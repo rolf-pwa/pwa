@@ -5,7 +5,16 @@ import { AppLayout } from "@/shared/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import { PageBreadcrumbs } from "@/shared/components/PageBreadcrumbs";
+import { toast } from "sonner";
+import {
+  SERVICE_TIER_LABEL,
+  SERVICE_TIER_BAND,
+  SERVICE_TIER_CADENCE,
+  SERVICE_TIER_ORDER,
+  type ServiceTier,
+} from "@/shared/lib/serviceTier";
 import {
   Collapsible,
   CollapsibleContent,
@@ -27,6 +36,8 @@ import {
   Landmark,
   Anchor,
   ExternalLink,
+  Layers,
+  RefreshCw,
 } from "lucide-react";
 import { FamilyRollup } from "@/modules/crm/components/FamilyRollup";
 import { FamilyTaskRollup } from "@/modules/crm/components/FamilyTaskRollup";
@@ -83,6 +94,7 @@ const FamilyDetail = () => {
   const [openSidebarHoldingTank, setOpenSidebarHoldingTank] = useState(false);
   const [openSidebarVineyard, setOpenSidebarVineyard] = useState(false);
   const [openSidebarStorehouses, setOpenSidebarStorehouses] = useState(false);
+  const [recomputingTier, setRecomputingTier] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!id) return;
@@ -244,6 +256,43 @@ const FamilyDetail = () => {
     return names[num] || "Storehouse";
   };
 
+  const handleRecomputeTier = async () => {
+    setRecomputingTier(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("service-tier-recompute", {
+        body: { familyId: family.id },
+      });
+      if (error) throw error;
+      toast.success(
+        data?.transitions?.length ? `Tier updated — ${SERVICE_TIER_LABEL[data.transitions[0].newTier as ServiceTier]}` : "Recomputed — no tier change.",
+      );
+      await fetchData();
+    } catch {
+      toast.error("Couldn't recompute this family's service tier.");
+    } finally {
+      setRecomputingTier(false);
+    }
+  };
+
+  const handleOverrideTier = async (tier: ServiceTier) => {
+    const { data: userRes } = await supabase.auth.getUser();
+    const { error } = await supabase
+      .from("families")
+      .update({
+        service_tier: tier,
+        service_tier_source: "manual_override",
+        service_tier_overridden_at: new Date().toISOString(),
+        service_tier_overridden_by: userRes?.user?.id,
+      } as any)
+      .eq("id", family.id);
+    if (error) {
+      toast.error("Couldn't set the service tier override.");
+      return;
+    }
+    setFamily({ ...family, service_tier: tier, service_tier_source: "manual_override" });
+    toast.success(`Service tier manually set to ${SERVICE_TIER_LABEL[tier]}`);
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -348,6 +397,84 @@ const FamilyDetail = () => {
                     <span className="font-semibold text-amber-600">{formatCurrency(totalHolding)}</span>
                   </div>
                 )}
+              </div>
+            </CollapsibleCard>
+
+            {/* Client Service Tier -- Phase A, staff-only (see plan file). Not
+                visible to clients anywhere; client-facing rollout targeted
+                January 2027. */}
+            <CollapsibleCard
+              icon={Layers}
+              iconBgClassName="bg-sanctuary-bronze/10"
+              iconColorClassName="text-sanctuary-bronze"
+              title="Service Tier"
+              subtitle="Staff-only — not visible to clients"
+              headerRight={
+                family.service_tier ? (
+                  <Badge className="bg-sanctuary-bronze/20 text-sanctuary-bronze border-sanctuary-bronze/30 text-[10px]">
+                    {SERVICE_TIER_LABEL[family.service_tier as ServiceTier]}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[10px]">Not classified</Badge>
+                )
+              }
+              defaultCollapsed={false}
+            >
+              <div className="space-y-3 text-sm">
+                {family.service_tier && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">{SERVICE_TIER_BAND[family.service_tier as ServiceTier]}</p>
+                    <p className="text-xs text-muted-foreground">{SERVICE_TIER_CADENCE[family.service_tier as ServiceTier]}</p>
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Grouped AUM (managed only)</span>
+                  <span className="font-semibold">
+                    {family.grouped_aum_cad != null ? formatCurrency(Number(family.grouped_aum_cad)) : "—"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Ratified Charter on file</span>
+                  <span className="font-semibold">{family.has_ratified_charter ? "Yes" : "No"}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Source</span>
+                  <span className="font-semibold">
+                    {family.service_tier_source === "manual_override" ? "Manual override" : "Computed"}
+                  </span>
+                </div>
+                {family.service_tier_computed_at && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Last recomputed {new Date(family.service_tier_computed_at).toLocaleString("en-CA")}
+                  </p>
+                )}
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={handleRecomputeTier}
+                  disabled={recomputingTier}
+                >
+                  {recomputingTier ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Recompute Now
+                </Button>
+
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Manual override</p>
+                  <Select value={family.service_tier || undefined} onValueChange={(v) => handleOverrideTier(v as ServiceTier)}>
+                    <SelectTrigger className="h-8"><SelectValue placeholder="Set tier manually" /></SelectTrigger>
+                    <SelectContent>
+                      {SERVICE_TIER_ORDER.map((t) => (
+                        <SelectItem key={t} value={t}>{SERVICE_TIER_LABEL[t]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </CollapsibleCard>
 

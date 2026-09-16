@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 import { ROLE_ICONS, ROLE_LABELS } from "./FamilyTreeList";
 import type { ResolvedSelection } from "./types";
+import { SERVICE_TIER_LABEL, type ServiceTier } from "@/shared/lib/serviceTier";
 
 type ConfirmKind = "deleteFamily" | "deleteHousehold" | "markDeceased" | "removeIndividual" | null;
 
@@ -225,6 +226,11 @@ export function DetailPanel({
             })()}
           {selection.type === "family" && (
             <InlineEdit value={family.name} onSave={(v) => updateFamilyName(family.id, v)} className="font-serif text-lg font-semibold" />
+          )}
+          {selection.type === "family" && family.service_tier && (
+            <Badge variant="outline" className="shrink-0 text-[10px]" title="Staff-only — not visible to clients">
+              {SERVICE_TIER_LABEL[family.service_tier as ServiceTier]}
+            </Badge>
           )}
           {selection.type === "household" && (
             <InlineEdit

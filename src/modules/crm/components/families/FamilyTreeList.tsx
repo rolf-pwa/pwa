@@ -4,6 +4,7 @@ import { InlineEdit } from "@/shared/components/InlineEdit";
 import { ChevronRight, ChevronDown, TreesIcon, Home, User, Crown, Shield, Baby } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import type { Family, Selected, SelectedType } from "./types";
+import { SERVICE_TIER_LABEL, type ServiceTier } from "@/shared/lib/serviceTier";
 
 export const ROLE_ICONS: Record<string, typeof Crown> = {
   head_of_family: Crown,
@@ -103,6 +104,11 @@ export function FamilyTreeList({
                 <Badge className={cn("shrink-0", TIER_COLORS[family.fee_tier] || "")}>
                   {TIER_LABELS[family.fee_tier] || family.fee_tier}
                 </Badge>
+                {family.service_tier && (
+                  <Badge variant="outline" className="shrink-0 text-[10px]" title="Staff-only — not visible to clients">
+                    {SERVICE_TIER_LABEL[family.service_tier as ServiceTier]}
+                  </Badge>
+                )}
               </div>
 
               <CollapsibleContent>

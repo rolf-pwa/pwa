@@ -25,6 +25,7 @@ export interface Family {
   total_family_assets: number;
   annual_savings: number;
   charter_document_url: string | null;
+  service_tier: string | null;
   households: Household[];
 }
 
