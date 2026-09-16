@@ -66,6 +66,7 @@ interface GovernanceAuditDoc {
   computed: ComputedFigures;
   extraction_errors: string[];
   narrative_ungrounded_dollar_figures: string[];
+  compliance_notes: string[];
 }
 interface GovernanceAuditRow {
   id: string;
@@ -435,6 +436,15 @@ export default function GovernanceAudit() {
                   ))}
                 </div>
               </>
+            )}
+
+            {doc.compliance_notes.length > 0 && (
+              <div className="mb-3 border-t border-[#D8DEDC] pt-3 text-[10px] leading-relaxed text-[#5B6470]">
+                <p className="mb-1 font-semibold uppercase tracking-wider text-[#5B6470]">Compliance Status</p>
+                <ul className="list-none space-y-0.5">
+                  {doc.compliance_notes.map((note, i) => <li key={i}>{note}</li>)}
+                </ul>
+              </div>
             )}
 
             <div className="border-t border-[#D8DEDC] pt-4 text-[10px] leading-relaxed text-[#5B6470]">

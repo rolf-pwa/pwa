@@ -534,22 +534,54 @@ async function runFullAudit(db: Db, householdId: string, userId: string, options
     );
     assumptions.push(...estateWarnings, ...estateResult.notes);
 
+    // -- Compliance: Sovereignty Charter ratification --
+    // Fetched once, unconditionally (not just when an Investor Profile
+    // exists), since this is a real compliance check on its own, not a
+    // byproduct of target selection. Reused below for the target
+    // selection's Charter tone summary too, so this is the only query.
+    // Ratified-vs-not is a real, structured field this CRM already tracks
+    // (draft_status/esign_status -- confirmed the exact "ratified" check
+    // CharterRatificationTile.tsx/SovereigntyCharter.tsx already use, so
+    // this can't silently drift from what those pages show). There's no
+    // re-ratification/staleness concept modeled anywhere in this CRM
+    // today (a ratified Charter never expires) -- confirmed with Rolf this
+    // is the right bar for now; a re-ratification cadence would be a
+    // separate, later policy decision, not invented here.
+    let charterRow: { mission_of_capital: string | null; vision_20_year: string | null; draft_status: string | null; esign_status: string | null; ratified_at: string | null } | undefined;
+    try {
+      const { data: charters } = await db
+        .from("sovereignty_charters")
+        .select("mission_of_capital, vision_20_year, draft_status, esign_status, ratified_at")
+        .in("contact_id", financials.members.map((m) => m.id))
+        .limit(1);
+      charterRow = charters?.[0];
+    } catch {
+      // no Charter row at all -- treated as not-ratified below
+    }
+    const hasRatifiedCharter = charterRow?.draft_status === "ratified" || charterRow?.esign_status === "ratified";
+
+    // -- Compliance footnotes, printed on the document itself (not just
+    // staff-only `assumptions`) -- per Rolf's request. Terms of Engagement
+    // and regulatory disclosures have no structured tracking anywhere in
+    // this CRM yet (confirmed: no table, no dedicated Vault folder, no
+    // renewal cadence) -- Rolf's direction is a Correspondence/TOE and
+    // Correspondence/Disclosures Vault subfolder structure, checked
+    // autonomously by a future "Librarian Agent" once he provides the
+    // required-document list (tracked on the roadmap). Until that exists,
+    // this stays an honest manual-review reminder, not a fabricated check.
+    const complianceNotes: string[] = [
+      hasRatifiedCharter
+        ? `Sovereignty Charter: ratified${charterRow?.ratified_at ? ` ${charterRow.ratified_at.slice(0, 10)}` : ""}.`
+        : "Sovereignty Charter: NOT YET RATIFIED on file for this household -- confirm before this audit's governance recommendations are treated as Charter-aligned.",
+      "Terms of Engagement and regulatory disclosures: confirm current signed copies are on file in the Vault " +
+        "(Correspondence/TOE, Correspondence/Disclosures) before client delivery -- automated currency tracking not yet implemented.",
+    ];
+
     const scoreableProfile = investorProfiles.find((p) => p.profile_category);
     let targetIncomeEquitySplit: { income_pct: number; equity_pct: number } | null = null;
     let capitalRow: ScorecardRow | undefined;
     if (scoreableProfile && typeof scoreableProfile.total_points === "number") {
-      let charterTone: string | null = null;
-      try {
-        const { data: charters } = await db
-          .from("sovereignty_charters")
-          .select("mission_of_capital, vision_20_year")
-          .in("contact_id", financials.members.map((m) => m.id))
-          .limit(1);
-        const charter = charters?.[0];
-        charterTone = [charter?.mission_of_capital, charter?.vision_20_year].filter(Boolean).join(" ") || null;
-      } catch {
-        // no ratified Charter on file -- selectTarget works fine without a tone summary
-      }
+      const charterTone = [charterRow?.mission_of_capital, charterRow?.vision_20_year].filter(Boolean).join(" ") || null;
       try {
         const target = selectTarget(
           { totalPoints: scoreableProfile.total_points, profileCategory: scoreableProfile.profile_category! },
@@ -649,6 +681,7 @@ async function runFullAudit(db: Db, householdId: string, userId: string, options
       legal_facts: legalFacts,
       extraction_errors: extractionErrors,
       narrative_ungrounded_dollar_figures: narrativeUngrounded,
+      compliance_notes: complianceNotes,
     };
 
     await db
