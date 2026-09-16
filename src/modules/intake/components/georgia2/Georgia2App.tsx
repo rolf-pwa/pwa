@@ -8,7 +8,22 @@ import { StepResults } from "./StepResults";
 import { StepLeadCapture } from "./StepLeadCapture";
 import { StepSuccess } from "./StepSuccess";
 import { BlueprintCanvas } from "./BlueprintCanvas";
-import { useGeorgia2ExitBeacon } from "@/modules/intake/lib/session-tracker";
+import { trackGeorgia2, useGeorgia2ExitBeacon, type Georgia2SessionPatch } from "@/modules/intake/lib/session-tracker";
+
+// Maps the Stepper's 5 labeled steps (Domain/Catalyst/Diagnostic/Pathway/
+// Confidential) to their first-reach tracking field. state.step 3 and 4
+// both render StepDiagnostic in the left pane (Diagnostic has two virtual
+// sub-steps), but step 4 is also when the results pane's reveal becomes
+// visible -- exactly what the Stepper itself labels "Pathway" -- so that's
+// tracked as its own step here, matching how a visitor actually
+// experiences the flow, not just which component is mounted.
+const STEP_REACHED_FIELD: Record<number, keyof Georgia2SessionPatch> = {
+  1: "step_domain_reached_at",
+  2: "step_catalyst_reached_at",
+  3: "step_diagnostic_reached_at",
+  4: "step_pathway_reached_at",
+  5: "step_confidential_reached_at",
+};
 
 function Shell({ embed }: { embed?: boolean }) {
   const { state } = useGeorgia2();
@@ -26,6 +41,19 @@ function Shell({ embed }: { embed?: boolean }) {
     }),
     state.sessionKey
   );
+
+  // First-reach funnel tracking: fires once per step per session (a Back
+  // button revisit never re-sends an already-tracked step, so each column
+  // stays a true first-reach time), so real drop-off between Domain,
+  // Catalyst, Diagnostic, Pathway (the results reveal), and Confidential
+  // (the contact-info ask) can finally be measured instead of guessed at.
+  const trackedStepsRef = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    const field = STEP_REACHED_FIELD[state.step];
+    if (!field || trackedStepsRef.current.has(state.step)) return;
+    trackedStepsRef.current.add(state.step);
+    trackGeorgia2({ [field]: new Date().toISOString() } as Georgia2SessionPatch);
+  }, [state.step]);
 
   // Bring the top of the wizard back into view whenever the visitor advances
   // a step, so they don't have to scroll up manually. Step 4 is skipped because

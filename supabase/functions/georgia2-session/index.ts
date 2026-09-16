@@ -37,6 +37,15 @@ const BodySchema = z.object({
   reached_lead_capture: z.boolean().optional(),
   lead_captured: z.boolean().optional(),
   ended: z.boolean().optional(),
+  // First-reach timestamps per Stepper-labeled step -- the client only
+  // ever sends these once per step per session (see session-tracker.ts),
+  // so a later, earlier, or repeated value here is trusted as-is; this
+  // endpoint doesn't need to guard against overwriting an earlier value.
+  step_domain_reached_at: z.string().datetime().optional(),
+  step_catalyst_reached_at: z.string().datetime().optional(),
+  step_diagnostic_reached_at: z.string().datetime().optional(),
+  step_pathway_reached_at: z.string().datetime().optional(),
+  step_confidential_reached_at: z.string().datetime().optional(),
 });
 
 serve(async (req) => {

@@ -13,6 +13,12 @@ export interface Georgia2SessionPatch {
   reached_lead_capture?: boolean;
   lead_captured?: boolean;
   ended?: boolean;
+  /** First-reach timestamps per Stepper-labeled step -- see Georgia2App.tsx, sent once per step per session. */
+  step_domain_reached_at?: string;
+  step_catalyst_reached_at?: string;
+  step_diagnostic_reached_at?: string;
+  step_pathway_reached_at?: string;
+  step_confidential_reached_at?: string;
 }
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
