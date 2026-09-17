@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { useAuth } from "@/shared/hooks/useAuth";
@@ -8,7 +8,6 @@ import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Label } from "@/shared/components/ui/label";
 import { Textarea } from "@/shared/components/ui/textarea";
-import { Badge } from "@/shared/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -17,22 +16,13 @@ import {
   SelectValue,
 } from "@/shared/components/ui/select";
 import { toast } from "sonner";
-import { ArrowLeft, X, Plus, Search, Bell, BellOff, Trash2 } from "lucide-react";
+import { ArrowLeft, Bell, BellOff, Trash2 } from "lucide-react";
 import { PageBreadcrumbs } from "@/shared/components/PageBreadcrumbs";
-import { StatementUpload } from "@/modules/crm/components/StatementUpload";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
   AlertDialogTitle, AlertDialogTrigger
 } from "@/shared/components/ui/alert-dialog";
-
-interface LinkedMember {
-  relationship_id?: string;
-  contact_id: string;
-  display_name: string;
-  relationship_label: string;
-  isNew?: boolean;
-}
 
 const ContactForm = () => {
   const { id } = useParams<{ id: string }>();
@@ -41,8 +31,6 @@ const ContactForm = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [saving, setSaving] = useState(false);
-  const [statementFiles, setStatementFiles] = useState<File[]>([]);
-  const [isIngesting, setIsIngesting] = useState(false);
   const [emailNotifEnabled, setEmailNotifEnabled] = useState(true);
 
   const [form, setForm] = useState({
@@ -52,21 +40,11 @@ const ContactForm = () => {
     phone: "",
     address: "",
     family_role: "head_of_family" as "head_of_family" | "spouse" | "beneficiary" | "minor" | "head_of_household",
-    governance_status: "stabilization" as "stabilization" | "sovereign" | "none" | "core",
-    fiduciary_entity: "pws" as "pws" | "pwa",
-    lawyer_name: "",
-    lawyer_firm: "",
-    accountant_name: "",
-    accountant_firm: "",
-    executor_name: "",
-    executor_firm: "",
-    poa_name: "",
-    poa_firm: "",
     vineyard_ebitda: "",
     vineyard_operating_income: "",
     vineyard_balance_sheet_summary: "",
     quiet_period_start_date: "",
-    
+
     asana_url: "",
     ia_financial_url: "",
     just_wealth_url: "",
@@ -76,42 +54,10 @@ const ContactForm = () => {
   });
   const [householdId, setHouseholdId] = useState<string | null>(null);
 
-  // Household member linking
-  const [householdMembers, setHouseholdMembers] = useState<LinkedMember[]>([]);
-  const [memberSearch, setMemberSearch] = useState("");
-  const [memberLabel, setMemberLabel] = useState("");
-  const [searchResults, setSearchResults] = useState<{ id: string; first_name: string; last_name: string | null }[]>([]);
-  const [showResults, setShowResults] = useState(false);
-
-  // Search contacts for household linking
-  const searchContacts = useCallback(async (query: string) => {
-    if (query.length < 2) { setSearchResults([]); return; }
-    const { data } = await supabase
-      .from("contacts")
-      .select("id, first_name, last_name")
-      .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%`)
-      .neq("id", id || "")
-      .limit(5);
-    setSearchResults(data || []);
-    setShowResults(true);
-  }, [id]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => searchContacts(memberSearch), 300);
-    return () => clearTimeout(timer);
-  }, [memberSearch, searchContacts]);
-
   useEffect(() => {
     if (!id) return;
     async function load() {
-      const [contactRes, householdRes] = await Promise.all([
-        supabase.from("contacts").select("*").eq("id", id).maybeSingle(),
-        supabase
-          .from("household_relationships")
-          .select("id, member_contact_id, relationship_label, contact:contacts!household_relationships_member_contact_id_fkey(id, first_name, last_name)")
-          .eq("contact_id", id),
-      ]);
-      const data = contactRes.data;
+      const { data } = await supabase.from("contacts").select("*").eq("id", id).maybeSingle();
       if (!data) return;
       setForm({
         first_name: data.first_name || "",
@@ -120,21 +66,11 @@ const ContactForm = () => {
         phone: data.phone || "",
         address: data.address || "",
         family_role: (data.family_role as any) || "head_of_family",
-        governance_status: data.governance_status as any,
-        fiduciary_entity: data.fiduciary_entity as any,
-        lawyer_name: data.lawyer_name || "",
-        lawyer_firm: data.lawyer_firm || "",
-        accountant_name: data.accountant_name || "",
-        accountant_firm: data.accountant_firm || "",
-        executor_name: (data as any).executor_name || "",
-        executor_firm: (data as any).executor_firm || "",
-        poa_name: (data as any).poa_name || "",
-        poa_firm: (data as any).poa_firm || "",
         vineyard_ebitda: data.vineyard_ebitda?.toString() || "",
         vineyard_operating_income: data.vineyard_operating_income?.toString() || "",
         vineyard_balance_sheet_summary: data.vineyard_balance_sheet_summary || "",
         quiet_period_start_date: data.quiet_period_start_date || "",
-        
+
         asana_url: data.asana_url || "",
         ia_financial_url: data.ia_financial_url || "",
         just_wealth_url: (data as any).just_wealth_url || "",
@@ -153,73 +89,9 @@ const ContactForm = () => {
         if (hh) setForm((prev) => ({ ...prev, vault_root_folder_id: (hh as any).vault_root_folder_id || "" }));
       }
       setEmailNotifEnabled(data.email_notifications_enabled !== false);
-      setHouseholdMembers(
-        (householdRes.data || []).map((r: any) => ({
-          relationship_id: r.id,
-          contact_id: r.member_contact_id,
-          display_name: `${r.contact?.first_name || ""} ${r.contact?.last_name || ""}`.trim() || "Unknown",
-          relationship_label: r.relationship_label || "",
-        }))
-      );
     }
     load();
   }, [id]);
-
-  function addExistingMember(contact: { id: string; first_name: string; last_name: string | null }) {
-    if (householdMembers.some((m) => m.contact_id === contact.id)) {
-      toast.error("Already added.");
-      return;
-    }
-    setHouseholdMembers((prev) => [
-      ...prev,
-      { contact_id: contact.id, display_name: `${contact.first_name} ${contact.last_name || ""}`.trim(), relationship_label: memberLabel },
-    ]);
-    setMemberSearch("");
-    setMemberLabel("");
-    setShowResults(false);
-  }
-
-  async function addNewMember(name: string) {
-    if (!user) return;
-    setHouseholdMembers((prev) => [
-      ...prev,
-      { contact_id: "", display_name: name, relationship_label: memberLabel, isNew: true },
-    ]);
-    setMemberSearch("");
-    setMemberLabel("");
-    setShowResults(false);
-  }
-
-  function removeMember(index: number) {
-    setHouseholdMembers((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  async function saveHouseholdMembers(contactId: string) {
-    // Delete existing relationships
-    await supabase.from("household_relationships").delete().eq("contact_id", contactId);
-
-    for (const member of householdMembers) {
-      let memberId = member.contact_id;
-
-      // Create new contact if needed
-      if (member.isNew || !memberId) {
-        const nameParts = member.display_name.split(" ");
-        const { data } = await supabase
-          .from("contacts")
-          .insert({ full_name: member.display_name, first_name: nameParts[0] || "", last_name: nameParts.slice(1).join(" ") || "", created_by: user!.id } as any)
-          .select("id")
-          .single();
-        if (data) memberId = data.id;
-        else continue;
-      }
-
-      await supabase.from("household_relationships").insert({
-        contact_id: contactId,
-        member_contact_id: memberId,
-        relationship_label: member.relationship_label || null,
-      });
-    }
-  }
 
   function update(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -242,16 +114,6 @@ const ContactForm = () => {
       phone: form.phone || null,
       address: form.address || null,
       family_role: form.family_role,
-      governance_status: form.governance_status,
-      fiduciary_entity: form.fiduciary_entity,
-      lawyer_name: form.lawyer_name || null,
-      lawyer_firm: form.lawyer_firm || null,
-      accountant_name: form.accountant_name || null,
-      accountant_firm: form.accountant_firm || null,
-      executor_name: form.executor_name || null,
-      executor_firm: form.executor_firm || null,
-      poa_name: form.poa_name || null,
-      poa_firm: form.poa_firm || null,
       vineyard_ebitda: form.vineyard_ebitda ? Number(form.vineyard_ebitda) : null,
       vineyard_operating_income: form.vineyard_operating_income
         ? Number(form.vineyard_operating_income)
@@ -293,9 +155,6 @@ const ContactForm = () => {
       contactId = data.id;
     }
 
-    // Save household relationships
-    await saveHouseholdMembers(contactId!);
-
     // Persist vault root folder on the household
     if (householdId) {
       const raw = form.vault_root_folder_id.trim();
@@ -322,41 +181,6 @@ const ContactForm = () => {
         .from("households")
         .update(householdUpdate)
         .eq("id", householdId);
-    }
-
-    // Upload statements and trigger ingestion for each file
-    if (statementFiles.length > 0 && contactId) {
-      setIsIngesting(true);
-      const contactName = `${form.first_name} ${form.last_name}`.trim();
-
-      for (const file of statementFiles) {
-        try {
-          const filePath = `${contactId}/${Date.now()}_${file.name}`;
-          const { error: uploadErr } = await supabase.storage
-            .from("statement-uploads")
-            .upload(filePath, file, { contentType: "application/pdf" });
-
-          if (uploadErr) {
-            toast.error(`Upload failed for ${file.name}: ${uploadErr.message}`);
-            continue;
-          }
-
-          const { data, error } = await supabase.functions.invoke("ingest-statement", {
-            body: { contactId, householdId: null, filePath, contactName },
-          });
-
-          if (error) {
-            toast.error(`Ingestion failed for ${file.name}`);
-          } else {
-            toast.success(
-              `${file.name} — ${data?.accountsInserted || 0} accounts added to Holding Tank`
-            );
-          }
-        } catch {
-          toast.error(`Error processing ${file.name}`);
-        }
-      }
-      setIsIngesting(false);
     }
 
     toast.success(isEdit ? "Contact updated." : "Contact created.");
@@ -494,78 +318,6 @@ const ContactForm = () => {
           </CardContent>
         </Card>
 
-        {/* Governance & Sovereignty */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Governance & Sovereignty</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <Label>Sovereignty Status</Label>
-              <Select value={form.governance_status} onValueChange={(v) => update("governance_status", v)}>
-                <SelectTrigger><SelectValue placeholder="Select status…" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none" className="text-muted-foreground">— None —</SelectItem>
-                  <SelectItem value="core">Core</SelectItem>
-                  <SelectItem value="stabilization">Stabilization</SelectItem>
-                  <SelectItem value="sovereign">Sovereign</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Fiduciary Entity</Label>
-              <Select value={form.fiduciary_entity} onValueChange={(v) => update("fiduciary_entity", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pws">PWS</SelectItem>
-                  <SelectItem value="pwa">PWA</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Professional Team */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Professional Team</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <Label>Lawyer Name</Label>
-              <Input value={form.lawyer_name} onChange={(e) => update("lawyer_name", e.target.value)} />
-            </div>
-            <div>
-              <Label>Lawyer Firm</Label>
-              <Input value={form.lawyer_firm} onChange={(e) => update("lawyer_firm", e.target.value)} />
-            </div>
-            <div>
-              <Label>Accountant Name</Label>
-              <Input value={form.accountant_name} onChange={(e) => update("accountant_name", e.target.value)} />
-            </div>
-            <div>
-              <Label>Accountant Firm</Label>
-              <Input value={form.accountant_firm} onChange={(e) => update("accountant_firm", e.target.value)} />
-            </div>
-            <div>
-              <Label>Executor Name</Label>
-              <Input value={form.executor_name} onChange={(e) => update("executor_name", e.target.value)} />
-            </div>
-            <div>
-              <Label>Executor Firm</Label>
-              <Input value={form.executor_firm} onChange={(e) => update("executor_firm", e.target.value)} />
-            </div>
-            <div>
-              <Label>Power of Attorney Name</Label>
-              <Input value={form.poa_name} onChange={(e) => update("poa_name", e.target.value)} />
-            </div>
-            <div>
-              <Label>Power of Attorney Firm</Label>
-              <Input value={form.poa_firm} onChange={(e) => update("poa_firm", e.target.value)} />
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Resources */}
         <Card>
           <CardHeader>
@@ -605,85 +357,6 @@ const ContactForm = () => {
             <div>
               <Label>Charter Document URL</Label>
               <Input value={form.charter_url} onChange={(e) => update("charter_url", e.target.value)} placeholder="https://drive.google.com/..." />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Statement Upload */}
-        <StatementUpload
-          files={statementFiles}
-          onFilesChange={setStatementFiles}
-          isIngesting={isIngesting}
-        />
-
-        {/* Household Members */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Household Members</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {/* Linked members list */}
-            {householdMembers.length > 0 && (
-              <div className="space-y-1">
-                {householdMembers.map((m, i) => (
-                  <div key={i} className="flex items-center gap-2 rounded-md border px-3 py-2">
-                    <span className="flex-1 text-sm font-medium">{m.display_name}</span>
-                    {m.relationship_label && (
-                      <Badge variant="secondary" className="text-xs">{m.relationship_label}</Badge>
-                    )}
-                    {m.isNew && (
-                      <Badge variant="outline" className="text-xs">New contact</Badge>
-                    )}
-                    <button type="button" onClick={() => removeMember(i)} className="text-muted-foreground hover:text-destructive">
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Search / Add */}
-            <div className="grid gap-2 sm:grid-cols-3">
-              <div className="relative sm:col-span-2">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Search existing contacts..."
-                  value={memberSearch}
-                  onChange={(e) => setMemberSearch(e.target.value)}
-                  onFocus={() => memberSearch.length >= 2 && setShowResults(true)}
-                  onBlur={() => setTimeout(() => setShowResults(false), 200)}
-                  className="pl-9"
-                />
-                {showResults && (
-                  <div className="absolute z-10 mt-1 w-full rounded-md border bg-popover shadow-md">
-                    {searchResults.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        className="flex w-full items-center px-3 py-2 text-sm hover:bg-muted"
-                        onMouseDown={() => addExistingMember(c)}
-                      >
-                        {c.first_name} {c.last_name}
-                      </button>
-                    ))}
-                    {memberSearch.length >= 2 && (
-                      <button
-                        type="button"
-                        className="flex w-full items-center gap-2 border-t px-3 py-2 text-sm text-sanctuary-bronze hover:bg-muted"
-                        onMouseDown={() => addNewMember(memberSearch)}
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        Create "{memberSearch}" as new contact
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-              <Input
-                placeholder="Relationship (e.g. Spouse)"
-                value={memberLabel}
-                onChange={(e) => setMemberLabel(e.target.value)}
-              />
             </div>
           </CardContent>
         </Card>
