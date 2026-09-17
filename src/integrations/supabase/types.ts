@@ -655,11 +655,9 @@ export type Database = {
           executor_name: string | null
           family_id: string | null
           family_role: Database["public"]["Enums"]["family_role"]
-          fiduciary_entity: Database["public"]["Enums"]["fiduciary_entity"]
           first_name: string
           full_name: string
           google_drive_url: string | null
-          governance_status: Database["public"]["Enums"]["governance_status"]
           household_id: string | null
           household_members: Json | null
           ia_financial_url: string | null
@@ -694,11 +692,9 @@ export type Database = {
           executor_name?: string | null
           family_id?: string | null
           family_role?: Database["public"]["Enums"]["family_role"]
-          fiduciary_entity?: Database["public"]["Enums"]["fiduciary_entity"]
           first_name?: string
           full_name: string
           google_drive_url?: string | null
-          governance_status?: Database["public"]["Enums"]["governance_status"]
           household_id?: string | null
           household_members?: Json | null
           ia_financial_url?: string | null
@@ -733,11 +729,9 @@ export type Database = {
           executor_name?: string | null
           family_id?: string | null
           family_role?: Database["public"]["Enums"]["family_role"]
-          fiduciary_entity?: Database["public"]["Enums"]["fiduciary_entity"]
           first_name?: string
           full_name?: string
           google_drive_url?: string | null
-          governance_status?: Database["public"]["Enums"]["governance_status"]
           household_id?: string | null
           household_members?: Json | null
           ia_financial_url?: string | null
@@ -923,6 +917,7 @@ export type Database = {
           corporation_id: string
           created_at: string
           current_value: number | null
+          custodian: string | null
           id: string
           notes: string | null
           updated_at: string
@@ -934,6 +929,7 @@ export type Database = {
           corporation_id: string
           created_at?: string
           current_value?: number | null
+          custodian?: string | null
           id?: string
           notes?: string | null
           updated_at?: string
@@ -945,6 +941,7 @@ export type Database = {
           corporation_id?: string
           created_at?: string
           current_value?: number | null
+          custodian?: string | null
           id?: string
           notes?: string | null
           updated_at?: string
@@ -1336,8 +1333,15 @@ export type Database = {
           created_by: string
           fee_tier: Database["public"]["Enums"]["fee_tier"]
           fee_tier_discount_pct: number
+          grouped_aum_cad: number | null
+          has_ratified_charter: boolean
           id: string
           name: string
+          service_tier: Database["public"]["Enums"]["service_tier"] | null
+          service_tier_computed_at: string | null
+          service_tier_overridden_at: string | null
+          service_tier_overridden_by: string | null
+          service_tier_source: string
           total_family_assets: number
           updated_at: string
           vfo_enabled: boolean
@@ -1350,8 +1354,15 @@ export type Database = {
           created_by: string
           fee_tier?: Database["public"]["Enums"]["fee_tier"]
           fee_tier_discount_pct?: number
+          grouped_aum_cad?: number | null
+          has_ratified_charter?: boolean
           id?: string
           name: string
+          service_tier?: Database["public"]["Enums"]["service_tier"] | null
+          service_tier_computed_at?: string | null
+          service_tier_overridden_at?: string | null
+          service_tier_overridden_by?: string | null
+          service_tier_source?: string
           total_family_assets?: number
           updated_at?: string
           vfo_enabled?: boolean
@@ -1364,8 +1375,15 @@ export type Database = {
           created_by?: string
           fee_tier?: Database["public"]["Enums"]["fee_tier"]
           fee_tier_discount_pct?: number
+          grouped_aum_cad?: number | null
+          has_ratified_charter?: boolean
           id?: string
           name?: string
+          service_tier?: Database["public"]["Enums"]["service_tier"] | null
+          service_tier_computed_at?: string | null
+          service_tier_overridden_at?: string | null
+          service_tier_overridden_by?: string | null
+          service_tier_source?: string
           total_family_assets?: number
           updated_at?: string
           vfo_enabled?: boolean
@@ -1588,6 +1606,11 @@ export type Database = {
           scale: number | null
           session_key: string
           source: string | null
+          step_catalyst_reached_at: string | null
+          step_confidential_reached_at: string | null
+          step_diagnostic_reached_at: string | null
+          step_domain_reached_at: string | null
+          step_pathway_reached_at: string | null
           updated_at: string
           user_agent: string | null
         }
@@ -1608,6 +1631,11 @@ export type Database = {
           scale?: number | null
           session_key: string
           source?: string | null
+          step_catalyst_reached_at?: string | null
+          step_confidential_reached_at?: string | null
+          step_diagnostic_reached_at?: string | null
+          step_domain_reached_at?: string | null
+          step_pathway_reached_at?: string | null
           updated_at?: string
           user_agent?: string | null
         }
@@ -1628,6 +1656,11 @@ export type Database = {
           scale?: number | null
           session_key?: string
           source?: string | null
+          step_catalyst_reached_at?: string | null
+          step_confidential_reached_at?: string | null
+          step_diagnostic_reached_at?: string | null
+          step_domain_reached_at?: string | null
+          step_pathway_reached_at?: string | null
           updated_at?: string
           user_agent?: string | null
         }
@@ -1725,6 +1758,53 @@ export type Database = {
           },
         ]
       }
+      governance_audits: {
+        Row: {
+          computed: Json
+          created_at: string
+          created_by: string | null
+          generated_at: string | null
+          generation_error: string | null
+          generation_status: string
+          household_id: string
+          id: string
+          is_draft: boolean
+          updated_at: string
+        }
+        Insert: {
+          computed?: Json
+          created_at?: string
+          created_by?: string | null
+          generated_at?: string | null
+          generation_error?: string | null
+          generation_status?: string
+          household_id: string
+          id?: string
+          is_draft?: boolean
+          updated_at?: string
+        }
+        Update: {
+          computed?: Json
+          created_at?: string
+          created_by?: string | null
+          generated_at?: string | null
+          generation_error?: string | null
+          generation_status?: string
+          household_id?: string
+          id?: string
+          is_draft?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "governance_audits_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       governance_review_findings: {
         Row: {
           account_ref: Json
@@ -1781,6 +1861,7 @@ export type Database = {
           account_number: string | null
           account_owner: string | null
           account_type: string
+          beneficiary_designation: string | null
           book_value: number | null
           contact_id: string
           created_at: string
@@ -1800,6 +1881,7 @@ export type Database = {
           account_number?: string | null
           account_owner?: string | null
           account_type?: string
+          beneficiary_designation?: string | null
           book_value?: number | null
           contact_id: string
           created_at?: string
@@ -1819,6 +1901,7 @@ export type Database = {
           account_number?: string | null
           account_owner?: string | null
           account_type?: string
+          beneficiary_designation?: string | null
           book_value?: number | null
           contact_id?: string
           created_at?: string
@@ -2513,6 +2596,7 @@ export type Database = {
           holder_type: Database["public"]["Enums"]["liability_holder_type"]
           id: string
           interest_rate_pct: number | null
+          last_audit_flagged_at: string | null
           liability_type: Database["public"]["Enums"]["liability_type"]
           notes: string | null
           original_amount: number | null
@@ -2535,6 +2619,7 @@ export type Database = {
           holder_type: Database["public"]["Enums"]["liability_holder_type"]
           id?: string
           interest_rate_pct?: number | null
+          last_audit_flagged_at?: string | null
           liability_type?: Database["public"]["Enums"]["liability_type"]
           notes?: string | null
           original_amount?: number | null
@@ -2557,6 +2642,7 @@ export type Database = {
           holder_type?: Database["public"]["Enums"]["liability_holder_type"]
           id?: string
           interest_rate_pct?: number | null
+          last_audit_flagged_at?: string | null
           liability_type?: Database["public"]["Enums"]["liability_type"]
           notes?: string | null
           original_amount?: number | null
@@ -4917,6 +5003,7 @@ export type Database = {
         Row: {
           account_number: string | null
           asset_type: string | null
+          beneficiary_designation: string | null
           book_value: number | null
           charter_alignment: Database["public"]["Enums"]["charter_alignment"]
           contact_id: string | null
@@ -4936,6 +5023,7 @@ export type Database = {
         Insert: {
           account_number?: string | null
           asset_type?: string | null
+          beneficiary_designation?: string | null
           book_value?: number | null
           charter_alignment?: Database["public"]["Enums"]["charter_alignment"]
           contact_id?: string | null
@@ -4955,6 +5043,7 @@ export type Database = {
         Update: {
           account_number?: string | null
           asset_type?: string | null
+          beneficiary_designation?: string | null
           book_value?: number | null
           charter_alignment?: Database["public"]["Enums"]["charter_alignment"]
           contact_id?: string | null
@@ -5473,6 +5562,7 @@ export type Database = {
           account_name: string
           account_number: string | null
           account_type: string
+          beneficiary_designation: string | null
           book_value: number | null
           contact_id: string
           created_at: string
@@ -5487,6 +5577,7 @@ export type Database = {
           account_name: string
           account_number?: string | null
           account_type?: string
+          beneficiary_designation?: string | null
           book_value?: number | null
           contact_id: string
           created_at?: string
@@ -5501,6 +5592,7 @@ export type Database = {
           account_name?: string
           account_number?: string | null
           account_type?: string
+          beneficiary_designation?: string | null
           book_value?: number | null
           contact_id?: string
           created_at?: string
@@ -5630,6 +5722,13 @@ export type Database = {
       pipeline_category: "pws_consulting" | "new_aum" | "insurance"
       pipeline_status: "pending" | "in_process" | "completed"
       review_status: "pending" | "approved" | "rejected" | "escalated"
+      service_tier:
+        | "tier_0"
+        | "tier_1"
+        | "tier_2a"
+        | "tier_2b"
+        | "tier_3"
+        | "tier_4"
       vault_contact_role: "viewer" | "contributor" | "manager"
       vault_share_link_type: "portal" | "guest"
       vault_share_permission: "view" | "view_upload" | "view_upload_download"
@@ -5794,6 +5893,14 @@ export const Constants = {
       pipeline_category: ["pws_consulting", "new_aum", "insurance"],
       pipeline_status: ["pending", "in_process", "completed"],
       review_status: ["pending", "approved", "rejected", "escalated"],
+      service_tier: [
+        "tier_0",
+        "tier_1",
+        "tier_2a",
+        "tier_2b",
+        "tier_3",
+        "tier_4",
+      ],
       vault_contact_role: ["viewer", "contributor", "manager"],
       vault_share_link_type: ["portal", "guest"],
       vault_share_permission: ["view", "view_upload", "view_upload_download"],

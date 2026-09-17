@@ -63,7 +63,7 @@ async function fetchFamilyCorporationIds(db: SupabaseClient, contactIds: string[
     .in("contact_id", contactIds)
     .eq("is_active", true);
   if (error) throw new Error(`Failed to load family corporations: ${error.message}`);
-  return [...new Set((data || []).map((s: { corporation_id: string }) => s.corporation_id))];
+  return [...new Set<string>((data || []).map((s: { corporation_id: string }) => s.corporation_id))];
 }
 
 /**
