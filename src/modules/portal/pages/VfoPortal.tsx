@@ -260,7 +260,11 @@ const VfoPortal = () => {
     : null;
   const earlyViewedPerson = earlyMember || data?.contact;
   const unreadUpdateCount = useUnreadUpdateCount(
-    earlyViewedPerson?.governance_status ?? "",
+    // earlyMember already carries a real per-member governance_status
+    // (denormalized from its household in portal-validate); the data?.contact
+    // fallback (viewing self, no drilldown) has none post-migration, so
+    // fall through to the logged-in contact's own household value.
+    earlyViewedPerson?.governance_status ?? data?.household?.governance_status ?? "",
     earlyViewedPerson?.id ?? "",
     drilldown.householdId || data?.household?.id || null,
     token || ""
@@ -1171,7 +1175,7 @@ const VfoPortal = () => {
 
             <TabsContent value="updates" className="mt-4">
               <PortalUpdates
-                governanceStatus={contact.governance_status ?? ""}
+                governanceStatus={household?.governance_status ?? ""}
                 contactId={contact.id}
                 householdId={contact.household_id}
                 portalToken={portalToken}

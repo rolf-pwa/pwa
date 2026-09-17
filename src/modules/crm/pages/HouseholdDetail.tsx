@@ -168,7 +168,7 @@ const HouseholdDetail = () => {
       { data: contacts },
     ] = await Promise.all([
       supabase.from("families").select("name").eq("id", hh.family_id).single(),
-      supabase.from("contacts").select("id, first_name, last_name, family_role, email, phone, address, governance_status, is_minor, asana_url, lawyer_name, lawyer_firm, accountant_name, accountant_firm, executor_name, executor_firm, poa_name, poa_firm").eq("household_id", id),
+      supabase.from("contacts").select("id, first_name, last_name, family_role, email, phone, address, is_minor, asana_url, lawyer_name, lawyer_firm, accountant_name, accountant_firm, executor_name, executor_firm, poa_name, poa_firm").eq("household_id", id),
     ]);
     if (!mountedRef.current) return;
 
@@ -612,10 +612,6 @@ const HouseholdDetail = () => {
                   value={household.governance_status || "stabilization"}
                   onValueChange={async (v) => {
                     await supabase.from("households").update({ governance_status: v as any }).eq("id", household.id);
-                    const memberIds = members.map((m: any) => m.id);
-                    if (memberIds.length > 0) {
-                      await supabase.from("contacts").update({ governance_status: v as any }).in("id", memberIds);
-                    }
                     setHousehold({ ...household, governance_status: v });
                     toast.success("Governance status updated for household");
                   }}
@@ -635,10 +631,6 @@ const HouseholdDetail = () => {
                   value={household.fiduciary_entity || "pws"}
                   onValueChange={async (v) => {
                     await supabase.from("households").update({ fiduciary_entity: v as any }).eq("id", household.id);
-                    const memberIds = members.map((m: any) => m.id);
-                    if (memberIds.length > 0) {
-                      await supabase.from("contacts").update({ fiduciary_entity: v as any }).in("id", memberIds);
-                    }
                     setHousehold({ ...household, fiduciary_entity: v });
                     toast.success("Fiduciary entity updated for household");
                   }}

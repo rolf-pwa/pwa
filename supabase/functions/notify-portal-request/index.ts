@@ -231,19 +231,24 @@ if (req.method === "OPTIONS") {
           .not("email", "is", null)
           .eq("email_notifications_enabled", true);
         contacts = data || [];
+      } else if (target_governance_status && target_governance_status !== "all") {
+        // Governance-status-based targeting -- now a household-level field,
+        // so this needs an inner join to filter on it (PostgREST requires
+        // `!inner` to filter by an embedded resource's own column).
+        const { data } = await supabase
+          .from("contacts")
+          .select("id, email, first_name, email_notifications_enabled, households!inner(governance_status)")
+          .not("email", "is", null)
+          .eq("email_notifications_enabled", true)
+          .eq("households.governance_status", target_governance_status);
+        contacts = data || [];
       } else {
-        // Governance-status-based targeting (or all)
-        let query = supabase
+        // No targeting at all -- every notification-eligible contact.
+        const { data } = await supabase
           .from("contacts")
           .select("id, email, first_name, email_notifications_enabled")
           .not("email", "is", null)
           .eq("email_notifications_enabled", true);
-
-        if (target_governance_status && target_governance_status !== "all") {
-          query = query.eq("governance_status", target_governance_status);
-        }
-
-        const { data } = await query;
         contacts = data || [];
       }
 

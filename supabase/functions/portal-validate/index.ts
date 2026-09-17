@@ -115,7 +115,7 @@ async function buildHierarchy(supabase: any, contact: any) {
     // Fetch all households, respecting hof_visible flag
     const { data: allHouseholds } = await supabase
       .from("households")
-      .select("id, label, address, hof_visible")
+      .select("id, label, address, hof_visible, governance_status, fiduciary_entity")
       .eq("family_id", familyId)
       .order("label");
 
@@ -142,8 +142,16 @@ async function buildHierarchy(supabase: any, contact: any) {
         id: hh.id,
         label: hh.label,
         address: hh.address,
+        governance_status: hh.governance_status,
+        fiduciary_entity: hh.fiduciary_entity,
         members: members.map((m: any) => ({
           ...m,
+          // Denormalized from this household for hierarchy-view read
+          // convenience -- assembled fresh on every request, never stored,
+          // so this isn't the same drift-prone duplication being removed
+          // from the contacts table.
+          governance_status: hh.governance_status,
+          fiduciary_entity: hh.fiduciary_entity,
           vineyard_accounts: assets.vineyard.filter((v: any) => v.contact_id === m.id),
           storehouses: assets.storehouses.filter((s: any) => s.contact_id === m.id),
         })),
@@ -155,11 +163,14 @@ async function buildHierarchy(supabase: any, contact: any) {
 
   if ((role === "head_of_family" || role === "head_of_household" || role === "spouse" || role === "beneficiary") && householdId) {
     // Head of household, spouse, or beneficiary: see household members
-    const { data: members } = await supabase
-      .from("contacts")
-      .select("id, first_name, last_name, family_role, is_minor, email")
-      .eq("household_id", householdId)
-      .neq("id", contact.id);
+    const [{ data: members }, { data: ownHousehold }] = await Promise.all([
+      supabase
+        .from("contacts")
+        .select("id, first_name, last_name, family_role, is_minor, email")
+        .eq("household_id", householdId)
+        .neq("id", contact.id),
+      supabase.from("households").select("governance_status, fiduciary_entity").eq("id", householdId).maybeSingle(),
+    ]);
 
     const memberIds = (members || []).map((m: any) => m.id);
     const assets = await fetchAssetsForContacts(supabase, memberIds);
@@ -168,6 +179,10 @@ async function buildHierarchy(supabase: any, contact: any) {
       level: role === "head_of_family" ? "family" : "household",
       members: (members || []).map((m: any) => ({
         ...m,
+        // Denormalized from the shared household for read convenience --
+        // every member here is in the same householdId as the caller.
+        governance_status: ownHousehold?.governance_status,
+        fiduciary_entity: ownHousehold?.fiduciary_entity,
         vineyard_accounts: assets.vineyard.filter((v: any) => v.contact_id === m.id),
         storehouses: assets.storehouses.filter((s: any) => s.contact_id === m.id),
       })),
@@ -310,7 +325,7 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
 
       if (householdId) {
         extraQueries.push(
-          supabase.from("households").select("id, label, address").eq("id", householdId).maybeSingle()
+          supabase.from("households").select("id, label, address, governance_status, fiduciary_entity").eq("id", householdId).maybeSingle()
         );
         extraQueries.push(
           supabase.from("contacts").select("id, first_name, last_name, family_role, is_minor").eq("household_id", householdId).neq("id", contactId)

@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
         .select("contact_id, category, status, amount, notes")
         .gte("updated_at", dayStart).lte("updated_at", dayEnd),
       sb.from("contacts")
-        .select("id, governance_status")
+        .select("id, households(governance_status)")
         .gte("updated_at", dayStart).lte("updated_at", dayEnd),
       sb.from("holding_tank")
         .select("contact_id, account_name, status, current_value")
@@ -190,7 +190,7 @@ Deno.serve(async (req) => {
     for (const r of contactsRes.data || []) {
       addRow(r.id, {
         label: "Contact Updated",
-        summary: r.governance_status ? `Governance: ${r.governance_status}` : "Profile updated",
+        summary: r.households?.governance_status ? `Governance: ${r.households.governance_status}` : "Profile updated",
       });
     }
     for (const r of holdingRes.data || []) {

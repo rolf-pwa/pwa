@@ -43,8 +43,8 @@ interface Contact {
   email: string | null;
   phone: string | null;
   address: string | null;
-  governance_status: string;
-  fiduciary_entity: string;
+  household_id: string | null;
+  households: { governance_status: string | null; fiduciary_entity: string | null } | null;
   updated_at: string;
   google_drive_url: string | null;
   asana_url: string | null;
@@ -65,7 +65,7 @@ const Contacts = () => {
   const fetchContacts = useCallback(async () => {
     const { data } = await supabase
       .from("contacts")
-      .select("id, first_name, last_name, email, phone, address, governance_status, fiduciary_entity, updated_at, google_drive_url, asana_url, ia_financial_url")
+      .select("id, first_name, last_name, email, phone, address, household_id, households(governance_status, fiduciary_entity), updated_at, google_drive_url, asana_url, ia_financial_url")
       .order("last_name")
       .order("first_name");
     setContacts(data || []);
@@ -86,8 +86,8 @@ const Contacts = () => {
     const clientEntities = new Set(["pwa", "pws"]);
     const base = contacts.filter((c) =>
       view === "general"
-        ? !clientEntities.has((c.fiduciary_entity || "").toLowerCase())
-        : clientEntities.has((c.fiduciary_entity || "").toLowerCase())
+        ? !clientEntities.has((c.households?.fiduciary_entity || "").toLowerCase())
+        : clientEntities.has((c.households?.fiduciary_entity || "").toLowerCase())
     );
     const searched = base.filter((c) => {
       const name = `${c.first_name} ${c.last_name || ""}`.toLowerCase();
@@ -314,19 +314,21 @@ const Contacts = () => {
 
                   {/* Badges */}
                   <div className="flex items-center gap-2 shrink-0">
-                    <Badge variant="outline" className="text-xs uppercase">
-                      {c.fiduciary_entity}
-                    </Badge>
-                    {c.governance_status !== "none" && (
+                    {c.households?.fiduciary_entity && (
+                      <Badge variant="outline" className="text-xs uppercase">
+                        {c.households.fiduciary_entity}
+                      </Badge>
+                    )}
+                    {c.households?.governance_status && c.households.governance_status !== "none" && (
                       <Badge
-                        variant={c.governance_status === "sovereign" ? "default" : "secondary"}
+                        variant={c.households.governance_status === "sovereign" ? "default" : "secondary"}
                         className={
-                          c.governance_status === "sovereign"
+                          c.households.governance_status === "sovereign"
                             ? "bg-sanctuary-bronze/20 text-sanctuary-bronze border-sanctuary-bronze/30"
                             : ""
                         }
                       >
-                        {c.governance_status === "sovereign" ? "Sovereign" : c.governance_status === "core" ? "Core" : "Stabilization"}
+                        {c.households.governance_status === "sovereign" ? "Sovereign" : c.households.governance_status === "core" ? "Core" : "Stabilization"}
                       </Badge>
                     )}
                   </div>

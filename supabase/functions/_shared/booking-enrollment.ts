@@ -257,7 +257,6 @@ export async function enrollPaidBooking(
         family_id: family.id,
         household_id: household.id,
         family_role: "head_of_family",
-        governance_status: "stabilization",
         quiet_period_start_date: new Date().toISOString().slice(0, 10),
         created_by: createdBy,
       })

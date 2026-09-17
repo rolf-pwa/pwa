@@ -153,7 +153,7 @@ serve(async (req) => {
 
     const { data: contact, error: contactError } = await supabase
       .from("contacts")
-      .select("id, first_name, last_name, charter_url, governance_status")
+      .select("id, first_name, last_name, charter_url, households(governance_status)")
       .eq("id", contactId)
       .single();
 
@@ -307,7 +307,7 @@ serve(async (req) => {
       missingStorehouseHarvestCount > 0 ? `${missingStorehouseHarvestCount} Storehouse item(s) are missing BOY/current harvest tracking.` : undefined,
       negativeHarvestCount > 0 ? `${negativeHarvestCount} tracked account(s) show a negative current harvest and need review.` : undefined,
       vineyardAccounts.length > 0 && storehouses.length === 0 ? "Vineyard assets exist without a matching Storehouse reserve framework." : undefined,
-      contact.governance_status === "stabilization" ? "Contact is still in Stabilization Phase, so full sovereign governance is not yet complete." : undefined,
+      contact.households?.governance_status === "stabilization" ? "Contact is still in Stabilization Phase, so full sovereign governance is not yet complete." : undefined,
     ]);
 
     const preliminaryPriorities = uniqueDefined([
@@ -321,7 +321,7 @@ serve(async (req) => {
       missingVineyardHarvestCount > 0 || missingStorehouseHarvestCount > 0 ? "Complete BOY and current harvest tracking for every matched account before the next quarterly review." : undefined,
       negativeHarvestCount > 0 ? "Review accounts with negative current harvest and confirm whether losses or cash flows explain the variance." : undefined,
       vineyardAccounts.length > 0 && storehouseTotal === 0 ? "Pair core Vineyard assets with reserve and protection lanes before the next 90-day cycle." : undefined,
-      contact.governance_status === "stabilization" ? "Complete the move from Stabilization into ratified governance so the system can be enforced." : undefined,
+      contact.households?.governance_status === "stabilization" ? "Complete the move from Stabilization into ratified governance so the system can be enforced." : undefined,
       contact.charter_url && storehouses.length > 0 && vineyardAccounts.length > 0 ? "Reconfirm the next 90-day allocation plan with the Charter, Vineyard, and Storehouse structure side by side." : undefined,
     ]);
 

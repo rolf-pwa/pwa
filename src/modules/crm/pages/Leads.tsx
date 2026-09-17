@@ -182,6 +182,7 @@ export default function Leads() {
         .insert({
           family_id: (family as any).id,
           label: householdLabel.trim() || "Primary",
+          governance_status: "stabilization",
         } as any)
         .select()
         .single();
@@ -200,7 +201,6 @@ export default function Leads() {
           full_name: convertTarget.first_name.trim(),
           email: convertTarget.email,
           phone: convertTarget.phone,
-          governance_status: "stabilization",
           family_role: role as any,
           family_id: (family as any).id,
           household_id: (household as any).id,

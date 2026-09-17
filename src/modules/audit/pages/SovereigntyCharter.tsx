@@ -25,7 +25,7 @@ type ContactRecord = {
   google_drive_url: string | null;
   charter_url: string | null;
   quiet_period_start_date: string | null;
-  governance_status: string;
+  households: { governance_status: string | null } | null;
   lawyer_name: string | null;
   accountant_name: string | null;
   executor_name: string | null;
@@ -328,7 +328,7 @@ export default function SovereigntyCharter() {
       protected_assets_note: "No protected accounts have been explicitly classified yet.",
       harvest_accounts_note: "No eligible harvest accounts are currently defined.",
       appendix_note: "This appendix condenses the current territory into a printable schedule so the Charter, Stabilization Map, and Quarterly Review all reference the same canonical structure.",
-      footer_status: contactRecord.governance_status === "sovereign" ? "Ratified / Sovereign phase" : "Draft / review in progress",
+      footer_status: contactRecord.households?.governance_status === "sovereign" ? "Ratified / Sovereign phase" : "Draft / review in progress",
       footer_date_label: formatDate(contactRecord.quiet_period_start_date, "Ratification date to be confirmed"),
       full_markdown: "",
       custom_sections: { pageOne: [], pageTwo: [] },
@@ -420,7 +420,7 @@ export default function SovereigntyCharter() {
     setLoading(true);
     const { data: contactData, error: contactError } = await supabase
       .from("contacts")
-      .select("id, first_name, last_name, full_name, family_id, household_id, google_drive_url, charter_url, quiet_period_start_date, governance_status, lawyer_name, accountant_name, executor_name, poa_name, email, phone")
+      .select("id, first_name, last_name, full_name, family_id, household_id, google_drive_url, charter_url, quiet_period_start_date, households(governance_status), lawyer_name, accountant_name, executor_name, poa_name, email, phone")
       .eq("id", contactId)
       .maybeSingle();
 

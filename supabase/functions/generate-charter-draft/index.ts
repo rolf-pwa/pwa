@@ -231,7 +231,7 @@ function buildDefaultCharter(contact: any, family: any | null, totalStewardship:
     protected_assets_note: "No protected accounts have been explicitly classified yet.",
     harvest_accounts_note: "No eligible harvest accounts are currently defined.",
     appendix_note: "This appendix condenses the current territory into a printable schedule so the Charter, Stabilization Map, and Quarterly Review all reference the same canonical structure.",
-    footer_status: contact.governance_status === "sovereign" ? "Ratified / Sovereign phase" : "Draft / review in progress",
+    footer_status: contact.households?.governance_status === "sovereign" ? "Ratified / Sovereign phase" : "Draft / review in progress",
     footer_date_label: quietDate || "Ratification date to be confirmed",
     custom_sections: { pageOne: [], pageTwo: [] },
     draft_status: "draft",
@@ -308,7 +308,7 @@ serve(async (req) => {
     const [{ data: contact, error: contactError }, { data: existingCharter, error: charterError }] = await Promise.all([
       admin
         .from("contacts")
-        .select("id, first_name, last_name, full_name, family_id, household_id, charter_url, quiet_period_start_date, governance_status, lawyer_name, accountant_name, executor_name, poa_name, email, phone")
+        .select("id, first_name, last_name, full_name, family_id, household_id, charter_url, quiet_period_start_date, households(governance_status), lawyer_name, accountant_name, executor_name, poa_name, email, phone")
         .eq("id", contactId)
         .single(),
       charterId

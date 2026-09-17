@@ -89,10 +89,10 @@ serve(async (req) => {
       });
     }
 
-    // Eligibility: governance_status='sovereign' AND fiduciary_entity='pwa'
+    // Eligibility: governance_status='sovereign' AND fiduciary_entity='pwa' (household-level)
     const { data: contact } = await admin
       .from("contacts")
-      .select("id, phone, governance_status, fiduciary_entity, first_name, last_name")
+      .select("id, phone, first_name, last_name, households(governance_status, fiduciary_entity)")
       .eq("id", tokenRow.contact_id)
       .maybeSingle();
 
@@ -103,8 +103,8 @@ serve(async (req) => {
     }
 
     const eligible =
-      contact.governance_status === "sovereign" &&
-      contact.fiduciary_entity === "pwa";
+      (contact.households as any)?.governance_status === "sovereign" &&
+      (contact.households as any)?.fiduciary_entity === "pwa";
 
     if (!eligible) {
       return new Response(JSON.stringify({

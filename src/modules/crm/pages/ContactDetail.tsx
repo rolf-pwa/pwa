@@ -173,6 +173,7 @@ const ContactDetail = () => {
   const [familyServiceTier, setFamilyServiceTier] = useState<string | null>(null);
   const [householdLabel, setHouseholdLabel] = useState<string | null>(null);
   const [householdVaultRootId, setHouseholdVaultRootId] = useState<string | null>(null);
+  const [householdGovernanceStatus, setHouseholdGovernanceStatus] = useState<string | null>(null);
   const [vineyardAccounts, setVineyardAccounts] = useState<VineyardAccount[]>([]);
   const [professionalContacts, setProfessionalContacts] = useState<Record<string, { id: string; full_name: string } | null>>({});
   const [newAccountName, setNewAccountName] = useState("");
@@ -262,7 +263,7 @@ const ContactDetail = () => {
         ? supabase.from("families").select("name, service_tier").eq("id", contactData.family_id).maybeSingle()
         : Promise.resolve({ data: null as any }),
       contactData?.household_id
-        ? supabase.from("households").select("label, vault_root_folder_id").eq("id", contactData.household_id).maybeSingle()
+        ? supabase.from("households").select("label, vault_root_folder_id, governance_status").eq("id", contactData.household_id).maybeSingle()
         : Promise.resolve({ data: null as any }),
       names.length > 0
         ? supabase.from("contacts").select("id, first_name, last_name, full_name").in("full_name", names)
@@ -279,6 +280,7 @@ const ContactDetail = () => {
     setFamilyServiceTier((famRes.data as any)?.service_tier || null);
     setHouseholdLabel((hhRes.data as any)?.label || null);
     setHouseholdVaultRootId((hhRes.data as any)?.vault_root_folder_id || null);
+    setHouseholdGovernanceStatus((hhRes.data as any)?.governance_status || null);
     const proMap = new Map<string, EngagedProfessional>();
     ((engagedProRes.data as any[]) || []).forEach((row) => {
       const p = row.professional;
@@ -533,7 +535,7 @@ const ContactDetail = () => {
     return (<AppLayout><p className="text-muted-foreground">Contact not found.</p></AppLayout>);
   }
 
-  const isStabilization = contact.governance_status === "stabilization";
+  const isStabilization = householdGovernanceStatus === "stabilization";
   const quietStart = contact.quiet_period_start_date ? new Date(contact.quiet_period_start_date) : null;
   const quietEnd = quietStart ? addDays(quietStart, 90) : null;
   const daysElapsed = quietStart ? Math.min(differenceInDays(new Date(), quietStart), 90) : 0;

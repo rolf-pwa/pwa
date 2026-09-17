@@ -23,6 +23,7 @@ import { toast } from "sonner";
 interface ProposedUpdateCardProps {
   functionCall: FunctionCall;
   contactId?: string;
+  householdId?: string;
   isApproved: boolean;
   onApproved: () => void;
 }
@@ -39,7 +40,7 @@ const CARD_CONFIG: Record<string, { icon: typeof Database; label: string; color:
   ingest_audit_territory: { icon: MapPin, label: "Draft Territory — Audit Ingestion", color: "text-emerald-600" },
 };
 
-export function ProposedUpdateCard({ functionCall, contactId, isApproved, onApproved }: ProposedUpdateCardProps) {
+export function ProposedUpdateCard({ functionCall, contactId, householdId, isApproved, onApproved }: ProposedUpdateCardProps) {
   const [loading, setLoading] = useState(false);
   const [queueLoading, setQueueLoading] = useState(false);
   const [queued, setQueued] = useState(false);
@@ -179,8 +180,9 @@ export function ProposedUpdateCard({ functionCall, contactId, isApproved, onAppr
           if (args.email) contactData.email = args.email;
           if (args.phone) contactData.phone = args.phone;
           if (args.address) contactData.address = args.address;
-          if (args.fiduciary_entity) contactData.fiduciary_entity = args.fiduciary_entity;
-          if (args.governance_status) contactData.governance_status = args.governance_status;
+          // fiduciary_entity/governance_status live on households, not
+          // contacts -- a brand-new contact has no household link yet in
+          // this same call, so there's nothing to write them onto here.
 
           const { data: newContact, error } = await supabase
             .from("contacts")
@@ -204,7 +206,7 @@ export function ProposedUpdateCard({ functionCall, contactId, isApproved, onAppr
           const updates: Record<string, any> = {};
           const fieldsToCopy = [
             "first_name", "last_name", "email", "phone", "address",
-            "fiduciary_entity", "governance_status", "google_drive_url",
+            "google_drive_url",
             "ia_financial_url",
             "lawyer_name", "lawyer_firm", "accountant_name", "accountant_firm",
           ];
@@ -221,6 +223,18 @@ export function ProposedUpdateCard({ functionCall, contactId, isApproved, onAppr
 
           if (Object.keys(updates).length > 0) {
             const { error } = await supabase.from("contacts").update(updates).eq("id", cid);
+            if (error) throw error;
+          }
+
+          // fiduciary_entity/governance_status live on the contact's
+          // household, not the contact itself -- write there instead. If
+          // this contact has no household yet, these two fields are
+          // silently skipped (a real, expected case, not an error).
+          const householdUpdates: Record<string, any> = {};
+          if (args.fiduciary_entity != null) householdUpdates.fiduciary_entity = args.fiduciary_entity;
+          if (args.governance_status != null) householdUpdates.governance_status = args.governance_status;
+          if (Object.keys(householdUpdates).length > 0 && householdId) {
+            const { error } = await supabase.from("households").update(householdUpdates).eq("id", householdId);
             if (error) throw error;
           }
 

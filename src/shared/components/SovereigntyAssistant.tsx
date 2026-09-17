@@ -231,6 +231,7 @@ export function SovereigntyAssistant({
                       key={idx}
                       functionCall={fc}
                       contactId={contactId}
+                      householdId={contactContext?.householdId}
                       isApproved={msg.approvedActions?.has(idx) || false}
                       onApproved={() => markActionApproved(msg.id, idx)}
                     />

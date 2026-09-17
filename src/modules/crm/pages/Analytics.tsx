@@ -23,7 +23,6 @@ interface Contact {
   id: string;
   full_name: string;
   email: string | null;
-  governance_status: string;
   household_id: string | null;
 }
 
@@ -57,7 +56,7 @@ const Analytics = () => {
     setLoading(true);
     Promise.all([
       supabase.from("portal_logins" as any).select("*").gte("created_at", rangeStart).order("created_at", { ascending: false }),
-      supabase.from("contacts").select("id, full_name, email, governance_status, household_id"),
+      supabase.from("contacts").select("id, full_name, email, household_id"),
       supabase
         .from("georgia2_sessions" as any)
         .select(

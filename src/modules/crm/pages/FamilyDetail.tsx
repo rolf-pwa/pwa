@@ -116,7 +116,7 @@ const FamilyDetail = () => {
       supabase.from("households").select("*").eq("family_id", id).order("label"),
       supabase
         .from("contacts")
-        .select("id, first_name, last_name, family_role, household_id, email, phone, is_minor, governance_status")
+        .select("id, first_name, last_name, family_role, household_id, email, phone, is_minor")
         .eq("family_id", id),
     ]);
 

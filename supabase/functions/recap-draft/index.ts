@@ -117,7 +117,7 @@ Deno.serve(async (req) => {
     ] = await Promise.all([
       sb.from("portal_requests").select("request_type, request_description, status, contact_id").gte("created_at", dayStart).lte("created_at", dayEnd),
       sb.from("business_pipeline").select("category, status, amount, notes").gte("updated_at", dayStart).lte("updated_at", dayEnd),
-      sb.from("contacts").select("full_name, governance_status").gte("updated_at", dayStart).lte("updated_at", dayEnd),
+      sb.from("contacts").select("full_name, households(governance_status)").gte("updated_at", dayStart).lte("updated_at", dayEnd),
       sb.from("holding_tank").select("account_name, status, current_value").gte("updated_at", dayStart).lte("updated_at", dayEnd),
       sb.from("sovereignty_audit_trail").select("action_type, action_description").gte("created_at", dayStart).lte("created_at", dayEnd),
       sb.from("review_queue").select("action_type, action_description, status").gte("created_at", dayStart).lte("created_at", dayEnd),

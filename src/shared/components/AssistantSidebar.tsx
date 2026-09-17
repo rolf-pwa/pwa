@@ -21,15 +21,22 @@ export function AssistantSidebar() {
     queryFn: async () => {
       if (!entity) return null;
       const { table, nameColumn } = ENTITY_TABLE[entity.type];
-      const { data } = await supabase.from(table as any).select(nameColumn).eq("id", entity.id).maybeSingle();
-      return (data as any)?.[nameColumn] ?? null;
+      // Contact lookups also grab household_id here -- reused as the target
+      // for household-scoped AI proposals (fiduciary_entity/governance_status)
+      // in ProposedUpdateCard, instead of a second round-trip per approval.
+      const columns = entity.type === "contact" ? `${nameColumn}, household_id` : nameColumn;
+      const { data } = await supabase.from(table as any).select(columns).eq("id", entity.id).maybeSingle();
+      return {
+        name: (data as any)?.[nameColumn] ?? null,
+        householdId: entity.type === "contact" ? ((data as any)?.household_id ?? null) : null,
+      };
     },
     enabled: isOpen && !!entity,
     staleTime: 60_000,
   });
 
   const contactContext = entity
-    ? { type: entity.type, id: entity.id, name: nameQuery.data ?? undefined }
+    ? { type: entity.type, id: entity.id, name: nameQuery.data?.name ?? undefined, householdId: nameQuery.data?.householdId ?? undefined }
     : undefined;
 
   return (

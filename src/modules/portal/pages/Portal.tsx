@@ -241,7 +241,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
   const [accountsOpen, setAccountsOpen] = useState(false);
 
   // Unread update count — must be called unconditionally (Rules of Hooks)
-  const unreadUpdateCount = useUnreadUpdateCount(data?.contact?.governance_status ?? "", data?.contact?.id ?? "", data?.contact?.household_id ?? null, token || data?.portal_token || "");
+  const unreadUpdateCount = useUnreadUpdateCount(data?.household?.governance_status ?? "", data?.contact?.id ?? "", data?.contact?.household_id ?? null, token || data?.portal_token || "");
 
   // OTP login state
   const [email, setEmail] = useState("");
@@ -1139,8 +1139,8 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
                 </TabsTrigger>
               )}
               {isSelf &&
-                contact.governance_status === "sovereign" &&
-                contact.fiduciary_entity === "pwa" && (
+                household?.governance_status === "sovereign" &&
+                household?.fiduciary_entity === "pwa" && (
                   <TabsTrigger value="messages" className="flex-1 gap-1.5">
                     <MessageCircle className="h-4 w-4" />
                     Messages
@@ -1275,8 +1275,8 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
             )}
 
             {isSelf &&
-              contact.governance_status === "sovereign" &&
-              contact.fiduciary_entity === "pwa" && (
+              household?.governance_status === "sovereign" &&
+              household?.fiduciary_entity === "pwa" && (
                 <TabsContent value="messages" className="mt-4">
                   <PortalMessages
                     portalToken={portalToken}
@@ -1369,7 +1369,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
                     </span>
                   )}
                 </div>
-                <PortalUpdates governanceStatus={contact.governance_status} contactId={contact.id} householdId={contact.household_id} portalToken={portalToken} />
+                <PortalUpdates governanceStatus={household?.governance_status ?? ""} contactId={contact.id} householdId={contact.household_id} portalToken={portalToken} />
               </CardContent>
             </Card>
           )}
