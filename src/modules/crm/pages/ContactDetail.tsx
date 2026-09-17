@@ -65,6 +65,7 @@ import { GenerateCharterDraftButton } from "@/modules/audit";
 import { VaultView } from "@/modules/crm/pages/Vault";
 import { dialViaQuo } from "@/shared/lib/quo-dial";
 import { MEETING_BOOKING_LINKS } from "@/shared/lib/meetingBookingLinks";
+import { SERVICE_TIER_LABEL, type ServiceTier } from "@/shared/lib/serviceTier";
 import { 
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, 
@@ -169,6 +170,7 @@ const ContactDetail = () => {
   const [householdMembers, setHouseholdMembers] = useState<HouseholdMember[]>([]);
   const [engagedProfessionals, setEngagedProfessionals] = useState<EngagedProfessional[]>([]);
   const [familyName, setFamilyName] = useState<string | null>(null);
+  const [familyServiceTier, setFamilyServiceTier] = useState<string | null>(null);
   const [householdLabel, setHouseholdLabel] = useState<string | null>(null);
   const [householdVaultRootId, setHouseholdVaultRootId] = useState<string | null>(null);
   const [vineyardAccounts, setVineyardAccounts] = useState<VineyardAccount[]>([]);
@@ -257,7 +259,7 @@ const ContactDetail = () => {
         ? supabase.from("contacts").select("id, first_name, last_name, family_role").eq("household_id", contactData.household_id).neq("id", id).order("first_name")
         : Promise.resolve({ data: [] as any[] }),
       contactData?.family_id
-        ? supabase.from("families").select("name").eq("id", contactData.family_id).maybeSingle()
+        ? supabase.from("families").select("name, service_tier").eq("id", contactData.family_id).maybeSingle()
         : Promise.resolve({ data: null as any }),
       contactData?.household_id
         ? supabase.from("households").select("label, vault_root_folder_id").eq("id", contactData.household_id).maybeSingle()
@@ -274,6 +276,7 @@ const ContactDetail = () => {
     if (!mountedRef.current) return;
     setHouseholdMembers((hhMembersRes.data as any) || []);
     setFamilyName((famRes.data as any)?.name || null);
+    setFamilyServiceTier((famRes.data as any)?.service_tier || null);
     setHouseholdLabel((hhRes.data as any)?.label || null);
     setHouseholdVaultRootId((hhRes.data as any)?.vault_root_folder_id || null);
     const proMap = new Map<string, EngagedProfessional>();
@@ -593,18 +596,17 @@ const ContactDetail = () => {
                         Household: —
                       </span>
                     )}
-                    <Badge variant="outline" className="text-[10px] uppercase">
-                      {contact.fiduciary_entity}
-                    </Badge>
-                    {contact.governance_status !== "none" && (
+                    {familyServiceTier ? (
                       <Badge
-                        className={
-                          isStabilization
-                            ? "bg-sanctuary-green/20 text-sanctuary-green border-sanctuary-green/30"
-                            : "bg-sanctuary-bronze/20 text-sanctuary-bronze border-sanctuary-bronze/30"
-                        }
+                        variant="outline"
+                        className="text-[10px]"
+                        title="Staff-only — not visible to clients"
                       >
-                        {isStabilization ? "Stabilization Phase" : "Sovereign Phase"}
+                        {SERVICE_TIER_LABEL[familyServiceTier as ServiceTier]}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                        Tier not classified
                       </Badge>
                     )}
                   </div>
