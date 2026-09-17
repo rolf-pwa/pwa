@@ -40,6 +40,7 @@ interface ContactOption {
 
 export function ContactMerge({ contactId, contactName, onMerged, trigger, open: controlledOpen, onOpenChange }: ContactMergeProps) {
   const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
   const open = controlledOpen ?? internalOpen;
   const setOpen = (value: boolean) => {
     setInternalOpen(value);
@@ -106,14 +107,16 @@ export function ContactMerge({ contactId, contactName, onMerged, trigger, open: 
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button variant="outline" size="sm" className="gap-1.5">
-            <Merge className="h-4 w-4" />
-            Merge
-          </Button>
-        )}
-      </DialogTrigger>
+      {(trigger || !isControlled) && (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <Merge className="h-4 w-4" />
+              Merge
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Merge Duplicate Contact</DialogTitle>
