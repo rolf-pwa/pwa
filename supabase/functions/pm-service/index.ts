@@ -218,7 +218,7 @@ Deno.serve(async (req) => {
     }
 
     const COLLABORATOR_FIELDS =
-      "id, task_id, professional_id, tagged_by, created_at, professionals(id, full_name, firm, professional_type)";
+      "id, task_id, professional_id, contact_id, tagged_by, created_at, professionals(id, full_name, firm, professional_type), contacts(id, first_name, last_name)";
 
     if (action === "listTaskCollaborators") {
       const { task_id } = body;
@@ -258,6 +258,36 @@ Deno.serve(async (req) => {
         .delete()
         .eq("task_id", task_id)
         .eq("professional_id", professional_id);
+      if (error) return json({ ok: false, error: error.message }, 500);
+      return json({ ok: true });
+    }
+
+    if (action === "tagContact") {
+      const { task_id, contact_id } = body;
+      if (!task_id || !contact_id) return json({ ok: false, error: "task_id and contact_id are required" }, 400);
+      const { error: insertErr } = await db
+        .from("pm_task_collaborators")
+        .insert({ task_id, contact_id, tagged_by: userId });
+      // Idempotent: a double-click / already-tagged row is not an error.
+      if (insertErr && insertErr.code !== "23505") return json({ ok: false, error: insertErr.message }, 500);
+      const { data, error } = await db
+        .from("pm_task_collaborators")
+        .select(COLLABORATOR_FIELDS)
+        .eq("task_id", task_id)
+        .eq("contact_id", contact_id)
+        .maybeSingle();
+      if (error) return json({ ok: false, error: error.message }, 500);
+      return json({ ok: true, collaborator: data });
+    }
+
+    if (action === "untagContact") {
+      const { task_id, contact_id } = body;
+      if (!task_id || !contact_id) return json({ ok: false, error: "task_id and contact_id are required" }, 400);
+      const { error } = await db
+        .from("pm_task_collaborators")
+        .delete()
+        .eq("task_id", task_id)
+        .eq("contact_id", contact_id);
       if (error) return json({ ok: false, error: error.message }, 500);
       return json({ ok: true });
     }

@@ -2927,27 +2927,37 @@ export type Database = {
       }
       pm_task_collaborators: {
         Row: {
+          contact_id: string | null
           created_at: string
           id: string
-          professional_id: string
+          professional_id: string | null
           tagged_by: string | null
           task_id: string
         }
         Insert: {
+          contact_id?: string | null
           created_at?: string
           id?: string
-          professional_id: string
+          professional_id?: string | null
           tagged_by?: string | null
           task_id: string
         }
         Update: {
+          contact_id?: string | null
           created_at?: string
           id?: string
-          professional_id?: string
+          professional_id?: string | null
           tagged_by?: string | null
           task_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "pm_task_collaborators_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "pm_task_collaborators_professional_id_fkey"
             columns: ["professional_id"]

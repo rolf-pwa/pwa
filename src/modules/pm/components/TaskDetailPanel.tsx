@@ -10,6 +10,7 @@ import { getTaskAgent } from "@/shared/lib/agents";
 import type { PmTask, PmTaskCollaborator, PmTaskComment } from "@/shared/lib/agents";
 import { StaffAssigneePicker } from "./StaffAssigneePicker";
 import { ProfessionalPicker } from "./ProfessionalPicker";
+import { HouseholdMemberPicker } from "./HouseholdMemberPicker";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { cn } from "@/shared/lib/utils";
 
@@ -35,8 +36,10 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
   const [loadingSubtasks, setLoadingSubtasks] = useState(true);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [addingSubtask, setAddingSubtask] = useState(false);
-  const [taggedPros, setTaggedPros] = useState<PmTaskCollaborator[]>([]);
+  const [collaborators, setCollaborators] = useState<PmTaskCollaborator[]>([]);
   const [loadingTaggedPros, setLoadingTaggedPros] = useState(true);
+  const taggedPros = collaborators.filter((c) => c.professional_id);
+  const taggedContacts = collaborators.filter((c) => c.contact_id);
 
   useEffect(() => {
     setDescription(task.description || "");
@@ -62,7 +65,7 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
     getTaskAgent()
       .listTaskCollaborators(task.id)
       .then((data) => {
-        if (!cancelled) setTaggedPros(data);
+        if (!cancelled) setCollaborators(data);
       })
       .finally(() => !cancelled && setLoadingTaggedPros(false));
     return () => {
@@ -173,7 +176,7 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
   const tagProfessional = async (professionalId: string) => {
     try {
       const created = await getTaskAgent().tagProfessional(task.id, professionalId);
-      setTaggedPros((prev) => [...prev, created]);
+      setCollaborators((prev) => [...prev, created]);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not tag this professional.");
     }
@@ -182,9 +185,27 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
   const untagProfessional = async (professionalId: string) => {
     try {
       await getTaskAgent().untagProfessional(task.id, professionalId);
-      setTaggedPros((prev) => prev.filter((c) => c.professional_id !== professionalId));
+      setCollaborators((prev) => prev.filter((c) => c.professional_id !== professionalId));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not remove this professional.");
+    }
+  };
+
+  const tagContact = async (contactId: string) => {
+    try {
+      const created = await getTaskAgent().tagContact(task.id, contactId);
+      setCollaborators((prev) => [...prev, created]);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not tag this household member.");
+    }
+  };
+
+  const untagContact = async (contactId: string) => {
+    try {
+      await getTaskAgent().untagContact(task.id, contactId);
+      setCollaborators((prev) => prev.filter((c) => c.contact_id !== contactId));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not remove this household member.");
     }
   };
 
@@ -309,7 +330,41 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
             ))}
           </div>
         ) : null}
-        <ProfessionalPicker excludeIds={taggedPros.map((c) => c.professional_id)} onSelect={tagProfessional} />
+        <ProfessionalPicker excludeIds={taggedPros.map((c) => c.professional_id!)} onSelect={tagProfessional} />
+      </div>
+
+      <div className="space-y-2">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tagged Household Members</h4>
+        {loadingTaggedPros ? (
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        ) : taggedContacts.length > 0 ? (
+          <div className="space-y-1">
+            {taggedContacts.map((c) => (
+              <div
+                key={c.id}
+                className="flex items-center justify-between rounded-md px-1.5 py-1 text-sm hover:bg-muted/50"
+              >
+                <span>
+                  {c.contacts?.first_name} {c.contacts?.last_name || ""}
+                </span>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-6 w-6"
+                  onClick={() => untagContact(c.contact_id!)}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <HouseholdMemberPicker
+          householdId={task.household_id}
+          familyId={task.family_id}
+          excludeIds={[...taggedContacts.map((c) => c.contact_id!), ...(task.contact_id ? [task.contact_id] : [])]}
+          onSelect={tagContact}
+        />
       </div>
 
       <div className="space-y-2">

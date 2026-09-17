@@ -87,4 +87,17 @@ export const edgeTaskAgent: ITaskAgentProvider = {
   async untagProfessional(taskId, professionalId): Promise<void> {
     await invoke<{ ok: boolean }>({ action: "untagProfessional", task_id: taskId, professional_id: professionalId });
   },
+
+  async tagContact(taskId, contactId): Promise<PmTaskCollaborator> {
+    const data = await invoke<{ collaborator: PmTaskCollaborator }>({
+      action: "tagContact",
+      task_id: taskId,
+      contact_id: contactId,
+    });
+    return data.collaborator;
+  },
+
+  async untagContact(taskId, contactId): Promise<void> {
+    await invoke<{ ok: boolean }>({ action: "untagContact", task_id: taskId, contact_id: contactId });
+  },
 };

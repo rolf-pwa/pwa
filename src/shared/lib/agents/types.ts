@@ -204,10 +204,12 @@ export interface PmTaskComment {
 export interface PmTaskCollaborator {
   id: string;
   task_id: string;
-  professional_id: string;
+  professional_id: string | null;
+  contact_id: string | null;
   tagged_by: string | null;
   created_at: string;
   professionals?: { id: string; full_name: string; firm: string | null; professional_type: string } | null;
+  contacts?: { id: string; first_name: string; last_name: string | null } | null;
 }
 
 export interface PmTaskFilter {
@@ -259,4 +261,6 @@ export interface ITaskAgentProvider {
   listTaskCollaborators(taskId: string): Promise<PmTaskCollaborator[]>;
   tagProfessional(taskId: string, professionalId: string): Promise<PmTaskCollaborator>;
   untagProfessional(taskId: string, professionalId: string): Promise<void>;
+  tagContact(taskId: string, contactId: string): Promise<PmTaskCollaborator>;
+  untagContact(taskId: string, contactId: string): Promise<void>;
 }
