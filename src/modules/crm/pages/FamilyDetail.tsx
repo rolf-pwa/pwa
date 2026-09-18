@@ -338,13 +338,6 @@ const FamilyDetail = () => {
                 </div>
               </div>
             </div>
-
-            {/* Total AUM */}
-            <div className="mt-4 flex items-center gap-3">
-              <Wallet className="h-4 w-4 text-sanctuary-bronze" />
-              <span className="text-sm text-muted-foreground">Total Family AUM</span>
-              <span className="text-lg font-bold text-sanctuary-bronze">{formatCurrency(totalAUM)}</span>
-            </div>
           </CardContent>
         </Card>
 

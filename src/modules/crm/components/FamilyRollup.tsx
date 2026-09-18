@@ -187,11 +187,6 @@ export const FamilyRollup = ({
           )}
           <BarChart3 className="h-4 w-4 text-accent" />
           <span className="text-sm font-semibold">Financial Rollup</span>
-          {!expanded && totalAssets > 0 && (
-            <span className="text-xs text-muted-foreground ml-2">
-              {formatCurrency(totalAssets)}
-            </span>
-          )}
         </div>
         <Button
           variant="outline"
