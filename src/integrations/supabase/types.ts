@@ -2854,6 +2854,67 @@ export type Database = {
         }
         Relationships: []
       }
+      pm_ai_teammate_runs: {
+        Row: {
+          agent_key: string
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          requested_by: string
+          result_comment_id: string | null
+          result_subtask_id: string | null
+          status: string
+          task_id: string
+        }
+        Insert: {
+          agent_key: string
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          requested_by: string
+          result_comment_id?: string | null
+          result_subtask_id?: string | null
+          status?: string
+          task_id: string
+        }
+        Update: {
+          agent_key?: string
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          requested_by?: string
+          result_comment_id?: string | null
+          result_subtask_id?: string | null
+          status?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pm_ai_teammate_runs_result_comment_id_fkey"
+            columns: ["result_comment_id"]
+            isOneToOne: false
+            referencedRelation: "pm_task_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pm_ai_teammate_runs_result_subtask_id_fkey"
+            columns: ["result_subtask_id"]
+            isOneToOne: false
+            referencedRelation: "pm_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pm_ai_teammate_runs_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "pm_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pm_projects: {
         Row: {
           contact_id: string | null
@@ -2976,6 +3037,7 @@ export type Database = {
       }
       pm_task_comments: {
         Row: {
+          author_agent_key: string | null
           author_contact_id: string | null
           author_id: string | null
           author_professional_id: string | null
@@ -2985,6 +3047,7 @@ export type Database = {
           task_id: string
         }
         Insert: {
+          author_agent_key?: string | null
           author_contact_id?: string | null
           author_id?: string | null
           author_professional_id?: string | null
@@ -2994,6 +3057,7 @@ export type Database = {
           task_id: string
         }
         Update: {
+          author_agent_key?: string | null
           author_contact_id?: string | null
           author_id?: string | null
           author_professional_id?: string | null
@@ -3029,6 +3093,7 @@ export type Database = {
       pm_tasks: {
         Row: {
           asana_gid: string | null
+          assigned_agent_key: string | null
           assignee_id: string | null
           client_visible: boolean
           completed_at: string | null
@@ -3049,6 +3114,7 @@ export type Database = {
         }
         Insert: {
           asana_gid?: string | null
+          assigned_agent_key?: string | null
           assignee_id?: string | null
           client_visible?: boolean
           completed_at?: string | null
@@ -3069,6 +3135,7 @@ export type Database = {
         }
         Update: {
           asana_gid?: string | null
+          assigned_agent_key?: string | null
           assignee_id?: string | null
           client_visible?: boolean
           completed_at?: string | null

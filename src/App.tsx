@@ -61,6 +61,7 @@ const TermsOfEngagementDoc = lazy(() => import("@/modules/billing/pages/TermsOfE
 const Projects = lazy(() => import("@/modules/pm/pages/Projects"));
 const ImportAsanaProject = lazy(() => import("@/modules/pm/pages/ImportAsanaProject"));
 const ProjectDetail = lazy(() => import("@/modules/pm/pages/ProjectDetail"));
+const TeamCapacity = lazy(() => import("@/modules/pm/pages/TeamCapacity"));
 
 const Brain = lazy(() => import("@/modules/brain/pages/Brain"));
 const BrainDocument = lazy(() => import("@/modules/brain/pages/BrainDocument"));
@@ -143,6 +144,7 @@ const App = () => (
               <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
               <Route path="/projects/import" element={<ProtectedRoute><ImportAsanaProject /></ProtectedRoute>} />
               <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
+              <Route path="/team-capacity" element={<ProtectedRoute><TeamCapacity /></ProtectedRoute>} />
               <Route path="/book" element={<BookService />} />
               <Route path="/book/embed" element={<BookService embed />} />
               <Route path="/book/confirm" element={<BookingConfirmation />} />

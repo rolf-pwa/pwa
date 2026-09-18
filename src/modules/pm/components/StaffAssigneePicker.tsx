@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/shared/components/ui/select";
+import { AI_TEAMMATE_LABEL, AI_TEAMMATE_ORDER } from "@/shared/lib/aiTeammates";
 
 interface StaffProfile {
   user_id: string;
@@ -22,8 +23,9 @@ interface HouseholdAssignee extends StaffProfile {
 }
 
 interface Props {
+  /** A real assignee user id, or `agent:{key}` for an AI Teammate — caller decodes. */
   value: string | null;
-  onChange: (userId: string | null) => void;
+  onChange: (value: string | null) => void;
   /** Scope for offering the household/family head(s) as an assignee, alongside staff. */
   householdId?: string | null;
   familyId?: string | null;
@@ -124,6 +126,15 @@ export function StaffAssigneePicker({ value, onChange, householdId, familyId }: 
             </SelectGroup>
           </>
         )}
+        <SelectSeparator />
+        <SelectGroup>
+          <SelectLabel>AI Teammates</SelectLabel>
+          {AI_TEAMMATE_ORDER.map((key) => (
+            <SelectItem key={key} value={`agent:${key}`}>
+              🤖 {AI_TEAMMATE_LABEL[key]}
+            </SelectItem>
+          ))}
+        </SelectGroup>
       </SelectContent>
     </Select>
   );

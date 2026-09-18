@@ -181,6 +181,8 @@ export interface PmTask {
   status: string;
   due_date: string | null;
   assignee_id: string | null;
+  /** Set instead of assignee_id when this task is owned by an AI Teammate, never both. */
+  assigned_agent_key: string | null;
   household_id: string | null;
   contact_id: string | null;
   corporation_id: string | null;
@@ -192,11 +194,26 @@ export interface PmTask {
   updated_at: string;
 }
 
+export interface PmAiTeammateRun {
+  id: string;
+  task_id: string;
+  agent_key: string;
+  status: "running" | "complete" | "error";
+  result_subtask_id: string | null;
+  result_comment_id: string | null;
+  error_message: string | null;
+  requested_by: string;
+  created_at: string;
+  completed_at: string | null;
+}
+
 export interface PmTaskComment {
   id: string;
   task_id: string;
   author_id: string;
   author_professional_id?: string | null;
+  /** Set instead of author_id when this comment was posted by an AI Teammate. */
+  author_agent_key?: string | null;
   body: string;
   created_at: string;
 }
@@ -254,7 +271,9 @@ export interface ITaskAgentProvider {
   }): Promise<PmTask>;
   updateTask(
     id: string,
-    updates: Partial<Pick<PmTask, "title" | "description" | "status" | "due_date" | "assignee_id" | "client_visible" | "family_id">>,
+    updates: Partial<
+      Pick<PmTask, "title" | "description" | "status" | "due_date" | "assignee_id" | "assigned_agent_key" | "client_visible" | "family_id">
+    >,
   ): Promise<PmTask>;
   getTaskComments(taskId: string): Promise<PmTaskComment[]>;
   postTaskComment(taskId: string, body: string): Promise<PmTaskComment>;
@@ -263,4 +282,8 @@ export interface ITaskAgentProvider {
   untagProfessional(taskId: string, professionalId: string): Promise<void>;
   tagContact(taskId: string, contactId: string): Promise<PmTaskCollaborator>;
   untagContact(taskId: string, contactId: string): Promise<void>;
+  /** Runs one AI Teammate draft against a task (single-shot; see pm-ai-teammate-run). */
+  runAiTeammate(taskId: string): Promise<{ run: PmAiTeammateRun; subtask: PmTask; comment: PmTaskComment }>;
+  /** All non-done tasks, ungrouped, for the Team Capacity view to group client-side. */
+  listOpenTasksForCapacity(): Promise<PmTask[]>;
 }

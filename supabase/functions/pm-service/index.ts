@@ -47,7 +47,7 @@ async function requireStaff(req: Request): Promise<{ userId: string; error?: und
 const PROJECT_FIELDS =
   "id, name, description, status, household_id, contact_id, corporation_id, family_id, created_by, created_at, updated_at";
 const TASK_FIELDS =
-  "id, project_id, parent_task_id, title, description, status, due_date, assignee_id, household_id, contact_id, corporation_id, family_id, completed_at, client_visible, created_by, created_at, updated_at";
+  "id, project_id, parent_task_id, title, description, status, due_date, assignee_id, assigned_agent_key, household_id, contact_id, corporation_id, family_id, completed_at, client_visible, created_by, created_at, updated_at";
 
 Deno.serve(async (req) => {
   const cors = getCorsHeaders(req);
@@ -112,6 +112,16 @@ Deno.serve(async (req) => {
       const { data, error } = await db.from("pm_projects").update(patch).eq("id", id).select(PROJECT_FIELDS).maybeSingle();
       if (error) return json({ ok: false, error: error.message }, 500);
       return json({ ok: true, project: data });
+    }
+
+    if (action === "listOpenTasksForCapacity") {
+      const { data, error } = await db
+        .from("pm_tasks")
+        .select(TASK_FIELDS)
+        .neq("status", "done")
+        .order("due_date", { ascending: true, nullsFirst: false });
+      if (error) return json({ ok: false, error: error.message }, 500);
+      return json({ ok: true, tasks: data });
     }
 
     if (action === "listTasks") {
@@ -183,11 +193,17 @@ Deno.serve(async (req) => {
       const { id, ...updates } = body;
       if (!id) return json({ ok: false, error: "id is required" }, 400);
       const patch: Record<string, unknown> = {};
-      for (const key of ["title", "description", "status", "due_date", "assignee_id", "client_visible", "family_id"]) {
+      for (const key of ["title", "description", "status", "due_date", "assignee_id", "assigned_agent_key", "client_visible", "family_id"]) {
         if (key in updates) patch[key] = updates[key];
       }
       if (patch.status === "done") patch.completed_at = new Date().toISOString();
       else if ("status" in patch) patch.completed_at = null;
+      // A task's owner is either a human (assignee_id) or an AI Teammate
+      // (assigned_agent_key) -- never both. Enforced here, not a DB CHECK,
+      // matching this table family's established "exactly one of X/Y"
+      // convention (see pm_task_comments' author columns).
+      if ("assigned_agent_key" in patch && patch.assigned_agent_key) patch.assignee_id = null;
+      if ("assignee_id" in patch && patch.assignee_id) patch.assigned_agent_key = null;
       const { data, error } = await db.from("pm_tasks").update(patch).eq("id", id).select(TASK_FIELDS).maybeSingle();
       if (error) return json({ ok: false, error: error.message }, 500);
       return json({ ok: true, task: data });
@@ -198,7 +214,7 @@ Deno.serve(async (req) => {
       if (!task_id) return json({ ok: false, error: "task_id is required" }, 400);
       const { data, error } = await db
         .from("pm_task_comments")
-        .select("id, task_id, author_id, body, created_at")
+        .select("id, task_id, author_id, author_agent_key, body, created_at")
         .eq("task_id", task_id)
         .order("created_at", { ascending: true });
       if (error) return json({ ok: false, error: error.message }, 500);
@@ -211,7 +227,7 @@ Deno.serve(async (req) => {
       const { data, error } = await db
         .from("pm_task_comments")
         .insert({ task_id, author_id: userId, body: String(text).trim() })
-        .select("id, task_id, author_id, body, created_at")
+        .select("id, task_id, author_id, author_agent_key, body, created_at")
         .maybeSingle();
       if (error) return json({ ok: false, error: error.message }, 500);
       return json({ ok: true, comment: data });

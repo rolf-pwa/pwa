@@ -4,10 +4,10 @@
  * touching components.
  */
 import { supabase } from "@/shared/integrations/supabase/client";
-import type { ITaskAgentProvider, PmProject, PmTask, PmTaskCollaborator, PmTaskComment, PmTaskFilter } from "../types";
+import type { ITaskAgentProvider, PmAiTeammateRun, PmProject, PmTask, PmTaskCollaborator, PmTaskComment, PmTaskFilter } from "../types";
 
-async function invoke<T>(body: Record<string, unknown>): Promise<T> {
-  const { data, error } = await supabase.functions.invoke("pm-service", { body });
+async function invoke<T>(body: Record<string, unknown>, fn = "pm-service"): Promise<T> {
+  const { data, error } = await supabase.functions.invoke(fn, { body });
   if (error) {
     let details = error.message;
     try {
@@ -99,5 +99,18 @@ export const edgeTaskAgent: ITaskAgentProvider = {
 
   async untagContact(taskId, contactId): Promise<void> {
     await invoke<{ ok: boolean }>({ action: "untagContact", task_id: taskId, contact_id: contactId });
+  },
+
+  async runAiTeammate(taskId): Promise<{ run: PmAiTeammateRun; subtask: PmTask; comment: PmTaskComment }> {
+    const data = await invoke<{ run: PmAiTeammateRun; subtask: PmTask; comment: PmTaskComment }>(
+      { task_id: taskId },
+      "pm-ai-teammate-run",
+    );
+    return data;
+  },
+
+  async listOpenTasksForCapacity(): Promise<PmTask[]> {
+    const data = await invoke<{ tasks: PmTask[] }>({ action: "listOpenTasksForCapacity" });
+    return data.tasks;
   },
 };

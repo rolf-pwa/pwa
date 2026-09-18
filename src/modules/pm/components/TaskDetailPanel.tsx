@@ -4,13 +4,15 @@ import { Input } from "@/shared/components/ui/input";
 import { Button } from "@/shared/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import { Switch } from "@/shared/components/ui/switch";
-import { Loader2, Send, Plus, Eye, EyeOff, X } from "lucide-react";
+import { Loader2, Send, Plus, Eye, EyeOff, X, Bot, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { getTaskAgent } from "@/shared/lib/agents";
 import type { PmTask, PmTaskCollaborator, PmTaskComment } from "@/shared/lib/agents";
 import { StaffAssigneePicker } from "./StaffAssigneePicker";
 import { ProfessionalPicker } from "./ProfessionalPicker";
 import { HouseholdMemberPicker } from "./HouseholdMemberPicker";
+import { AiTeammateStepper } from "./AiTeammateStepper";
+import { AI_TEAMMATE_DESCRIPTION, AI_TEAMMATE_LABEL, type AiTeammateKey } from "@/shared/lib/aiTeammates";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { cn } from "@/shared/lib/utils";
 
@@ -38,6 +40,8 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
   const [addingSubtask, setAddingSubtask] = useState(false);
   const [collaborators, setCollaborators] = useState<PmTaskCollaborator[]>([]);
   const [loadingTaggedPros, setLoadingTaggedPros] = useState(true);
+  const [agentCallInFlight, setAgentCallInFlight] = useState(false);
+  const [showAgentStepper, setShowAgentStepper] = useState(false);
   const taggedPros = collaborators.filter((c) => c.professional_id);
   const taggedContacts = collaborators.filter((c) => c.contact_id);
 
@@ -125,12 +129,30 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
     }
   };
 
-  const setAssignee = async (assignee_id: string | null) => {
+  const setAssignee = async (value: string | null) => {
     try {
-      const updated = await getTaskAgent().updateTask(task.id, { assignee_id });
+      const updated = value?.startsWith("agent:")
+        ? await getTaskAgent().updateTask(task.id, { assignee_id: null, assigned_agent_key: value.slice(6) })
+        : await getTaskAgent().updateTask(task.id, { assignee_id: value, assigned_agent_key: null });
       onChanged(updated);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not update the assignee.");
+    }
+  };
+
+  const runAiTeammate = async () => {
+    setShowAgentStepper(true);
+    setAgentCallInFlight(true);
+    try {
+      const { subtask, comment } = await getTaskAgent().runAiTeammate(task.id);
+      setSubtasks((prev) => [...prev, subtask]);
+      setComments((prev) => [...prev, comment]);
+      toast.success("AI Teammate posted a draft for review.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The AI Teammate run failed.");
+      setShowAgentStepper(false);
+    } finally {
+      setAgentCallInFlight(false);
     }
   };
 
@@ -245,7 +267,7 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
           onChange={(e) => setDueDate(e.target.value)}
         />
         <StaffAssigneePicker
-          value={task.assignee_id}
+          value={task.assigned_agent_key ? `agent:${task.assigned_agent_key}` : task.assignee_id}
           onChange={setAssignee}
           householdId={task.household_id}
           familyId={task.family_id}
@@ -256,6 +278,31 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
           <Switch checked={task.client_visible} onCheckedChange={setClientVisible} />
         </label>
       </div>
+
+      {task.assigned_agent_key && (
+        <div className="space-y-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Bot className="h-4 w-4 text-primary" />
+              <div>
+                <p className="text-sm font-medium">{AI_TEAMMATE_LABEL[task.assigned_agent_key as AiTeammateKey] || task.assigned_agent_key}</p>
+                <p className="text-xs text-muted-foreground">
+                  {AI_TEAMMATE_DESCRIPTION[task.assigned_agent_key as AiTeammateKey] || "Assigned to an AI Teammate."}
+                </p>
+              </div>
+            </div>
+            {!showAgentStepper && (
+              <Button size="sm" variant="outline" onClick={runAiTeammate} disabled={agentCallInFlight}>
+                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                Run{subtasks.length > 0 ? " again" : ""}
+              </Button>
+            )}
+          </div>
+          {showAgentStepper && (
+            <AiTeammateStepper active={agentCallInFlight} onSettled={() => setShowAgentStepper(false)} />
+          )}
+        </div>
+      )}
 
       <div className="space-y-1.5">
         <Textarea
@@ -378,7 +425,10 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
             {comments.map((c) => (
               <div key={c.id} className="rounded-md bg-muted/50 p-2 text-sm">
                 <div className="mb-0.5 text-xs font-medium text-muted-foreground">
-                  {authorNames[c.author_id] || "Staff"} · {new Date(c.created_at).toLocaleString()}
+                  {c.author_agent_key
+                    ? `🤖 ${AI_TEAMMATE_LABEL[c.author_agent_key as AiTeammateKey] || c.author_agent_key}`
+                    : authorNames[c.author_id] || "Staff"}{" "}
+                  · {new Date(c.created_at).toLocaleString()}
                 </div>
                 <div className="whitespace-pre-wrap">{c.body}</div>
               </div>

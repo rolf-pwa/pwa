@@ -30,6 +30,7 @@ import {
   FileSignature,
   ListTodo,
   MoreHorizontal,
+  Gauge,
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { useEffect, useState, createContext, useContext } from "react";
@@ -67,6 +68,7 @@ const GROUPS = [
       { to: "/requests", label: "Client Requests", icon: ClipboardList, badgeKey: "requests" },
       { to: "/inbox", label: "Inbox", icon: InboxIcon, badgeKey: "inbox" },
       { to: "/projects", label: "Projects", icon: ListTodo },
+      { to: "/team-capacity", label: "Team Capacity", icon: Gauge },
       { to: "/invoices", label: "Invoices", icon: Receipt },
       { to: "/services", label: "Services", icon: ConciergeBell },
     ],
