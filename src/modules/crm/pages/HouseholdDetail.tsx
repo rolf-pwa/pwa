@@ -420,24 +420,6 @@ const HouseholdDetail = () => {
                       <Users className="h-3.5 w-3.5" />
                       {familyName} Family
                     </Link>
-                    <Badge variant="outline" className="text-[10px] uppercase">
-                      {household.fiduciary_entity}
-                    </Badge>
-                    {household.governance_status !== "none" && (
-                      <Badge
-                        className={
-                          household.governance_status === "stabilization"
-                            ? "bg-sanctuary-green/20 text-sanctuary-green border-sanctuary-green/30"
-                            : "bg-sanctuary-bronze/20 text-sanctuary-bronze border-sanctuary-bronze/30"
-                        }
-                      >
-                        {household.governance_status === "stabilization"
-                          ? "Stabilization Phase"
-                          : household.governance_status === "sovereign"
-                            ? "Sovereign Phase"
-                            : "Core"}
-                      </Badge>
-                    )}
                     {household.relationship_ended_at && (
                       <Badge variant="outline" className="text-[10px] uppercase gap-1">
                         <CalendarOff className="h-3 w-3" />
