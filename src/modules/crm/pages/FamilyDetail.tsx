@@ -331,7 +331,7 @@ const FamilyDetail = () => {
                     </Badge>
                     {family.fee_tier && (
                       <Badge className="bg-sanctuary-bronze/20 text-sanctuary-bronze border-sanctuary-bronze/30 uppercase text-[10px]">
-                        {family.fee_tier} Tier
+                        {family.fee_tier} Fee Tier
                       </Badge>
                     )}
                   </div>
