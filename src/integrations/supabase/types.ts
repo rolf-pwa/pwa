@@ -1935,15 +1935,22 @@ export type Database = {
       }
       household_charters: {
         Row: {
+          boundary_protocol_note: string | null
+          capital_request_framework_note: string | null
           completed_at: string | null
           completed_by: string | null
           core_values: Json
           created_at: string
           created_by: string | null
+          discretionary_trust_guidelines: string | null
           grounding_principles: Json
           household_id: string
           id: string
+          matrimonial_ringfencing_note: string | null
+          meeting_transcripts: Json
+          poa_incapacity_protocol: string | null
           river_boundary_note: string | null
+          shareholder_voting_philosophy: string | null
           status: string
           step: number
           treasury_snapshot: Json | null
@@ -1953,15 +1960,22 @@ export type Database = {
           vision_text: string | null
         }
         Insert: {
+          boundary_protocol_note?: string | null
+          capital_request_framework_note?: string | null
           completed_at?: string | null
           completed_by?: string | null
           core_values?: Json
           created_at?: string
           created_by?: string | null
+          discretionary_trust_guidelines?: string | null
           grounding_principles?: Json
           household_id: string
           id?: string
+          matrimonial_ringfencing_note?: string | null
+          meeting_transcripts?: Json
+          poa_incapacity_protocol?: string | null
           river_boundary_note?: string | null
+          shareholder_voting_philosophy?: string | null
           status?: string
           step?: number
           treasury_snapshot?: Json | null
@@ -1971,15 +1985,22 @@ export type Database = {
           vision_text?: string | null
         }
         Update: {
+          boundary_protocol_note?: string | null
+          capital_request_framework_note?: string | null
           completed_at?: string | null
           completed_by?: string | null
           core_values?: Json
           created_at?: string
           created_by?: string | null
+          discretionary_trust_guidelines?: string | null
           grounding_principles?: Json
           household_id?: string
           id?: string
+          matrimonial_ringfencing_note?: string | null
+          meeting_transcripts?: Json
+          poa_incapacity_protocol?: string | null
           river_boundary_note?: string | null
+          shareholder_voting_philosophy?: string | null
           status?: string
           step?: number
           treasury_snapshot?: Json | null

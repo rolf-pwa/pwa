@@ -31,6 +31,24 @@ export interface TreasurySnapshot {
   holding_tank_rows: { id: string; account_name: string; current_value: number; days_since_added: number }[];
 }
 
+export interface MeetingTranscript {
+  id: string;
+  title: string;
+  content_text: string;
+  added_at: string;
+  external_file_id: string | null;
+  external_modified_at: string | null;
+}
+
+export interface Perspective2Draft {
+  discretionary_trust_guidelines: string;
+  poa_incapacity_protocol: string;
+  shareholder_voting_philosophy: string;
+  boundary_protocol_note: string;
+  capital_request_framework_note: string;
+  matrimonial_ringfencing_note: string;
+}
+
 export interface HouseholdCharter {
   id: string;
   household_id: string;
@@ -43,6 +61,13 @@ export interface HouseholdCharter {
   treasury_snapshot_computed_at: string | null;
   vineyard_replenishment_policy: string | null;
   river_boundary_note: string | null;
+  meeting_transcripts: MeetingTranscript[];
+  discretionary_trust_guidelines: string | null;
+  poa_incapacity_protocol: string | null;
+  shareholder_voting_philosophy: string | null;
+  boundary_protocol_note: string | null;
+  capital_request_framework_note: string | null;
+  matrimonial_ringfencing_note: string | null;
   completed_at: string | null;
   completed_by: string | null;
   created_by: string | null;
@@ -82,8 +107,20 @@ export async function loadCharterIntake(householdId: string) {
 
 export async function saveCharterIntakeField(
   householdId: string,
-  field: "vision" | "core_values" | "grounding_principles" | "vineyard_replenishment" | "river_boundary",
-  value: string | NamedItem[],
+  field:
+    | "vision"
+    | "core_values"
+    | "grounding_principles"
+    | "vineyard_replenishment"
+    | "river_boundary"
+    | "meeting_transcripts"
+    | "discretionary_trust_guidelines"
+    | "poa_incapacity_protocol"
+    | "shareholder_voting_philosophy"
+    | "boundary_protocol_note"
+    | "capital_request_framework_note"
+    | "matrimonial_ringfencing_note",
+  value: string | NamedItem[] | MeetingTranscript[],
   advanceTo: number,
 ) {
   const data = await invoke<{ charter: HouseholdCharter }>({
@@ -99,6 +136,18 @@ export async function saveCharterIntakeField(
 export async function recomputeTreasurySnapshot(householdId: string) {
   const data = await invoke<{ charter: HouseholdCharter }>({ action: "recompute_treasury", household_id: householdId });
   return data.charter;
+}
+
+export async function syncMeetingTranscripts(householdId: string) {
+  return invoke<{ charter: HouseholdCharter; synced: number; folder_missing?: boolean; errors?: { title: string; message: string }[] }>({
+    action: "sync_meeting_transcripts",
+    household_id: householdId,
+  });
+}
+
+export async function draftPerspective2(householdId: string) {
+  const data = await invoke<{ draft: Perspective2Draft }>({ action: "draft_perspective_2", household_id: householdId });
+  return data.draft;
 }
 
 export async function completeCharterIntake(householdId: string) {

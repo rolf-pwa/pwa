@@ -127,6 +127,68 @@ export function StepReview({ charter, completing, onComplete }: Props) {
           )}
         </div>
 
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Meeting Transcripts
+          </h3>
+          {charter.meeting_transcripts.length > 0 ? (
+            <p className="rounded-md border border-border bg-muted/30 p-3 text-sm">
+              {charter.meeting_transcripts.length} transcript{charter.meeting_transcripts.length === 1 ? "" : "s"}{" "}
+              synced — most recent{" "}
+              {new Date(
+                Math.max(...charter.meeting_transcripts.map((t) => new Date(t.added_at).getTime())),
+              ).toLocaleDateString()}
+              .
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground italic">No meeting transcripts added yet.</p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Fiduciary Guidance
+          </h3>
+          <div className="space-y-2">
+            {[
+              ["Discretionary Trust Guidelines", charter.discretionary_trust_guidelines],
+              ["POA & Incapacity Protocol", charter.poa_incapacity_protocol],
+              ["Shareholder Voting & Succession Philosophy", charter.shareholder_voting_philosophy],
+            ].map(([label, text]) => (
+              <div key={label} className="rounded-md border border-border bg-muted/30 p-3">
+                <p className="text-xs font-medium text-muted-foreground">{label}</p>
+                {text?.trim() ? (
+                  <p className="mt-1 whitespace-pre-wrap text-sm">{text}</p>
+                ) : (
+                  <p className="mt-1 text-sm text-muted-foreground italic">Not yet drafted.</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Boundary &amp; Capital Protocols
+          </h3>
+          <div className="space-y-2">
+            {[
+              ["The Sovereignty Boundary Protocol", charter.boundary_protocol_note],
+              ["Capital Request Framework", charter.capital_request_framework_note],
+              ["Matrimonial & Asset Ring-Fencing", charter.matrimonial_ringfencing_note],
+            ].map(([label, text]) => (
+              <div key={label} className="rounded-md border border-border bg-muted/30 p-3">
+                <p className="text-xs font-medium text-muted-foreground">{label}</p>
+                {text?.trim() ? (
+                  <p className="mt-1 whitespace-pre-wrap text-sm">{text}</p>
+                ) : (
+                  <p className="mt-1 text-sm text-muted-foreground italic">Not yet drafted.</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
         {charter.status === "complete" ? (
           <p className="text-sm font-medium text-emerald-600">
             Marked complete{charter.completed_at ? ` on ${new Date(charter.completed_at).toLocaleDateString()}` : ""}.

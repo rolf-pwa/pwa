@@ -8,16 +8,23 @@ import { toast } from "sonner";
 import { OnboardingStepper, type OnboardingStepMeta } from "@/modules/intake";
 import {
   completeCharterIntake,
+  draftPerspective2,
   loadCharterIntake,
   recomputeTreasurySnapshot,
   saveCharterIntakeField,
+  syncMeetingTranscripts,
   type CharterPrefill,
   type HouseholdCharter,
+  type MeetingTranscript,
   type NamedItem,
+  type Perspective2Draft,
 } from "../hooks/useCharterIntake";
 import { StepFamilyVision } from "../components/charter-intake/StepFamilyVision";
 import { NamedListStep } from "../components/charter-intake/NamedListStep";
 import { StepTreasuryCapital } from "../components/charter-intake/StepTreasuryCapital";
+import { StepMeetingTranscripts } from "../components/charter-intake/StepMeetingTranscripts";
+import { StepFiduciaryGuidance } from "../components/charter-intake/StepFiduciaryGuidance";
+import { StepBoundaryCapitalProtocols } from "../components/charter-intake/StepBoundaryCapitalProtocols";
 import { StepReview } from "../components/charter-intake/StepReview";
 import { CORE_VALUES_DEFAULTS, GROUNDING_PRINCIPLES_DEFAULTS } from "../lib/charterBedrockDefaults";
 
@@ -26,7 +33,10 @@ const CHARTER_INTAKE_STEPS: OnboardingStepMeta[] = [
   { id: 2, title: "Core Values", hint: "How the family works together" },
   { id: 3, title: "System Grounding Principles", hint: "How the system stays disciplined" },
   { id: 4, title: "Treasury & Capital Structure", hint: "How capital is partitioned, replenished, and compounded" },
-  { id: 5, title: "Review & Complete", hint: "Confirm before marking the Bedrock complete" },
+  { id: 5, title: "Meeting Transcripts", hint: "Synced directly from the household's Meeting Notes in Drive" },
+  { id: 6, title: "Fiduciary Guidance", hint: "Trust, POA, and shareholder succession guidance" },
+  { id: 7, title: "Boundary & Capital Protocols", hint: "Social boundaries, capital requests, and asset ring-fencing" },
+  { id: 8, title: "Review & Complete", hint: "Confirm before marking the Bedrock complete" },
 ];
 
 const CORE_VALUES_GUIDANCE =
@@ -43,6 +53,9 @@ export default function CharterIntake() {
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [recomputing, setRecomputing] = useState(false);
+  const [syncingTranscripts, setSyncingTranscripts] = useState(false);
+  const [perspective2Draft, setPerspective2Draft] = useState<Perspective2Draft | null>(null);
+  const [drafting, setDrafting] = useState(false);
   const [current, setCurrent] = useState(1);
 
   const furthest = charter?.step ?? 1;
@@ -112,6 +125,107 @@ export default function CharterIntake() {
       const updated = await saveCharterIntakeField(householdId, "river_boundary", riverText, 5);
       setCharter(updated);
       setCurrent(5);
+      toast.success("Saved.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const syncTranscripts = async () => {
+    if (!householdId) return;
+    setSyncingTranscripts(true);
+    try {
+      const result = await syncMeetingTranscripts(householdId);
+      setCharter(result.charter);
+      if (result.folder_missing) {
+        toast.error("No Meeting Notes folder found for this household's Advisor Files in Drive.");
+      } else {
+        toast.success(result.synced > 0 ? `Synced ${result.synced} file(s) from Drive.` : "Already up to date.");
+      }
+      if (result.errors?.length) {
+        result.errors.forEach((e) => toast.error(`Could not sync "${e.title}": ${e.message}`));
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not sync from Drive.");
+    } finally {
+      setSyncingTranscripts(false);
+    }
+  };
+
+  const saveTranscripts = async (rows: MeetingTranscript[]) => {
+    if (!householdId) return;
+    setSaving(true);
+    try {
+      const updated = await saveCharterIntakeField(householdId, "meeting_transcripts", rows, 6);
+      setCharter(updated);
+      setCurrent(6);
+      toast.success("Saved.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const draftP2 = async () => {
+    if (!householdId) return;
+    setDrafting(true);
+    try {
+      const draft = await draftPerspective2(householdId);
+      setPerspective2Draft(draft);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not draft with AI.");
+    } finally {
+      setDrafting(false);
+    }
+  };
+
+  const saveFiduciaryGuidance = async (fields: {
+    discretionary_trust_guidelines: string;
+    poa_incapacity_protocol: string;
+    shareholder_voting_philosophy: string;
+  }) => {
+    if (!householdId) return;
+    setSaving(true);
+    try {
+      await saveCharterIntakeField(householdId, "discretionary_trust_guidelines", fields.discretionary_trust_guidelines, 6);
+      await saveCharterIntakeField(householdId, "poa_incapacity_protocol", fields.poa_incapacity_protocol, 6);
+      const updated = await saveCharterIntakeField(
+        householdId,
+        "shareholder_voting_philosophy",
+        fields.shareholder_voting_philosophy,
+        7,
+      );
+      setCharter(updated);
+      setCurrent(7);
+      toast.success("Saved.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveBoundaryCapitalProtocols = async (fields: {
+    boundary_protocol_note: string;
+    capital_request_framework_note: string;
+    matrimonial_ringfencing_note: string;
+  }) => {
+    if (!householdId) return;
+    setSaving(true);
+    try {
+      await saveCharterIntakeField(householdId, "boundary_protocol_note", fields.boundary_protocol_note, 7);
+      await saveCharterIntakeField(householdId, "capital_request_framework_note", fields.capital_request_framework_note, 7);
+      const updated = await saveCharterIntakeField(
+        householdId,
+        "matrimonial_ringfencing_note",
+        fields.matrimonial_ringfencing_note,
+        8,
+      );
+      setCharter(updated);
+      setCurrent(8);
       toast.success("Saved.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not save.");
@@ -205,7 +319,41 @@ export default function CharterIntake() {
                 onSave={saveTreasuryNarratives}
               />
             )}
-            {current === 5 && <StepReview charter={charter} completing={completing} onComplete={complete} />}
+            {current === 5 && (
+              <StepMeetingTranscripts
+                transcripts={charter.meeting_transcripts}
+                syncing={syncingTranscripts}
+                saving={saving}
+                onSync={syncTranscripts}
+                onSave={saveTranscripts}
+              />
+            )}
+            {current === 6 && (
+              <StepFiduciaryGuidance
+                householdId={householdId!}
+                discretionaryTrustGuidelines={charter.discretionary_trust_guidelines}
+                poaIncapacityProtocol={charter.poa_incapacity_protocol}
+                shareholderVotingPhilosophy={charter.shareholder_voting_philosophy}
+                draft={perspective2Draft}
+                drafting={drafting}
+                saving={saving}
+                onDraft={draftP2}
+                onSave={saveFiduciaryGuidance}
+              />
+            )}
+            {current === 7 && (
+              <StepBoundaryCapitalProtocols
+                boundaryProtocolNote={charter.boundary_protocol_note}
+                capitalRequestFrameworkNote={charter.capital_request_framework_note}
+                matrimonialRingfencingNote={charter.matrimonial_ringfencing_note}
+                draft={perspective2Draft}
+                drafting={drafting}
+                saving={saving}
+                onDraft={draftP2}
+                onSave={saveBoundaryCapitalProtocols}
+              />
+            )}
+            {current === 8 && <StepReview charter={charter} completing={completing} onComplete={complete} />}
           </>
         )}
       </div>

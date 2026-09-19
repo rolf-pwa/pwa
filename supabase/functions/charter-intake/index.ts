@@ -6,6 +6,9 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { computeStorehouseFundedPct, gatherHouseholdFinancials } from "../_shared/sovereignty-diagnostics.ts";
+import { generateVertexContent, parseServiceAccountKey, type ServiceAccountKey } from "../_shared/vertex-ai.ts";
+import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
+import { driveDownloadFile, driveListChildren } from "../_shared/vault-provisioning.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -54,6 +57,15 @@ interface NamedItem {
   description: string;
 }
 
+interface MeetingTranscript {
+  id: string;
+  title: string;
+  content_text: string;
+  added_at: string;
+  external_file_id: string | null;
+  external_modified_at: string | null;
+}
+
 const CORE_VALUES_DEFAULTS: NamedItem[] = [
   { key: "autonomy_respect", title: "Individual Autonomy and Mutual Respect", description: "" },
   { key: "radical_transparency", title: "Radical Transparency and Honest Communication", description: "" },
@@ -71,6 +83,8 @@ const GROUNDING_PRINCIPLES_DEFAULTS: NamedItem[] = [
 const CHARTER_FIELDS =
   "id, household_id, status, step, vision_text, core_values, grounding_principles, " +
   "treasury_snapshot, treasury_snapshot_computed_at, vineyard_replenishment_policy, river_boundary_note, " +
+  "meeting_transcripts, discretionary_trust_guidelines, poa_incapacity_protocol, shareholder_voting_philosophy, " +
+  "boundary_protocol_note, capital_request_framework_note, matrimonial_ringfencing_note, " +
   "completed_at, completed_by, created_by, created_at, updated_at";
 
 function isNamedItemArray(value: unknown): value is NamedItem[] {
@@ -81,6 +95,120 @@ function isNamedItemArray(value: unknown): value is NamedItem[] {
         v && typeof v === "object" && typeof (v as Record<string, unknown>).title === "string" && typeof (v as Record<string, unknown>).description === "string",
     )
   );
+}
+
+function isMeetingTranscriptArray(value: unknown): value is MeetingTranscript[] {
+  return (
+    Array.isArray(value) &&
+    value.every((v) => {
+      if (!v || typeof v !== "object") return false;
+      const r = v as Record<string, unknown>;
+      return (
+        typeof r.id === "string" &&
+        typeof r.title === "string" &&
+        typeof r.content_text === "string" &&
+        typeof r.added_at === "string"
+      );
+    })
+  );
+}
+
+const MAX_TRANSCRIPT_CHARS = 20000;
+const PDF_INLINE_MAX_BYTES = 18 * 1024 * 1024; // ~18 MB safe for inline base64
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function extractPdfTextWithVertex(sa: ServiceAccountKey, base64: string, fileName: string): Promise<string> {
+  const result = await generateVertexContent(
+    sa,
+    "gemini-2.5-flash",
+    [
+      {
+        role: "user",
+        parts: [
+          {
+            text: `Extract the full readable text from this PDF document titled "${fileName}". Preserve headings, lists, and paragraph structure using plain text formatting. Do not summarize, do not add commentary, and do not wrap the output in code fences. Return only the extracted text.`,
+          },
+          { inlineData: { mimeType: "application/pdf", data: base64 } },
+        ],
+      },
+    ],
+    { temperature: 0.1, maxOutputTokens: 8192 },
+  );
+  const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  return text.trim();
+}
+
+/** Downloads and extracts plain text from a Drive file — Google Doc via /export, PDF via Vertex, anything else as raw text. */
+async function extractDriveFileText(
+  accessToken: string,
+  sa: ServiceAccountKey,
+  fileId: string,
+  mimeType: string,
+  fileName: string,
+): Promise<string> {
+  if (mimeType.startsWith("application/vnd.google-apps")) {
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) throw new Error(`Drive export failed [${res.status}]: ${(await res.text()).slice(0, 300)}`);
+    return (await res.text()).slice(0, MAX_TRANSCRIPT_CHARS);
+  }
+  if (mimeType.includes("pdf")) {
+    const buffer = await driveDownloadFile(fileId, accessToken);
+    if (buffer.byteLength > PDF_INLINE_MAX_BYTES) {
+      throw new Error(`PDF too large to extract inline (${Math.round(buffer.byteLength / 1024 / 1024)} MB)`);
+    }
+    const text = await extractPdfTextWithVertex(sa, arrayBufferToBase64(buffer), fileName);
+    if (!text.trim()) throw new Error("PDF extraction returned no usable text");
+    return text.slice(0, MAX_TRANSCRIPT_CHARS);
+  }
+  const buffer = await driveDownloadFile(fileId, accessToken);
+  return new TextDecoder().decode(buffer).slice(0, MAX_TRANSCRIPT_CHARS);
+}
+
+/** Resolves the Drive folder id of a household's Advisor Files > Meeting Notes subfolder, or null if either is missing. */
+// deno-lint-ignore no-explicit-any
+async function resolveMeetingNotesFolderId(db: any, householdId: string, accessToken: string): Promise<string | null> {
+  const { data: household } = await db
+    .from("households")
+    .select("vault_root_folder_id")
+    .eq("id", householdId)
+    .maybeSingle();
+  const vaultRootFolderId = household?.vault_root_folder_id as string | undefined;
+  if (!vaultRootFolderId) return null;
+
+  // vault_root_folder_id's own parent is the "[LastName] Household" folder,
+  // which "Advisor Files" is a sibling of (see vault-provisioning.ts's own
+  // header comment for the exact tree shape).
+  const metaRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${vaultRootFolderId}?fields=parents`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!metaRes.ok) return null;
+  const meta = await metaRes.json();
+  const householdFolderId = meta.parents?.[0];
+  if (!householdFolderId) return null;
+
+  const householdChildren = await driveListChildren(householdFolderId, accessToken);
+  const advisorFolder = householdChildren.find(
+    (f) => f.mimeType === "application/vnd.google-apps.folder" && f.name === "Advisor Files",
+  );
+  if (!advisorFolder) return null;
+
+  const advisorChildren = await driveListChildren(advisorFolder.id, accessToken);
+  const meetingNotesFolder = advisorChildren.find(
+    (f) => f.mimeType === "application/vnd.google-apps.folder" && f.name === "Meeting Notes",
+  );
+  return meetingNotesFolder?.id ?? null;
 }
 
 // deno-lint-ignore no-explicit-any
@@ -170,13 +298,34 @@ Deno.serve(async (req) => {
         grounding_principles: "grounding_principles",
         vineyard_replenishment: "vineyard_replenishment_policy",
         river_boundary: "river_boundary_note",
+        meeting_transcripts: "meeting_transcripts",
+        discretionary_trust_guidelines: "discretionary_trust_guidelines",
+        poa_incapacity_protocol: "poa_incapacity_protocol",
+        shareholder_voting_philosophy: "shareholder_voting_philosophy",
+        boundary_protocol_note: "boundary_protocol_note",
+        capital_request_framework_note: "capital_request_framework_note",
+        matrimonial_ringfencing_note: "matrimonial_ringfencing_note",
       };
       const column = columnByField[String(field || "")];
       if (!column) return json({ ok: false, error: "Unknown field" }, 400);
 
-      const TEXT_COLUMNS = new Set(["vision_text", "vineyard_replenishment_policy", "river_boundary_note"]);
+      const TEXT_COLUMNS = new Set([
+        "vision_text",
+        "vineyard_replenishment_policy",
+        "river_boundary_note",
+        "discretionary_trust_guidelines",
+        "poa_incapacity_protocol",
+        "shareholder_voting_philosophy",
+        "boundary_protocol_note",
+        "capital_request_framework_note",
+        "matrimonial_ringfencing_note",
+      ]);
       if (TEXT_COLUMNS.has(column)) {
         if (typeof value !== "string") return json({ ok: false, error: "Expected a text value" }, 400);
+      } else if (column === "meeting_transcripts") {
+        if (!isMeetingTranscriptArray(value)) {
+          return json({ ok: false, error: "Expected an array of {id, title, content_text, added_at}" }, 400);
+        }
       } else if (!isNamedItemArray(value)) {
         return json({ ok: false, error: "Expected an array of {key, title, description}" }, 400);
       }
@@ -232,6 +381,202 @@ Deno.serve(async (req) => {
       if (error) return json({ ok: false, error: error.message }, 500);
       if (!data) return json({ ok: false, error: "No charter record for this household — call load first" }, 404);
       return json({ ok: true, charter: data });
+    }
+
+    if (action === "sync_meeting_transcripts") {
+      let accessToken: string;
+      try {
+        accessToken = await getServiceGoogleAccessToken(db);
+      } catch (e) {
+        return json({ ok: false, error: `Google auth failed: ${e instanceof Error ? e.message : String(e)}` }, 500);
+      }
+
+      const meetingNotesFolderId = await resolveMeetingNotesFolderId(db, householdId, accessToken);
+      if (!meetingNotesFolderId) {
+        return json({ ok: true, synced: 0, folder_missing: true });
+      }
+
+      const files = (await driveListChildren(meetingNotesFolderId, accessToken)).filter(
+        (f) => f.mimeType !== "application/vnd.google-apps.folder",
+      );
+
+      const { data: current, error: currentErr } = await db
+        .from("household_charters")
+        .select("meeting_transcripts")
+        .eq("household_id", householdId)
+        .maybeSingle();
+      if (currentErr) return json({ ok: false, error: currentErr.message }, 500);
+      if (!current) return json({ ok: false, error: "No charter record for this household — call load first" }, 404);
+
+      const existing: MeetingTranscript[] = current.meeting_transcripts || [];
+      const byFileId = new Map(existing.filter((t) => t.external_file_id).map((t) => [t.external_file_id, t]));
+      const resultArray: MeetingTranscript[] = [...existing];
+      const errors: { title: string; message: string }[] = [];
+      let synced = 0;
+      let sa: ServiceAccountKey | null = null;
+
+      for (const file of files as { id: string; name: string; mimeType: string; modifiedTime?: string }[]) {
+        const prior = byFileId.get(file.id);
+        if (prior && prior.external_modified_at === file.modifiedTime) continue;
+
+        try {
+          if (file.mimeType.includes("pdf") && !sa) {
+            sa = await parseServiceAccountKey(Deno.env.get("GCP_SERVICE_ACCOUNT_KEY"));
+          }
+          const contentText = await extractDriveFileText(
+            accessToken,
+            sa as ServiceAccountKey,
+            file.id,
+            file.mimeType,
+            file.name,
+          );
+          const entry: MeetingTranscript = {
+            id: prior?.id ?? crypto.randomUUID(),
+            title: file.name,
+            content_text: contentText,
+            added_at: new Date().toISOString(),
+            external_file_id: file.id,
+            external_modified_at: file.modifiedTime ?? null,
+          };
+          const idx = resultArray.findIndex((t) => t.external_file_id === file.id);
+          if (idx >= 0) resultArray[idx] = entry;
+          else resultArray.push(entry);
+          synced++;
+        } catch (e) {
+          errors.push({ title: file.name, message: e instanceof Error ? e.message : String(e) });
+        }
+      }
+
+      const { data, error } = await db
+        .from("household_charters")
+        .update({ meeting_transcripts: resultArray })
+        .eq("household_id", householdId)
+        .select(CHARTER_FIELDS)
+        .maybeSingle();
+      if (error) return json({ ok: false, error: error.message }, 500);
+      return json({ ok: true, charter: data, synced, errors });
+    }
+
+    if (action === "draft_perspective_2") {
+      const { data: charter, error: charterErr } = await db
+        .from("household_charters")
+        .select("vision_text, core_values, grounding_principles, meeting_transcripts")
+        .eq("household_id", householdId)
+        .maybeSingle();
+      if (charterErr) return json({ ok: false, error: charterErr.message }, 500);
+      if (!charter) return json({ ok: false, error: "No charter record for this household — call load first" }, 404);
+
+      const { data: contacts } = await db
+        .from("contacts")
+        .select(
+          "first_name, last_name, lawyer_name, lawyer_firm, accountant_name, accountant_firm, executor_name, executor_firm, poa_name, poa_firm",
+        )
+        .eq("household_id", householdId);
+
+      const fiduciaryLines: string[] = [];
+      for (const c of contacts || []) {
+        const name = `${c.first_name} ${c.last_name || ""}`.trim();
+        const roles: [string, string | null, string | null][] = [
+          ["Lawyer", c.lawyer_name, c.lawyer_firm],
+          ["Accountant", c.accountant_name, c.accountant_firm],
+          ["Executor", c.executor_name, c.executor_firm],
+          ["Power of Attorney", c.poa_name, c.poa_firm],
+        ];
+        for (const [role, roleName, firm] of roles) {
+          if (roleName) fiduciaryLines.push(`${name}'s ${role}: ${roleName}${firm ? ` (${firm})` : ""}`);
+        }
+      }
+
+      const values = (charter.core_values || []).map((v: NamedItem) => `${v.title}: ${v.description}`).join("\n");
+      const principles = (charter.grounding_principles || [])
+        .map((p: NamedItem) => `${p.title}: ${p.description}`)
+        .join("\n");
+      const transcripts = (charter.meeting_transcripts || [])
+        .map((t: MeetingTranscript) => `--- ${t.title} ---\n${t.content_text}`)
+        .join("\n\n");
+
+      const prompt = `You are drafting the "Family Well-Being & Stakeholder Harmony" perspective of a household's Sovereignty Charter for a wealth advisory firm.
+
+Family Vision:
+${charter.vision_text || "(not yet written)"}
+
+Core Values:
+${values || "(none)"}
+
+System Grounding Principles:
+${principles || "(none)"}
+
+Fiduciary contacts on file:
+${fiduciaryLines.join("\n") || "(none on file)"}
+
+Meeting transcripts:
+${transcripts || "(none synced yet)"}
+
+Draft the following six narratives, grounded strictly in the facts above — never invent a name, firm, amount, or fact not present in the supplied material. If the supplied material doesn't support a confident draft for a given field, write a short honest placeholder noting what's missing (e.g. "No meeting transcript content yet addresses this — revisit once a transcript covering trust guidelines is synced.") rather than fabricating detail:
+1. Discretionary Trust Guidelines
+2. POA & Incapacity Protocol
+3. Shareholder Voting & Succession Philosophy
+4. The Sovereignty Boundary Protocol (social/family boundary scripts)
+5. Capital Request Framework
+6. Matrimonial & Asset Ring-Fencing`;
+
+      const DRAFT_TOOL_SCHEMA = {
+        functionDeclarations: [
+          {
+            name: "draft_perspective_2_narratives",
+            description: "Draft the six Family Well-Being & Stakeholder Harmony narratives.",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                discretionary_trust_guidelines: { type: "STRING" },
+                poa_incapacity_protocol: { type: "STRING" },
+                shareholder_voting_philosophy: { type: "STRING" },
+                boundary_protocol_note: { type: "STRING" },
+                capital_request_framework_note: { type: "STRING" },
+                matrimonial_ringfencing_note: { type: "STRING" },
+              },
+              required: [
+                "discretionary_trust_guidelines",
+                "poa_incapacity_protocol",
+                "shareholder_voting_philosophy",
+                "boundary_protocol_note",
+                "capital_request_framework_note",
+                "matrimonial_ringfencing_note",
+              ],
+            },
+          },
+        ],
+      };
+
+      let sa: ServiceAccountKey;
+      try {
+        sa = await parseServiceAccountKey(Deno.env.get("GCP_SERVICE_ACCOUNT_KEY"));
+      } catch (e) {
+        return json({ ok: false, error: e instanceof Error ? e.message : String(e) }, 500);
+      }
+
+      let result;
+      try {
+        result = await generateVertexContent(
+          sa,
+          "gemini-2.5-flash",
+          [{ role: "user", parts: [{ text: prompt }] }],
+          { temperature: 0.4, maxOutputTokens: 4096 },
+          {
+            tools: [DRAFT_TOOL_SCHEMA],
+            toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["draft_perspective_2_narratives"] } },
+          },
+        );
+      } catch (e) {
+        return json({ ok: false, error: e instanceof Error ? e.message : String(e) }, 500);
+      }
+
+      const parts = result.candidates?.[0]?.content?.parts || [];
+      // deno-lint-ignore no-explicit-any
+      const fnCall = parts.find((p: any) => p.functionCall)?.functionCall;
+      if (!fnCall?.args) return json({ ok: false, error: "The model did not return a usable draft." }, 500);
+
+      return json({ ok: true, draft: fnCall.args });
     }
 
     if (action === "complete") {
