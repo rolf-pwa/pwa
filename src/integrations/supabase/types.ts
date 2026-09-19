@@ -1933,6 +1933,59 @@ export type Database = {
           },
         ]
       }
+      household_charters: {
+        Row: {
+          completed_at: string | null
+          completed_by: string | null
+          core_values: Json
+          created_at: string
+          created_by: string | null
+          grounding_principles: Json
+          household_id: string
+          id: string
+          status: string
+          step: number
+          updated_at: string
+          vision_text: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          completed_by?: string | null
+          core_values?: Json
+          created_at?: string
+          created_by?: string | null
+          grounding_principles?: Json
+          household_id: string
+          id?: string
+          status?: string
+          step?: number
+          updated_at?: string
+          vision_text?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          completed_by?: string | null
+          core_values?: Json
+          created_at?: string
+          created_by?: string | null
+          grounding_principles?: Json
+          household_id?: string
+          id?: string
+          status?: string
+          step?: number
+          updated_at?: string
+          vision_text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_charters_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: true
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       household_relationships: {
         Row: {
           contact_id: string

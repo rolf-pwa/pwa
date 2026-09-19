@@ -127,6 +127,7 @@ export default function GovernanceAudit() {
   const [regenerating, setRegenerating] = useState(false);
   const [confirmFinalize, setConfirmFinalize] = useState(false);
   const [togglingDraft, setTogglingDraft] = useState(false);
+  const [charterV2Status, setCharterV2Status] = useState<"draft" | "complete" | null>(null);
 
   const load = async () => {
     if (!id) return;
@@ -136,8 +137,17 @@ export default function GovernanceAudit() {
       setLoading(false);
       return;
     }
-    setAudit(data as unknown as GovernanceAuditRow);
+    const row = data as unknown as GovernanceAuditRow;
+    setAudit(row);
     setLoading(false);
+    if (row?.household_id) {
+      const { data: charterV2 } = await supabase
+        .from("household_charters")
+        .select("status")
+        .eq("household_id", row.household_id)
+        .maybeSingle();
+      setCharterV2Status((charterV2?.status as "draft" | "complete" | undefined) ?? null);
+    }
   };
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
@@ -257,6 +267,15 @@ export default function GovernanceAudit() {
           </div>
         )}
       </div>
+
+      {charterV2Status !== "complete" && (
+        <div className="print:hidden mx-auto flex max-w-[900px] items-center justify-between gap-3 border-b border-primary/20 bg-primary/5 px-6 py-2 text-sm">
+          <span>This household's Charter is still on the v1 format.</span>
+          <Button size="sm" variant="outline" onClick={() => navigate(`/charter-intake/household/${audit.household_id}`)}>
+            Migrate to Sovereignty Charter v2.0
+          </Button>
+        </div>
+      )}
 
       <AlertDialog open={confirmFinalize} onOpenChange={setConfirmFinalize}>
         <AlertDialogContent>

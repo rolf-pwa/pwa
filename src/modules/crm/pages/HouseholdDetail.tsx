@@ -44,7 +44,7 @@ import { HouseholdRequestsRollup } from "@/modules/crm/components/HouseholdReque
 import { HouseholdStatementIngestion } from "@/modules/crm/components/HouseholdStatementIngestion";
 import { HoldingTank } from "@/modules/crm/components/HoldingTank";
 import { VaultView } from "@/modules/crm/pages/Vault";
-import { CharterRatificationTile, StabilizationMapButton, GovernanceAuditButton, HouseholdAuditTrailRollup } from "@/modules/audit";
+import { CharterRatificationTile, StabilizationMapButton, GovernanceAuditButton, HouseholdAuditTrailRollup, StartCharterIntakeButton } from "@/modules/audit";
 import { ProsPanel } from "@/modules/crm/components/ProsPanel";
 import { AddCompanyDialog } from "@/modules/crm/components/AddCompanyDialog";
 import {
@@ -138,6 +138,7 @@ const HouseholdDetail = () => {
   const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [reopenRelationshipOpen, setReopenRelationshipOpen] = useState(false);
   const [vaultScanning, setVaultScanning] = useState(false);
+  const [charterV2Status, setCharterV2Status] = useState<"draft" | "complete" | null>(null);
 
   // Guard against setState after unmount when fetchData reruns via mutation callbacks.
   const mountedRef = useRef(true);
@@ -166,13 +167,16 @@ const HouseholdDetail = () => {
     const [
       { data: family },
       { data: contacts },
+      { data: charterV2 },
     ] = await Promise.all([
       supabase.from("families").select("name").eq("id", hh.family_id).single(),
       supabase.from("contacts").select("id, first_name, last_name, family_role, email, phone, address, is_minor, asana_url, lawyer_name, lawyer_firm, accountant_name, accountant_firm, executor_name, executor_firm, poa_name, poa_firm").eq("household_id", id),
+      supabase.from("household_charters").select("status").eq("household_id", id).maybeSingle(),
     ]);
     if (!mountedRef.current) return;
 
     setFamilyName(family?.name || "Unknown");
+    setCharterV2Status((charterV2?.status as "draft" | "complete" | undefined) ?? null);
     const roleRank = (r: string | null | undefined) => {
       const v = (r || "").toLowerCase();
       if (v === "hof" || v === "head_of_family" || v.includes("head of family")) return 0;
@@ -1080,6 +1084,23 @@ const HouseholdDetail = () => {
                         </div>
                       </div>
                     )}
+
+                    {/* Step 5 — Sovereignty Charter v2.0 (Foundational Bedrock).
+                        Never hidden once complete, unlike step 4 — staff
+                        will plausibly want to revisit and edit this content. */}
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-semibold text-muted-foreground">
+                        5
+                      </div>
+                      <div className="flex-1 space-y-1.5">
+                        <p className="text-sm font-medium text-foreground">Sovereignty Charter v2.0</p>
+                        <p className="text-xs text-muted-foreground">
+                          Capture Family Vision, Core Values, and System Grounding Principles — the
+                          Foundational Bedrock of this household's Charter.
+                        </p>
+                        <StartCharterIntakeButton householdId={id} status={charterV2Status} />
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
                 {(household?.vision_notes || household?.values_notes || household?.purpose_notes ||

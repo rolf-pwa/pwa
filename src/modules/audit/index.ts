@@ -12,3 +12,4 @@ export { QuarterlySystemReviewButton } from "./components/QuarterlySystemReviewB
 export { SovereigntyCharterButton } from "./components/SovereigntyCharterButton";
 export { GenerateCharterDraftButton } from "./components/GenerateCharterDraftButton";
 export { CharterRatificationTile } from "./components/CharterRatificationTile";
+export { StartCharterIntakeButton } from "./components/StartCharterIntakeButton";
