@@ -6,6 +6,31 @@ export interface NamedItem {
   description: string;
 }
 
+export interface StorehouseReserves {
+  liquidity: number;
+  strategic: number;
+  philanthropic: number;
+  legacy: number;
+}
+
+export interface TreasurySnapshot {
+  aum: number;
+  net_worth: number;
+  vineyard_total: number;
+  holding_tank_total: number;
+  personal_liabilities_total: number;
+  corp_liabilities_total: number;
+  storehouse_reserves: StorehouseReserves;
+  storehouse_targets: StorehouseReserves;
+  storehouse_funded_pct: {
+    liquidity: number | null;
+    strategic: number | null;
+    philanthropic: number | null;
+    legacy: number | null;
+  };
+  holding_tank_rows: { id: string; account_name: string; current_value: number; days_since_added: number }[];
+}
+
 export interface HouseholdCharter {
   id: string;
   household_id: string;
@@ -14,6 +39,10 @@ export interface HouseholdCharter {
   vision_text: string | null;
   core_values: NamedItem[];
   grounding_principles: NamedItem[];
+  treasury_snapshot: TreasurySnapshot | null;
+  treasury_snapshot_computed_at: string | null;
+  vineyard_replenishment_policy: string | null;
+  river_boundary_note: string | null;
   completed_at: string | null;
   completed_by: string | null;
   created_by: string | null;
@@ -53,7 +82,7 @@ export async function loadCharterIntake(householdId: string) {
 
 export async function saveCharterIntakeField(
   householdId: string,
-  field: "vision" | "core_values" | "grounding_principles",
+  field: "vision" | "core_values" | "grounding_principles" | "vineyard_replenishment" | "river_boundary",
   value: string | NamedItem[],
   advanceTo: number,
 ) {
@@ -64,6 +93,11 @@ export async function saveCharterIntakeField(
     value,
     advance_to: advanceTo,
   });
+  return data.charter;
+}
+
+export async function recomputeTreasurySnapshot(householdId: string) {
+  const data = await invoke<{ charter: HouseholdCharter }>({ action: "recompute_treasury", household_id: householdId });
   return data.charter;
 }
 

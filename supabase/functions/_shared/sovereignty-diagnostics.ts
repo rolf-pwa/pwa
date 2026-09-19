@@ -299,6 +299,32 @@ const RESERVE_KEY_BY_STOREHOUSE_NUMBER: Record<number, keyof StorehouseReserves>
   4: "legacy",
 };
 
+/**
+ * Per-pillar funding target (summed from storehouses.target_value, the
+ * existing field HouseholdDetail.tsx's own "% funded" progress bars already
+ * use) against the same live reserve totals gatherHouseholdFinancials
+ * computes. Zero extra queries -- reuses the storehouses rows already
+ * fetched for `reserves`. A pillar with no target_value set anywhere
+ * returns null funded-% (nothing to show), not a misleading 0%.
+ */
+export function computeStorehouseFundedPct(
+  storehouses: any[],
+  reserves: StorehouseReserves,
+): { targets: StorehouseReserves; fundedPct: Record<keyof StorehouseReserves, number | null> } {
+  const targets: StorehouseReserves = { liquidity: 0, strategic: 0, philanthropic: 0, legacy: 0 };
+  for (const s of storehouses) {
+    if (s.asset_type === REAL_ESTATE_ASSET_TYPE) continue;
+    const key = RESERVE_KEY_BY_STOREHOUSE_NUMBER[s.storehouse_number];
+    if (!key) continue;
+    targets[key] += Number(s.target_value) || 0;
+  }
+  const fundedPct = {} as Record<keyof StorehouseReserves, number | null>;
+  (Object.keys(targets) as (keyof StorehouseReserves)[]).forEach((key) => {
+    fundedPct[key] = targets[key] > 0 ? Math.min((reserves[key] / targets[key]) * 100, 100) : null;
+  });
+  return { targets, fundedPct };
+}
+
 export interface HouseholdFinancials {
   householdLabel: string;
   familyName: string;
@@ -388,7 +414,11 @@ export async function gatherHouseholdFinancials(
         .select("contact_id, corporation_id, ownership_percentage, share_class, role_title")
         .in("contact_id", memberIds)
         .eq("is_active", true),
-      admin.from("holding_tank").select("contact_id, current_value").in("contact_id", memberIds).neq("status", "moved"),
+      admin
+        .from("holding_tank")
+        .select("id, contact_id, account_name, current_value, created_at")
+        .in("contact_id", memberIds)
+        .neq("status", "moved"),
       admin.from("liabilities").select("*").eq("holder_type", "contact").in("contact_id", memberIds),
     ]);
 

@@ -1,7 +1,17 @@
 import { Loader2 } from "lucide-react";
 import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent } from "@/shared/components/ui/card";
-import type { HouseholdCharter } from "../../hooks/useCharterIntake";
+import type { HouseholdCharter, StorehouseReserves } from "../../hooks/useCharterIntake";
+
+const formatCurrency = (val: number) =>
+  new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val);
+
+const STOREHOUSE_LABELS: { key: keyof StorehouseReserves; label: string }[] = [
+  { key: "liquidity", label: "Liquidity Reserve" },
+  { key: "strategic", label: "Strategic Reserve" },
+  { key: "philanthropic", label: "Philanthropic Trust" },
+  { key: "legacy", label: "Legacy Trust" },
+];
 
 interface Props {
   charter: HouseholdCharter;
@@ -56,6 +66,65 @@ export function StepReview({ charter, completing, onComplete }: Props) {
               </div>
             ))}
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Treasury &amp; Capital Structure
+          </h3>
+          {charter.treasury_snapshot ? (
+            <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3 text-sm">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-xs text-muted-foreground">AUM</p>
+                  <p className="font-medium">{formatCurrency(charter.treasury_snapshot.aum)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Net Worth</p>
+                  <p className="font-medium">{formatCurrency(charter.treasury_snapshot.net_worth)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Vineyard</p>
+                  <p className="font-medium">{formatCurrency(charter.treasury_snapshot.vineyard_total)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Holding Tank</p>
+                  <p className="font-medium">{formatCurrency(charter.treasury_snapshot.holding_tank_total)}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 border-t border-border pt-2">
+                {STOREHOUSE_LABELS.map(({ key, label }) => (
+                  <div key={key}>
+                    <p className="text-xs text-muted-foreground">{label}</p>
+                    <p className="font-medium">
+                      {formatCurrency(charter.treasury_snapshot!.storehouse_reserves[key])}
+                      {charter.treasury_snapshot!.storehouse_funded_pct[key] !== null && (
+                        <span className="ml-1 text-xs text-muted-foreground">
+                          ({Math.round(charter.treasury_snapshot!.storehouse_funded_pct[key]!)}% funded)
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              {charter.vineyard_replenishment_policy?.trim() && (
+                <p className="whitespace-pre-wrap border-t border-border pt-2 text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">Vineyard policy: </span>
+                  {charter.vineyard_replenishment_policy}
+                </p>
+              )}
+              {charter.river_boundary_note?.trim() && (
+                <p className="whitespace-pre-wrap text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">River boundary: </span>
+                  {charter.river_boundary_note}
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground italic">
+              Not yet computed — visit the Treasury &amp; Capital Structure step.
+            </p>
+          )}
         </div>
 
         {charter.status === "complete" ? (

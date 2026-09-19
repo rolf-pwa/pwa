@@ -1943,9 +1943,13 @@ export type Database = {
           grounding_principles: Json
           household_id: string
           id: string
+          river_boundary_note: string | null
           status: string
           step: number
+          treasury_snapshot: Json | null
+          treasury_snapshot_computed_at: string | null
           updated_at: string
+          vineyard_replenishment_policy: string | null
           vision_text: string | null
         }
         Insert: {
@@ -1957,9 +1961,13 @@ export type Database = {
           grounding_principles?: Json
           household_id: string
           id?: string
+          river_boundary_note?: string | null
           status?: string
           step?: number
+          treasury_snapshot?: Json | null
+          treasury_snapshot_computed_at?: string | null
           updated_at?: string
+          vineyard_replenishment_policy?: string | null
           vision_text?: string | null
         }
         Update: {
@@ -1971,9 +1979,13 @@ export type Database = {
           grounding_principles?: Json
           household_id?: string
           id?: string
+          river_boundary_note?: string | null
           status?: string
           step?: number
+          treasury_snapshot?: Json | null
+          treasury_snapshot_computed_at?: string | null
           updated_at?: string
+          vineyard_replenishment_policy?: string | null
           vision_text?: string | null
         }
         Relationships: [

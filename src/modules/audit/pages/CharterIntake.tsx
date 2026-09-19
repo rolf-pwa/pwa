@@ -9,6 +9,7 @@ import { OnboardingStepper, type OnboardingStepMeta } from "@/modules/intake";
 import {
   completeCharterIntake,
   loadCharterIntake,
+  recomputeTreasurySnapshot,
   saveCharterIntakeField,
   type CharterPrefill,
   type HouseholdCharter,
@@ -16,6 +17,7 @@ import {
 } from "../hooks/useCharterIntake";
 import { StepFamilyVision } from "../components/charter-intake/StepFamilyVision";
 import { NamedListStep } from "../components/charter-intake/NamedListStep";
+import { StepTreasuryCapital } from "../components/charter-intake/StepTreasuryCapital";
 import { StepReview } from "../components/charter-intake/StepReview";
 import { CORE_VALUES_DEFAULTS, GROUNDING_PRINCIPLES_DEFAULTS } from "../lib/charterBedrockDefaults";
 
@@ -23,7 +25,8 @@ const CHARTER_INTAKE_STEPS: OnboardingStepMeta[] = [
   { id: 1, title: "Family Vision", hint: "The multi-generational purpose of this wealth" },
   { id: 2, title: "Core Values", hint: "How the family works together" },
   { id: 3, title: "System Grounding Principles", hint: "How the system stays disciplined" },
-  { id: 4, title: "Review & Complete", hint: "Confirm before marking the Bedrock complete" },
+  { id: 4, title: "Treasury & Capital Structure", hint: "How capital is partitioned, replenished, and compounded" },
+  { id: 5, title: "Review & Complete", hint: "Confirm before marking the Bedrock complete" },
 ];
 
 const CORE_VALUES_GUIDANCE =
@@ -39,6 +42,7 @@ export default function CharterIntake() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [recomputing, setRecomputing] = useState(false);
   const [current, setCurrent] = useState(1);
 
   const furthest = charter?.step ?? 1;
@@ -79,6 +83,35 @@ export default function CharterIntake() {
       const updated = await saveCharterIntakeField(householdId, field, value, advanceTo);
       setCharter(updated);
       setCurrent(advanceTo);
+      toast.success("Saved.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const recompute = async () => {
+    if (!householdId) return;
+    setRecomputing(true);
+    try {
+      const updated = await recomputeTreasurySnapshot(householdId);
+      setCharter(updated);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not recompute the Treasury snapshot.");
+    } finally {
+      setRecomputing(false);
+    }
+  };
+
+  const saveTreasuryNarratives = async (vineyardText: string, riverText: string) => {
+    if (!householdId) return;
+    setSaving(true);
+    try {
+      await saveCharterIntakeField(householdId, "vineyard_replenishment", vineyardText, 4);
+      const updated = await saveCharterIntakeField(householdId, "river_boundary", riverText, 5);
+      setCharter(updated);
+      setCurrent(5);
       toast.success("Saved.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not save.");
@@ -163,7 +196,16 @@ export default function CharterIntake() {
                 onSave={(value) => save("grounding_principles", value, 4)}
               />
             )}
-            {current === 4 && <StepReview charter={charter} completing={completing} onComplete={complete} />}
+            {current === 4 && (
+              <StepTreasuryCapital
+                charter={charter}
+                recomputing={recomputing}
+                saving={saving}
+                onRecompute={recompute}
+                onSave={saveTreasuryNarratives}
+              />
+            )}
+            {current === 5 && <StepReview charter={charter} completing={completing} onComplete={complete} />}
           </>
         )}
       </div>

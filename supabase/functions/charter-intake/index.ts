@@ -5,6 +5,7 @@
 // ever reads from (for pre-fill), never writes to.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { computeStorehouseFundedPct, gatherHouseholdFinancials } from "../_shared/sovereignty-diagnostics.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -67,7 +68,10 @@ const GROUNDING_PRINCIPLES_DEFAULTS: NamedItem[] = [
   { key: "preparedness", title: "Principle of Preparedness", description: "" },
 ];
 
-const CHARTER_FIELDS = "id, household_id, status, step, vision_text, core_values, grounding_principles, completed_at, completed_by, created_by, created_at, updated_at";
+const CHARTER_FIELDS =
+  "id, household_id, status, step, vision_text, core_values, grounding_principles, " +
+  "treasury_snapshot, treasury_snapshot_computed_at, vineyard_replenishment_policy, river_boundary_note, " +
+  "completed_at, completed_by, created_by, created_at, updated_at";
 
 function isNamedItemArray(value: unknown): value is NamedItem[] {
   return (
@@ -164,12 +168,15 @@ Deno.serve(async (req) => {
         vision: "vision_text",
         core_values: "core_values",
         grounding_principles: "grounding_principles",
+        vineyard_replenishment: "vineyard_replenishment_policy",
+        river_boundary: "river_boundary_note",
       };
       const column = columnByField[String(field || "")];
       if (!column) return json({ ok: false, error: "Unknown field" }, 400);
 
-      if (column === "vision_text") {
-        if (typeof value !== "string") return json({ ok: false, error: "vision text must be a string" }, 400);
+      const TEXT_COLUMNS = new Set(["vision_text", "vineyard_replenishment_policy", "river_boundary_note"]);
+      if (TEXT_COLUMNS.has(column)) {
+        if (typeof value !== "string") return json({ ok: false, error: "Expected a text value" }, 400);
       } else if (!isNamedItemArray(value)) {
         return json({ ok: false, error: "Expected an array of {key, title, description}" }, 400);
       }
@@ -190,6 +197,40 @@ Deno.serve(async (req) => {
         .select(CHARTER_FIELDS)
         .maybeSingle();
       if (error) return json({ ok: false, error: error.message }, 500);
+      return json({ ok: true, charter: data });
+    }
+
+    if (action === "recompute_treasury") {
+      const financials = await gatherHouseholdFinancials(db, householdId);
+      const { targets, fundedPct } = computeStorehouseFundedPct(financials.storehouses, financials.storehouseReserves);
+
+      const snapshot = {
+        aum: financials.totalAum,
+        net_worth: financials.netWorth,
+        vineyard_total: financials.totalVineyard,
+        holding_tank_total: financials.totalHoldingTank,
+        personal_liabilities_total: financials.totalPersonalLiabilities,
+        corp_liabilities_total: financials.totalCorpLiabilities,
+        storehouse_reserves: financials.storehouseReserves,
+        storehouse_targets: targets,
+        storehouse_funded_pct: fundedPct,
+        // deno-lint-ignore no-explicit-any
+        holding_tank_rows: financials.holdingTank.map((h: any) => ({
+          id: h.id,
+          account_name: h.account_name,
+          current_value: Number(h.current_value) || 0,
+          days_since_added: Math.floor((Date.now() - new Date(h.created_at).getTime()) / 86_400_000),
+        })),
+      };
+
+      const { data, error } = await db
+        .from("household_charters")
+        .update({ treasury_snapshot: snapshot, treasury_snapshot_computed_at: new Date().toISOString() })
+        .eq("household_id", householdId)
+        .select(CHARTER_FIELDS)
+        .maybeSingle();
+      if (error) return json({ ok: false, error: error.message }, 500);
+      if (!data) return json({ ok: false, error: "No charter record for this household — call load first" }, 404);
       return json({ ok: true, charter: data });
     }
 
