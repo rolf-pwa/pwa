@@ -94,6 +94,15 @@ interface LegalDocument {
   added_at: string;
 }
 
+interface NextGenMilestone {
+  id: string;
+  member_name: string;
+  milestone_title: string;
+  status: "not_started" | "in_progress" | "complete";
+  target_date: string | null;
+  notes: string | null;
+}
+
 const CORE_VALUES_DEFAULTS: NamedItem[] = [
   { key: "autonomy_respect", title: "Individual Autonomy and Mutual Respect", description: "" },
   { key: "radical_transparency", title: "Radical Transparency and Honest Communication", description: "" },
@@ -116,6 +125,8 @@ const CHARTER_FIELDS =
   "legal_documents, governance_snapshot, governance_snapshot_computed_at, corporate_passive_income_annual, " +
   "active_operational_assets_value, cda_balance, tax_friction_shields_note, hub_spoke_cadence_note, " +
   "tri_party_mou_note, pure_fiduciary_standard_note, " +
+  "identity_transition_note, next_gen_milestones, philanthropic_stewardship_note, " +
+  "family_values_addendum_signed_at, family_values_addendum_reaffirmed_at, " +
   "completed_at, completed_by, created_by, created_at, updated_at";
 
 function isNamedItemArray(value: unknown): value is NamedItem[] {
@@ -157,6 +168,22 @@ function isLegalDocumentArray(value: unknown): value is LegalDocument[] {
         typeof r.document_type === "string" &&
         typeof r.summary === "string" &&
         typeof r.added_at === "string"
+      );
+    })
+  );
+}
+
+function isNextGenMilestoneArray(value: unknown): value is NextGenMilestone[] {
+  return (
+    Array.isArray(value) &&
+    value.every((v) => {
+      if (!v || typeof v !== "object") return false;
+      const r = v as Record<string, unknown>;
+      return (
+        typeof r.id === "string" &&
+        typeof r.member_name === "string" &&
+        typeof r.milestone_title === "string" &&
+        (r.status === "not_started" || r.status === "in_progress" || r.status === "complete")
       );
     })
   );
@@ -500,6 +527,9 @@ Deno.serve(async (req) => {
         hub_spoke_cadence_note: "hub_spoke_cadence_note",
         tri_party_mou_note: "tri_party_mou_note",
         pure_fiduciary_standard_note: "pure_fiduciary_standard_note",
+        identity_transition_note: "identity_transition_note",
+        next_gen_milestones: "next_gen_milestones",
+        philanthropic_stewardship_note: "philanthropic_stewardship_note",
       };
       const column = columnByField[String(field || "")];
       if (!column) return json({ ok: false, error: "Unknown field" }, 400);
@@ -518,6 +548,8 @@ Deno.serve(async (req) => {
         "hub_spoke_cadence_note",
         "tri_party_mou_note",
         "pure_fiduciary_standard_note",
+        "identity_transition_note",
+        "philanthropic_stewardship_note",
       ]);
       const NUMBER_COLUMNS = new Set(["corporate_passive_income_annual", "active_operational_assets_value", "cda_balance"]);
       if (NUMBER_COLUMNS.has(column)) {
@@ -531,6 +563,10 @@ Deno.serve(async (req) => {
       } else if (column === "legal_documents") {
         if (!isLegalDocumentArray(value)) {
           return json({ ok: false, error: "Expected an array of {id, title, source_category, document_type, summary, added_at}" }, 400);
+        }
+      } else if (column === "next_gen_milestones") {
+        if (!isNextGenMilestoneArray(value)) {
+          return json({ ok: false, error: "Expected an array of {id, member_name, milestone_title, status}" }, 400);
         }
       } else if (!isNamedItemArray(value)) {
         return json({ ok: false, error: "Expected an array of {key, title, description}" }, 400);
@@ -1054,6 +1090,126 @@ Draft the following four narratives, grounded strictly in the facts above — ne
       if (!fnCall?.args) return json({ ok: false, error: "The model did not return a usable draft." }, 500);
 
       return json({ ok: true, draft: fnCall.args });
+    }
+
+    if (action === "draft_perspective_4") {
+      const { data: charter, error: charterErr } = await db
+        .from("household_charters")
+        .select("vision_text, core_values, grounding_principles, meeting_transcripts, legal_documents, treasury_snapshot")
+        .eq("household_id", householdId)
+        .maybeSingle();
+      if (charterErr) return json({ ok: false, error: charterErr.message }, 500);
+      if (!charter) return json({ ok: false, error: "No charter record for this household — call load first" }, 404);
+
+      const values = (charter.core_values || []).map((v: NamedItem) => `${v.title}: ${v.description}`).join("\n");
+      const principles = (charter.grounding_principles || [])
+        .map((p: NamedItem) => `${p.title}: ${p.description}`)
+        .join("\n");
+      const transcripts = (charter.meeting_transcripts || [])
+        .map((t: MeetingTranscript) => `--- ${t.title} ---\n${t.content_text}`)
+        .join("\n\n");
+      const legalDocs = (charter.legal_documents || [])
+        .map((d: LegalDocument) => `--- [${d.source_category}] ${d.document_type} — ${d.title} ---\n${d.summary}`)
+        .join("\n\n");
+      const philanthropicBalance = charter.treasury_snapshot?.storehouse_reserves?.philanthropic;
+      const philanthropicLine =
+        typeof philanthropicBalance === "number"
+          ? `Philanthropic Storehouse balance (real, computed): $${philanthropicBalance.toLocaleString("en-CA")} CAD`
+          : "Philanthropic Storehouse balance: not yet computed — visit the Treasury & Capital Structure step.";
+
+      const prompt = `You are drafting the "Human Capital & Generational Stewardship" perspective of a household's Sovereignty Charter for a wealth advisory firm.
+
+Family Vision:
+${charter.vision_text || "(not yet written)"}
+
+Core Values:
+${values || "(none)"}
+
+System Grounding Principles:
+${principles || "(none)"}
+
+Meeting transcripts:
+${transcripts || "(none synced yet)"}
+
+Legal documents on file:
+${legalDocs || "(none synced yet)"}
+
+${philanthropicLine}
+
+Draft the following two narratives, grounded strictly in the facts above — never invent a name, firm, amount, or fact not present in the supplied material (use the real philanthropic balance figure exactly as given, never re-derive or round it differently). If the supplied material doesn't support a confident draft for a given field, write a short honest placeholder noting what's missing rather than fabricating detail:
+1. OpCo-to-WealthCo Identity Transition (the psychological/governance shift from operator to Chairman of the family balance sheet)
+2. Philanthropic Stewardship Engine (the family's charitable directives and a self-sustaining endowment approach, referencing the real Philanthropic Storehouse balance above)`;
+
+      const DRAFT_TOOL_SCHEMA = {
+        functionDeclarations: [
+          {
+            name: "draft_perspective_4_narratives",
+            description: "Draft the two Human Capital & Generational Stewardship narratives.",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                identity_transition_note: { type: "STRING" },
+                philanthropic_stewardship_note: { type: "STRING" },
+              },
+              required: ["identity_transition_note", "philanthropic_stewardship_note"],
+            },
+          },
+        ],
+      };
+
+      let sa: ServiceAccountKey;
+      try {
+        sa = await parseServiceAccountKey(Deno.env.get("GCP_SERVICE_ACCOUNT_KEY"));
+      } catch (e) {
+        return json({ ok: false, error: e instanceof Error ? e.message : String(e) }, 500);
+      }
+
+      let result;
+      try {
+        result = await generateVertexContent(
+          sa,
+          "gemini-2.5-flash",
+          [{ role: "user", parts: [{ text: prompt }] }],
+          { temperature: 0.4, maxOutputTokens: 4096 },
+          {
+            tools: [DRAFT_TOOL_SCHEMA],
+            toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["draft_perspective_4_narratives"] } },
+          },
+        );
+      } catch (e) {
+        return json({ ok: false, error: e instanceof Error ? e.message : String(e) }, 500);
+      }
+
+      const parts = result.candidates?.[0]?.content?.parts || [];
+      // deno-lint-ignore no-explicit-any
+      const fnCall = parts.find((p: any) => p.functionCall)?.functionCall;
+      if (!fnCall?.args) return json({ ok: false, error: "The model did not return a usable draft." }, 500);
+
+      return json({ ok: true, draft: fnCall.args });
+    }
+
+    if (action === "mark_values_addendum_signed") {
+      const { data, error } = await db
+        .from("household_charters")
+        .update({ family_values_addendum_signed_at: new Date().toISOString() })
+        .eq("household_id", householdId)
+        .select(CHARTER_FIELDS)
+        .maybeSingle();
+      if (error) return json({ ok: false, error: error.message }, 500);
+      if (!data) return json({ ok: false, error: "No charter record for this household — call load first" }, 404);
+      return json({ ok: true, charter: data });
+    }
+
+    if (action === "mark_values_addendum_reaffirmed") {
+      const { data, error } = await db
+        .from("household_charters")
+        .update({ family_values_addendum_reaffirmed_at: new Date().toISOString() })
+        .eq("household_id", householdId)
+        .select(CHARTER_FIELDS)
+        .maybeSingle();
+      if (error) return json({ ok: false, error: error.message }, 500);
+      if (!data) return json({ ok: false, error: "No charter record for this household — call load first" }, 404);
+      return json({ ok: true, charter: data });
     }
 
     if (action === "complete") {

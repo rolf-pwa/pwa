@@ -93,6 +93,20 @@ export interface Perspective3Draft {
   tax_friction_shields_note: string;
 }
 
+export interface NextGenMilestone {
+  id: string;
+  member_name: string;
+  milestone_title: string;
+  status: "not_started" | "in_progress" | "complete";
+  target_date: string | null;
+  notes: string | null;
+}
+
+export interface Perspective4Draft {
+  identity_transition_note: string;
+  philanthropic_stewardship_note: string;
+}
+
 export interface HouseholdCharter {
   id: string;
   household_id: string;
@@ -122,6 +136,11 @@ export interface HouseholdCharter {
   hub_spoke_cadence_note: string | null;
   tri_party_mou_note: string | null;
   pure_fiduciary_standard_note: string | null;
+  identity_transition_note: string | null;
+  next_gen_milestones: NextGenMilestone[];
+  philanthropic_stewardship_note: string | null;
+  family_values_addendum_signed_at: string | null;
+  family_values_addendum_reaffirmed_at: string | null;
   completed_at: string | null;
   completed_by: string | null;
   created_by: string | null;
@@ -184,8 +203,11 @@ export async function saveCharterIntakeField(
     | "tax_friction_shields_note"
     | "hub_spoke_cadence_note"
     | "tri_party_mou_note"
-    | "pure_fiduciary_standard_note",
-  value: string | number | null | NamedItem[] | MeetingTranscript[] | LegalDocument[],
+    | "pure_fiduciary_standard_note"
+    | "identity_transition_note"
+    | "next_gen_milestones"
+    | "philanthropic_stewardship_note",
+  value: string | number | null | NamedItem[] | MeetingTranscript[] | LegalDocument[] | NextGenMilestone[],
   advanceTo: number,
 ) {
   const data = await invoke<{ charter: HouseholdCharter }>({
@@ -230,6 +252,21 @@ export async function recomputeGovernanceSnapshot(householdId: string) {
 export async function draftPerspective3(householdId: string) {
   const data = await invoke<{ draft: Perspective3Draft }>({ action: "draft_perspective_3", household_id: householdId });
   return data.draft;
+}
+
+export async function draftPerspective4(householdId: string) {
+  const data = await invoke<{ draft: Perspective4Draft }>({ action: "draft_perspective_4", household_id: householdId });
+  return data.draft;
+}
+
+export async function markValuesAddendumSigned(householdId: string) {
+  const data = await invoke<{ charter: HouseholdCharter }>({ action: "mark_values_addendum_signed", household_id: householdId });
+  return data.charter;
+}
+
+export async function markValuesAddendumReaffirmed(householdId: string) {
+  const data = await invoke<{ charter: HouseholdCharter }>({ action: "mark_values_addendum_reaffirmed", household_id: householdId });
+  return data.charter;
 }
 
 export async function completeCharterIntake(householdId: string) {

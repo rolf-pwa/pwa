@@ -80,6 +80,21 @@ export function computeUsaStaleness(
   return { onFile: true, isStale: ageYears > 2, ageYears: Math.round(ageYears * 10) / 10 };
 }
 
+/** A family values addendum is stale if never signed, or its most recent
+ *  affirmation (reaffirmed_at if present, else signed_at) is >3 years old —
+ *  mirrors computeUsaStaleness's >2-year pattern for the doc's own cadence. */
+export function computeValuesAddendumStaleness(
+  signedAt: string | null | undefined,
+  reaffirmedAt: string | null | undefined,
+): { onFile: boolean; isStale: boolean; ageYears: number | null } {
+  const lastAffirmed = reaffirmedAt || signedAt;
+  if (!lastAffirmed) return { onFile: false, isStale: true, ageYears: null };
+  const affirmed = new Date(lastAffirmed);
+  if (Number.isNaN(affirmed.getTime())) return { onFile: false, isStale: true, ageYears: null };
+  const ageYears = (Date.now() - affirmed.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+  return { onFile: true, isStale: ageYears > 3, ageYears: Math.round(ageYears * 10) / 10 };
+}
+
 export interface DocumentReadiness {
   percent: number;
   criticalTotal: number;

@@ -285,6 +285,88 @@ export function StepReview({ charter, completing, onComplete }: Props) {
           </div>
         </div>
 
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Identity Transition
+          </h3>
+          {charter.identity_transition_note?.trim() ? (
+            <p className="whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 text-sm">
+              {charter.identity_transition_note}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground italic">Not yet drafted.</p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Next-Gen Milestones
+          </h3>
+          {charter.next_gen_milestones.length > 0 ? (
+            <p className="rounded-md border border-border bg-muted/30 p-3 text-sm">
+              {charter.next_gen_milestones.filter((m) => m.status === "complete").length} of{" "}
+              {charter.next_gen_milestones.length} milestones complete (
+              {Math.round(
+                (charter.next_gen_milestones.filter((m) => m.status === "complete").length /
+                  charter.next_gen_milestones.length) *
+                  100,
+              )}
+              %).
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground italic">No milestones added yet.</p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Philanthropic Stewardship
+          </h3>
+          {charter.treasury_snapshot && (
+            <p className="text-xs text-muted-foreground">
+              Philanthropic Storehouse balance: {formatCurrency(charter.treasury_snapshot.storehouse_reserves.philanthropic)}
+            </p>
+          )}
+          {charter.philanthropic_stewardship_note?.trim() ? (
+            <p className="whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 text-sm">
+              {charter.philanthropic_stewardship_note}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground italic">Not yet drafted.</p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Family Values Addendum
+          </h3>
+          <div className="rounded-md border border-border bg-muted/30 p-3 text-sm">
+            <p>
+              Signed:{" "}
+              {charter.family_values_addendum_signed_at
+                ? new Date(charter.family_values_addendum_signed_at).toLocaleDateString("en-CA")
+                : "Not yet signed"}
+            </p>
+            <p>
+              Reaffirmed:{" "}
+              {charter.family_values_addendum_reaffirmed_at
+                ? new Date(charter.family_values_addendum_reaffirmed_at).toLocaleDateString("en-CA")
+                : "Never"}
+            </p>
+            {(() => {
+              const lastAffirmed = charter.family_values_addendum_reaffirmed_at || charter.family_values_addendum_signed_at;
+              if (!lastAffirmed) return null;
+              const ageYears = (Date.now() - new Date(lastAffirmed).getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+              const isStale = ageYears > 3;
+              return (
+                <p className={isStale ? "text-amber-600" : "text-emerald-600"}>
+                  {isStale ? "Stale" : "Current"} — last affirmed {Math.round(ageYears * 10) / 10} years ago
+                </p>
+              );
+            })()}
+          </div>
+        </div>
+
         {charter.status === "complete" ? (
           <p className="text-sm font-medium text-emerald-600">
             Marked complete{charter.completed_at ? ` on ${new Date(charter.completed_at).toLocaleDateString()}` : ""}.

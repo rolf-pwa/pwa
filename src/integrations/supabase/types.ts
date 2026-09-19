@@ -1946,15 +1946,20 @@ export type Database = {
           created_at: string
           created_by: string | null
           discretionary_trust_guidelines: string | null
+          family_values_addendum_reaffirmed_at: string | null
+          family_values_addendum_signed_at: string | null
           governance_snapshot: Json | null
           governance_snapshot_computed_at: string | null
           grounding_principles: Json
           household_id: string
           hub_spoke_cadence_note: string | null
           id: string
+          identity_transition_note: string | null
           legal_documents: Json
           matrimonial_ringfencing_note: string | null
           meeting_transcripts: Json
+          next_gen_milestones: Json
+          philanthropic_stewardship_note: string | null
           poa_incapacity_protocol: string | null
           pure_fiduciary_standard_note: string | null
           river_boundary_note: string | null
@@ -1981,15 +1986,20 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           discretionary_trust_guidelines?: string | null
+          family_values_addendum_reaffirmed_at?: string | null
+          family_values_addendum_signed_at?: string | null
           governance_snapshot?: Json | null
           governance_snapshot_computed_at?: string | null
           grounding_principles?: Json
           household_id: string
           hub_spoke_cadence_note?: string | null
           id?: string
+          identity_transition_note?: string | null
           legal_documents?: Json
           matrimonial_ringfencing_note?: string | null
           meeting_transcripts?: Json
+          next_gen_milestones?: Json
+          philanthropic_stewardship_note?: string | null
           poa_incapacity_protocol?: string | null
           pure_fiduciary_standard_note?: string | null
           river_boundary_note?: string | null
@@ -2016,15 +2026,20 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           discretionary_trust_guidelines?: string | null
+          family_values_addendum_reaffirmed_at?: string | null
+          family_values_addendum_signed_at?: string | null
           governance_snapshot?: Json | null
           governance_snapshot_computed_at?: string | null
           grounding_principles?: Json
           household_id?: string
           hub_spoke_cadence_note?: string | null
           id?: string
+          identity_transition_note?: string | null
           legal_documents?: Json
           matrimonial_ringfencing_note?: string | null
           meeting_transcripts?: Json
+          next_gen_milestones?: Json
+          philanthropic_stewardship_note?: string | null
           poa_incapacity_protocol?: string | null
           pure_fiduciary_standard_note?: string | null
           river_boundary_note?: string | null

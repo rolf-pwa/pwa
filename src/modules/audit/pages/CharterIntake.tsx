@@ -10,7 +10,10 @@ import {
   completeCharterIntake,
   draftPerspective2,
   draftPerspective3,
+  draftPerspective4,
   loadCharterIntake,
+  markValuesAddendumReaffirmed,
+  markValuesAddendumSigned,
   recomputeGovernanceSnapshot,
   recomputeTreasurySnapshot,
   saveCharterIntakeField,
@@ -21,8 +24,10 @@ import {
   type LegalDocument,
   type MeetingTranscript,
   type NamedItem,
+  type NextGenMilestone,
   type Perspective2Draft,
   type Perspective3Draft,
+  type Perspective4Draft,
 } from "../hooks/useCharterIntake";
 import { StepFamilyVision } from "../components/charter-intake/StepFamilyVision";
 import { NamedListStep } from "../components/charter-intake/NamedListStep";
@@ -33,6 +38,8 @@ import { StepBoundaryCapitalProtocols } from "../components/charter-intake/StepB
 import { StepVaultProtocolLegalDocuments } from "../components/charter-intake/StepVaultProtocolLegalDocuments";
 import { StepCorporateTaxShields } from "../components/charter-intake/StepCorporateTaxShields";
 import { StepHubSpokeCoordination } from "../components/charter-intake/StepHubSpokeCoordination";
+import { StepIdentityTransitionNextGen } from "../components/charter-intake/StepIdentityTransitionNextGen";
+import { StepPhilanthropicValuesAddendum } from "../components/charter-intake/StepPhilanthropicValuesAddendum";
 import { StepReview } from "../components/charter-intake/StepReview";
 import { CORE_VALUES_DEFAULTS, GROUNDING_PRINCIPLES_DEFAULTS } from "../lib/charterBedrockDefaults";
 
@@ -47,7 +54,9 @@ const CHARTER_INTAKE_STEPS: OnboardingStepMeta[] = [
   { id: 8, title: "Vault Protocol & Legal Documents", hint: "Wills, POA, trust deeds, and shareholder agreements from the Vault" },
   { id: 9, title: "Corporate Tax Friction Shields", hint: "SBD clawback, active asset ratio, and CDA balance" },
   { id: 10, title: "Hub-and-Spoke Coordination", hint: "Review cadence, the Tri-Party MOU, and the Pure Fiduciary Standard" },
-  { id: 11, title: "Review & Complete", hint: "Confirm before marking the Bedrock complete" },
+  { id: 11, title: "Identity Transition & Next-Gen Milestones", hint: "OpCo-to-WealthCo transition and rising-generation readiness" },
+  { id: 12, title: "Philanthropic Stewardship & Values Addendum", hint: "Charitable directives and the family values addendum" },
+  { id: 13, title: "Review & Complete", hint: "Confirm before marking the Bedrock complete" },
 ];
 
 const CORE_VALUES_GUIDANCE =
@@ -71,6 +80,9 @@ export default function CharterIntake() {
   const [syncingLegalDocuments, setSyncingLegalDocuments] = useState(false);
   const [perspective3Draft, setPerspective3Draft] = useState<Perspective3Draft | null>(null);
   const [drafting3, setDrafting3] = useState(false);
+  const [perspective4Draft, setPerspective4Draft] = useState<Perspective4Draft | null>(null);
+  const [drafting4, setDrafting4] = useState(false);
+  const [markingAddendum, setMarkingAddendum] = useState(false);
   const [current, setCurrent] = useState(1);
 
   const furthest = charter?.step ?? 1;
@@ -375,6 +387,78 @@ export default function CharterIntake() {
     }
   };
 
+  const draftP4 = async () => {
+    if (!householdId) return;
+    setDrafting4(true);
+    try {
+      const draft = await draftPerspective4(householdId);
+      setPerspective4Draft(draft);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not draft with AI.");
+    } finally {
+      setDrafting4(false);
+    }
+  };
+
+  const saveIdentityTransitionNextGen = async (identityTransitionNote: string, milestones: NextGenMilestone[]) => {
+    if (!householdId) return;
+    setSaving(true);
+    try {
+      await saveCharterIntakeField(householdId, "identity_transition_note", identityTransitionNote, 12);
+      const updated = await saveCharterIntakeField(householdId, "next_gen_milestones", milestones, 12);
+      setCharter(updated);
+      setCurrent(12);
+      toast.success("Saved.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const savePhilanthropicNote = async (note: string) => {
+    if (!householdId) return;
+    setSaving(true);
+    try {
+      const updated = await saveCharterIntakeField(householdId, "philanthropic_stewardship_note", note, 13);
+      setCharter(updated);
+      setCurrent(13);
+      toast.success("Saved.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const markSigned = async () => {
+    if (!householdId) return;
+    setMarkingAddendum(true);
+    try {
+      const updated = await markValuesAddendumSigned(householdId);
+      setCharter(updated);
+      toast.success("Marked signed.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not mark signed.");
+    } finally {
+      setMarkingAddendum(false);
+    }
+  };
+
+  const markReaffirmed = async () => {
+    if (!householdId) return;
+    setMarkingAddendum(true);
+    try {
+      const updated = await markValuesAddendumReaffirmed(householdId);
+      setCharter(updated);
+      toast.success("Marked reaffirmed.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not mark reaffirmed.");
+    } finally {
+      setMarkingAddendum(false);
+    }
+  };
+
   const complete = async () => {
     if (!householdId) return;
     setCompleting(true);
@@ -537,7 +621,34 @@ export default function CharterIntake() {
                 onSave={saveHubSpoke}
               />
             )}
-            {current === 11 && <StepReview charter={charter} completing={completing} onComplete={complete} />}
+            {current === 11 && (
+              <StepIdentityTransitionNextGen
+                identityTransitionNote={charter.identity_transition_note}
+                milestones={charter.next_gen_milestones}
+                draft={perspective4Draft}
+                drafting={drafting4}
+                saving={saving}
+                onDraft={draftP4}
+                onSave={saveIdentityTransitionNextGen}
+              />
+            )}
+            {current === 12 && (
+              <StepPhilanthropicValuesAddendum
+                philanthropicStewardshipNote={charter.philanthropic_stewardship_note}
+                philanthropicBalance={charter.treasury_snapshot?.storehouse_reserves.philanthropic ?? null}
+                signedAt={charter.family_values_addendum_signed_at}
+                reaffirmedAt={charter.family_values_addendum_reaffirmed_at}
+                draft={perspective4Draft}
+                drafting={drafting4}
+                saving={saving}
+                marking={markingAddendum}
+                onDraft={draftP4}
+                onSave={savePhilanthropicNote}
+                onMarkSigned={markSigned}
+                onMarkReaffirmed={markReaffirmed}
+              />
+            )}
+            {current === 13 && <StepReview charter={charter} completing={completing} onComplete={complete} />}
           </>
         )}
       </div>
