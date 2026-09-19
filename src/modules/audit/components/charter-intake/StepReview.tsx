@@ -189,6 +189,102 @@ export function StepReview({ charter, completing, onComplete }: Props) {
           </div>
         </div>
 
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Vault Protocol Readiness
+          </h3>
+          {charter.governance_snapshot?.vault_protocol_readiness ? (
+            <p className="rounded-md border border-border bg-muted/30 p-3 text-sm">
+              {charter.governance_snapshot.vault_protocol_readiness.percent}% of tracked Vault categories
+              populated ({charter.governance_snapshot.vault_protocol_readiness.criticalSatisfied} of{" "}
+              {charter.governance_snapshot.vault_protocol_readiness.criticalTotal}).
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground italic">
+              Not yet computed — visit the Vault Protocol &amp; Legal Documents step.
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Legal Documents</h3>
+          {charter.legal_documents.length > 0 ? (
+            <div className="space-y-2">
+              {charter.legal_documents.map((d) => (
+                <div key={d.id} className="rounded-md border border-border bg-muted/30 p-3 text-sm">
+                  <p className="font-medium">
+                    {d.document_type} <span className="text-xs text-muted-foreground">({d.source_category})</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">{d.title}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground italic">No legal documents synced yet.</p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Corporate Tax Friction Shields
+          </h3>
+          {charter.governance_snapshot?.track_type !== "corporate" ? (
+            <p className="text-sm text-muted-foreground italic">Not applicable — personal-track household.</p>
+          ) : charter.governance_snapshot?.tax_shields ? (
+            <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3 text-sm">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-xs text-muted-foreground">SBD Clawback</p>
+                  <p className="font-medium">{formatCurrency(charter.governance_snapshot.tax_shields.sbd_clawback)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Active Asset Ratio</p>
+                  <p className="font-medium">{Math.round(charter.governance_snapshot.tax_shields.active_asset_ratio.ratio * 100)}%</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">CDA Balance</p>
+                  <p className="font-medium">
+                    {charter.governance_snapshot.tax_shields.cda_balance !== null
+                      ? formatCurrency(charter.governance_snapshot.tax_shields.cda_balance)
+                      : "Not entered"}
+                  </p>
+                </div>
+              </div>
+              {charter.tax_friction_shields_note?.trim() && (
+                <p className="whitespace-pre-wrap border-t border-border pt-2 text-xs text-muted-foreground">
+                  {charter.tax_friction_shields_note}
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground italic">
+              Not yet computed — visit the Corporate Tax Friction Shields step.
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Hub-and-Spoke Coordination
+          </h3>
+          <div className="space-y-2">
+            {[
+              ["Hub-and-Spoke Coordination Cadence", charter.hub_spoke_cadence_note],
+              ["Tri-Party MOU Protocol", charter.tri_party_mou_note],
+              ["Pure Fiduciary Standard", charter.pure_fiduciary_standard_note],
+            ].map(([label, text]) => (
+              <div key={label} className="rounded-md border border-border bg-muted/30 p-3">
+                <p className="text-xs font-medium text-muted-foreground">{label}</p>
+                {text?.trim() ? (
+                  <p className="mt-1 whitespace-pre-wrap text-sm">{text}</p>
+                ) : (
+                  <p className="mt-1 text-sm text-muted-foreground italic">Not yet drafted.</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
         {charter.status === "complete" ? (
           <p className="text-sm font-medium text-emerald-600">
             Marked complete{charter.completed_at ? ` on ${new Date(charter.completed_at).toLocaleDateString()}` : ""}.

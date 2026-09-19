@@ -1935,76 +1935,106 @@ export type Database = {
       }
       household_charters: {
         Row: {
+          active_operational_assets_value: number | null
           boundary_protocol_note: string | null
           capital_request_framework_note: string | null
+          cda_balance: number | null
           completed_at: string | null
           completed_by: string | null
           core_values: Json
+          corporate_passive_income_annual: number | null
           created_at: string
           created_by: string | null
           discretionary_trust_guidelines: string | null
+          governance_snapshot: Json | null
+          governance_snapshot_computed_at: string | null
           grounding_principles: Json
           household_id: string
+          hub_spoke_cadence_note: string | null
           id: string
+          legal_documents: Json
           matrimonial_ringfencing_note: string | null
           meeting_transcripts: Json
           poa_incapacity_protocol: string | null
+          pure_fiduciary_standard_note: string | null
           river_boundary_note: string | null
           shareholder_voting_philosophy: string | null
           status: string
           step: number
+          tax_friction_shields_note: string | null
           treasury_snapshot: Json | null
           treasury_snapshot_computed_at: string | null
+          tri_party_mou_note: string | null
           updated_at: string
           vineyard_replenishment_policy: string | null
           vision_text: string | null
         }
         Insert: {
+          active_operational_assets_value?: number | null
           boundary_protocol_note?: string | null
           capital_request_framework_note?: string | null
+          cda_balance?: number | null
           completed_at?: string | null
           completed_by?: string | null
           core_values?: Json
+          corporate_passive_income_annual?: number | null
           created_at?: string
           created_by?: string | null
           discretionary_trust_guidelines?: string | null
+          governance_snapshot?: Json | null
+          governance_snapshot_computed_at?: string | null
           grounding_principles?: Json
           household_id: string
+          hub_spoke_cadence_note?: string | null
           id?: string
+          legal_documents?: Json
           matrimonial_ringfencing_note?: string | null
           meeting_transcripts?: Json
           poa_incapacity_protocol?: string | null
+          pure_fiduciary_standard_note?: string | null
           river_boundary_note?: string | null
           shareholder_voting_philosophy?: string | null
           status?: string
           step?: number
+          tax_friction_shields_note?: string | null
           treasury_snapshot?: Json | null
           treasury_snapshot_computed_at?: string | null
+          tri_party_mou_note?: string | null
           updated_at?: string
           vineyard_replenishment_policy?: string | null
           vision_text?: string | null
         }
         Update: {
+          active_operational_assets_value?: number | null
           boundary_protocol_note?: string | null
           capital_request_framework_note?: string | null
+          cda_balance?: number | null
           completed_at?: string | null
           completed_by?: string | null
           core_values?: Json
+          corporate_passive_income_annual?: number | null
           created_at?: string
           created_by?: string | null
           discretionary_trust_guidelines?: string | null
+          governance_snapshot?: Json | null
+          governance_snapshot_computed_at?: string | null
           grounding_principles?: Json
           household_id?: string
+          hub_spoke_cadence_note?: string | null
           id?: string
+          legal_documents?: Json
           matrimonial_ringfencing_note?: string | null
           meeting_transcripts?: Json
           poa_incapacity_protocol?: string | null
+          pure_fiduciary_standard_note?: string | null
           river_boundary_note?: string | null
           shareholder_voting_philosophy?: string | null
           status?: string
           step?: number
+          tax_friction_shields_note?: string | null
           treasury_snapshot?: Json | null
           treasury_snapshot_computed_at?: string | null
+          tri_party_mou_note?: string | null
           updated_at?: string
           vineyard_replenishment_policy?: string | null
           vision_text?: string | null

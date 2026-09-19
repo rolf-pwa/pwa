@@ -9,15 +9,20 @@ import { OnboardingStepper, type OnboardingStepMeta } from "@/modules/intake";
 import {
   completeCharterIntake,
   draftPerspective2,
+  draftPerspective3,
   loadCharterIntake,
+  recomputeGovernanceSnapshot,
   recomputeTreasurySnapshot,
   saveCharterIntakeField,
+  syncLegalDocuments,
   syncMeetingTranscripts,
   type CharterPrefill,
   type HouseholdCharter,
+  type LegalDocument,
   type MeetingTranscript,
   type NamedItem,
   type Perspective2Draft,
+  type Perspective3Draft,
 } from "../hooks/useCharterIntake";
 import { StepFamilyVision } from "../components/charter-intake/StepFamilyVision";
 import { NamedListStep } from "../components/charter-intake/NamedListStep";
@@ -25,6 +30,9 @@ import { StepTreasuryCapital } from "../components/charter-intake/StepTreasuryCa
 import { StepMeetingTranscripts } from "../components/charter-intake/StepMeetingTranscripts";
 import { StepFiduciaryGuidance } from "../components/charter-intake/StepFiduciaryGuidance";
 import { StepBoundaryCapitalProtocols } from "../components/charter-intake/StepBoundaryCapitalProtocols";
+import { StepVaultProtocolLegalDocuments } from "../components/charter-intake/StepVaultProtocolLegalDocuments";
+import { StepCorporateTaxShields } from "../components/charter-intake/StepCorporateTaxShields";
+import { StepHubSpokeCoordination } from "../components/charter-intake/StepHubSpokeCoordination";
 import { StepReview } from "../components/charter-intake/StepReview";
 import { CORE_VALUES_DEFAULTS, GROUNDING_PRINCIPLES_DEFAULTS } from "../lib/charterBedrockDefaults";
 
@@ -36,7 +44,10 @@ const CHARTER_INTAKE_STEPS: OnboardingStepMeta[] = [
   { id: 5, title: "Meeting Transcripts", hint: "Synced directly from the household's Meeting Notes in Drive" },
   { id: 6, title: "Fiduciary Guidance", hint: "Trust, POA, and shareholder succession guidance" },
   { id: 7, title: "Boundary & Capital Protocols", hint: "Social boundaries, capital requests, and asset ring-fencing" },
-  { id: 8, title: "Review & Complete", hint: "Confirm before marking the Bedrock complete" },
+  { id: 8, title: "Vault Protocol & Legal Documents", hint: "Wills, POA, trust deeds, and shareholder agreements from the Vault" },
+  { id: 9, title: "Corporate Tax Friction Shields", hint: "SBD clawback, active asset ratio, and CDA balance" },
+  { id: 10, title: "Hub-and-Spoke Coordination", hint: "Review cadence, the Tri-Party MOU, and the Pure Fiduciary Standard" },
+  { id: 11, title: "Review & Complete", hint: "Confirm before marking the Bedrock complete" },
 ];
 
 const CORE_VALUES_GUIDANCE =
@@ -56,6 +67,10 @@ export default function CharterIntake() {
   const [syncingTranscripts, setSyncingTranscripts] = useState(false);
   const [perspective2Draft, setPerspective2Draft] = useState<Perspective2Draft | null>(null);
   const [drafting, setDrafting] = useState(false);
+  const [trackType, setTrackType] = useState<"personal" | "corporate">("personal");
+  const [syncingLegalDocuments, setSyncingLegalDocuments] = useState(false);
+  const [perspective3Draft, setPerspective3Draft] = useState<Perspective3Draft | null>(null);
+  const [drafting3, setDrafting3] = useState(false);
   const [current, setCurrent] = useState(1);
 
   const furthest = charter?.step ?? 1;
@@ -76,10 +91,11 @@ export default function CharterIntake() {
       loadCharterIntake(householdId),
       supabase.from("households").select("label").eq("id", householdId).maybeSingle(),
     ])
-      .then(([{ charter: loaded, prefill: p }, householdRes]) => {
+      .then(([{ charter: loaded, prefill: p, track_type: t }, householdRes]) => {
         if (cancelled) return;
         setCharter(loaded);
         setPrefill(p);
+        setTrackType(t);
         setHouseholdLabel(householdRes.data?.label || "Household");
       })
       .catch((e) => toast.error(e instanceof Error ? e.message : "Could not load Charter Intake."))
@@ -234,6 +250,131 @@ export default function CharterIntake() {
     }
   };
 
+  const syncLegalDocs = async () => {
+    if (!householdId) return;
+    setSyncingLegalDocuments(true);
+    try {
+      const result = await syncLegalDocuments(householdId);
+      setCharter(result.charter);
+      if (result.vault_missing) {
+        toast.error("No Vault has been provisioned for this household yet.");
+      } else {
+        toast.success(result.synced > 0 ? `Synced ${result.synced} document(s) from the Vault.` : "Already up to date.");
+      }
+      if (result.errors?.length) {
+        result.errors.forEach((e) => toast.error(`Could not sync "${e.title}": ${e.message}`));
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not sync from the Vault.");
+    } finally {
+      setSyncingLegalDocuments(false);
+    }
+  };
+
+  const saveLegalDocuments = async (rows: LegalDocument[]) => {
+    if (!householdId) return;
+    setSaving(true);
+    try {
+      const updated = await saveCharterIntakeField(householdId, "legal_documents", rows, 9);
+      setCharter(updated);
+      setCurrent(9);
+      toast.success("Saved.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const recomputeGovernance = async () => {
+    if (!householdId) return;
+    setRecomputing(true);
+    try {
+      const updated = await recomputeGovernanceSnapshot(householdId);
+      setCharter(updated);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not recompute the Governance snapshot.");
+    } finally {
+      setRecomputing(false);
+    }
+  };
+
+  const draftP3 = async () => {
+    if (!householdId) return;
+    setDrafting3(true);
+    try {
+      const draft = await draftPerspective3(householdId);
+      setPerspective3Draft(draft);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not draft with AI.");
+    } finally {
+      setDrafting3(false);
+    }
+  };
+
+  const saveTaxShields = async (fields: {
+    corporate_passive_income_annual: number | null;
+    active_operational_assets_value: number | null;
+    cda_balance: number | null;
+    tax_friction_shields_note: string;
+  }) => {
+    if (!householdId) return;
+    setSaving(true);
+    try {
+      await saveCharterIntakeField(householdId, "corporate_passive_income_annual", fields.corporate_passive_income_annual, 9);
+      await saveCharterIntakeField(householdId, "active_operational_assets_value", fields.active_operational_assets_value, 9);
+      await saveCharterIntakeField(householdId, "cda_balance", fields.cda_balance, 9);
+      const updated = await saveCharterIntakeField(householdId, "tax_friction_shields_note", fields.tax_friction_shields_note, 10);
+      setCharter(updated);
+      setCurrent(10);
+      toast.success("Saved.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const skipTaxShields = async () => {
+    if (!householdId) return;
+    setSaving(true);
+    try {
+      const updated = await saveCharterIntakeField(householdId, "tax_friction_shields_note", charter?.tax_friction_shields_note ?? "", 10);
+      setCharter(updated);
+      setCurrent(10);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not continue.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveHubSpoke = async (fields: {
+    hub_spoke_cadence_note: string;
+    tri_party_mou_note: string;
+    pure_fiduciary_standard_note: string;
+  }) => {
+    if (!householdId) return;
+    setSaving(true);
+    try {
+      await saveCharterIntakeField(householdId, "hub_spoke_cadence_note", fields.hub_spoke_cadence_note, 10);
+      await saveCharterIntakeField(householdId, "tri_party_mou_note", fields.tri_party_mou_note, 10);
+      const updated = await saveCharterIntakeField(
+        householdId,
+        "pure_fiduciary_standard_note",
+        fields.pure_fiduciary_standard_note,
+        11,
+      );
+      setCharter(updated);
+      setCurrent(11);
+      toast.success("Saved.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const complete = async () => {
     if (!householdId) return;
     setCompleting(true);
@@ -353,7 +494,50 @@ export default function CharterIntake() {
                 onSave={saveBoundaryCapitalProtocols}
               />
             )}
-            {current === 8 && <StepReview charter={charter} completing={completing} onComplete={complete} />}
+            {current === 8 && (
+              <StepVaultProtocolLegalDocuments
+                documents={charter.legal_documents}
+                governanceSnapshot={charter.governance_snapshot}
+                governanceSnapshotComputedAt={charter.governance_snapshot_computed_at}
+                syncing={syncingLegalDocuments}
+                recomputing={recomputing}
+                saving={saving}
+                onSync={syncLegalDocs}
+                onRecompute={recomputeGovernance}
+                onSave={saveLegalDocuments}
+              />
+            )}
+            {current === 9 && (
+              <StepCorporateTaxShields
+                trackType={trackType}
+                corporatePassiveIncomeAnnual={charter.corporate_passive_income_annual}
+                activeOperationalAssetsValue={charter.active_operational_assets_value}
+                cdaBalance={charter.cda_balance}
+                taxFrictionShieldsNote={charter.tax_friction_shields_note}
+                governanceSnapshot={charter.governance_snapshot}
+                recomputing={recomputing}
+                drafting={drafting3}
+                saving={saving}
+                draftSuggestion={perspective3Draft?.tax_friction_shields_note}
+                onRecompute={recomputeGovernance}
+                onDraft={draftP3}
+                onSave={saveTaxShields}
+                onSkip={skipTaxShields}
+              />
+            )}
+            {current === 10 && (
+              <StepHubSpokeCoordination
+                hubSpokeCadenceNote={charter.hub_spoke_cadence_note}
+                triPartyMouNote={charter.tri_party_mou_note}
+                pureFiduciaryStandardNote={charter.pure_fiduciary_standard_note}
+                draft={perspective3Draft}
+                drafting={drafting3}
+                saving={saving}
+                onDraft={draftP3}
+                onSave={saveHubSpoke}
+              />
+            )}
+            {current === 11 && <StepReview charter={charter} completing={completing} onComplete={complete} />}
           </>
         )}
       </div>

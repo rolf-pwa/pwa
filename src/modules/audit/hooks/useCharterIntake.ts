@@ -49,6 +49,50 @@ export interface Perspective2Draft {
   matrimonial_ringfencing_note: string;
 }
 
+export interface LegalDocument {
+  id: string;
+  title: string;
+  source_category: "estate" | "business";
+  document_type: string;
+  summary: string;
+  extracted_facts: {
+    testator_or_grantor_name: string | null;
+    date_executed: string | null;
+    jurisdiction: string | null;
+    parties: { name: string; role: string; relationship: string | null }[];
+    beneficiary_designations: { beneficiary_name: string; asset_or_share_description: string }[];
+    key_clauses: { clause_ref: string | null; summary: string }[];
+    notes: string | null;
+  };
+  external_file_id: string;
+  external_modified_at: string | null;
+  added_at: string;
+}
+
+export interface GovernanceSnapshot {
+  track_type: "personal" | "corporate";
+  vault_protocol_readiness: {
+    percent: number;
+    criticalTotal: number;
+    criticalSatisfied: number;
+    missingCritical: string[];
+    missingRecommended: string[];
+  };
+  tax_shields: {
+    sbd_clawback: number;
+    active_asset_ratio: { ratio: number; belowLcgeThreshold: boolean };
+    total_corp_assets: number;
+    cda_balance: number | null;
+  } | null;
+}
+
+export interface Perspective3Draft {
+  hub_spoke_cadence_note: string;
+  tri_party_mou_note: string;
+  pure_fiduciary_standard_note: string;
+  tax_friction_shields_note: string;
+}
+
 export interface HouseholdCharter {
   id: string;
   household_id: string;
@@ -68,6 +112,16 @@ export interface HouseholdCharter {
   boundary_protocol_note: string | null;
   capital_request_framework_note: string | null;
   matrimonial_ringfencing_note: string | null;
+  legal_documents: LegalDocument[];
+  governance_snapshot: GovernanceSnapshot | null;
+  governance_snapshot_computed_at: string | null;
+  corporate_passive_income_annual: number | null;
+  active_operational_assets_value: number | null;
+  cda_balance: number | null;
+  tax_friction_shields_note: string | null;
+  hub_spoke_cadence_note: string | null;
+  tri_party_mou_note: string | null;
+  pure_fiduciary_standard_note: string | null;
   completed_at: string | null;
   completed_by: string | null;
   created_by: string | null;
@@ -102,7 +156,10 @@ async function invoke<T>(body: Record<string, unknown>): Promise<T> {
 }
 
 export async function loadCharterIntake(householdId: string) {
-  return invoke<{ charter: HouseholdCharter; prefill: CharterPrefill }>({ action: "load", household_id: householdId });
+  return invoke<{ charter: HouseholdCharter; prefill: CharterPrefill; track_type: "personal" | "corporate" }>({
+    action: "load",
+    household_id: householdId,
+  });
 }
 
 export async function saveCharterIntakeField(
@@ -119,8 +176,16 @@ export async function saveCharterIntakeField(
     | "shareholder_voting_philosophy"
     | "boundary_protocol_note"
     | "capital_request_framework_note"
-    | "matrimonial_ringfencing_note",
-  value: string | NamedItem[] | MeetingTranscript[],
+    | "matrimonial_ringfencing_note"
+    | "legal_documents"
+    | "corporate_passive_income_annual"
+    | "active_operational_assets_value"
+    | "cda_balance"
+    | "tax_friction_shields_note"
+    | "hub_spoke_cadence_note"
+    | "tri_party_mou_note"
+    | "pure_fiduciary_standard_note",
+  value: string | number | null | NamedItem[] | MeetingTranscript[] | LegalDocument[],
   advanceTo: number,
 ) {
   const data = await invoke<{ charter: HouseholdCharter }>({
@@ -147,6 +212,23 @@ export async function syncMeetingTranscripts(householdId: string) {
 
 export async function draftPerspective2(householdId: string) {
   const data = await invoke<{ draft: Perspective2Draft }>({ action: "draft_perspective_2", household_id: householdId });
+  return data.draft;
+}
+
+export async function syncLegalDocuments(householdId: string) {
+  return invoke<{ charter: HouseholdCharter; synced: number; vault_missing?: boolean; errors?: { title: string; message: string }[] }>({
+    action: "sync_legal_documents",
+    household_id: householdId,
+  });
+}
+
+export async function recomputeGovernanceSnapshot(householdId: string) {
+  const data = await invoke<{ charter: HouseholdCharter }>({ action: "recompute_governance_snapshot", household_id: householdId });
+  return data.charter;
+}
+
+export async function draftPerspective3(householdId: string) {
+  const data = await invoke<{ draft: Perspective3Draft }>({ action: "draft_perspective_3", household_id: householdId });
   return data.draft;
 }
 

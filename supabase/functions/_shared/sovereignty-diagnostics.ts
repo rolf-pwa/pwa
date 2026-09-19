@@ -162,7 +162,7 @@ export async function computeDocumentReadiness(
 }
 
 /** Vault folder categories that count toward readiness for legacy/existing clients. */
-const VAULT_READINESS_SLUGS = ["identity-legal", "estate", "tax", "insurance", "investments"];
+export const VAULT_READINESS_SLUGS = ["identity-legal", "estate", "tax", "insurance", "investments"];
 
 /**
  * Document readiness for legacy/existing clients, sourced live from the household's
@@ -172,11 +172,14 @@ const VAULT_READINESS_SLUGS = ["identity-legal", "estate", "tax", "insurance", "
  *
  * Checks the same folder categories staff already see in the CRM's Vault tab
  * (vault_folder_templates), so this can never drift stale the way a cached or
- * advisor-re-typed signal would.
+ * advisor-re-typed signal would. `slugs` defaults to VAULT_READINESS_SLUGS but
+ * callers (e.g. the Charter's Vault Protocol check) can pass an extended list —
+ * e.g. adding "business" for corporate-track households.
  */
 export async function computeVaultReadiness(
   admin: SupabaseClient,
   vaultRootFolderId: string | null,
+  slugs: string[] = VAULT_READINESS_SLUGS,
 ): Promise<DocumentReadiness> {
   const unavailable = (categories: { display_name: string }[]): DocumentReadiness => ({
     percent: 0,
@@ -200,7 +203,7 @@ export async function computeVaultReadiness(
     .from("vault_folder_templates")
     .select("display_name, slug")
     .eq("is_active", true)
-    .in("slug", VAULT_READINESS_SLUGS);
+    .in("slug", slugs);
   const categories = (templates ?? []) as { display_name: string; slug: string }[];
   if (categories.length === 0) {
     return { percent: 0, criticalTotal: 0, criticalSatisfied: 0, missingCritical: [], missingRecommended: [] };
