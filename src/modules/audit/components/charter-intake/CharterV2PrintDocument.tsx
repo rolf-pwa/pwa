@@ -19,7 +19,12 @@ const pageStyle: React.CSSProperties = {
   color: "#334155",
 };
 
-const pageWrap = "bg-white";
+// "charter-v2-page" mirrors v1's own "stab-doc" class: the only purpose is
+// giving @media print something to zero the on-screen marginTop: "6mm" page
+// separator on — v1 already has this reset (`.stab-doc { margin: 0 !important; }`),
+// and without an equivalent here every page after the first prints with a
+// stray 6mm gap pushed onto it, shifting layout against the size:A4/margin:0 @page rule.
+const pageWrap = "charter-v2-page bg-white";
 
 function formatCurrency(val: number) {
   return new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val);
@@ -369,6 +374,7 @@ export function CharterV2PrintDocument({ charter, householdLabel }: Props) {
         @media print {
           @page { size: A4 portrait; margin: 0; }
           body { background: white !important; }
+          .charter-v2-page { margin: 0 !important; }
           .print-page-break { break-before: page; page-break-before: always; }
         }
       `}</style>

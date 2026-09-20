@@ -15,9 +15,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarCollapseProvider>
-      <div className="advisor-app flex h-screen flex-col overflow-hidden bg-background">
-        {/* Header — full width, above the sidebar and the content */}
-        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-border bg-card px-4 py-2.5">
+      <div className="advisor-app flex h-screen flex-col overflow-hidden bg-background print:h-auto print:overflow-visible">
+        {/* Header — full width, above the sidebar and the content. Hidden on print: a page
+            rendered through AppLayout (e.g. CharterIntake) that also builds its own print
+            document must not have this app chrome bleeding into the printed/PDF output —
+            every other print-aware page in this app (SovereigntyCharter, StabilizationMap,
+            QuarterlySystemReview, GovernanceAudit) renders standalone, outside AppLayout
+            entirely, so they never had this problem; this is the one exception. */}
+        <header className="print:hidden flex shrink-0 items-center justify-between gap-4 border-b border-border bg-card px-4 py-2.5">
           <img src={prosperwiseWordmark} alt="ProsperWise" className="h-6 shrink-0" />
           <div className="flex items-center gap-4 min-w-0">
             <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground shrink-0">
@@ -47,13 +52,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <div className="flex flex-1 overflow-hidden">
-          <AppSidebar />
-          <main className="flex-1 overflow-y-auto">
-            <div className="max-w-screen-2xl px-6 py-8">{children}</div>
+        <div className="flex flex-1 overflow-hidden print:block print:overflow-visible">
+          <div className="print:hidden">
+            <AppSidebar />
+          </div>
+          <main className="flex-1 overflow-y-auto print:overflow-visible">
+            <div className="max-w-screen-2xl px-6 py-8 print:max-w-none print:p-0">{children}</div>
           </main>
         </div>
-        <AssistantSidebar />
+        <div className="print:hidden">
+          <AssistantSidebar />
+        </div>
         <CommandPalette />
       </div>
     </SidebarCollapseProvider>
