@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { AppLayout } from "@/shared/components/AppLayout";
 import { PageBreadcrumbs } from "@/shared/components/PageBreadcrumbs";
+import { Button } from "@/shared/components/ui/button";
 import { supabase } from "@/shared/integrations/supabase/client";
-import { Loader2 } from "lucide-react";
+import { Loader2, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { OnboardingStepper, type OnboardingStepMeta } from "@/modules/intake";
 import {
@@ -41,6 +42,7 @@ import { StepHubSpokeCoordination } from "../components/charter-intake/StepHubSp
 import { StepIdentityTransitionNextGen } from "../components/charter-intake/StepIdentityTransitionNextGen";
 import { StepPhilanthropicValuesAddendum } from "../components/charter-intake/StepPhilanthropicValuesAddendum";
 import { StepReview } from "../components/charter-intake/StepReview";
+import { CharterV2PrintDocument } from "../components/charter-intake/CharterV2PrintDocument";
 import { CORE_VALUES_DEFAULTS, GROUNDING_PRINCIPLES_DEFAULTS } from "../lib/charterBedrockDefaults";
 
 const CHARTER_INTAKE_STEPS: OnboardingStepMeta[] = [
@@ -476,6 +478,7 @@ export default function CharterIntake() {
   return (
     <AppLayout>
       <div className="space-y-6">
+        <div className="print:hidden space-y-6">
         <PageBreadcrumbs
           items={[
             { label: "Dashboard", href: "/dashboard" },
@@ -485,12 +488,19 @@ export default function CharterIntake() {
           ]}
         />
 
-        <div>
-          <h1 className="font-serif text-2xl">Sovereignty Charter v2.0 — Foundational Bedrock</h1>
-          <p className="text-sm text-muted-foreground">
-            Family Vision, Core Values, and System Grounding Principles — the constitutional preamble that
-            informs every perspective of this household's Charter.
-          </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="font-serif text-2xl">Sovereignty Charter v2.0 — Foundational Bedrock</h1>
+            <p className="text-sm text-muted-foreground">
+              Family Vision, Core Values, and System Grounding Principles — the constitutional preamble that
+              informs every perspective of this household's Charter.
+            </p>
+          </div>
+          {charter && (
+            <Button variant="outline" onClick={() => window.print()}>
+              <Printer className="mr-2 h-4 w-4" /> Print / PDF
+            </Button>
+          )}
         </div>
 
         {loading || !charter ? (
@@ -650,6 +660,13 @@ export default function CharterIntake() {
             )}
             {current === 13 && <StepReview charter={charter} completing={completing} onComplete={complete} />}
           </>
+        )}
+        </div>
+
+        {charter && (
+          <div className="hidden print:block">
+            <CharterV2PrintDocument charter={charter} householdLabel={householdLabel} />
+          </div>
         )}
       </div>
     </AppLayout>
