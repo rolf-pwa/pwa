@@ -21,6 +21,74 @@ function bucketNoiseExposure(noiseStrain: number): "Low" | "Moderate" | "High" |
   return "Low";
 }
 
+// Mirrors georgiaInsights()/bcContextNotes() in src/modules/intake/lib/derive.ts
+// -- keep in sync (minus the "Your Next Step" insight and the empty-state
+// fallback text, neither of which apply once lead capture is already done).
+// Computed from already-validated domain/catalyst/answers/risk_scores_calculated
+// rather than trusting free-text sent by the client -- this is a public,
+// unauthenticated endpoint and these strings get embedded directly into an
+// outbound email, so the content must come from server-trusted inputs only.
+function computeNarrativeInsights(
+  risk: z.infer<typeof RiskScoresSchema> | null,
+): { tag: string; body: string }[] {
+  if (!risk) return [];
+  const insights: { tag: string; body: string }[] = [];
+  if (risk.noise_strain >= 70) {
+    insights.push({
+      tag: "Noise Exposure",
+      body: "With many eyes on this transition, the noise level around you is incredibly high. You have a legal and emotional right to step back. The single best decision right now is to declare a Quiet Period while we sort the sequence.",
+    });
+  }
+  if (risk.tax_drag_risk >= 70) {
+    insights.push({
+      tag: "Tax Exposure",
+      body: "There are structural tax drags apparent in your profile. In British Columbia, the sequence of how you receive and shelter capital dictates what you keep. Let's address tax exposures before any money moves.",
+    });
+  }
+  if (risk.readiness_score <= 40) {
+    insights.push({
+      tag: "Decision Readiness",
+      body: "It is completely normal to feel paralyzed right now. Your nervous system is catching up with a massive life change. We will prioritize reducing your cognitive overhead — no major plans are needed today.",
+    });
+  }
+  return insights;
+}
+
+function computeBcContextNotes(domain: "corporate" | "personal", catalyst: string, answers: Record<string, unknown>): string[] {
+  const notes: string[] = [];
+  if (domain === "corporate") {
+    notes.push("BC-registered CCPCs may access the Lifetime Capital Gains Exemption (LCGE): $1,250,000 per shareholder.");
+    if (answers.holdco && answers.holdco !== "yes") {
+      notes.push("Without an active HoldCo, retained earnings face full corporate + personal tax on distribution.");
+    }
+    if (answers.lcge === "unsure") {
+      notes.push("Multiplying the LCGE through family trusts requires 24-month share holding rules — plan early.");
+    }
+    if (answers.purification === "yes") {
+      notes.push("Excess passive cash inside the OpCo can disqualify the LCGE — purification is the first move.");
+    }
+  }
+  if (domain === "personal") {
+    if (catalyst === "inheritance") {
+      notes.push("BC Probate fees: ~1.4% on estates over $50,000. Assets in joint tenancy or trust may bypass probate.");
+    }
+    if (catalyst === "divorce_restructuring") {
+      notes.push("BC Family Law Act: family property is presumed 50/50 unless a cohabitation or marriage agreement applies.");
+    }
+    if (catalyst === "executive_exit" && answers.tax_deferral === "no") {
+      notes.push("Retiring allowance rollovers into RRSP room can shelter significant severance from immediate BC tax.");
+    }
+    if (catalyst === "sudden_windfall") {
+      notes.push("A 90-day Quiet Period in a separate high-interest account is the strongest first structural move.");
+    }
+  }
+  return notes;
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 function getCorsHeaders(req: Request) {
   const origin = req.headers.get("Origin") || "";
   const allowedSuffixes = [
@@ -86,8 +154,10 @@ function roadmapEmailHtml(opts: {
   catalystLabel: string;
   scaleFormatted: string;
   risk: z.infer<typeof RiskScoresSchema> | null;
+  insights: { tag: string; body: string }[];
+  bcNotes: string[];
 }): string {
-  const { firstName, catalystLabel, scaleFormatted, risk } = opts;
+  const { firstName, catalystLabel, scaleFormatted, risk, insights, bcNotes } = opts;
   const gaugeRows = risk
     ? `
       <tr><td style="padding:6px 0;color:#334155;font-family:'DM Sans',sans-serif;font-size:14px;">Tax Drag Risk</td><td style="padding:6px 0;text-align:right;font-weight:600;color:#1e293b;font-family:'DM Sans',sans-serif;font-size:14px;">${risk.tax_drag_risk}/100</td></tr>
@@ -97,6 +167,26 @@ function roadmapEmailHtml(opts: {
     `
     : "";
 
+  const insightsHtml = insights.length
+    ? insights
+        .map(
+          (ins) => `
+      <div style="border-left:3px solid #a37c58;background:#faf9f7;padding:10px 14px;margin-bottom:10px;">
+        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#a37c58;margin:0 0 4px;font-family:'DM Sans',sans-serif;">${escapeHtml(ins.tag)}</p>
+        <p style="font-size:13px;line-height:1.55;color:#334155;margin:0;font-family:'DM Sans',sans-serif;">${escapeHtml(ins.body)}</p>
+      </div>`
+        )
+        .join("")
+    : "";
+
+  const bcNotesHtml = bcNotes.length
+    ? `
+      <p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;margin:20px 0 8px;">British Columbia Context</p>
+      <ul style="margin:0;padding-left:18px;">
+        ${bcNotes.map((n) => `<li style="font-size:13px;line-height:1.6;color:#334155;margin-bottom:4px;">${escapeHtml(n)}</li>`).join("")}
+      </ul>`
+    : "";
+
   return `
     <div style="font-family:'DM Sans',sans-serif;color:#334155;max-width:520px;margin:0 auto;">
       <p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;">Sovereignty Operating System™</p>
@@ -104,7 +194,9 @@ function roadmapEmailHtml(opts: {
       <p style="font-size:14px;line-height:1.6;">Hi ${firstName},</p>
       <p style="font-size:14px;line-height:1.6;">Thanks for walking through Georgia's diagnostic. Based on what you shared — ${catalystLabel}, ${scaleFormatted} — here's your private risk snapshot:</p>
       ${gaugeRows ? `<table style="width:100%;border-collapse:collapse;margin:16px 0;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;">${gaugeRows}</table>` : ""}
-      <p style="font-size:14px;line-height:1.6;">No pitch, no commitment. When you're ready to go deeper, the Sovereignty Survey is a 90-minute working session built around exactly what you've told Georgia — you leave with a Stabilization Map, an Immediate Risk Scan, and a 30-Day Action Framework.</p>
+      ${insightsHtml ? `<div style="margin:16px 0;">${insightsHtml}</div>` : ""}
+      ${bcNotesHtml}
+      <p style="font-size:14px;line-height:1.6;margin-top:20px;">No pitch, no commitment. When you're ready to go deeper, the Sovereignty Survey is a 90-minute working session built around exactly what you've told Georgia — you leave with a Stabilization Map, an Immediate Risk Scan, and a 30-Day Action Framework.</p>
       <p style="font-size:14px;line-height:1.6;"><a href="https://www.prosperwise.ca/sovereignty-audit#pricing" style="color:#a37c58;">Learn more about the Sovereignty Survey →</a></p>
       <p style="font-size:14px;line-height:1.6;margin-top:24px;">— Rolf &amp; the ${APP_NAME} team</p>
     </div>
@@ -204,6 +296,8 @@ serve(async (req) => {
           catalystLabel,
           scaleFormatted,
           risk,
+          insights: computeNarrativeInsights(risk),
+          bcNotes: computeBcContextNotes(data.domain, data.catalyst, data.answers),
         });
         const subject = "Your Confidential Roadmap — ProsperWise";
 
