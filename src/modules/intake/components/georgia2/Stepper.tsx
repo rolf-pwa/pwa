@@ -5,8 +5,8 @@ const STEPS = [
   { n: 1, label: "Domain" },
   { n: 2, label: "Catalyst" },
   { n: 3, label: "Diagnostic" },
-  { n: 4, label: "Pathway" },
-  { n: 5, label: "Confidential" },
+  { n: 4, label: "Confidential" },
+  { n: 5, label: "Pathway" },
 ];
 
 export function Stepper({ current }: { current: number }) {

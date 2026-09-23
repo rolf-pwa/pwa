@@ -15,7 +15,6 @@ export interface Georgia2State {
   catalyst: Catalyst | null;
   answers: Partial<Answers>;
   scale: number;
-  resultsRevealed: boolean;
   chosenPathway: Pathway | null;
   contact: Contact;
   sessionKey: string;
@@ -29,7 +28,6 @@ type Action =
   | { type: "set_catalyst"; catalyst: Catalyst }
   | { type: "set_answer"; key: string; value: Answer }
   | { type: "set_scale"; scale: number }
-  | { type: "reveal_results" }
   | { type: "set_pathway"; pathway: Pathway }
   | { type: "set_contact"; contact: Partial<Contact> }
   | { type: "submitting"; value: boolean }
@@ -47,7 +45,6 @@ function initial(): Georgia2State {
     catalyst: null,
     answers: {},
     scale: 1_000_000,
-    resultsRevealed: false,
     chosenPathway: null,
     contact: { first_name: "", email: "", mobile: "" },
     sessionKey: newSessionKey(),
@@ -61,17 +58,18 @@ function reducer(state: Georgia2State, action: Action): Georgia2State {
     case "set_step":
       return { ...state, step: action.step };
     case "set_domain":
-      return { ...state, domain: action.domain, catalyst: null, answers: {}, resultsRevealed: false, step: 2 };
+      return { ...state, domain: action.domain, catalyst: null, answers: {}, step: 2 };
     case "set_catalyst":
       return { ...state, catalyst: action.catalyst, step: 3 };
     case "set_answer":
       return { ...state, answers: { ...state.answers, [action.key]: action.value } };
     case "set_scale":
       return { ...state, scale: action.scale };
-    case "reveal_results":
-      return { ...state, resultsRevealed: true };
     case "set_pathway":
-      return { ...state, chosenPathway: action.pathway, step: 5 };
+      // No step jump here -- pathway is now chosen from within StepResults
+      // itself (step 5, after lead capture), not by transitioning to a
+      // still-to-come contact form. See StepResults.tsx's pick().
+      return { ...state, chosenPathway: action.pathway };
     case "set_contact":
       return { ...state, contact: { ...state.contact, ...action.contact } };
     case "submitting":

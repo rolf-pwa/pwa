@@ -10,19 +10,21 @@ import { StepSuccess } from "./StepSuccess";
 import { BlueprintCanvas } from "./BlueprintCanvas";
 import { trackGeorgia2, useGeorgia2ExitBeacon, type Georgia2SessionPatch } from "@/modules/intake/lib/session-tracker";
 
-// Maps the Stepper's 5 labeled steps (Domain/Catalyst/Diagnostic/Pathway/
-// Confidential) to their first-reach tracking field. state.step 3 and 4
-// both render StepDiagnostic in the left pane (Diagnostic has two virtual
-// sub-steps), but step 4 is also when the results pane's reveal becomes
-// visible -- exactly what the Stepper itself labels "Pathway" -- so that's
-// tracked as its own step here, matching how a visitor actually
-// experiences the flow, not just which component is mounted.
+// Maps the Stepper's 5 labeled steps (Domain/Catalyst/Diagnostic/
+// Confidential/Pathway) to their first-reach tracking field. Lead capture
+// ("Confidential") now comes BEFORE the pathway reveal -- the visitor
+// gives contact info first, then sees their recommendation and picks a
+// pathway -- so step 4/5 map to the opposite tracking columns from the
+// original build; the column names themselves (step_confidential_reached_at
+// / step_pathway_reached_at) describe the CONCEPT reached, not a fixed
+// step number, so they didn't need to change, just which local step
+// number reaches which one.
 const STEP_REACHED_FIELD: Record<number, keyof Georgia2SessionPatch> = {
   1: "step_domain_reached_at",
   2: "step_catalyst_reached_at",
   3: "step_diagnostic_reached_at",
-  4: "step_pathway_reached_at",
-  5: "step_confidential_reached_at",
+  4: "step_confidential_reached_at",
+  5: "step_pathway_reached_at",
 };
 
 function Shell({ embed }: { embed?: boolean }) {
@@ -35,9 +37,9 @@ function Shell({ embed }: { embed?: boolean }) {
       answers: state.answers as Record<string, unknown>,
       scale: state.scale,
       chosen_pathway: state.chosenPathway,
-      reached_lead_capture: state.step >= 5,
+      reached_lead_capture: state.step >= 4,
       lead_captured: state.step >= 6,
-      final_phase: state.step >= 6 ? "complete" : state.step >= 5 ? "lead_capture" : "chat",
+      final_phase: state.step >= 6 ? "complete" : state.step >= 4 ? "lead_capture" : "chat",
     }),
     state.sessionKey
   );
@@ -60,7 +62,7 @@ function Shell({ embed }: { embed?: boolean }) {
   // StepResults scrolls to its own card header instead of the input pane above it.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (state.step === 4) return; // results pane handles its own scroll target
+    if (state.step === 5) return; // StepResults handles its own scroll target
     if (rootRef.current) {
       rootRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     }
@@ -110,18 +112,19 @@ function Shell({ embed }: { embed?: boolean }) {
           <div className="rounded-2xl border border-border bg-card p-5 md:p-8">
             {state.step === 1 && <StepDomain />}
             {state.step === 2 && <StepCatalyst />}
-            {(state.step === 3 || state.step === 4) && <StepDiagnostic />}
-            {state.step === 5 && <StepLeadCapture />}
+            {state.step === 3 && <StepDiagnostic />}
+            {state.step === 4 && <StepLeadCapture />}
+            {state.step === 5 && <StepResults />}
             {state.step === 6 && <StepSuccess />}
           </div>
 
-          {/* Results pane, side by side */}
-            <aside className="space-y-6 rounded-2xl border border-border bg-muted/30 p-5 md:p-6">
-              <BlueprintCanvas />
-              {state.step >= 4 && <StepResults />}
-            </aside>
-
-
+          {/* Blueprint pane, side by side -- a constant visual companion
+              throughout, independent of whatever step is active in the
+              input pane (unlike StepResults, which now lives there as its
+              own dedicated step once lead capture is done). */}
+          <aside className="space-y-6 rounded-2xl border border-border bg-muted/30 p-5 md:p-6">
+            <BlueprintCanvas />
+          </aside>
         </div>
 
         <p className="mt-6 text-center text-[10px] uppercase tracking-widest text-muted-foreground">

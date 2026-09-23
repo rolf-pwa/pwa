@@ -22,13 +22,6 @@ export function StepDiagnostic() {
   const result = state.domain ? deriveResult(state.domain, state.scale) : null;
   const questionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // Once every question is answered, flow naturally into the results card.
-  useEffect(() => {
-    if (allAnswered && state.step === 3) {
-      dispatch({ type: "set_step", step: 4 });
-    }
-  }, [allAnswered, state.step, dispatch]);
-
   // On stacked/mobile layouts, bring the next unanswered question into view
   // after each answer so the visitor doesn't have to scroll down manually.
   useEffect(() => {
@@ -118,13 +111,13 @@ export function StepDiagnostic() {
           <span>{formatCAD(SCALE_MIN)}</span>
           <span>{formatCAD(SCALE_MAX)}</span>
         </div>
-        {result && allAnswered && !state.resultsRevealed && (
+        {result && allAnswered && (
           <Button
             size="lg"
             className="mt-4 w-full"
-            onClick={() => dispatch({ type: "reveal_results" })}
+            onClick={() => dispatch({ type: "set_step", step: 4 })}
           >
-            See my pathway <ArrowRight className="ml-1 h-4 w-4" />
+            Continue <ArrowRight className="ml-1 h-4 w-4" />
           </Button>
         )}
 
