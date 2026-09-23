@@ -19,6 +19,11 @@ export function BlueprintCanvas() {
   const insights = georgiaInsights(state.domain, state.catalyst, state.answers, state.scale);
   const riskNotes = insights.filter((i) => i.tag !== "Your Next Step");
   const timeline = state.catalyst ? CATALYST_TIMELINES[state.catalyst] : null;
+  // The gauges themselves (numbers/bars above) stay visible throughout as
+  // the "watch your blueprint build live" hook -- only the written-out
+  // narrative content is gated, and only until lead capture (step 4) is
+  // actually submitted (step 5+), not merely reached.
+  const narrativesUnlocked = state.step >= 5;
   const currentStage = timeline
     ? timelineStageIndex(state.catalyst, state.answers, timeline.length)
     : 0;
@@ -121,7 +126,7 @@ export function BlueprintCanvas() {
             Awaiting answers
           </p>
         )}
-        {riskNotes.length > 0 && (
+        {narrativesUnlocked && riskNotes.length > 0 && (
           <div className="mt-3 space-y-2">
             {riskNotes.map((ins, i) => (
               <div key={i} className="rounded-lg border border-accent/30 bg-accent/5 p-3">
@@ -129,6 +134,13 @@ export function BlueprintCanvas() {
                 <p className="mt-1 text-xs leading-relaxed text-foreground">{ins.body}</p>
               </div>
             ))}
+          </div>
+        )}
+        {!narrativesUnlocked && answered && riskNotes.length > 0 && (
+          <div className="mt-3 rounded-lg border border-dashed border-border bg-muted/30 p-3">
+            <p className="text-xs text-muted-foreground">
+              Georgia has notes on your risk profile — complete your confidential details to unlock them.
+            </p>
           </div>
         )}
       </div>
@@ -139,14 +151,22 @@ export function BlueprintCanvas() {
           British Columbia Context
         </p>
         <div className="rounded-lg border border-border bg-card p-4">
-          <ul className="space-y-2">
-            {notes.map((n, i) => (
-              <li key={i} className="flex gap-2 text-xs leading-relaxed text-muted-foreground">
-                <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-accent" />
-                <span>{n}</span>
-              </li>
-            ))}
-          </ul>
+          {narrativesUnlocked ? (
+            <ul className="space-y-2">
+              {notes.map((n, i) => (
+                <li key={i} className="flex gap-2 text-xs leading-relaxed text-muted-foreground">
+                  <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-accent" />
+                  <span>{n}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {notes.length > 0
+                ? "Complete your confidential details to unlock your BC-specific context."
+                : "Complete Steps 1–3 to reveal your BC-specific context."}
+            </p>
+          )}
         </div>
       </div>
 
