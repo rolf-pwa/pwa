@@ -6,6 +6,7 @@ import { ArrowLeft, Lock, Loader2 } from "lucide-react";
 import { z } from "zod";
 import { useState } from "react";
 import { trackGeorgia2 } from "@/modules/intake/lib/session-tracker";
+import { computeGauges } from "@/modules/intake/lib/derive";
 
 const ContactSchema = z.object({
   first_name: z.string().trim().min(1, "First name required").max(80),
@@ -34,6 +35,11 @@ export function StepLeadCapture() {
     dispatch({ type: "submitting", value: true });
     dispatch({ type: "submit_error", error: null });
     try {
+      // Same computeGauges() BlueprintCanvas has been rendering live all
+      // along — persisted now so Phase 2's Delta Engine has a stable,
+      // queryable self-reported baseline (see the schema migration's own
+      // comment for why this isn't recomputed server-side).
+      const gauges = computeGauges(state.domain, state.catalyst, state.answers, state.scale);
       const res = await fetch(`${FUNCTIONS_URL}/georgia2-lead`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -47,6 +53,12 @@ export function StepLeadCapture() {
           chosen_pathway: state.chosenPathway,
           scale: state.scale,
           answers: state.answers,
+          risk_scores_calculated: {
+            tax_drag_risk: gauges.taxDragRisk,
+            structure_safety: gauges.structureSafety,
+            noise_strain: gauges.noiseStrain,
+            readiness_score: gauges.readiness,
+          },
         }),
       });
       if (!res.ok) {

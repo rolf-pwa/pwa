@@ -308,6 +308,9 @@ export const CATALYST_QUESTIONS: Record<Catalyst, Question[]> = {
 export type Pathway =
   | "survey"
   | "academy_guide"
+  // Lower-commitment path (Causal AI Platform Phase 0 / "Ask Georgia"):
+  // email-gated roadmap delivery, no purchase or call required.
+  | "confidential_roadmap"
   // Legacy values retained so historical lead rows still type-check.
   | "vfo_stabilization"
   | "vfo_catalyst_guide"

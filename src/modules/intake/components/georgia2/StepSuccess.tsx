@@ -17,6 +17,11 @@ const PATHWAY_COPY: Record<
     body: "Your catalyst-matched Academy article is public and free to read. When you're ready for a working session, the Sovereignty Survey is the next step.",
     next: "No email required — the Academy is self-guided.",
   },
+  confidential_roadmap: {
+    title: "Your Confidential Roadmap Is On Its Way",
+    body: "We've sent your personalized risk snapshot and next-step guidance to your inbox. No pitch, no commitment — just a clear picture of where things stand.",
+    next: "Watch for a confidential email from ProsperWise. When you're ready for a working session, the Sovereignty Survey is the next step.",
+  },
   // Legacy pathway labels retained for historical sessions.
   vfo_stabilization: {
     title: "Sovereignty Survey Requested",

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useGeorgia2 } from "./state";
 import { Button } from "@/shared/components/ui/button";
-import { ArrowLeft, Calendar, Phone } from "lucide-react";
+import { ArrowLeft, Calendar, Mail, Phone } from "lucide-react";
 import {
   deriveResult,
   formatCAD,
@@ -90,6 +90,15 @@ export function StepResults() {
               >
                 <Phone className="mr-2 h-4 w-4 shrink-0" />
                 Talk It Through
+              </Button>
+              <Button
+                size="lg"
+                variant="ghost"
+                className="h-auto w-full whitespace-normal py-3 text-center leading-snug"
+                onClick={() => pick("confidential_roadmap")}
+              >
+                <Mail className="mr-2 h-4 w-4 shrink-0" />
+                Just Email My Confidential Roadmap
               </Button>
             </div>
           </div>
