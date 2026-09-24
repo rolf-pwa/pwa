@@ -11,6 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { format } from "date-fns";
 import { useAutoSave, AutoSaveIndicator } from "@/shared/hooks/useAutoSave";
 import pwLogoWhite from "@/assets/prosperwise-logo-white.png";
+import { ActiveRiskFlags, type RiskFlag } from "../components/ontology/StepOntologyAssessment";
+
+const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
 type StatusKind = "red" | "amber" | "green";
 
@@ -181,6 +184,39 @@ export default function StabilizationMap() {
     }
     // eslint-disable-next-line
   }, [map?.generation_status]);
+
+  // Causal AI Platform (Phase 3 integration): a staff-only reference panel
+  // showing the household's current Causal DAG flags, fetched live from
+  // household-ontology's own `load` action (never cached/duplicated onto
+  // this table) — wrapped in print:hidden below, so it never reaches the
+  // client-facing printed/exported document. Household-track maps only;
+  // the Ontology has no equivalent for the older contact/lead-scoped maps.
+  const [causalFlags, setCausalFlags] = useState<RiskFlag[]>([]);
+  useEffect(() => {
+    if (!map?.household_id) {
+      setCausalFlags([]);
+      return;
+    }
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+        const res = await fetch(`${FUNCTIONS_URL}/household-ontology`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ action: "load", household_id: map.household_id }),
+        });
+        const json = await res.json();
+        if (res.ok && !json?.error) setCausalFlags(json.flags ?? []);
+      } catch {
+        // Non-fatal — the Stabilization Map's own diagnostics render fine without this.
+      }
+    })();
+  }, [map?.household_id]);
 
   const sessionDateLabel = useMemo(() => {
     if (!map?.session_date) return "";
@@ -444,6 +480,13 @@ export default function StabilizationMap() {
           </div>
         )}
       </div>
+
+      {/* Causal AI Platform — staff-only, never printed/exported. */}
+      {isHouseholdMap && (
+        <div className="mx-auto max-w-[1100px] px-6 pt-6 print:hidden">
+          <ActiveRiskFlags flags={causalFlags} />
+        </div>
+      )}
 
       {/* Editor pane */}
       {editing && (

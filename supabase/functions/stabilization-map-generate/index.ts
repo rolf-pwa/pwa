@@ -4,6 +4,7 @@ import {
   computeSovereigntyDiagnostics,
   type DiagnosticInputs,
 } from "../_shared/sovereignty-diagnostics.ts";
+import { evaluateCausalDag, type OntologyAssessmentPayload, type RiskFlag } from "../_shared/causal-dag-evaluator.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -189,13 +190,14 @@ Your job: draft ONLY the narrative fields below. **Never invent, restate incorre
 ## Rules
 - Write in the Sanctuary voice — calm, direct, non-alarmist, professional. No jargon, no exclamations.
 - If the facts state this is an existing/managed client formalizing their SOS (not a new engagement), the situation_summary and Phase 1 action items must reflect *formalizing/ratifying* their existing arrangement — never use "initiating," "Day One," or basic-document-collection language ("secure government IDs," "collect bank statements") for a client who already has a governed relationship on file.
+- If a "Causal AI Ontology assessment" or "Active Causal Risk Flags" fact is present, you may draw on it when writing the urgency_flag and Phase 1 action items — but NEVER quote a raw score, index, or internal field name from it (never write anything like "guilt/survivor feelings 9/10" or "secrecy_isolation_score"). Translate it into plain advisor language describing the real-world behavior or risk instead (e.g. "there are early signs of guilt-driven hesitation around engaging with this inheritance"). Named risk flags (e.g. "Legacy Asset Liquidation Paralysis") and their recommended actions ARE safe to reference directly — those are already advisor-facing labels, not raw internal data.
 - situation_summary: 1-2 sentences summarizing the household's transition/wealth event and current state of stabilization.
 - urgency_flag: 1 sentence describing what is currently absent or exposed (governance gaps, unaddressed drag, missing structure).
 - Action plan: draft 2-4 concrete bullet items for EACH of three phases, grounded in the facts provided:
   - Phase 1 (Immediate, Days 1-30): protective/administrative steps — never structural changes.
   - Phase 2 (Structural Purification, Days 31-60): the concrete structural/tax remediation this household's facts call for.
   - Phase 3 (Governance Ratification, Days 61-90): charter/governance ratification and cadence-setting steps.
-  - Each bullet needs a short title (max ~50 characters) and one supporting sentence of detail.
+  - Each bullet needs a short title (max ~50 characters) and one supporting sentence of detail. Keep every field concise — the response must complete well within the output budget, so do not pad with extra detail beyond what's requested.
 
 ## Output
 Call \`populate_household_stabilization_map\` with all fields filled.`;
@@ -269,6 +271,7 @@ function factsBlock(
   isLegacyClient: boolean,
   visionValues?: { vision: string; values: string; purpose: string },
   householdContext?: HouseholdContext,
+  causalRiskLines?: string[],
 ): string {
   const lines = [`Household: ${householdLabel} (${familyName})`];
   if (isLegacyClient) {
@@ -349,7 +352,48 @@ function factsBlock(
       `Estate hygiene — Will: ${diagnostics.estate_hygiene.will_status || "unknown"}, POA: ${diagnostics.estate_hygiene.poa_status || "unknown"}, Beneficiary coordination: ${diagnostics.estate_hygiene.beneficiary_coordination_status || "unknown"}`,
     );
   }
+  if (causalRiskLines && causalRiskLines.length > 0) {
+    lines.push(...causalRiskLines);
+  }
   return lines.join("\n");
+}
+
+// ---------- Causal AI Platform integration (Phase 3) ----------
+// The Ontology assessment and its Causal DAG flags are handed to the model
+// as read-only facts, exactly like every other diagnostic in this file --
+// evaluateCausalDag() itself is still pure deterministic math, never the
+// AI. Only the flag NAMES/actions (already advisor-friendly labels, e.g.
+// "Legacy Asset Liquidation Paralysis") are safe for the model to
+// reference in prose -- the underlying raw scores/field paths are for
+// context only, never to be quoted back; see HOUSEHOLD_EXTRACTION_PROMPT's
+// own rule for the instruction that enforces this.
+function causalRiskFactsLines(assessment: OntologyAssessmentPayload | null, flags: RiskFlag[]): string[] {
+  if (!assessment) return [];
+  const lines: string[] = [];
+  const fin = assessment.financial_state;
+  const rel = assessment.relational_state;
+  const emo = assessment.emotional_state;
+  const spokeParts: string[] = [];
+  if (fin?.financial_literacy_score != null) spokeParts.push(`financial literacy self-assessed ${fin.financial_literacy_score}/10`);
+  if (fin?.tax_liability_identified != null) spokeParts.push(`tax liability identified: ${fin.tax_liability_identified ? "yes" : "no"}`);
+  if (fin?.existing_fiduciary_team != null) spokeParts.push(`existing fiduciary team in place: ${fin.existing_fiduciary_team ? "yes" : "no"}`);
+  if (rel?.spousal_alignment_score != null) spokeParts.push(`spousal/partner alignment ${rel.spousal_alignment_score}/10`);
+  if (rel?.begging_hand_pressure_index) spokeParts.push(`outside pressure from others for access to funds: ${rel.begging_hand_pressure_index}`);
+  if (rel?.secrecy_isolation_score != null) spokeParts.push(`secrecy/isolation around the money ${rel.secrecy_isolation_score}/10`);
+  if (emo?.guilt_survivor_index != null) spokeParts.push(`guilt/survivor feelings about receiving this capital ${emo.guilt_survivor_index}/10`);
+  if (emo?.imposter_syndrome_score != null) spokeParts.push(`imposter syndrome ${emo.imposter_syndrome_score}/10`);
+  if (emo?.decision_behavior_type) spokeParts.push(`decision behavior tendency: ${emo.decision_behavior_type}`);
+  if (emo?.psychological_stage_goldbart) spokeParts.push(`psychological stage: ${emo.psychological_stage_goldbart.replace(/_/g, " ")}`);
+  if (emo?.transition_phase_bradley) spokeParts.push(`transition phase: ${emo.transition_phase_bradley.replace(/_/g, " ")}`);
+  if (spokeParts.length > 0) {
+    lines.push(`Causal AI Ontology assessment (staff-entered, most recent on file): ${spokeParts.join("; ")}.`);
+  }
+  if (flags.length > 0) {
+    lines.push(
+      `Active Causal Risk Flags: ${flags.map((f) => `${f.risk_name} (${f.severity}) — recommended action: ${f.action}`).join(" | ")}`,
+    );
+  }
+  return lines;
 }
 
 // ---------- Household-track generation handler ----------
@@ -447,6 +491,17 @@ async function handleHouseholdGeneration(
     );
     const isLegacyClient = financials.isLegacyClient;
 
+    const { data: latestOntology } = await supabase
+      .from("household_ontology_assessments")
+      .select("financial_state, relational_state, emotional_state, event_spoke_type, event_spoke_data")
+      .eq("household_id", householdId)
+      .order("assessment_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const causalFlags = latestOntology ? evaluateCausalDag(latestOntology as OntologyAssessmentPayload) : [];
+    const causalRiskLines = causalRiskFactsLines(latestOntology as OntologyAssessmentPayload | null, causalFlags);
+
     const gcpKeyRaw = Deno.env.get("GCP_SERVICE_ACCOUNT_KEY");
     if (!gcpKeyRaw) throw new Error("GCP_SERVICE_ACCOUNT_KEY not configured");
     const sa: ServiceAccountKey = JSON.parse(gcpKeyRaw);
@@ -478,6 +533,7 @@ async function handleHouseholdGeneration(
         pendingCapexDescription: household.pending_capex_description,
         legacyAdvisorFrictionNotes: household.legacy_advisor_friction_notes,
       },
+      causalRiskLines,
     );
 
     const aiRes = await fetch(vertexUrl, {
@@ -493,7 +549,7 @@ async function handleHouseholdGeneration(
         toolConfig: {
           functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["populate_household_stabilization_map"] },
         },
-        generationConfig: { temperature: 0.3, maxOutputTokens: 2048 },
+        generationConfig: { temperature: 0.3, maxOutputTokens: 8192 },
       }),
     });
 
