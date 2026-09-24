@@ -21,7 +21,10 @@ import { supabase } from "@/shared/integrations/supabase/client";
 import { cn } from "@/shared/lib/utils";
 import { ArrowLeft, ChevronDown, ChevronUp, Lock, Loader2, Play, Quote, Save } from "lucide-react";
 import { toast } from "sonner";
-import { ActiveRiskFlags, type OntologyAssessment, type RiskFlag } from "../components/ontology/StepOntologyAssessment";
+import { OnboardingStepper, type OnboardingStepMeta } from "@/modules/intake";
+import { ActiveRiskFlags, StepOntologyAssessment, type OntologyAssessment, type OntologySavePayload, type RiskFlag } from "../components/ontology/StepOntologyAssessment";
+import { StepMeetingTranscripts } from "../components/charter-intake/StepMeetingTranscripts";
+import { loadCharterIntake, syncMeetingTranscripts, saveCharterIntakeField, type MeetingTranscript } from "../hooks/useCharterIntake";
 
 const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
@@ -42,19 +45,18 @@ async function callFn(name: string, body: Record<string, unknown>) {
   return json;
 }
 
-interface TranscriptOption {
-  id: string;
-  title: string;
-  added_at: string;
-}
+const WORKBENCH_STEPS: OnboardingStepMeta[] = [
+  { id: 1, title: "Ontology Assessment", hint: "The household's Hub & Spoke baseline" },
+  { id: 2, title: "Meeting Transcripts", hint: "Synced directly from the household's Vault" },
+  { id: 3, title: "Delta Reconciliation", hint: "Compare the baseline against a real transcript" },
+  { id: 4, title: "Review & Lock", hint: "Sign off once the assessment is current" },
+];
 
 interface Delta {
   variable_path: string;
   discrepancy_type: "Variance" | "Contradiction" | "Unstated_Risk";
   self_reported_value?: string;
-  /** Plain-language description, for display only — never written to storage. */
   observed_transcript_value: string;
-  /** The actual value to store, in the field's own format — this is what gets applied. */
   proposed_value: string;
   delta_severity: "Low" | "Moderate" | "High" | "Critical";
   supporting_quotes: string[];
@@ -131,41 +133,55 @@ function DeltaCard({ delta, checked, onToggle }: { delta: Delta; checked: boolea
   );
 }
 
-/** Phase 2 of the Causal AI Platform: compares a household's self-reported
- *  Ontology baseline against a real synced meeting transcript, surfaces
- *  discrepancies for staff to individually accept, and only writes an
- *  accepted subset back as a new Ontology assessment. Nothing here is
- *  auto-applied — see delta-engine-reconcile's own header comment. */
-export default function DeltaReconciliationWorkbench() {
+/** Single entry point for the Causal AI Platform, staff-side — Ontology
+ *  Assessment, Meeting Transcripts, Delta Reconciliation, and Review & Lock
+ *  as one stepped flow (matching the onboarding/Charter Intake wizard
+ *  pattern), rather than three separate pages a staff member had to
+ *  navigate between by hand. Supersedes the earlier separate
+ *  HouseholdOntology.tsx / DeltaReconciliationWorkbench.tsx pages. */
+export default function CausalAIWorkbench() {
   const { householdId } = useParams<{ householdId: string }>();
   const navigate = useNavigate();
+  const [current, setCurrent] = useState(1);
   const [loading, setLoading] = useState(true);
   const [householdLabel, setHouseholdLabel] = useState("");
-  const [transcripts, setTranscripts] = useState<TranscriptOption[]>([]);
+
+  // Ontology
+  const [latest, setLatest] = useState<OntologyAssessment | null>(null);
+  const [pastCount, setPastCount] = useState(0);
+  const [flags, setFlags] = useState<RiskFlag[]>([]);
+  const [pipelineStatus, setPipelineStatus] = useState<string | null>(null);
+  const [savingOntology, setSavingOntology] = useState(false);
+
+  // Meeting transcripts (shared with the Charter v2.0 wizard's own step)
+  const [transcripts, setTranscripts] = useState<MeetingTranscript[]>([]);
+  const [syncing, setSyncing] = useState(false);
+  const [savingTranscripts, setSavingTranscripts] = useState(false);
+
+  // Delta reconciliation
   const [transcriptId, setTranscriptId] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [deltas, setDeltas] = useState<Delta[]>([]);
   const [accepted, setAccepted] = useState<Set<number>>(new Set());
-  const [latest, setLatest] = useState<OntologyAssessment | null>(null);
-  const [flags, setFlags] = useState<RiskFlag[]>([]);
-  const [pipelineStatus, setPipelineStatus] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [savingDeltas, setSavingDeltas] = useState(false);
+
   const [locking, setLocking] = useState(false);
 
   const load = async () => {
     if (!householdId) return;
     setLoading(true);
     try {
-      const [{ data: household }, ontology, transcriptList] = await Promise.all([
+      const [{ data: household }, ontology, charterData] = await Promise.all([
         supabase.from("households").select("label").eq("id", householdId).maybeSingle(),
         callFn("household-ontology", { action: "load", household_id: householdId }),
-        callFn("delta-engine-reconcile", { action: "list_transcripts", household_id: householdId }),
+        loadCharterIntake(householdId),
       ]);
       setHouseholdLabel(household?.label || "Household");
       setLatest(ontology.latest ?? null);
+      setPastCount(ontology.assessments?.length ?? 0);
       setFlags(ontology.flags ?? []);
       setPipelineStatus(ontology.causal_pipeline_status ?? null);
-      setTranscripts(transcriptList.transcripts ?? []);
+      setTranscripts(charterData.charter.meeting_transcripts ?? []);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load Workbench");
     } finally {
@@ -177,6 +193,57 @@ export default function DeltaReconciliationWorkbench() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [householdId]);
+
+  const handleSaveOntology = async (payload: OntologySavePayload) => {
+    if (!householdId) return;
+    setSavingOntology(true);
+    try {
+      const result = await callFn("household-ontology", { action: "save", household_id: householdId, ...payload });
+      toast.success("Assessment saved");
+      setLatest(result.assessment);
+      setFlags(result.flags ?? []);
+      setPastCount((c) => c + 1);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to save assessment");
+    } finally {
+      setSavingOntology(false);
+    }
+  };
+
+  const handleSync = async () => {
+    if (!householdId) return;
+    setSyncing(true);
+    try {
+      const data = await syncMeetingTranscripts(householdId);
+      setTranscripts(data.charter.meeting_transcripts ?? []);
+      if (data.folder_missing) {
+        toast.error("No Meeting Notes folder found for this household's Vault.");
+      } else {
+        toast.success(data.synced > 0 ? `Synced ${data.synced} transcript${data.synced === 1 ? "" : "s"}.` : "No new or changed files found.");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Sync failed");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleSaveTranscripts = async (rows: MeetingTranscript[]) => {
+    if (!householdId) return;
+    setSavingTranscripts(true);
+    try {
+      // advanceTo: 1 -- this flow is independent of the Charter v2.0
+      // wizard's own step progression (household_charters.step), so this
+      // never advances it; GREATEST(current, 1) is always a no-op there.
+      const charter = await saveCharterIntakeField(householdId, "meeting_transcripts", rows, 1);
+      setTranscripts(charter.meeting_transcripts ?? []);
+      toast.success("Transcript list updated");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to save transcript list");
+    } finally {
+      setSavingTranscripts(false);
+    }
+  };
 
   const runAnalysis = async () => {
     if (!householdId || !transcriptId) return;
@@ -210,7 +277,7 @@ export default function DeltaReconciliationWorkbench() {
 
   const saveAccepted = async () => {
     if (!householdId || accepted.size === 0) return;
-    setSaving(true);
+    setSavingDeltas(true);
     try {
       const acceptedDeltas = Array.from(accepted).map((i) => ({
         variable_path: deltas[i].variable_path,
@@ -230,7 +297,7 @@ export default function DeltaReconciliationWorkbench() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to save reconciled assessment");
     } finally {
-      setSaving(false);
+      setSavingDeltas(false);
     }
   };
 
@@ -263,13 +330,12 @@ export default function DeltaReconciliationWorkbench() {
       <div className="space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <Button variant="ghost" size="sm" className="-ml-2 mb-1" onClick={() => navigate(`/household-ontology/household/${householdId}`)}>
-              <ArrowLeft className="mr-1 h-4 w-4" /> Back to Ontology
+            <Button variant="ghost" size="sm" className="-ml-2 mb-1" onClick={() => navigate(`/households/${householdId}`)}>
+              <ArrowLeft className="mr-1 h-4 w-4" /> Back to household
             </Button>
-            <h1 className="font-serif text-2xl">Delta Reconciliation Workbench — {householdLabel}</h1>
+            <h1 className="font-serif text-2xl">Causal AI Workbench — {householdLabel}</h1>
             <p className="text-sm text-muted-foreground">
-              Compare the self-reported baseline against a real meeting transcript. Nothing writes back until you
-              explicitly accept a delta and save.
+              {pastCount > 0 ? `${pastCount} assessment${pastCount === 1 ? "" : "s"} on file.` : "No assessments on file yet."}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -298,78 +364,89 @@ export default function DeltaReconciliationWorkbench() {
           </div>
         </div>
 
+        <OnboardingStepper current={current} furthest={4} onSelect={setCurrent} steps={WORKBENCH_STEPS} />
+
         <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
           <div className="space-y-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Run Delta Analysis</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {transcripts.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No meeting transcripts synced yet for this household — sync some from the Charter Intake wizard's
-                    Meeting Transcripts step first.
-                  </p>
-                ) : (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Select value={transcriptId} onValueChange={setTranscriptId}>
-                      <SelectTrigger className="w-[280px]">
-                        <SelectValue placeholder="Choose a synced transcript" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {transcripts.map((t) => (
-                          <SelectItem key={t.id} value={t.id}>
-                            {t.title}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button onClick={runAnalysis} disabled={!transcriptId || analyzing}>
-                      {analyzing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
-                      Run Delta Analysis
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            {current === 1 && <StepOntologyAssessment latest={latest} saving={savingOntology} onSave={handleSaveOntology} />}
 
-            {deltas.length > 0 && (
+            {current === 2 && (
+              <StepMeetingTranscripts transcripts={transcripts} syncing={syncing} saving={savingTranscripts} onSync={handleSync} onSave={handleSaveTranscripts} />
+            )}
+
+            {current === 3 && (
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Run Delta Analysis</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {transcripts.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No meeting transcripts synced yet — go to the Meeting Transcripts step first.
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Select value={transcriptId} onValueChange={setTranscriptId}>
+                          <SelectTrigger className="w-[280px]">
+                            <SelectValue placeholder="Choose a synced transcript" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {transcripts.map((t) => (
+                              <SelectItem key={t.id} value={t.id}>
+                                {t.title}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button onClick={runAnalysis} disabled={!transcriptId || analyzing}>
+                          {analyzing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+                          Run Delta Analysis
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {deltas.length > 0 && (
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between pb-3">
+                      <CardTitle className="text-base">Detected Deltas ({deltas.length})</CardTitle>
+                      <Button size="sm" onClick={saveAccepted} disabled={accepted.size === 0 || savingDeltas}>
+                        {savingDeltas ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                        Save {accepted.size > 0 ? `${accepted.size} Accepted` : ""}
+                      </Button>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {deltas.map((d, i) => (
+                        <DeltaCard key={i} delta={d} checked={accepted.has(i)} onToggle={() => toggleAccept(i)} />
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
+
+            {current === 4 && (
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-3">
-                  <CardTitle className="text-base">Detected Deltas ({deltas.length})</CardTitle>
-                  <Button size="sm" onClick={saveAccepted} disabled={accepted.size === 0 || saving}>
-                    {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                    Save {accepted.size > 0 ? `${accepted.size} Accepted` : ""}
-                  </Button>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Review</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  {deltas.map((d, i) => (
-                    <DeltaCard key={i} delta={d} checked={accepted.has(i)} onToggle={() => toggleAccept(i)} />
-                  ))}
+                <CardContent className="space-y-3 text-sm text-muted-foreground">
+                  <p>
+                    Pipeline status: <span className="font-medium text-foreground">{pipelineStatus ? PIPELINE_LABEL[pipelineStatus] || pipelineStatus : "Not started"}</span>
+                  </p>
+                  <p>{pastCount} assessment{pastCount === 1 ? "" : "s"} on file, {transcripts.length} transcript{transcripts.length === 1 ? "" : "s"} synced.</p>
+                  <p>
+                    Once the Ontology reflects the most recent real conversation with this household, use "Lock &amp;
+                    Ratify" above to sign off.
+                  </p>
                 </CardContent>
               </Card>
             )}
           </div>
 
           <div className="space-y-4 lg:sticky lg:top-6 lg:self-start">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Current Ontology Snapshot</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-xs text-muted-foreground">
-                {latest ? (
-                  <>
-                    <p>Assessment date: {latest.assessment_date}</p>
-                    <p>Event Spoke: {latest.event_spoke_type || "(not set)"}</p>
-                    <p className="break-all">Financial: {JSON.stringify(latest.financial_state)}</p>
-                    <p className="break-all">Relational: {JSON.stringify(latest.relational_state)}</p>
-                    <p className="break-all">Emotional: {JSON.stringify(latest.emotional_state)}</p>
-                  </>
-                ) : (
-                  <p>No assessment on file yet.</p>
-                )}
-              </CardContent>
-            </Card>
             <ActiveRiskFlags flags={flags} />
           </div>
         </div>

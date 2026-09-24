@@ -8,19 +8,21 @@ interface Props {
   className?: string;
 }
 
-/** Entry point for the Causal AI Platform's Hub & Spoke Ontology assessment,
- *  matching StartCharterIntakeButton's simple navigate-on-click shape. */
-export function HouseholdOntologyButton({ householdId, className }: Props) {
+/** Entry point for the Causal AI Platform's stepped Workbench (Ontology
+ *  Assessment, Meeting Transcripts, Delta Reconciliation, Review & Lock —
+ *  one flow, matching StartCharterIntakeButton's simple navigate-on-click
+ *  shape). */
+export function CausalAIWorkbenchButton({ householdId, className }: Props) {
   const navigate = useNavigate();
 
   return (
     <Button
       variant="outline"
       className={cn(className)}
-      onClick={() => navigate(`/household-ontology/household/${householdId}`)}
+      onClick={() => navigate(`/causal-ai-workbench/household/${householdId}`)}
     >
       <Brain className="mr-2 h-4 w-4" />
-      Household Ontology
+      Causal AI Workbench
     </Button>
   );
 }

@@ -44,7 +44,7 @@ import { HouseholdRequestsRollup } from "@/modules/crm/components/HouseholdReque
 import { HouseholdStatementIngestion } from "@/modules/crm/components/HouseholdStatementIngestion";
 import { HoldingTank } from "@/modules/crm/components/HoldingTank";
 import { VaultView } from "@/modules/crm/pages/Vault";
-import { CharterRatificationTile, StabilizationMapButton, GovernanceAuditButton, HouseholdAuditTrailRollup, StartCharterIntakeButton, HouseholdOntologyButton } from "@/modules/audit";
+import { CharterRatificationTile, StabilizationMapButton, GovernanceAuditButton, HouseholdAuditTrailRollup, StartCharterIntakeButton, CausalAIWorkbenchButton } from "@/modules/audit";
 import { ProsPanel } from "@/modules/crm/components/ProsPanel";
 import { AddCompanyDialog } from "@/modules/crm/components/AddCompanyDialog";
 import {
@@ -1102,21 +1102,22 @@ const HouseholdDetail = () => {
                       </div>
                     </div>
 
-                    {/* Step 6 — Causal AI Platform: Hub & Spoke Ontology
-                        (Phase 1). Staff-entered assessment feeding the
-                        deterministic Causal DAG evaluator — separate from
-                        the Charter itself, never client-facing. */}
+                    {/* Step 6 — Causal AI Platform. One stepped Workbench
+                        (Ontology Assessment, Meeting Transcripts, Delta
+                        Reconciliation, Review & Lock) — separate from the
+                        Charter itself, never client-facing. */}
                     <div className="flex items-start gap-3">
                       <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-semibold text-muted-foreground">
                         6
                       </div>
                       <div className="flex-1 space-y-1.5">
-                        <p className="text-sm font-medium text-foreground">Household Ontology</p>
+                        <p className="text-sm font-medium text-foreground">Causal AI Workbench</p>
                         <p className="text-xs text-muted-foreground">
-                          Staff assessment of the household's financial, relational, and emotional state —
-                          the Causal AI Platform's Hub &amp; Spoke model.
+                          Staff assessment of the household's financial, relational, and emotional state,
+                          reconciled against real meeting transcripts — the Causal AI Platform's Hub &amp;
+                          Spoke model.
                         </p>
-                        <HouseholdOntologyButton householdId={id} />
+                        <CausalAIWorkbenchButton householdId={id} />
                       </div>
                     </div>
                   </CardContent>
