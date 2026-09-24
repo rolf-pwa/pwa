@@ -219,7 +219,9 @@ For each delta, give TWO different things:
 - observed_transcript_value: a plain-language description of what the transcript reveals, for a human reviewer to read.
 - proposed_value: the actual value to store for that field, in the exact format the field expects — a bare number with no words for a 1-10 score field or a percentage/ratio/dollar field (e.g. "8", not "very high"), the exact string "true" or "false" for a yes/no field, or the exact matching enum label for a field with fixed options (e.g. "Critical", "Pure_Builder", "Acute_Grief") — never a sentence. If the transcript doesn't support a confident, specific proposed_value for a field (only a general impression), omit that delta rather than guessing at a number.
 
-Every delta must include at least one verbatim supporting quote lifted directly from the transcript text above — never paraphrase the quote, and never fabricate a quote that doesn't appear verbatim in the transcript.`;
+Every delta must include at least one verbatim supporting quote lifted directly from the transcript text above — never paraphrase the quote, and never fabricate a quote that doesn't appear verbatim in the transcript.
+
+Return at most the 8 most significant deltas, ranked by delta_severity (Critical and High first). If more than 8 variable_paths show a real discrepancy, keep only the 8 most important — do not try to report everything, since a long response risks being cut off mid-generation.`;
 
     const DELTA_TOOL_SCHEMA = {
       functionDeclarations: [
@@ -273,7 +275,14 @@ Every delta must include at least one verbatim supporting quote lifted directly 
         sa,
         "gemini-2.5-flash",
         [{ role: "user", parts: [{ text: prompt }] }],
-        { temperature: 0.2, maxOutputTokens: 4096 },
+        // 8192, not 4096 -- deltas_detected is an unbounded array (each
+        // entry carries a rationale + several verbatim quotes), and a
+        // dense transcript can legitimately produce enough of them to
+        // exceed a smaller cap mid-generation, corrupting the function
+        // call. Capped further by the prompt's own "at most 8 deltas"
+        // instruction above, so this is real headroom, not a bet against
+        // the same failure recurring on an even richer transcript.
+        { temperature: 0.2, maxOutputTokens: 8192 },
         {
           tools: [DELTA_TOOL_SCHEMA],
           toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["identify_causal_deltas"] } },
