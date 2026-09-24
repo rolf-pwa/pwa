@@ -79,6 +79,7 @@ const QuarterlyVfoAudit = lazy(() => import("@/modules/audit/pages/QuarterlyVfoA
 const SovereigntyCharter = lazy(() => import("@/modules/audit/pages/SovereigntyCharter"));
 const CharterIntake = lazy(() => import("@/modules/audit/pages/CharterIntake"));
 const HouseholdOntology = lazy(() => import("@/modules/audit/pages/HouseholdOntology"));
+const DeltaReconciliationWorkbench = lazy(() => import("@/modules/audit/pages/DeltaReconciliationWorkbench"));
 const Inbox = lazy(() => import("@/modules/crm/pages/Inbox"));
 const Professionals = lazy(() => import("@/modules/crm/pages/Professionals"));
 const ProfessionalDetail = lazy(() => import("@/modules/crm/pages/ProfessionalDetail"));
@@ -188,6 +189,7 @@ const App = () => (
               <Route path="/sovereignty-charter/contact/:contactId" element={<ProtectedRoute><SovereigntyCharter /></ProtectedRoute>} />
               <Route path="/charter-intake/household/:householdId" element={<ProtectedRoute><CharterIntake /></ProtectedRoute>} />
               <Route path="/household-ontology/household/:householdId" element={<ProtectedRoute><HouseholdOntology /></ProtectedRoute>} />
+              <Route path="/delta-reconciliation/household/:householdId" element={<ProtectedRoute><DeltaReconciliationWorkbench /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>

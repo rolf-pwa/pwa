@@ -54,6 +54,50 @@ async function requireStaff(req: Request): Promise<{ userId: string; error?: und
 const ASSESSMENT_FIELDS =
   "id, household_id, assessment_date, financial_state, relational_state, emotional_state, event_spoke_type, event_spoke_data, source_georgia2_lead_id, seeded_from, created_by, created_at, updated_at";
 
+// Phase 2: households.causal_pipeline_status only ever moves forward.
+// Plain ordinal list, not a DB enum -- matches this codebase's convention
+// of validating evolving state concepts in code (see the migration's own
+// comment for why LEAD_TRIAGED isn't representable here at all).
+const PIPELINE_ORDER = ["survey_completed", "delta_reconciled", "charter_drafted", "hitl_locked", "vfo_active"];
+
+async function advancePipelineStatus(db: ReturnType<typeof admin>, householdId: string, next: string): Promise<void> {
+  const { data: household } = await db.from("households").select("causal_pipeline_status").eq("id", householdId).maybeSingle();
+  const current = household?.causal_pipeline_status as string | null;
+  const currentIdx = current ? PIPELINE_ORDER.indexOf(current) : -1;
+  const nextIdx = PIPELINE_ORDER.indexOf(next);
+  if (nextIdx === -1 || nextIdx <= currentIdx) return; // never regress, never set an unknown value
+  await db.from("households").update({ causal_pipeline_status: next }).eq("id", householdId);
+}
+
+// Coerces a delta's proposed_value (always a string from the LLM tool
+// call, distinct from its human-readable observed_transcript_value — see
+// delta-engine-reconcile's own prompt for why those are two separate
+// fields) back to the right JS type for storage — "true"/"false" ->
+// boolean, a numeric string -> number, anything else stays a string
+// (covers every enum/free-text field). A heuristic on purpose rather than
+// a per-field type table: simpler, and doesn't need to be kept in sync
+// with causal-dag-evaluator.ts's field list as that evolves.
+function coerceDeltaValue(raw: string): string | number | boolean {
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  if (raw.trim() !== "" && !Number.isNaN(Number(raw))) return Number(raw);
+  return raw;
+}
+
+function applyDeltaToPayload(
+  payload: Record<string, unknown>,
+  variablePath: string,
+  rawValue: string,
+): Record<string, unknown> {
+  const [section, field] = variablePath.split(".");
+  if (!section || !field) return payload;
+  const next = { ...payload };
+  const sectionObj = { ...((next[section] as Record<string, unknown>) || {}) };
+  sectionObj[field] = coerceDeltaValue(rawValue);
+  next[section] = sectionObj;
+  return next;
+}
+
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -88,12 +132,15 @@ Deno.serve(async (req) => {
   const db = admin();
 
   if (action === "load") {
-    const { data: assessments, error } = await db
-      .from("household_ontology_assessments")
-      .select(ASSESSMENT_FIELDS)
-      .eq("household_id", householdId)
-      .order("assessment_date", { ascending: false })
-      .order("created_at", { ascending: false });
+    const [{ data: assessments, error }, { data: household }] = await Promise.all([
+      db
+        .from("household_ontology_assessments")
+        .select(ASSESSMENT_FIELDS)
+        .eq("household_id", householdId)
+        .order("assessment_date", { ascending: false })
+        .order("created_at", { ascending: false }),
+      db.from("households").select("causal_pipeline_status").eq("id", householdId).maybeSingle(),
+    ]);
     if (error) {
       return new Response(JSON.stringify({ error: error.message }), {
         status: 500,
@@ -102,10 +149,16 @@ Deno.serve(async (req) => {
     }
     const latest = assessments?.[0] ?? null;
     const flags = latest ? evaluateCausalDag(latest as OntologyAssessmentPayload) : [];
-    return new Response(JSON.stringify({ ok: true, assessments: assessments ?? [], latest, flags }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        assessments: assessments ?? [],
+        latest,
+        flags,
+        causal_pipeline_status: household?.causal_pipeline_status ?? null,
+      }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   }
 
   if (action === "save") {
@@ -139,6 +192,86 @@ Deno.serve(async (req) => {
 
     const flags = evaluateCausalDag(payload);
     return new Response(JSON.stringify({ ok: true, assessment: inserted, flags }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // Applies staff-accepted deltas from a Delta Reconciliation Workbench run
+  // (delta-engine-reconcile's own output, never trusted un-reviewed) onto
+  // the household's latest Ontology payload, inserts the result as a new
+  // dated assessment (same "always insert, never overwrite" convention as
+  // `save`), and advances the pipeline status. Every accepted delta was
+  // an explicit staff click in the Workbench — nothing here evaluates or
+  // applies anything the AI proposed on its own.
+  if (action === "apply_deltas") {
+    const acceptedDeltas = Array.isArray(body.accepted_deltas)
+      ? (body.accepted_deltas as { variable_path: string; proposed_value: string }[])
+      : [];
+    if (acceptedDeltas.length === 0) {
+      return new Response(JSON.stringify({ error: "No accepted deltas to apply" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { data: latestRows } = await db
+      .from("household_ontology_assessments")
+      .select(ASSESSMENT_FIELDS)
+      .eq("household_id", householdId)
+      .order("assessment_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const latest = latestRows?.[0] ?? null;
+
+    let payload: Record<string, unknown> = {
+      financial_state: latest?.financial_state ?? {},
+      relational_state: latest?.relational_state ?? {},
+      emotional_state: latest?.emotional_state ?? {},
+      event_spoke_type: latest?.event_spoke_type ?? null,
+      event_spoke_data: latest?.event_spoke_data ?? {},
+    };
+    for (const delta of acceptedDeltas) {
+      if (!delta?.variable_path) continue;
+      payload = applyDeltaToPayload(payload, delta.variable_path, String(delta.proposed_value ?? ""));
+    }
+
+    const { data: inserted, error } = await db
+      .from("household_ontology_assessments")
+      .insert({
+        household_id: householdId,
+        financial_state: payload.financial_state,
+        relational_state: payload.relational_state,
+        emotional_state: payload.emotional_state,
+        event_spoke_type: payload.event_spoke_type,
+        event_spoke_data: payload.event_spoke_data,
+        created_by: staff.userId,
+      })
+      .select(ASSESSMENT_FIELDS)
+      .single();
+    if (error) {
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    await advancePipelineStatus(db, householdId, "delta_reconciled");
+
+    const flags = evaluateCausalDag(payload as OntologyAssessmentPayload);
+    return new Response(JSON.stringify({ ok: true, assessment: inserted, flags }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // Explicit staff action locking the household's Ontology as reviewed —
+  // the blueprint's HITL_LOCKED state. Just a pipeline-status advance, no
+  // other side effect: there's no separate "lock" flag on the assessment
+  // row itself, matching how this table has no concept of draft/final.
+  if (action === "lock_and_ratify") {
+    await advancePipelineStatus(db, householdId, "hitl_locked");
+    return new Response(JSON.stringify({ ok: true, causal_pipeline_status: "hitl_locked" }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

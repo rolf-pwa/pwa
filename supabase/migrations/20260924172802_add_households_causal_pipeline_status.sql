@@ -1,0 +1,26 @@
+-- Causal AI Platform, Phase 2: the pipeline-status state machine from the
+-- architectural blueprint §7.1 (LEAD_TRIAGED -> SURVEY_COMPLETED ->
+-- DELTA_RECONCILED -> CHARTER_DRAFTED -> HITL_LOCKED -> VFO_ACTIVE).
+--
+-- Plain TEXT, not a Postgres enum, matching this codebase's established
+-- convention for evolving/staff-facing state concepts (georgia2_leads.
+-- domain/catalyst, household_charters.status) -- validated in code, not
+-- the DB.
+--
+-- Honest adaptation of the blueprint's own model to this codebase's real
+-- architecture, not a literal 1:1 port: a household doesn't exist until a
+-- lead actually converts (enrollPaidBooking creates it), so LEAD_TRIAGED
+-- is not representable on a households row at all -- by definition, any
+-- household that exists has already cleared both LEAD_TRIAGED and
+-- SURVEY_COMPLETED. This column is therefore only ever set starting at
+-- 'survey_completed', stamped at household creation in
+-- _shared/booking-enrollment.ts. 'delta_reconciled' advances via the new
+-- Delta Reconciliation Workbench; 'hitl_locked' via that Workbench's
+-- explicit "Lock & Ratify" action. 'charter_drafted' and 'vfo_active' are
+-- deliberately NOT wired in this pass -- no single reliable trigger point
+-- exists yet for either ("Charter marked complete" vs. "this Perspective
+-- edited," and "first Quarterly Review after ratification" has no
+-- Review-completion event to key off at all) -- flagged here rather than
+-- wired to a guessed-at, unreliable trigger.
+ALTER TABLE public.households
+  ADD COLUMN causal_pipeline_status text;

@@ -298,6 +298,11 @@ export async function enrollPaidBooking(
         label: `${last} Household`,
         governance_status: "stabilization",
         quiet_period_start_date: new Date().toISOString().slice(0, 10),
+        // Causal AI Platform pipeline status: a household never exists
+        // before both LEAD_TRIAGED and SURVEY_COMPLETED have already
+        // happened (see the migration's own comment), so this is the
+        // correct starting value, not a default guess.
+        causal_pipeline_status: "survey_completed",
       })
       .select("id")
       .maybeSingle();

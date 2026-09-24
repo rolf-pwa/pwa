@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { AppLayout } from "@/shared/components/AppLayout";
 import { Button } from "@/shared/components/ui/button";
@@ -105,11 +105,14 @@ export default function HouseholdOntology() {
             </Button>
             <h1 className="font-serif text-2xl">Household Ontology — {householdLabel}</h1>
             <p className="text-sm text-muted-foreground">
-              The Hub &amp; Spoke Ontology behind the Causal AI Platform. Staff-entered only in this pass —
-              {" "}
-              {pastCount > 0 ? `${pastCount} assessment${pastCount === 1 ? "" : "s"} on file, most recent shown below.` : "no assessments on file yet."}
+              The Hub &amp; Spoke Ontology behind the Causal AI Platform.{" "}
+              {pastCount > 0 ? `${pastCount} assessment${pastCount === 1 ? "" : "s"} on file, most recent shown below.` : "No assessments on file yet."}
             </p>
           </div>
+          <Button variant="outline" onClick={() => navigate(`/delta-reconciliation/household/${householdId}`)}>
+            <Sparkles className="mr-2 h-4 w-4" />
+            Delta Reconciliation Workbench
+          </Button>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
