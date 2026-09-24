@@ -78,6 +78,7 @@ const GovernanceReview = lazy(() => import("@/modules/audit/pages/GovernanceRevi
 const QuarterlyVfoAudit = lazy(() => import("@/modules/audit/pages/QuarterlyVfoAudit"));
 const SovereigntyCharter = lazy(() => import("@/modules/audit/pages/SovereigntyCharter"));
 const CharterIntake = lazy(() => import("@/modules/audit/pages/CharterIntake"));
+const HouseholdOntology = lazy(() => import("@/modules/audit/pages/HouseholdOntology"));
 const Inbox = lazy(() => import("@/modules/crm/pages/Inbox"));
 const Professionals = lazy(() => import("@/modules/crm/pages/Professionals"));
 const ProfessionalDetail = lazy(() => import("@/modules/crm/pages/ProfessionalDetail"));
@@ -186,6 +187,7 @@ const App = () => (
               <Route path="/quarterly-account-sync" element={<ProtectedRoute><QuarterlyReview /></ProtectedRoute>} />
               <Route path="/sovereignty-charter/contact/:contactId" element={<ProtectedRoute><SovereigntyCharter /></ProtectedRoute>} />
               <Route path="/charter-intake/household/:householdId" element={<ProtectedRoute><CharterIntake /></ProtectedRoute>} />
+              <Route path="/household-ontology/household/:householdId" element={<ProtectedRoute><HouseholdOntology /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>

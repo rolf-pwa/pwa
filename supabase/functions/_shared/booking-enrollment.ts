@@ -142,6 +142,67 @@ async function convertMatchingLeads(client: any, email: string): Promise<void> {
   }
 }
 
+// Causal AI Platform, Phase 1: Georgia 2.0's catalyst maps onto the Hub &
+// Spoke Ontology's event_spoke_type where a real Spoke exists for it —
+// divorce_restructuring/sudden_windfall/insurance_settlement have no
+// matching Spoke yet, so those stay unseeded rather than forced into a
+// wrong fit. Deliberately not evaluated against the Causal DAG here — see
+// _shared/causal-dag-evaluator.ts's own header comment: that only ever
+// runs against an already-engaged household's real (staff-entered)
+// assessment, never against a lead's pre-consent diagnostic answers.
+const CATALYST_TO_SPOKE: Record<string, string | undefined> = {
+  inheritance: "inheritance",
+  founder_exit: "business_exit",
+  growth_stage_founder: "pre_exit_growth",
+  executive_exit: "executive_retirement",
+};
+
+/**
+ * Seeds one household_ontology_assessments row from the lead's Georgia 2.0
+ * diagnostic, for a brand-new household only (an existing household
+ * re-booking already has its own real assessment history, if any). Almost
+ * everything in the Hub (financial/relational/emotional state) has no
+ * Georgia 2.0 equivalent and is deliberately left null rather than
+ * fabricated -- this is provenance + the one field (bc_probate_exposure)
+ * that genuinely maps 1:1, not a substitute for a real staff assessment.
+ * Best-effort: never blocks enrollment if it fails.
+ */
+async function seedOntologyFromGeorgia2Lead(client: any, householdId: string, email: string): Promise<void> {
+  if (!email) return;
+  try {
+    const { data: lead } = await client
+      .from("georgia2_leads")
+      .select("id, domain, catalyst, scale, answers, risk_scores_calculated, submitted_at")
+      .ilike("email", email)
+      .order("submitted_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!lead) return;
+
+    const spokeType = CATALYST_TO_SPOKE[lead.catalyst as string] ?? null;
+    const eventSpokeData =
+      spokeType === "inheritance"
+        ? { bc_probate_exposure: (lead.answers as Record<string, unknown> | null)?.probate === "yes" }
+        : null;
+
+    await client.from("household_ontology_assessments").insert({
+      household_id: householdId,
+      event_spoke_type: spokeType,
+      event_spoke_data: eventSpokeData,
+      source_georgia2_lead_id: lead.id,
+      seeded_from: {
+        domain: lead.domain,
+        catalyst: lead.catalyst,
+        scale: lead.scale,
+        answers: lead.answers,
+        risk_scores_calculated: lead.risk_scores_calculated,
+      },
+    });
+  } catch (e) {
+    console.error("[enrollPaidBooking] Ontology seed from Georgia 2.0 lead failed (non-fatal):", e);
+  }
+}
+
 export interface EnrollmentResult {
   contactId: string | null;
   householdId: string | null;
@@ -272,6 +333,11 @@ export async function enrollPaidBooking(
 
   // ---- 3. Convert any matching pending lead — see convertMatchingLeads() ----
   await convertMatchingLeads(client, email);
+
+  // ---- 3b. Seed the Ontology from that same lead's diagnostic, brand-new households only ----
+  if (created && householdId) {
+    await seedOntologyFromGeorgia2Lead(client, householdId, email);
+  }
 
   // ---- 4. Link the booking ----------------------------------------------
   await client.from("service_bookings").update({ contact_id: contactId }).eq("id", bookingId);
