@@ -427,6 +427,9 @@ export default function Leads() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
+                          {lead.status === "pending_survey_payment" && (
+                            <Badge className="text-[10px]">Survey clicked · awaiting payment</Badge>
+                          )}
                           <Badge variant="outline" className="text-[10px] capitalize">{lead.domain}</Badge>
                           {lead.scale != null && (
                             <Badge variant="secondary" className="text-[10px]">{formatCurrency(lead.scale)}</Badge>

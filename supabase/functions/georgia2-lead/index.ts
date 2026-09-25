@@ -311,7 +311,7 @@ serve(async (req) => {
     // going Back -- update that lead instead of creating a duplicate.
     const { data: existing } = await supabase
       .from("georgia2_leads")
-      .select("id, email, chosen_pathway")
+      .select("id, email, chosen_pathway, status")
       .eq("session_key", data.session_key)
       .order("submitted_at", { ascending: false })
       .limit(1)
@@ -336,15 +336,28 @@ serve(async (req) => {
       primary_friction: payload?.primary_friction ?? null,
     };
 
+    // Clicking "Start the Sovereignty Survey" puts the lead in the payment
+    // pipeline: it is converted when they pay (convertMatchingLeads), and gets
+    // one abandoned-cart email if still pending 48h later. Never touches a
+    // lead that is already converted or dismissed.
+    const enteringPayment =
+      data.chosen_pathway === "survey" && (!existing || existing.status === "new");
+    const lifecycle = enteringPayment
+      ? { status: "pending_survey_payment", survey_clicked_at: new Date().toISOString() }
+      : {};
+
     let leadId: string;
     if (existing) {
-      const { error: updateErr } = await supabase.from("georgia2_leads").update(fields).eq("id", existing.id);
+      const { error: updateErr } = await supabase
+        .from("georgia2_leads")
+        .update({ ...fields, ...lifecycle })
+        .eq("id", existing.id);
       if (updateErr) throw updateErr;
       leadId = existing.id;
     } else {
       const { data: lead, error: insertErr } = await supabase
         .from("georgia2_leads")
-        .insert({ session_key: data.session_key, ...fields })
+        .insert({ session_key: data.session_key, ...fields, ...lifecycle })
         .select("id")
         .single();
       if (insertErr) throw insertErr;

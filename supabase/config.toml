@@ -169,3 +169,6 @@ verify_jwt = false
 
 [functions.service-tier-recompute]
 verify_jwt = false
+
+[functions.georgia2-abandoned-cart]
+verify_jwt = false

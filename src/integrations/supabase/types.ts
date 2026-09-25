@@ -1528,6 +1528,7 @@ export type Database = {
       }
       georgia2_leads: {
         Row: {
+          abandoned_cart_sent_at: string | null
           answers: Json
           catalyst: string
           chosen_pathway: string
@@ -1550,11 +1551,13 @@ export type Database = {
           spoke: string | null
           status: string
           submitted_at: string
+          survey_clicked_at: string | null
           timeline_urgency: string | null
           unstructured_stress_quote: string | null
           updated_at: string
         }
         Insert: {
+          abandoned_cart_sent_at?: string | null
           answers?: Json
           catalyst: string
           chosen_pathway: string
@@ -1577,11 +1580,13 @@ export type Database = {
           spoke?: string | null
           status?: string
           submitted_at?: string
+          survey_clicked_at?: string | null
           timeline_urgency?: string | null
           unstructured_stress_quote?: string | null
           updated_at?: string
         }
         Update: {
+          abandoned_cart_sent_at?: string | null
           answers?: Json
           catalyst?: string
           chosen_pathway?: string
@@ -1604,6 +1609,7 @@ export type Database = {
           spoke?: string | null
           status?: string
           submitted_at?: string
+          survey_clicked_at?: string | null
           timeline_urgency?: string | null
           unstructured_stress_quote?: string | null
           updated_at?: string

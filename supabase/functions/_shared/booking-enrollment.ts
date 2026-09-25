@@ -11,6 +11,7 @@
 
 import { square } from "./square.ts";
 import { provisionClientFolderTree } from "./vault-provisioning.ts";
+import { sendOnboardingLinkEmail } from "./onboarding-link-email.ts";
 
 function splitName(fullName: string): { first: string; last: string } {
   const parts = String(fullName || "").trim().split(/\s+/).filter(Boolean);
@@ -393,6 +394,13 @@ export async function enrollPaidBooking(
     contact_id: contactId,
     source_type: "booking_paid",
   });
+
+  // ---- 7. Email the onboarding link (best-effort) -----------------------
+  // The confirmation page forwards the buyer into onboarding, but only if
+  // the tab is still open. This is the fallback if it isn't.
+  if (email && contactId) {
+    await sendOnboardingLinkEmail(client, { contactId, email, firstName: first });
+  }
 
   return { contactId, householdId, created, vaultProvisioning };
 }
