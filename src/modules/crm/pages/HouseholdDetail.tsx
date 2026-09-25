@@ -38,6 +38,7 @@ import { toast } from "sonner";
 import { PageBreadcrumbs } from "@/shared/components/PageBreadcrumbs";
 import { policyTypeLabel } from "@/shared/lib/insurance";
 import { CollapsibleCard } from "@/shared/components/CollapsibleCard";
+import { GeorgiaDiagnosticCard } from "@/modules/intake";
 import { Progress } from "@/shared/components/ui/progress";
 import { HouseholdTaskRollup } from "@/modules/crm/components/HouseholdTaskRollup";
 import { HouseholdRequestsRollup } from "@/modules/crm/components/HouseholdRequestsRollup";
@@ -1122,6 +1123,7 @@ const HouseholdDetail = () => {
                     </div>
                   </CardContent>
                 </Card>
+                <GeorgiaDiagnosticCard householdId={id!} />
                 {(household?.vision_notes || household?.values_notes || household?.purpose_notes ||
                   household?.anchor_transfer_amount != null || household?.spousal_alignment_score != null ||
                   household?.pressure_types?.length > 0 || household?.pending_capex_amount != null ||

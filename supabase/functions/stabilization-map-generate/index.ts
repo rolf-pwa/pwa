@@ -4,6 +4,7 @@ import {
   computeSovereigntyDiagnostics,
   type DiagnosticInputs,
 } from "../_shared/sovereignty-diagnostics.ts";
+import { georgiaFactLines, type GeorgiaLeadFacts } from "../_shared/georgia-diagnostic-facts.ts";
 import { evaluateCausalDag, type OntologyAssessmentPayload, type RiskFlag } from "../_shared/causal-dag-evaluator.ts";
 
 const ALLOWED_ORIGINS = [
@@ -191,6 +192,7 @@ Your job: draft ONLY the narrative fields below. **Never invent, restate incorre
 - Write in the Sanctuary voice — calm, direct, non-alarmist, professional. No jargon, no exclamations.
 - If the facts state this is an existing/managed client formalizing their SOS (not a new engagement), the situation_summary and Phase 1 action items must reflect *formalizing/ratifying* their existing arrangement — never use "initiating," "Day One," or basic-document-collection language ("secure government IDs," "collect bank statements") for a client who already has a governed relationship on file.
 - If a "Causal AI Ontology assessment" or "Active Causal Risk Flags" fact is present, you may draw on it when writing the urgency_flag and Phase 1 action items — but NEVER quote a raw score, index, or internal field name from it (never write anything like "guilt/survivor feelings 9/10" or "secrecy_isolation_score"). Translate it into plain advisor language describing the real-world behavior or risk instead (e.g. "there are early signs of guilt-driven hesitation around engaging with this inheritance"). Named risk flags (e.g. "Legacy Asset Liquidation Paralysis") and their recommended actions ARE safe to reference directly — those are already advisor-facing labels, not raw internal data.
+- If a "Georgia diagnostic" fact is present, it is what the client told us about themselves before engaging: you may let it shape the tone of the situation_summary and the emphasis of the Phase 1 action items (for example, acknowledging that outside pressure or feeling stuck is real, or that governance is not yet written down). Translate it into plain advisor language. NEVER quote a score, never write "the diagnostic said" or "the client stated", and never present these as direct quotes or as verified facts — they are self-reported context, not findings.
 - situation_summary: 1-2 sentences summarizing the household's transition/wealth event and current state of stabilization.
 - urgency_flag: 1 sentence describing what is currently absent or exposed (governance gaps, unaddressed drag, missing structure).
 - Action plan: draft 2-4 concrete bullet items for EACH of three phases, grounded in the facts provided:
@@ -272,6 +274,7 @@ function factsBlock(
   visionValues?: { vision: string; values: string; purpose: string },
   householdContext?: HouseholdContext,
   causalRiskLines?: string[],
+  georgiaLines?: string[],
 ): string {
   const lines = [`Household: ${householdLabel} (${familyName})`];
   if (isLegacyClient) {
@@ -354,6 +357,9 @@ function factsBlock(
   }
   if (causalRiskLines && causalRiskLines.length > 0) {
     lines.push(...causalRiskLines);
+  }
+  if (georgiaLines && georgiaLines.length > 0) {
+    lines.push(...georgiaLines);
   }
   return lines.join("\n");
 }
@@ -502,6 +508,28 @@ async function handleHouseholdGeneration(
     const causalFlags = latestOntology ? evaluateCausalDag(latestOntology as OntologyAssessmentPayload) : [];
     const causalRiskLines = causalRiskFactsLines(latestOntology as OntologyAssessmentPayload | null, causalFlags);
 
+    // The client's Georgia diagnostic, matched by any household member's
+    // email (so it also works for an existing contact, not just a household
+    // created from the lead). Best-effort context; never blocks generation.
+    let georgiaLines: string[] = [];
+    try {
+      const { data: memberRows } = await supabase.from("contacts").select("email").eq("household_id", householdId);
+      const emails = (memberRows ?? []).map((m: any) => m.email).filter((e: unknown): e is string => !!e);
+      if (emails.length > 0) {
+        const filter = emails.map((e: string) => `email.ilike."${e.replace(/"/g, "")}"`).join(",");
+        const { data: georgiaLead } = await supabase
+          .from("georgia2_leads")
+          .select("catalyst, answers, diagnostic_payload, risk_scores_calculated")
+          .or(filter)
+          .order("submitted_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        georgiaLines = georgiaFactLines(georgiaLead as GeorgiaLeadFacts | null);
+      }
+    } catch (e) {
+      console.warn("[stabilization-map-generate] Georgia diagnostic lookup failed (non-fatal):", e);
+    }
+
     const gcpKeyRaw = Deno.env.get("GCP_SERVICE_ACCOUNT_KEY");
     if (!gcpKeyRaw) throw new Error("GCP_SERVICE_ACCOUNT_KEY not configured");
     const sa: ServiceAccountKey = JSON.parse(gcpKeyRaw);
@@ -534,6 +562,7 @@ async function handleHouseholdGeneration(
         legacyAdvisorFrictionNotes: household.legacy_advisor_friction_notes,
       },
       causalRiskLines,
+      georgiaLines,
     );
 
     const aiRes = await fetch(vertexUrl, {

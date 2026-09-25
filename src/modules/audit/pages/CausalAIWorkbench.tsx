@@ -21,7 +21,7 @@ import { supabase } from "@/shared/integrations/supabase/client";
 import { cn } from "@/shared/lib/utils";
 import { ArrowLeft, ChevronDown, ChevronUp, Lock, Loader2, Play, Quote, Save } from "lucide-react";
 import { toast } from "sonner";
-import { OnboardingStepper, type OnboardingStepMeta } from "@/modules/intake";
+import { GeorgiaDiagnosticCard, OnboardingStepper, type OnboardingStepMeta } from "@/modules/intake";
 import { ActiveRiskFlags, StepOntologyAssessment, type OntologyAssessment, type OntologySavePayload, type RiskFlag } from "../components/ontology/StepOntologyAssessment";
 import { StepMeetingTranscripts } from "../components/charter-intake/StepMeetingTranscripts";
 import { loadCharterIntake, syncMeetingTranscripts, saveCharterIntakeField, type MeetingTranscript } from "../hooks/useCharterIntake";
@@ -368,6 +368,7 @@ export default function CausalAIWorkbench() {
 
         <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
           <div className="space-y-4">
+            {current === 1 && householdId && <GeorgiaDiagnosticCard householdId={householdId} />}
             {current === 1 && <StepOntologyAssessment latest={latest} saving={savingOntology} onSave={handleSaveOntology} />}
 
             {current === 2 && (

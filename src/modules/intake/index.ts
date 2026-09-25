@@ -9,3 +9,4 @@ export { PortalIntakePage } from "./components/PortalIntakePage";
 export { IntakeBackfillTile } from "./components/IntakeBackfillTile";
 export { OnboardingShell } from "./components/onboarding/OnboardingShell";
 export { OnboardingStepper, type OnboardingStepMeta } from "./components/onboarding/OnboardingStepper";
+export { GeorgiaDiagnosticCard } from "./components/GeorgiaDiagnosticCard";
