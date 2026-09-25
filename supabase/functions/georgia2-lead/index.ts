@@ -4,6 +4,14 @@ import { z } from "https://esm.sh/zod@3.25.76";
 import { checkOutboundPii } from "../_shared/pii-shield.ts";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { buildRawEmail, base64UrlEncode } from "../_shared/gmail-mime.ts";
+import {
+  actionPlanFor,
+  GOVERNANCE_SHOW_AT,
+  governanceDetails,
+  taxExposureBody,
+  vocabFor,
+  type InsightDetail,
+} from "../_shared/georgia-copy.ts";
 
 // primary_noise_exposure is a bucketed label derived from the client's
 // already-computed noise_strain gauge -- no separate weight table needed
@@ -28,62 +36,6 @@ function bucketNoiseExposure(noiseStrain: number): "Low" | "Moderate" | "High" |
 // rather than trusting free-text sent by the client -- this is a public,
 // unauthenticated endpoint and these strings get embedded directly into an
 // outbound email, so the content must come from server-trusted inputs only.
-type InsightDetail = { label: string; value: string; note: string; status: "gap" | "partial" | "strong" };
-
-// Keep in sync with GOVERNANCE_DETAIL / ADVISORY_DETAIL / governanceDetails()
-// in src/modules/intake/lib/derive.ts.
-const GOVERNANCE_DETAIL: Record<string, Omit<InsightDetail, "label">> = {
-  none: {
-    value: "No written charter",
-    note: "Decisions are being made case-by-case, without documented rules of engagement or family boundaries — the most common way well-intentioned capital gets pulled off course.",
-    status: "gap",
-  },
-  legal_only: {
-    value: "Wills and minute books only",
-    note: "Your legal documents say who gets what, but not why the wealth exists or how decisions get made when emotions run high.",
-    status: "partial",
-  },
-  charter: {
-    value: "Written family constitution in place",
-    note: "A charter is the strongest protection you can have — the work is keeping it current as your circumstances change.",
-    status: "strong",
-  },
-};
-const ADVISORY_DETAIL: Record<string, Omit<InsightDetail, "label">> = {
-  siloed: {
-    value: "Professionals work in silos",
-    note: "Your accountant, lawyer, and custodian aren't talking, so you are the translator between them. The costly mistakes hide in the gaps.",
-    status: "gap",
-  },
-  bank: {
-    value: "One institution runs everything",
-    note: "A single bank or broker is steering the structure, and their incentive is their own product shelf — not necessarily your charter.",
-    status: "partial",
-  },
-  vfo: {
-    value: "Coordinated team under one charter",
-    note: "Your professionals are aligned around one plan, which is exactly where you want to be.",
-    status: "strong",
-  },
-};
-
-function governanceDetails(answers: Record<string, unknown>): { details: InsightDetail[]; nextMove?: string } {
-  const details: InsightDetail[] = [];
-  const gov = GOVERNANCE_DETAIL[String(answers.governance ?? "")];
-  const adv = ADVISORY_DETAIL[String(answers.advisory ?? "")];
-  if (gov) details.push({ label: "Written charter", ...gov });
-  if (adv) details.push({ label: "Professional coordination", ...adv });
-  let nextMove: string | undefined;
-  if (gov && gov.status !== "strong") {
-    nextMove =
-      "Draft a Sovereignty Charter: put your family boundaries and the purpose of your capital in writing before capital moves.";
-  } else if (adv && adv.status !== "strong") {
-    nextMove =
-      "Bring your professionals under one plan: an independent Family CFO chairs regular sessions so your accountant, lawyer, and custodian work from the same charter.";
-  }
-  return { details, nextMove };
-}
-
 function computeNarrativeInsights(
   risk: z.infer<typeof RiskScoresSchema> | null,
   catalyst: string,
@@ -99,8 +51,8 @@ function computeNarrativeInsights(
       body: "It is completely normal to feel paralyzed right now. Your nervous system is catching up with a massive life change. We will prioritize reducing your cognitive overhead — no major plans are needed today.",
     });
   }
-  if (risk.structure_safety <= 55) {
-    const { details, nextMove } = governanceDetails(answers);
+  if (risk.structure_safety <= GOVERNANCE_SHOW_AT) {
+    const { details, nextMove } = governanceDetails(catalyst, answers);
     insights.push({
       tag: "Governance Readiness",
       body: details.length
@@ -120,11 +72,7 @@ function computeNarrativeInsights(
   if (risk.tax_drag_risk >= 70 || probateExposure) {
     insights.push({
       tag: "Tax Exposure",
-      body:
-        "There are structural tax drags apparent in your profile. In British Columbia, the sequence of how you receive and shelter capital dictates what you keep. Let's address tax exposures before any money moves." +
-        (probateExposure
-          ? " BC probate fees run about 1.4% on estate value over $50,000 — and assets held in joint tenancy or a trust may bypass probate entirely, so structure matters before anything is distributed."
-          : ""),
+      body: taxExposureBody(catalyst, probateExposure),
     });
   }
   if (insights.length === 0) {
@@ -135,24 +83,6 @@ function computeNarrativeInsights(
   }
   return insights;
 }
-
-// Keep in sync with ACTION_PLAN in src/modules/intake/lib/derive.ts.
-const ACTION_PLAN: { title: string; detail: string }[] = [
-  {
-    title: "Deposit funds into a secure Holding Account",
-    detail: "Park incoming capital somewhere secure and insured, so nothing is deployed before there is a plan.",
-  },
-  {
-    title: "Institute a 90-day (minimum) Stabilization Period",
-    detail:
-      "Halt all irreversible commitments. Do not sign discretionary investment mandates or respond to financial solicitations until your footing is steady.",
-  },
-  {
-    title: "Centralize your documents",
-    detail:
-      "Gather your wills, powers of attorney, account statements, tax returns, and corporate records in one secure place, so every professional works from the same facts.",
-  },
-];
 
 // 2026 limit, indexed annually -- keep in sync with LCGE_LIMIT_LABEL in
 // src/modules/intake/lib/derive.ts.
@@ -286,12 +216,12 @@ const SENDER_DISPLAY = "Georgia · ProsperWise <rolf@prosperwise.ca>";
 
 function roadmapEmailHtml(opts: {
   firstName: string;
-  catalystLabel: string;
+  catalyst: string;
   risk: z.infer<typeof RiskScoresSchema> | null;
   insights: { tag: string; body: string; details?: InsightDetail[]; nextMove?: string }[];
   bcNotes: string[];
 }): string {
-  const { firstName, catalystLabel, risk, insights, bcNotes } = opts;
+  const { firstName, catalyst, risk, insights, bcNotes } = opts;
   const gaugeRows = risk
     ? `
       <tr><td style="padding:6px 0;color:#334155;font-family:'DM Sans',sans-serif;font-size:14px;">Tax Drag Risk</td><td style="padding:6px 0;text-align:right;font-weight:600;color:#1e293b;font-family:'DM Sans',sans-serif;font-size:14px;">${risk.tax_drag_risk}/100</td></tr>
@@ -322,7 +252,7 @@ function roadmapEmailHtml(opts: {
   const actionPlanHtml = `
       <p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;margin:20px 0 8px;">Your Action Plan</p>
       <ol style="margin:0;padding-left:18px;">
-        ${ACTION_PLAN.map(
+        ${actionPlanFor(catalyst).map(
           (a) => `<li style="font-size:13px;line-height:1.6;color:#334155;margin-bottom:8px;"><strong style="color:#1e293b;">${escapeHtml(a.title)}</strong><br/>${escapeHtml(a.detail)}</li>`
         ).join("")}
       </ol>`;
@@ -339,8 +269,8 @@ function roadmapEmailHtml(opts: {
     <div style="font-family:'DM Sans',sans-serif;color:#334155;max-width:520px;margin:0 auto;">
       <p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;">Sovereignty Operating System™</p>
       <h2 style="font-family:'Cormorant Garamond',serif;font-weight:300;font-size:24px;color:#1e293b;margin:4px 0 16px;">Your Confidential Roadmap</h2>
-      <p style="font-size:14px;line-height:1.6;">Hi ${firstName},</p>
-      <p style="font-size:14px;line-height:1.6;">Thanks for walking through Georgia's diagnostic. Based on what you shared — ${catalystLabel} — here's your private risk snapshot:</p>
+      <p style="font-size:14px;line-height:1.6;">Hi ${escapeHtml(firstName)},</p>
+      <p style="font-size:14px;line-height:1.6;">Thanks for walking through Georgia's diagnostic. Based on what you shared about ${vocabFor(catalyst).eventPhrase}, here's your private risk snapshot:</p>
       ${gaugeRows ? `<table style="width:100%;border-collapse:collapse;margin:16px 0;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;">${gaugeRows}</table>` : ""}
       ${insightsHtml ? `<div style="margin:16px 0;">${insightsHtml}</div>` : ""}
       ${bcNotesHtml}
@@ -484,10 +414,9 @@ serve(async (req) => {
     // fail the visitor's already-successful submission over a Gmail problem.
     if (!existing || existing.email !== data.email) {
       try {
-        const catalystLabel = data.catalyst.replace(/_/g, " ");
         const html = roadmapEmailHtml({
           firstName: data.first_name,
-          catalystLabel,
+          catalyst: data.catalyst,
           risk,
           insights: computeNarrativeInsights(risk, data.catalyst, data.answers),
           bcNotes: computeBcContextNotes(data.domain, data.catalyst, data.answers),
