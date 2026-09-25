@@ -66,6 +66,23 @@ describe("georgia2 derive", () => {
     const tax = georgiaInsights("personal", "inheritance", { probate: "yes" }).find((i) => i.tag === "Tax Exposure");
     expect(tax?.body).toContain("probate");
   });
+  it("gives every catalyst a directives section, even when nothing is triggered", () => {
+    const healthy = { nervous_system: "grounded", governance: "charter", advisory: "vfo" };
+    for (const catalyst of ["founder_exit", "growth_stage_founder"] as const) {
+      const tags = georgiaInsights("corporate", catalyst, healthy).map((i) => i.tag).filter((x) => x !== "Your Next Step");
+      expect(tags).toEqual(["Foundations in Good Standing"]);
+    }
+    for (const catalyst of [
+      "inheritance",
+      "executive_exit",
+      "divorce_restructuring",
+      "insurance_settlement",
+      "sudden_windfall",
+    ] as const) {
+      const tags = georgiaInsights("personal", catalyst, healthy).map((i) => i.tag).filter((x) => x !== "Your Next Step");
+      expect(tags.length).toBeGreaterThan(0);
+    }
+  });
   it("asks the person-first questions before any catalyst-specific ones", () => {
     const qs = questionsFor("inheritance");
     expect(qs.slice(0, 3).map((q) => q.key)).toEqual(["nervous_system", "governance", "advisory"]);

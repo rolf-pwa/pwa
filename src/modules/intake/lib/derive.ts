@@ -604,6 +604,12 @@ export function timelineStageIndex(
 
 // ---- Georgia Insights (dynamic quotes) ------------------------------------
 
+export const STEADY_FOOTING = {
+  tag: "Foundations in Good Standing",
+  body:
+    "Your answers point to a steady footing — decision readiness, governance, noise, and tax exposure are all within a healthy range. The plan below is about keeping it that way while capital moves.",
+};
+
 export interface GeorgiaInsight {
   tag: string;
   body: string;
@@ -663,6 +669,14 @@ export function georgiaInsights(
           ? " BC probate fees run about 1.4% on estate value over $50,000 — and assets held in joint tenancy or a trust may bypass probate entirely, so structure matters before anything is distributed."
           : ""),
     });
+  }
+
+  // Every completed diagnostic gets the same results structure: when no
+  // directive is triggered, a steady-footing note stands in so the section
+  // never disappears. Keep in sync with computeNarrativeInsights in
+  // georgia2-lead/index.ts.
+  if (domain && hasDiagnosticInput(catalyst, answers) && !insights.some((i) => i.tag !== "Your Next Step")) {
+    insights.push({ tag: STEADY_FOOTING.tag, body: STEADY_FOOTING.body });
   }
 
   if (insights.length === 0) {

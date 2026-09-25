@@ -66,6 +66,12 @@ function computeNarrativeInsights(
           : ""),
     });
   }
+  if (insights.length === 0) {
+    insights.push({
+      tag: "Foundations in Good Standing",
+      body: "Your answers point to a steady footing — decision readiness, governance, noise, and tax exposure are all within a healthy range. The plan below is about keeping it that way while capital moves.",
+    });
+  }
   return insights;
 }
 
