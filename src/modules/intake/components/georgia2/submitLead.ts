@@ -7,18 +7,10 @@ const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 // lead and emails the results automatically; later calls (a pathway click,
 // or re-submitting after Back) update that same lead. keepalive lets a
 // pathway click survive the page navigating away right after it.
-export async function submitLead(
-  state: Georgia2State,
-  pathway: Pathway,
-  opts?: { emergency?: boolean }
-): Promise<{ validation: string | null }> {
+export async function submitLead(state: Georgia2State, pathway: Pathway): Promise<{ validation: string | null }> {
   if (!state.domain || !state.catalyst) throw new Error("Missing diagnostic answers");
   const gauges = computeGauges(state.domain, state.catalyst, state.answers);
-  const diagnosticPayload = deriveDiagnosticPayload(
-    state.catalyst,
-    state.answers,
-    opts?.emergency ? "Emergency_Override" : undefined
-  );
+  const diagnosticPayload = deriveDiagnosticPayload(state.catalyst, state.answers);
   const freeform = state.freeformResult;
   const res = await fetch(`${FUNCTIONS_URL}/georgia2-lead`, {
     method: "POST",

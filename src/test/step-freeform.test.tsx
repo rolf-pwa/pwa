@@ -115,8 +115,7 @@ describe("StepFreeform", () => {
 });
 
 describe("StepEmergency", () => {
-  it("shows the static safety copy and submits an urgent-contact lead flagged Emergency_Override", async () => {
-    const fetchFn = mockFetch(() => ({ success: true }));
+  it("shows reassurance and the Clarity Call page, with no emergency numbers or callback form", () => {
     render(
       <Georgia2Provider>
         <Arrange step={5}>
@@ -124,16 +123,13 @@ describe("StepEmergency", () => {
         </Arrange>
       </Georgia2Provider>
     );
-    expect(screen.getByText(/call 911/)).toBeTruthy();
-    expect(screen.getByText("9-8-8")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("First Name"), { target: { value: "Pat" } });
-    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "pat@example.com" } });
-    fireEvent.click(screen.getByText("Yes, please reach out"));
-    await waitFor(() => expect(screen.getByText(/will reach out to you personally/)).toBeTruthy());
-    const body = fetchFn.mock.calls[0][1]?.body as string;
-    const sent = JSON.parse(body);
-    expect(sent.chosen_pathway).toBe("urgent_contact");
-    expect(sent.diagnostic_payload.spoke).toBe("Emergency_Override");
+    expect(screen.getByText(/Nothing about your finances needs to be decided or moved today/)).toBeTruthy();
+    const link = screen.getByText("Book a Clarity Call").closest("a");
+    expect(link?.getAttribute("href")).toBe("https://www.prosperwise.ca/clarity-call");
+    const text = document.body.textContent ?? "";
+    expect(text).not.toMatch(/911|9-8-8|988/);
+    expect(screen.queryByLabelText("Email")).toBeNull();
+    expect(screen.queryByText(/reach out/i)).toBeNull();
   });
 
   it("lets the visitor return to the regular diagnostic", async () => {

@@ -4,7 +4,6 @@ import { z } from "https://esm.sh/zod@3.25.76";
 import { checkOutboundPii } from "../_shared/pii-shield.ts";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { buildRawEmail, base64UrlEncode } from "../_shared/gmail-mime.ts";
-import { sendServiceEmail, escapeHtml as escapeHtmlShared } from "../_shared/service-email.ts";
 import { fallbackValidation } from "../_shared/georgia-safety.ts";
 import { generateValidation, loadServiceAccount } from "../_shared/georgia-llm.ts";
 import {
@@ -194,8 +193,6 @@ const BodySchema = z.object({
     "academy_guide",
     "confidential_roadmap",
     "clarity_call",
-    // Emergency_Override visitor who asked for a personal reply.
-    "urgent_contact",
     // legacy values
     "vfo_stabilization",
     "vfo_catalyst_guide",
@@ -339,21 +336,14 @@ serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
-    // An Emergency_Override visitor asked for a personal reply: no roadmap
-    // email, no generated copy, and an urgent staff alert instead.
-    const isEmergency = payload?.spoke === "Emergency_Override" || data.chosen_pathway === "urgent_contact";
     const extraction = data.freeform_extraction ?? null;
 
     // The acknowledgment paragraph is written once, when the lead is created,
     // so the results screen and the emailed roadmap match. The model only
     // sees category labels (never the visitor's own words) and its output is
     // validated; anything rejected falls back to deterministic copy.
-    // A visitor who first asked for a personal reply and then chose to carry on
-    // with the regular diagnostic is treated as a fresh lead for this purpose:
-    // they have not yet been given an acknowledgment or a roadmap.
-    const startingFresh = !existing || (existing.chosen_pathway === "urgent_contact" && !isEmergency);
     let validation: string | null = existing?.validation_text ?? null;
-    if (startingFresh && !isEmergency) {
+    if (!existing) {
       const emotional = payload?.emotional_state ?? extraction?.emotional_state ?? null;
       const friction = payload?.primary_friction ?? extraction?.primary_friction ?? null;
       let generated: string | null = null;
@@ -390,7 +380,7 @@ serve(async (req) => {
       primary_friction: payload?.primary_friction ?? null,
       unstructured_stress_quote: data.unstructured_stress_quote || null,
       freeform_extraction: extraction,
-      ...(startingFresh && !isEmergency ? { validation_text: validation } : {}),
+      ...(existing ? {} : { validation_text: validation }),
     };
 
     // Clicking "Start the Sovereignty Survey" puts the lead in the payment
@@ -456,13 +446,11 @@ serve(async (req) => {
           ? ` · ⚠ free-text answer flagged (${extraction.threat_source ?? "screened"})`
           : "";
         await supabase.from("staff_notifications").insert({
-          title: isEmergency
-            ? `URGENT — Georgia visitor flagged and asked for a personal reply · ${data.first_name}`
-            : existing
-              ? `Georgia 2.0 lead chose ${data.chosen_pathway.replace(/_/g, " ")} · ${data.first_name}`
-              : `Georgia 2.0 lead · ${data.first_name}`,
+          title: existing
+            ? `Georgia 2.0 lead chose ${data.chosen_pathway.replace(/_/g, " ")} · ${data.first_name}`
+            : `Georgia 2.0 lead · ${data.first_name}`,
           body: `${data.domain} / ${data.catalyst} · ${data.chosen_pathway} · ${data.email}${flagged}`,
-          source_type: isEmergency ? "georgia2_emergency" : "georgia2_lead",
+          source_type: "georgia2_lead",
           link: "/leads",
         });
       } catch (notifyErr) {
@@ -470,25 +458,10 @@ serve(async (req) => {
       }
     }
 
-    // Emergency_Override: the bell may not be watched, so also email Rolf the
-    // details directly (best-effort). The visitor gets no automated email.
-    if (isEmergency && !existing) {
-      await sendServiceEmail(supabase, {
-        to: "rolf@prosperwise.ca",
-        subject: `URGENT — Georgia visitor asked for a personal reply (${data.first_name})`,
-        html: `<div style="font-family:'DM Sans',sans-serif;font-size:14px;color:#334155;max-width:520px;">
-          <p><strong>A Georgia visitor's free-text answer was flagged for safety screening and they asked for a personal reply.</strong></p>
-          <p>Name: ${escapeHtmlShared(data.first_name)}<br/>Email: ${escapeHtmlShared(data.email)}${data.mobile ? `<br/>Mobile: ${escapeHtmlShared(data.mobile)}` : ""}<br/>Event: ${escapeHtmlShared(data.catalyst.replace(/_/g, " "))}</p>
-          <p>Their words:<br/><em>${escapeHtmlShared(data.unstructured_stress_quote ?? "(none recorded)")}</em></p>
-          <p style="color:#64748b;font-size:12px;">Screening source: ${escapeHtmlShared(String(extraction?.threat_source ?? "unknown"))}. Nothing was emailed to the visitor.</p>
-        </div>`,
-      });
-    }
-
     // Email the results automatically the moment the lead is submitted (or
     // if they went Back and corrected their email). Best-effort -- never
     // fail the visitor's already-successful submission over a Gmail problem.
-    if (!isEmergency && (startingFresh || existing?.email !== data.email)) {
+    if (!existing || existing.email !== data.email) {
       try {
         const html = roadmapEmailHtml({
           firstName: data.first_name,
@@ -535,7 +508,7 @@ serve(async (req) => {
         success: true,
         lead_id: leadId,
         chosen_pathway: data.chosen_pathway,
-        validation: isEmergency ? null : validation,
+        validation,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

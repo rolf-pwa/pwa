@@ -430,10 +430,7 @@ export default function Leads() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          {lead.chosen_pathway === "urgent_contact" && (
-                            <Badge variant="destructive" className="text-[10px]">URGENT · asked for a personal reply</Badge>
-                          )}
-                          {lead.chosen_pathway !== "urgent_contact" && lead.freeform_extraction?.threat_detected && (
+                          {lead.freeform_extraction?.threat_detected && (
                             <Badge variant="outline" className="border-destructive/50 text-[10px] text-destructive">
                               Free text flagged
                             </Badge>
