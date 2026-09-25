@@ -155,6 +155,12 @@ describe("georgia2 derive", () => {
     expect(gov).toBeTruthy();
     expect(gov?.details).toHaveLength(2);
   });
+  it("states the 2026 LCGE limit ($1,275,000) everywhere it is shown", () => {
+    const lcgeQuestion = questionsFor("founder_exit").find((q) => q.key === "lcge");
+    expect(lcgeQuestion?.tooltip).toContain("$1,275,000");
+    expect(bcContextNotes("corporate", "founder_exit", {}).join(" ")).toContain("$1,275,000");
+    expect(bcContextNotes("corporate", "founder_exit", {}).join(" ")).not.toContain("1,250,000");
+  });
   it("asks the person-first questions before any catalyst-specific ones", () => {
     const qs = questionsFor("inheritance");
     expect(qs.slice(0, 3).map((q) => q.key)).toEqual(["nervous_system", "governance", "friction"]);
