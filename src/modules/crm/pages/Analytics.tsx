@@ -30,7 +30,6 @@ interface Georgia2Session {
   id: string;
   session_key: string;
   created_at: string;
-  step_domain_reached_at: string | null;
   step_catalyst_reached_at: string | null;
   step_diagnostic_reached_at: string | null;
   step_pathway_reached_at: string | null;
@@ -60,7 +59,7 @@ const Analytics = () => {
       supabase
         .from("georgia2_sessions" as any)
         .select(
-          "id, session_key, created_at, step_domain_reached_at, step_catalyst_reached_at, step_diagnostic_reached_at, step_pathway_reached_at, step_confidential_reached_at, lead_captured",
+          "id, session_key, created_at, step_catalyst_reached_at, step_diagnostic_reached_at, step_pathway_reached_at, step_confidential_reached_at, lead_captured",
         )
         .gte("created_at", rangeStart)
         .order("created_at", { ascending: false }),
@@ -129,42 +128,28 @@ const Analytics = () => {
   // Max for bar chart scaling
   const maxBucket = Math.max(1, ...buckets.map((b) => b.logins));
 
-  // Step-level tracking shipped 2026-09-16 -- a session created before that
-  // can never have step_*_reached_at data (the tracking code didn't exist
-  // yet), so including pre-launch sessions in the funnel's "Started" count
-  // would show a false 100% -> 0% cliff at the very first step, not a real
-  // drop-off. Excluded from the funnel only; the "Georgia Sessions Started"
-  // summary card above still counts every real session in range, since it
-  // doesn't depend on step data.
-  const FUNNEL_TRACKING_LAUNCH = "2026-09-16T00:00:00Z";
-  const funnelSessions = useMemo(
-    () => georgia2Sessions.filter((s) => s.created_at >= FUNNEL_TRACKING_LAUNCH),
-    [georgia2Sessions]
-  );
-  const preTrackingSessionCount = georgia2Sessions.length - funnelSessions.length;
-
-  // Georgia 2.0 funnel -- real first-reach counts per Stepper-labeled step,
-  // from the per-step tracking added alongside this card. "Started" is
-  // every trackable session row in range; each subsequent step is however
-  // many of those sessions ever reached that step (a Back-button revisit
-  // doesn't double count, since the tracking itself only records first reach).
+  // Georgia funnel -- first-reach counts per step of the current flow. "Started"
+  // is every session in range; each later row is how many of those sessions
+  // ever reached that step (a Back-button revisit never double counts, since
+  // the tracking only records first reach). Order follows the wizard: pick a
+  // transition, answer the questions, hit the contact gate, submit it (which
+  // is what reveals the results), then view them.
   const funnelSteps = useMemo(() => {
-    const total = funnelSessions.length;
+    const total = georgia2Sessions.length;
     const steps = [
       { label: "Started", count: total },
-      { label: "Domain", count: funnelSessions.filter((s) => s.step_domain_reached_at).length },
-      { label: "Catalyst", count: funnelSessions.filter((s) => s.step_catalyst_reached_at).length },
-      { label: "Diagnostic", count: funnelSessions.filter((s) => s.step_diagnostic_reached_at).length },
-      { label: "Pathway (reveal)", count: funnelSessions.filter((s) => s.step_pathway_reached_at).length },
-      { label: "Confidential (contact form)", count: funnelSessions.filter((s) => s.step_confidential_reached_at).length },
-      { label: "Submitted", count: funnelSessions.filter((s) => s.lead_captured).length },
+      { label: "Chose a transition", count: georgia2Sessions.filter((s) => s.step_catalyst_reached_at).length },
+      { label: "Answering questions", count: georgia2Sessions.filter((s) => s.step_diagnostic_reached_at).length },
+      { label: "Reached the contact gate", count: georgia2Sessions.filter((s) => s.step_confidential_reached_at).length },
+      { label: "Submitted (lead captured)", count: georgia2Sessions.filter((s) => s.lead_captured).length },
+      { label: "Viewed results", count: georgia2Sessions.filter((s) => s.step_pathway_reached_at).length },
     ];
     return steps.map((step, i) => ({
       ...step,
       pctOfTotal: total > 0 ? Math.round((step.count / total) * 100) : 0,
       pctOfPrevious: i > 0 && steps[i - 1].count > 0 ? Math.round((step.count / steps[i - 1].count) * 100) : null,
     }));
-  }, [funnelSessions]);
+  }, [georgia2Sessions]);
 
   return (
     <AppLayout>
@@ -309,16 +294,9 @@ const Analytics = () => {
             <Card>
               <CardHeader className="flex flex-row items-center gap-2">
                 <Route className="h-4 w-4 text-primary" />
-                <CardTitle className="text-sm">Georgia 2.0 — Diagnostic Funnel</CardTitle>
+                <CardTitle className="text-sm">Georgia — Diagnostic Funnel</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {preTrackingSessionCount > 0 && (
-                  <p className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1.5">
-                    {preTrackingSessionCount} session{preTrackingSessionCount === 1 ? "" : "s"} from before step
-                    tracking launched (Sep 16, 2026) {preTrackingSessionCount === 1 ? "is" : "are"} excluded below —
-                    {preTrackingSessionCount === 1 ? " it has" : " they have"} no step data to report.
-                  </p>
-                )}
                 {funnelSteps.map((step) => (
                   <div key={step.label} className="space-y-1">
                     <div className="flex items-center justify-between text-xs">
@@ -340,12 +318,8 @@ const Analytics = () => {
                     </div>
                   </div>
                 ))}
-                {funnelSessions.length === 0 && (
-                  <p className="text-muted-foreground text-sm text-center py-2">
-                    {preTrackingSessionCount > 0
-                      ? "No sessions with step tracking in this period yet."
-                      : "No Georgia 2.0 sessions in this period."}
-                  </p>
+                {georgia2Sessions.length === 0 && (
+                  <p className="text-muted-foreground text-sm text-center py-2">No Georgia sessions in this period.</p>
                 )}
               </CardContent>
             </Card>
