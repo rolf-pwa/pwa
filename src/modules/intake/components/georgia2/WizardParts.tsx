@@ -1,25 +1,24 @@
 import type { ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
 import { useGeorgia2, type Georgia2State } from "./state";
-import { CATALYST_QUESTIONS } from "@/modules/intake/lib/derive";
+import { PERSON_QUESTIONS, questionsFor } from "@/modules/intake/lib/derive";
 import { cn } from "@/shared/lib/utils";
 
 // Used only until a catalyst is chosen and the real question count is known.
-const ESTIMATED_QUESTION_COUNT = 3;
+const ESTIMATED_QUESTION_COUNT = PERSON_QUESTIONS.length + 3;
 
 export function wizardProgress(state: Georgia2State): { n: number; total: number; label: string } {
-  const questions = state.catalyst ? CATALYST_QUESTIONS[state.catalyst] : null;
+  const questions = state.catalyst ? questionsFor(state.catalyst) : null;
   const qCount = questions?.length ?? ESTIMATED_QUESTION_COUNT;
-  // Domain, Catalyst, each question, Scale, Confidential.
-  const total = qCount + 4;
+  // Domain, Catalyst, each question, Confidential.
+  const total = qCount + 3;
   if (state.step === 1) return { n: 1, total, label: "Domain" };
   if (state.step === 2) return { n: 2, total, label: "Catalyst" };
   if (state.step === 3) {
     const q = questions?.[state.questionIndex];
-    if (q) return { n: 3 + state.questionIndex, total, label: q.key.replace(/_/g, " ") };
-    return { n: 3 + qCount, total, label: "Scale" };
+    return { n: 3 + state.questionIndex, total, label: q ? q.key.replace(/_/g, " ") : "Diagnostic" };
   }
-  return { n: 4 + qCount, total, label: "Confidential" };
+  return { n: total, total, label: "Confidential" };
 }
 
 export function WizardProgress() {

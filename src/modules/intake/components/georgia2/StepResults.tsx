@@ -48,7 +48,7 @@ export function StepResults() {
     dispatch({ type: "submitting", value: true });
     dispatch({ type: "submit_error", error: null });
     try {
-      const gauges = computeGauges(state.domain, state.catalyst, state.answers, state.scale);
+      const gauges = computeGauges(state.domain, state.catalyst, state.answers);
       const res = await fetch(`${FUNCTIONS_URL}/georgia2-lead`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -60,7 +60,6 @@ export function StepResults() {
           domain: state.domain,
           catalyst: state.catalyst,
           chosen_pathway: pathway,
-          scale: state.scale,
           answers: state.answers,
           risk_scores_calculated: {
             tax_drag_risk: gauges.taxDragRisk,
@@ -101,8 +100,8 @@ export function StepResults() {
     }
   };
 
-  const gauges = computeGauges(state.domain, state.catalyst, state.answers, state.scale);
-  const directives = georgiaInsights(state.domain, state.catalyst, state.answers, state.scale).filter(
+  const gauges = computeGauges(state.domain, state.catalyst, state.answers);
+  const directives = georgiaInsights(state.domain, state.catalyst, state.answers).filter(
     (i) => i.tag !== "Your Next Step"
   );
   const bcNotes = bcContextNotes(state.domain, state.catalyst, state.answers);
@@ -116,11 +115,7 @@ export function StepResults() {
           </p>
           <h2 className="mt-2 font-serif text-3xl leading-tight md:text-4xl">Your Sovereignty Snapshot</h2>
         </div>
-        <p className="shrink-0 text-right text-sm text-muted-foreground">
-          {CATALYST_LABELS[state.catalyst]}
-          <br />
-          {formatCAD(state.scale)}
-        </p>
+        <p className="shrink-0 text-right text-sm text-muted-foreground">{CATALYST_LABELS[state.catalyst]}</p>
       </div>
 
       <div className="mt-6 grid grid-cols-2 gap-3 border-t border-border pt-6">

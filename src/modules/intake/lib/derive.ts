@@ -19,10 +19,6 @@ export type Answers = Record<string, OptionId>;
 // Legacy alias for state typing
 export type Answer = OptionId | null;
 
-export const VELVET_ROPE = 1_000_000;
-export const SCALE_MIN = 100_000;
-export const SCALE_MAX = 10_000_000;
-export const SCALE_STEP = 100_000;
 
 export const CATALYST_LABELS: Record<Catalyst, string> = {
   founder_exit: "Business Exit Planning",
@@ -102,6 +98,7 @@ export const DOMAIN_GREETING: Record<Domain, string> = {
 export interface QOption {
   id: OptionId;
   label: string;
+  description?: string;
   risks: Partial<Record<RiskKey, 1 | 2 | 3>>;
 }
 
@@ -111,6 +108,95 @@ export interface Question {
   tooltip: string;
   options: QOption[];
 }
+
+/**
+ * Person-first questions asked of every catalyst, immediately after the
+ * catalyst is chosen -- how the visitor is holding the moment (nervous
+ * system), whether their intentions are written down (governance), and
+ * whether the professionals around them work as one team (advisory).
+ * Risk weights use the same scale as the catalyst questions (1 = low,
+ * 3 = high risk) and feed the same four gauges.
+ */
+export const PERSON_QUESTIONS: Question[] = [
+  {
+    key: "nervous_system",
+    text: "How is your personal nervous system and decision buffer right now?",
+    tooltip:
+      "Decisions made under pressure are the most expensive ones. Where you are right now tells us how much protection your first 90 days need.",
+    options: [
+      {
+        id: "overload",
+        label: "Nervous-System Overload & High Pressure",
+        description: "Multiple advisors, banks, friends, or relatives are already reaching out with demands and proposals.",
+        risks: { noise: 3, readiness: 3 },
+      },
+      {
+        id: "cautious",
+        label: "Cautious Uncertainty",
+        description: "I feel the gravity of the wealth and want to avoid mistakes, but have not yet instituted a formal pause.",
+        risks: { noise: 2, readiness: 2 },
+      },
+      {
+        id: "grounded",
+        label: "Calm and Grounded",
+        description: "I have established clear temporary boundaries and am seeking long-term architectural stewardship.",
+        risks: { noise: 1, readiness: 1 },
+      },
+    ],
+  },
+  {
+    key: "governance",
+    text: "Do you have a written Sovereignty Charter or personal constitution?",
+    tooltip:
+      "A written charter turns your intentions into rules before emotion, family, or salespeople test them.",
+    options: [
+      {
+        id: "none",
+        label: "No formal written charter exists",
+        description: "Decisions are made case-by-case without documented rules of engagement or family boundaries.",
+        risks: { structure: 3 },
+      },
+      {
+        id: "legal_only",
+        label: "Only standard wills and corporate minute books",
+        description: "Legal documents exist, but they do not define the purpose of wealth or decision protocols.",
+        risks: { structure: 2 },
+      },
+      {
+        id: "charter",
+        label: "Yes, a comprehensive family constitution is in place",
+        description: "Written guidelines clearly govern family loans, gifting, philanthropy, and capital allocation.",
+        risks: { structure: 1 },
+      },
+    ],
+  },
+  {
+    key: "advisory",
+    text: "How do your external professionals (Accountant, Lawyer, Custodian) collaborate?",
+    tooltip:
+      "Uncoordinated professionals each optimize their own piece — the gaps between them are where the costly mistakes happen.",
+    options: [
+      {
+        id: "siloed",
+        label: "Completely Disconnected / Siloed",
+        description: "My CPA and corporate lawyer rarely or never speak; I am the middleman translating technical jargon.",
+        risks: { structure: 3, tax: 2 },
+      },
+      {
+        id: "bank",
+        label: "Private Bank / Broker Controls Everything",
+        description: "A bank representative manages things, but is primarily focused on their proprietary investment products.",
+        risks: { structure: 2, tax: 2 },
+      },
+      {
+        id: "vfo",
+        label: "Unified Virtual Family Office / Board of Directors",
+        description: "An independent Family CFO chairs regular governance meetings aligning all professionals to one charter.",
+        risks: { structure: 1, tax: 1 },
+      },
+    ],
+  },
+];
 
 export const CATALYST_QUESTIONS: Record<Catalyst, Question[]> = {
   founder_exit: [
@@ -298,6 +384,11 @@ export const CATALYST_QUESTIONS: Record<Catalyst, Question[]> = {
   ],
 };
 
+/** The full ordered question list for a catalyst: person-first, then catalyst-specific. */
+export function questionsFor(catalyst: Catalyst): Question[] {
+  return [...PERSON_QUESTIONS, ...CATALYST_QUESTIONS[catalyst]];
+}
+
 // ---- Routing ---------------------------------------------------------------
 
 /**
@@ -328,7 +419,7 @@ export interface DerivedResult {
   headline: string;
 }
 
-export function deriveResult(domain: Domain, _scale?: number): DerivedResult {
+export function deriveResult(domain: Domain): DerivedResult {
   const surveyPrice = SURVEY_PRICE[domain];
   return {
     surveyPrice,
@@ -345,7 +436,7 @@ export function deriveResult(domain: Domain, _scale?: number): DerivedResult {
 /** True once at least one diagnostic question has a real answer. */
 export function hasDiagnosticInput(catalyst: Catalyst | null, answers: Answers): boolean {
   if (!catalyst) return false;
-  return CATALYST_QUESTIONS[catalyst].some((q) => Boolean(answers[q.key]));
+  return questionsFor(catalyst).some((q) => Boolean(answers[q.key]));
 }
 
 function clamp(n: number): number {
@@ -378,7 +469,7 @@ function accumulateRisks(
     readiness: { sum: 0, count: 0 },
   };
   if (!catalyst) return totals;
-  const qs = CATALYST_QUESTIONS[catalyst];
+  const qs = questionsFor(catalyst);
   for (const q of qs) {
     const chosen = answers[q.key];
     if (!chosen) continue;
@@ -399,8 +490,7 @@ function avg(t: { sum: number; count: number }, fallback: number): number {
 export function computeGauges(
   domain: Domain | null,
   catalyst: Catalyst | null,
-  answers: Answers,
-  scale: number
+  answers: Answers
 ): Gauges {
   const t = accumulateRisks(catalyst, answers);
 
@@ -413,9 +503,6 @@ export function computeGauges(
   const structure = toSafety(avg(t.structure, 2));
   let readiness = toSafety(avg(t.readiness, 2));
 
-  // Scale nudges readiness upward once serious capital is on the table.
-  if (scale >= VELVET_ROPE) readiness += 5;
-  if (scale >= 5_000_000) readiness += 5;
   if (domain && catalyst) readiness += 5;
 
   return {
@@ -490,7 +577,7 @@ export function timelineStageIndex(
   milestoneCount: number
 ): number {
   if (!catalyst || milestoneCount <= 0) return 0;
-  const answered = CATALYST_QUESTIONS[catalyst].filter((q) => Boolean(answers[q.key])).length;
+  const answered = questionsFor(catalyst).filter((q) => Boolean(answers[q.key])).length;
   return Math.max(0, Math.min(answered, milestoneCount - 1));
 }
 
@@ -505,11 +592,10 @@ export interface GeorgiaInsight {
 export function georgiaInsights(
   domain: Domain | null,
   catalyst: Catalyst | null,
-  answers: Answers,
-  scale: number
+  answers: Answers
 ): GeorgiaInsight[] {
   const insights: GeorgiaInsight[] = [];
-  const gauges = computeGauges(domain, catalyst, answers, scale);
+  const gauges = computeGauges(domain, catalyst, answers);
 
   if (domain && hasDiagnosticInput(catalyst, answers)) {
     insights.push({
@@ -541,6 +627,15 @@ export function georgiaInsights(
       tag: "Decision Readiness",
       body:
         "It is completely normal to feel paralyzed right now. Your nervous system is catching up with a massive life change. We will prioritize reducing your cognitive overhead — no major plans are needed today.",
+    });
+  }
+
+  // Keep in sync with computeNarrativeInsights in georgia2-lead/index.ts.
+  if (gauges.structureSafety <= 40) {
+    insights.push({
+      tag: "Governance Structure",
+      body:
+        "Without a written charter and professionals working as one team, decisions get made case-by-case, under pressure. Putting your family boundaries and the purpose of your capital in writing is the durable fix.",
     });
   }
 

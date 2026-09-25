@@ -11,13 +11,11 @@ export interface Contact {
 
 export interface Georgia2State {
   step: Step;
-  // Which screen of the diagnostic step (3) is showing: 0..N-1 are the
-  // catalyst's questions one at a time, N is the scale-of-capital screen.
+  // Which question of the diagnostic step (3) is showing, one per screen.
   questionIndex: number;
   domain: Domain | null;
   catalyst: Catalyst | null;
   answers: Partial<Answers>;
-  scale: number;
   chosenPathway: Pathway | null;
   contact: Contact;
   sessionKey: string;
@@ -31,7 +29,6 @@ type Action =
   | { type: "set_domain"; domain: Domain }
   | { type: "set_catalyst"; catalyst: Catalyst }
   | { type: "set_answer"; key: string; value: Answer }
-  | { type: "set_scale"; scale: number }
   | { type: "set_pathway"; pathway: Pathway }
   | { type: "set_contact"; contact: Partial<Contact> }
   | { type: "submitting"; value: boolean }
@@ -49,7 +46,6 @@ function initial(): Georgia2State {
     domain: null,
     catalyst: null,
     answers: {},
-    scale: 1_000_000,
     chosenPathway: null,
     contact: { first_name: "", email: "", mobile: "" },
     sessionKey: newSessionKey(),
@@ -70,8 +66,6 @@ function reducer(state: Georgia2State, action: Action): Georgia2State {
       return { ...state, catalyst: action.catalyst, questionIndex: 0, step: 3 };
     case "set_answer":
       return { ...state, answers: { ...state.answers, [action.key]: action.value } };
-    case "set_scale":
-      return { ...state, scale: action.scale };
     case "set_pathway":
       // No step jump here -- pathway is now chosen from within StepResults
       // itself (step 5, after lead capture), not by transitioning to a

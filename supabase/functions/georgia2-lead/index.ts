@@ -51,6 +51,13 @@ function computeNarrativeInsights(
       body: "It is completely normal to feel paralyzed right now. Your nervous system is catching up with a massive life change. We will prioritize reducing your cognitive overhead — no major plans are needed today.",
     });
   }
+  // Keep in sync with georgiaInsights() in src/modules/intake/lib/derive.ts.
+  if (risk.structure_safety <= 40) {
+    insights.push({
+      tag: "Governance Structure",
+      body: "Without a written charter and professionals working as one team, decisions get made case-by-case, under pressure. Putting your family boundaries and the purpose of your capital in writing is the durable fix.",
+    });
+  }
   return insights;
 }
 
@@ -137,7 +144,9 @@ const BodySchema = z.object({
     "academy_pass",
   ]),
 
-  scale: z.number().min(0).max(1_000_000_000),
+  // No longer collected by the diagnostic (person-first redesign); still
+  // accepted so an older cached client build submits successfully.
+  scale: z.number().min(0).max(1_000_000_000).nullable().optional(),
   answers: z.record(z.string(), z.any()).default({}),
   // The 4 gauges, already computed client-side by computeGauges() (the
   // same values BlueprintCanvas has been rendering live all along) --
@@ -152,12 +161,11 @@ const SENDER_DISPLAY = "Georgia · ProsperWise <rolf@prosperwise.ca>";
 function roadmapEmailHtml(opts: {
   firstName: string;
   catalystLabel: string;
-  scaleFormatted: string;
   risk: z.infer<typeof RiskScoresSchema> | null;
   insights: { tag: string; body: string }[];
   bcNotes: string[];
 }): string {
-  const { firstName, catalystLabel, scaleFormatted, risk, insights, bcNotes } = opts;
+  const { firstName, catalystLabel, risk, insights, bcNotes } = opts;
   const gaugeRows = risk
     ? `
       <tr><td style="padding:6px 0;color:#334155;font-family:'DM Sans',sans-serif;font-size:14px;">Tax Drag Risk</td><td style="padding:6px 0;text-align:right;font-weight:600;color:#1e293b;font-family:'DM Sans',sans-serif;font-size:14px;">${risk.tax_drag_risk}/100</td></tr>
@@ -192,7 +200,7 @@ function roadmapEmailHtml(opts: {
       <p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;">Sovereignty Operating System™</p>
       <h2 style="font-family:'Cormorant Garamond',serif;font-weight:300;font-size:24px;color:#1e293b;margin:4px 0 16px;">Your Confidential Roadmap</h2>
       <p style="font-size:14px;line-height:1.6;">Hi ${firstName},</p>
-      <p style="font-size:14px;line-height:1.6;">Thanks for walking through Georgia's diagnostic. Based on what you shared — ${catalystLabel}, ${scaleFormatted} — here's your private risk snapshot:</p>
+      <p style="font-size:14px;line-height:1.6;">Thanks for walking through Georgia's diagnostic. Based on what you shared — ${catalystLabel} — here's your private risk snapshot:</p>
       ${gaugeRows ? `<table style="width:100%;border-collapse:collapse;margin:16px 0;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;">${gaugeRows}</table>` : ""}
       ${insightsHtml ? `<div style="margin:16px 0;">${insightsHtml}</div>` : ""}
       ${bcNotesHtml}
@@ -237,7 +245,7 @@ serve(async (req) => {
         domain: data.domain,
         catalyst: data.catalyst,
         chosen_pathway: data.chosen_pathway,
-        scale: data.scale,
+        scale: data.scale ?? null,
         answers: data.answers,
         risk_scores_calculated: risk,
         primary_noise_exposure: primaryNoiseExposure,
@@ -258,7 +266,7 @@ serve(async (req) => {
           chosen_pathway: data.chosen_pathway,
           domain: data.domain,
           catalyst: data.catalyst,
-          scale: data.scale,
+          scale: data.scale ?? null,
           answers: data.answers,
           risk_scores_calculated: risk,
           last_activity_at: new Date().toISOString(),
@@ -271,7 +279,7 @@ serve(async (req) => {
     try {
       await supabase.from("staff_notifications").insert({
         title: `Georgia 2.0 lead · ${data.first_name}`,
-        body: `${data.domain} / ${data.catalyst} · $${data.scale.toLocaleString()} · ${data.chosen_pathway} · ${data.email}`,
+        body: `${data.domain} / ${data.catalyst} · ${data.chosen_pathway} · ${data.email}`,
         source_type: "georgia2_lead",
         link: "/leads",
       });
@@ -286,22 +294,16 @@ serve(async (req) => {
     if (data.chosen_pathway === "confidential_roadmap") {
       try {
         const catalystLabel = data.catalyst.replace(/_/g, " ");
-        const scaleFormatted = new Intl.NumberFormat("en-CA", {
-          style: "currency",
-          currency: "CAD",
-          maximumFractionDigits: 0,
-        }).format(data.scale);
         const html = roadmapEmailHtml({
           firstName: data.first_name,
           catalystLabel,
-          scaleFormatted,
           risk,
           insights: computeNarrativeInsights(risk),
           bcNotes: computeBcContextNotes(data.domain, data.catalyst, data.answers),
         });
         const subject = "Your Confidential Roadmap — ProsperWise";
 
-        // Reflecting the lead's own self-reported catalyst/scale back to
+        // Reflecting the lead's own self-reported catalyst back to
         // them isn't the leak this shield exists to prevent (same
         // rationale send-contact-email uses for the same relaxation) --
         // every other outbound-PII rule (SIN, account numbers, health

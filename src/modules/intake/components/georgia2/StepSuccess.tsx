@@ -1,7 +1,7 @@
 import { useGeorgia2 } from "./state";
 import { Button } from "@/shared/components/ui/button";
 import { CheckCircle2 } from "lucide-react";
-import { CATALYST_LABELS, formatCAD } from "@/modules/intake/lib/derive";
+import { CATALYST_LABELS } from "@/modules/intake/lib/derive";
 
 const PATHWAY_COPY: Record<
   string,
@@ -59,7 +59,7 @@ export function StepSuccess() {
         <h2 className="text-3xl">{copy?.title ?? "Received"}</h2>
         {state.catalyst && (
           <p className="mt-2 text-sm text-muted-foreground">
-            {CATALYST_LABELS[state.catalyst]} · {formatCAD(state.scale)}
+            {CATALYST_LABELS[state.catalyst]}
           </p>
         )}
       </div>

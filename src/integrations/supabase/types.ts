@@ -1536,12 +1536,16 @@ export type Database = {
           email: string
           first_name: string
           id: string
+          jurisdiction: string
           mobile: string | null
           notes: string | null
-          scale: number
+          primary_noise_exposure: string | null
+          risk_scores_calculated: Json | null
+          scale: number | null
           session_key: string | null
           status: string
           submitted_at: string
+          unstructured_stress_quote: string | null
           updated_at: string
         }
         Insert: {
@@ -1553,12 +1557,16 @@ export type Database = {
           email: string
           first_name: string
           id?: string
+          jurisdiction?: string
           mobile?: string | null
           notes?: string | null
-          scale: number
+          primary_noise_exposure?: string | null
+          risk_scores_calculated?: Json | null
+          scale?: number | null
           session_key?: string | null
           status?: string
           submitted_at?: string
+          unstructured_stress_quote?: string | null
           updated_at?: string
         }
         Update: {
@@ -1570,12 +1578,16 @@ export type Database = {
           email?: string
           first_name?: string
           id?: string
+          jurisdiction?: string
           mobile?: string | null
           notes?: string | null
-          scale?: number
+          primary_noise_exposure?: string | null
+          risk_scores_calculated?: Json | null
+          scale?: number | null
           session_key?: string | null
           status?: string
           submitted_at?: string
+          unstructured_stress_quote?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1603,6 +1615,7 @@ export type Database = {
           message_count: number
           reached_lead_capture: boolean
           referrer: string | null
+          risk_scores_calculated: Json | null
           scale: number | null
           session_key: string
           source: string | null
@@ -1628,6 +1641,7 @@ export type Database = {
           message_count?: number
           reached_lead_capture?: boolean
           referrer?: string | null
+          risk_scores_calculated?: Json | null
           scale?: number | null
           session_key: string
           source?: string | null
@@ -1653,6 +1667,7 @@ export type Database = {
           message_count?: number
           reached_lead_capture?: boolean
           referrer?: string | null
+          risk_scores_calculated?: Json | null
           scale?: number | null
           session_key?: string
           source?: string | null
@@ -2064,6 +2079,69 @@ export type Database = {
           },
         ]
       }
+      household_ontology_assessments: {
+        Row: {
+          assessment_date: string
+          created_at: string
+          created_by: string | null
+          emotional_state: Json | null
+          event_spoke_data: Json | null
+          event_spoke_type: string | null
+          financial_state: Json | null
+          household_id: string
+          id: string
+          relational_state: Json | null
+          seeded_from: Json | null
+          source_georgia2_lead_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          assessment_date?: string
+          created_at?: string
+          created_by?: string | null
+          emotional_state?: Json | null
+          event_spoke_data?: Json | null
+          event_spoke_type?: string | null
+          financial_state?: Json | null
+          household_id: string
+          id?: string
+          relational_state?: Json | null
+          seeded_from?: Json | null
+          source_georgia2_lead_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          assessment_date?: string
+          created_at?: string
+          created_by?: string | null
+          emotional_state?: Json | null
+          event_spoke_data?: Json | null
+          event_spoke_type?: string | null
+          financial_state?: Json | null
+          household_id?: string
+          id?: string
+          relational_state?: Json | null
+          seeded_from?: Json | null
+          source_georgia2_lead_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_ontology_assessments_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "household_ontology_assessments_source_georgia2_lead_id_fkey"
+            columns: ["source_georgia2_lead_id"]
+            isOneToOne: false
+            referencedRelation: "georgia2_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       household_relationships: {
         Row: {
           contact_id: string
@@ -2109,6 +2187,7 @@ export type Database = {
           anchor_transfer_amount: number | null
           anchor_transfer_amount_note: string | null
           audit_booked_at: string | null
+          causal_pipeline_status: string | null
           created_at: string
           family_id: string
           fiduciary_entity: Database["public"]["Enums"]["fiduciary_entity"]
@@ -2152,6 +2231,7 @@ export type Database = {
           anchor_transfer_amount?: number | null
           anchor_transfer_amount_note?: string | null
           audit_booked_at?: string | null
+          causal_pipeline_status?: string | null
           created_at?: string
           family_id: string
           fiduciary_entity?: Database["public"]["Enums"]["fiduciary_entity"]
@@ -2195,6 +2275,7 @@ export type Database = {
           anchor_transfer_amount?: number | null
           anchor_transfer_amount_note?: string | null
           audit_booked_at?: string | null
+          causal_pipeline_status?: string | null
           created_at?: string
           family_id?: string
           fiduciary_entity?: Database["public"]["Enums"]["fiduciary_entity"]

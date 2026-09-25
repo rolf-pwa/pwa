@@ -53,7 +53,7 @@ type Georgia2Lead = {
   domain: string;
   catalyst: string;
   chosen_pathway: string;
-  scale: number;
+  scale: number | null;
   answers: Record<string, unknown>;
   status: string;
   created_at: string;
@@ -428,7 +428,9 @@ export default function Leads() {
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <Badge variant="outline" className="text-[10px] capitalize">{lead.domain}</Badge>
-                          <Badge variant="secondary" className="text-[10px]">{formatCurrency(lead.scale)}</Badge>
+                          {lead.scale != null && (
+                            <Badge variant="secondary" className="text-[10px]">{formatCurrency(lead.scale)}</Badge>
+                          )}
                         </div>
                       </div>
 

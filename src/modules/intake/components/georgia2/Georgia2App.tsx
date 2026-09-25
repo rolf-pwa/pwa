@@ -33,7 +33,6 @@ function Shell({ embed }: { embed?: boolean }) {
       domain: state.domain,
       catalyst: state.catalyst,
       answers: state.answers as Record<string, unknown>,
-      scale: state.scale,
       chosen_pathway: state.chosenPathway,
       reached_lead_capture: state.step >= 4,
       lead_captured: state.step >= 6,
