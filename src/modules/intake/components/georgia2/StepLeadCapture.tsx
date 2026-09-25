@@ -2,11 +2,12 @@ import { useGeorgia2 } from "./state";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Label } from "@/shared/components/ui/label";
-import { Lock } from "lucide-react";
+import { Loader2, Lock } from "lucide-react";
 import { z } from "zod";
 import { useState } from "react";
 import { trackGeorgia2 } from "@/modules/intake/lib/session-tracker";
 import { BackLink, Question, WizardProgress, wizardProgress } from "./WizardParts";
+import { submitLead } from "./submitLead";
 
 const ContactSchema = z.object({
   first_name: z.string().trim().min(1, "First name required").max(80),
@@ -14,17 +15,15 @@ const ContactSchema = z.object({
   mobile: z.string().trim().max(40).optional().or(z.literal("")),
 });
 
-// The step-4 screen -- reached right after the diagnostic questions,
-// before the results, directives, and pathway are ever shown (they stay
-// gated until this is submitted). This step only
-// validates and locally stores contact info; the actual submission to
-// georgia2-lead happens later, in StepResults.tsx, once a pathway is
-// chosen too (moved there when this step's position in the flow changed).
+// The step-4 screen -- reached right after the diagnostic questions, before
+// the results and action plan are shown (they stay gated until this is
+// submitted). Submitting creates the lead and the server emails the results
+// automatically; the results screen is only revealed once that succeeds.
 export function StepLeadCapture() {
   const { state, dispatch } = useGeorgia2();
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
     const parsed = ContactSchema.safeParse(state.contact);
@@ -36,8 +35,17 @@ export function StepLeadCapture() {
       setErrors(errs);
       return;
     }
-    trackGeorgia2({ reached_lead_capture: true, final_phase: "lead_capture" });
-    dispatch({ type: "set_step", step: 5 });
+    dispatch({ type: "submitting", value: true });
+    dispatch({ type: "submit_error", error: null });
+    try {
+      await submitLead(state, "confidential_roadmap");
+      trackGeorgia2({ lead_captured: true, reached_lead_capture: true, final_phase: "complete", ended: true });
+      dispatch({ type: "set_step", step: 5 });
+    } catch (err) {
+      dispatch({ type: "submit_error", error: err instanceof Error ? err.message : "Something went wrong" });
+    } finally {
+      dispatch({ type: "submitting", value: false });
+    }
   };
 
   const { n } = wizardProgress(state);
@@ -47,7 +55,7 @@ export function StepLeadCapture() {
       <WizardProgress />
       <Question
         number={n}
-        hint="Your Sovereignty Snapshot and prescribed directives are ready. Enter your details to unlock them — just enough to personalize your pathway and follow up privately."
+        hint="Your Sovereignty Snapshot and prescribed directives are ready. Enter your details to unlock them — we'll email you a copy too. Just enough to follow up privately, nothing more."
       >
         Where should we send your confidential results?
       </Question>
@@ -96,9 +104,16 @@ export function StepLeadCapture() {
           <span>Montréal data pinning. Zero tracking cookies. Your details never leave Canadian infrastructure.</span>
         </p>
 
+        {state.submitError && (
+          <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+            {state.submitError}
+          </div>
+        )}
+
         <div className="flex items-center justify-between pt-2">
           <BackLink onClick={() => dispatch({ type: "set_step", step: 3 })} />
-          <Button type="submit" size="lg" className="mt-8">
+          <Button type="submit" size="lg" className="mt-8" disabled={state.submitting}>
+            {state.submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Reveal My Results
           </Button>
         </div>

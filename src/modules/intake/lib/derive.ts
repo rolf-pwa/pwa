@@ -402,11 +402,31 @@ export type Pathway =
   // Lower-commitment path (Causal AI Platform Phase 0 / "Ask Georgia"):
   // email-gated roadmap delivery, no purchase or call required.
   | "confidential_roadmap"
+  // Visitor chose "Talk It Through" on the results screen.
+  | "clarity_call"
   // Legacy values retained so historical lead rows still type-check.
   | "vfo_stabilization"
   | "vfo_catalyst_guide"
   | "standalone_build"
   | "academy_pass";
+
+/** The three-step plan shown on the results screen. Keep in sync with ACTION_PLAN in georgia2-lead/index.ts. */
+export const ACTION_PLAN: { title: string; detail: string }[] = [
+  {
+    title: "Institute a 90-day (minimum) Stabilization Period",
+    detail:
+      "Halt all irreversible commitments. Do not sign discretionary investment mandates or respond to financial solicitations until your footing is steady.",
+  },
+  {
+    title: "Deposit funds into a secure Holding Account",
+    detail: "Park incoming capital somewhere secure and insured, so nothing is deployed before there is a plan.",
+  },
+  {
+    title: "Conduct a Sovereignty Survey",
+    detail:
+      "A working session that reviews your financial system, runs an Immediate Risk Scan, and leaves you with a 30-Day Action Framework.",
+  },
+];
 
 export const SURVEY_PRICE: Record<Domain, number> = {
   personal: 750,
@@ -606,22 +626,9 @@ export function georgiaInsights(
   }
 
 
-  if (gauges.noiseStrain >= 70) {
-    insights.push({
-      tag: "Noise Exposure",
-      body:
-        "With many eyes on this transition, the noise level around you is incredibly high. You have a legal and emotional right to step back. The single best decision right now is to declare a Quiet Period while we sort the sequence.",
-    });
-  }
-
-  if (gauges.taxDragRisk >= 70) {
-    insights.push({
-      tag: "Tax Exposure",
-      body:
-        "There are structural tax drags apparent in your profile. In British Columbia, the sequence of how you receive and shelter capital dictates what you keep. Let's address tax exposures before any money moves.",
-    });
-  }
-
+  // Order matters (person first): Decision Readiness, Governance Readiness,
+  // Noise Exposure, then Tax Exposure. Keep in sync with
+  // computeNarrativeInsights in georgia2-lead/index.ts.
   if (gauges.readiness <= 40) {
     insights.push({
       tag: "Decision Readiness",
@@ -630,12 +637,31 @@ export function georgiaInsights(
     });
   }
 
-  // Keep in sync with computeNarrativeInsights in georgia2-lead/index.ts.
   if (gauges.structureSafety <= 40) {
     insights.push({
-      tag: "Governance Structure",
+      tag: "Governance Readiness",
       body:
         "Without a written charter and professionals working as one team, decisions get made case-by-case, under pressure. Putting your family boundaries and the purpose of your capital in writing is the durable fix.",
+    });
+  }
+
+  if (gauges.noiseStrain >= 70) {
+    insights.push({
+      tag: "Noise Exposure",
+      body:
+        "With many eyes on this transition, the noise level around you is incredibly high. You have a legal and emotional right to step back. The single best decision right now is to declare a Quiet Period while we sort the sequence.",
+    });
+  }
+
+  const probateExposure = catalyst === "inheritance" && answers.probate === "yes";
+  if (gauges.taxDragRisk >= 70 || probateExposure) {
+    insights.push({
+      tag: "Tax Exposure",
+      body:
+        "There are structural tax drags apparent in your profile. In British Columbia, the sequence of how you receive and shelter capital dictates what you keep. Let's address tax exposures before any money moves." +
+        (probateExposure
+          ? " BC probate fees run about 1.4% on estate value over $50,000 — and assets held in joint tenancy or a trust may bypass probate entirely, so structure matters before anything is distributed."
+          : ""),
     });
   }
 
@@ -674,11 +700,6 @@ export function bcContextNotes(
     }
   }
   if (domain === "personal") {
-    if (catalyst === "inheritance") {
-      notes.push(
-        "BC Probate fees: ~1.4% on estates over $50,000. Assets in joint tenancy or trust may bypass probate."
-      );
-    }
     if (catalyst === "divorce_restructuring") {
       notes.push("BC Family Law Act: family property is presumed 50/50 unless a cohabitation or marriage agreement applies.");
     }
@@ -688,9 +709,6 @@ export function bcContextNotes(
     if (catalyst === "sudden_windfall") {
       notes.push("A 90-day Quiet Period in a separate high-interest account is the strongest first structural move.");
     }
-  }
-  if (notes.length === 0) {
-    notes.push("Complete Steps 1–3 to reveal your BC-specific context.");
   }
   return notes;
 }

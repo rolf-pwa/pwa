@@ -5,7 +5,6 @@ import { StepCatalyst } from "./StepCatalyst";
 import { StepDiagnostic } from "./StepDiagnostic";
 import { StepResults } from "./StepResults";
 import { StepLeadCapture } from "./StepLeadCapture";
-import { StepSuccess } from "./StepSuccess";
 import { trackGeorgia2, useGeorgia2ExitBeacon, type Georgia2SessionPatch } from "@/modules/intake/lib/session-tracker";
 
 // Maps the Stepper's 5 labeled steps (Domain/Catalyst/Diagnostic/
@@ -35,8 +34,8 @@ function Shell({ embed }: { embed?: boolean }) {
       answers: state.answers as Record<string, unknown>,
       chosen_pathway: state.chosenPathway,
       reached_lead_capture: state.step >= 4,
-      lead_captured: state.step >= 6,
-      final_phase: state.step >= 6 ? "complete" : state.step >= 4 ? "lead_capture" : "chat",
+      lead_captured: state.step >= 5,
+      final_phase: state.step >= 5 ? "complete" : state.step >= 4 ? "lead_capture" : "chat",
     }),
     state.sessionKey
   );
@@ -110,7 +109,6 @@ function Shell({ embed }: { embed?: boolean }) {
           {state.step === 3 && <StepDiagnostic />}
           {state.step === 4 && <StepLeadCapture />}
           {state.step === 5 && <StepResults />}
-          {state.step === 6 && <StepSuccess />}
         </div>
 
         <p className="mt-6 text-center text-[10px] uppercase tracking-widest text-muted-foreground">

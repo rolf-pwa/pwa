@@ -30,36 +30,63 @@ function bucketNoiseExposure(noiseStrain: number): "Low" | "Moderate" | "High" |
 // outbound email, so the content must come from server-trusted inputs only.
 function computeNarrativeInsights(
   risk: z.infer<typeof RiskScoresSchema> | null,
+  catalyst: string,
+  answers: Record<string, unknown>,
 ): { tag: string; body: string }[] {
   if (!risk) return [];
   const insights: { tag: string; body: string }[] = [];
-  if (risk.noise_strain >= 70) {
-    insights.push({
-      tag: "Noise Exposure",
-      body: "With many eyes on this transition, the noise level around you is incredibly high. You have a legal and emotional right to step back. The single best decision right now is to declare a Quiet Period while we sort the sequence.",
-    });
-  }
-  if (risk.tax_drag_risk >= 70) {
-    insights.push({
-      tag: "Tax Exposure",
-      body: "There are structural tax drags apparent in your profile. In British Columbia, the sequence of how you receive and shelter capital dictates what you keep. Let's address tax exposures before any money moves.",
-    });
-  }
+  // Order matters (person first): Decision Readiness, Governance Readiness,
+  // Noise Exposure, then Tax Exposure -- mirrors georgiaInsights() in derive.ts.
   if (risk.readiness_score <= 40) {
     insights.push({
       tag: "Decision Readiness",
       body: "It is completely normal to feel paralyzed right now. Your nervous system is catching up with a massive life change. We will prioritize reducing your cognitive overhead — no major plans are needed today.",
     });
   }
-  // Keep in sync with georgiaInsights() in src/modules/intake/lib/derive.ts.
   if (risk.structure_safety <= 40) {
     insights.push({
-      tag: "Governance Structure",
+      tag: "Governance Readiness",
       body: "Without a written charter and professionals working as one team, decisions get made case-by-case, under pressure. Putting your family boundaries and the purpose of your capital in writing is the durable fix.",
+    });
+  }
+  if (risk.noise_strain >= 70) {
+    insights.push({
+      tag: "Noise Exposure",
+      body: "With many eyes on this transition, the noise level around you is incredibly high. You have a legal and emotional right to step back. The single best decision right now is to declare a Quiet Period while we sort the sequence.",
+    });
+  }
+  const probateExposure = catalyst === "inheritance" && answers.probate === "yes";
+  if (risk.tax_drag_risk >= 70 || probateExposure) {
+    insights.push({
+      tag: "Tax Exposure",
+      body:
+        "There are structural tax drags apparent in your profile. In British Columbia, the sequence of how you receive and shelter capital dictates what you keep. Let's address tax exposures before any money moves." +
+        (probateExposure
+          ? " BC probate fees run about 1.4% on estate value over $50,000 — and assets held in joint tenancy or a trust may bypass probate entirely, so structure matters before anything is distributed."
+          : ""),
     });
   }
   return insights;
 }
+
+// Keep in sync with ACTION_PLAN in src/modules/intake/lib/derive.ts.
+const ACTION_PLAN: { title: string; detail: string }[] = [
+  {
+    title: "Institute a 90-day (minimum) Stabilization Period",
+    detail:
+      "Halt all irreversible commitments. Do not sign discretionary investment mandates or respond to financial solicitations until your footing is steady.",
+  },
+  {
+    title: "Deposit funds into a secure Holding Account",
+    detail:
+      "Park incoming capital somewhere secure and insured, so nothing is deployed before there is a plan.",
+  },
+  {
+    title: "Conduct a Sovereignty Survey",
+    detail:
+      "A working session that reviews your financial system, runs an Immediate Risk Scan, and leaves you with a 30-Day Action Framework.",
+  },
+];
 
 function computeBcContextNotes(domain: "corporate" | "personal", catalyst: string, answers: Record<string, unknown>): string[] {
   const notes: string[] = [];
@@ -76,9 +103,6 @@ function computeBcContextNotes(domain: "corporate" | "personal", catalyst: strin
     }
   }
   if (domain === "personal") {
-    if (catalyst === "inheritance") {
-      notes.push("BC Probate fees: ~1.4% on estates over $50,000. Assets in joint tenancy or trust may bypass probate.");
-    }
     if (catalyst === "divorce_restructuring") {
       notes.push("BC Family Law Act: family property is presumed 50/50 unless a cohabitation or marriage agreement applies.");
     }
@@ -137,6 +161,7 @@ const BodySchema = z.object({
     "survey",
     "academy_guide",
     "confidential_roadmap",
+    "clarity_call",
     // legacy values
     "vfo_stabilization",
     "vfo_catalyst_guide",
@@ -187,6 +212,14 @@ function roadmapEmailHtml(opts: {
         .join("")
     : "";
 
+  const actionPlanHtml = `
+      <p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;margin:20px 0 8px;">Your Action Plan</p>
+      <ol style="margin:0;padding-left:18px;">
+        ${ACTION_PLAN.map(
+          (a) => `<li style="font-size:13px;line-height:1.6;color:#334155;margin-bottom:8px;"><strong style="color:#1e293b;">${escapeHtml(a.title)}</strong><br/>${escapeHtml(a.detail)}</li>`
+        ).join("")}
+      </ol>`;
+
   const bcNotesHtml = bcNotes.length
     ? `
       <p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;margin:20px 0 8px;">British Columbia Context</p>
@@ -204,7 +237,8 @@ function roadmapEmailHtml(opts: {
       ${gaugeRows ? `<table style="width:100%;border-collapse:collapse;margin:16px 0;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;">${gaugeRows}</table>` : ""}
       ${insightsHtml ? `<div style="margin:16px 0;">${insightsHtml}</div>` : ""}
       ${bcNotesHtml}
-      <p style="font-size:14px;line-height:1.6;margin-top:20px;">No pitch, no commitment. When you're ready to go deeper, the Sovereignty Survey is a 90-minute working session built around exactly what you've told Georgia — you leave with a Stabilization Map, an Immediate Risk Scan, and a 30-Day Action Framework.</p>
+      ${actionPlanHtml}
+      <p style="font-size:14px;line-height:1.6;margin-top:20px;">No pitch, no commitment. When you're ready, the Sovereignty Survey is the next step.</p>
       <p style="font-size:14px;line-height:1.6;"><a href="https://www.prosperwise.ca/sovereignty-audit#pricing" style="color:#a37c58;">Learn more about the Sovereignty Survey →</a></p>
       <p style="font-size:14px;line-height:1.6;margin-top:24px;">— Rolf &amp; the ${APP_NAME} team</p>
     </div>
@@ -234,25 +268,45 @@ serve(async (req) => {
     const risk = data.risk_scores_calculated ?? null;
     const primaryNoiseExposure = risk ? bucketNoiseExposure(risk.noise_strain) : null;
 
-    // Insert the lead
-    const { data: lead, error: insertErr } = await supabase
+    // The lead is created once, when the visitor submits their contact
+    // details (results are emailed automatically at that moment). Later
+    // calls for the same session -- a pathway click, or re-submitting after
+    // going Back -- update that lead instead of creating a duplicate.
+    const { data: existing } = await supabase
       .from("georgia2_leads")
-      .insert({
-        session_key: data.session_key,
-        first_name: data.first_name,
-        email: data.email,
-        mobile: data.mobile || null,
-        domain: data.domain,
-        catalyst: data.catalyst,
-        chosen_pathway: data.chosen_pathway,
-        scale: data.scale ?? null,
-        answers: data.answers,
-        risk_scores_calculated: risk,
-        primary_noise_exposure: primaryNoiseExposure,
-      })
-      .select("id")
-      .single();
-    if (insertErr) throw insertErr;
+      .select("id, email, chosen_pathway")
+      .eq("session_key", data.session_key)
+      .order("submitted_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const fields = {
+      first_name: data.first_name,
+      email: data.email,
+      mobile: data.mobile || null,
+      domain: data.domain,
+      catalyst: data.catalyst,
+      chosen_pathway: data.chosen_pathway,
+      scale: data.scale ?? null,
+      answers: data.answers,
+      risk_scores_calculated: risk,
+      primary_noise_exposure: primaryNoiseExposure,
+    };
+
+    let leadId: string;
+    if (existing) {
+      const { error: updateErr } = await supabase.from("georgia2_leads").update(fields).eq("id", existing.id);
+      if (updateErr) throw updateErr;
+      leadId = existing.id;
+    } else {
+      const { data: lead, error: insertErr } = await supabase
+        .from("georgia2_leads")
+        .insert({ session_key: data.session_key, ...fields })
+        .select("id")
+        .single();
+      if (insertErr) throw insertErr;
+      leadId = lead.id;
+    }
 
     // Mark session as captured
     await supabase
@@ -275,39 +329,48 @@ serve(async (req) => {
         { onConflict: "session_key" }
       );
 
-    // Best-effort staff notification via existing staff_notifications table
-    try {
-      await supabase.from("staff_notifications").insert({
-        title: `Georgia 2.0 lead · ${data.first_name}`,
-        body: `${data.domain} / ${data.catalyst} · ${data.chosen_pathway} · ${data.email}`,
-        source_type: "georgia2_lead",
-        link: "/leads",
-      });
-    } catch (notifyErr) {
-      console.warn("staff_notifications insert failed (non-fatal):", notifyErr);
+    // Best-effort staff notification via existing staff_notifications table.
+    // A new lead always notifies; an existing one only when they've now
+    // picked a next step (Survey / Talk It Through) -- the hot signal.
+    const pickedNextStep =
+      existing &&
+      existing.chosen_pathway !== data.chosen_pathway &&
+      (data.chosen_pathway === "survey" || data.chosen_pathway === "clarity_call");
+    if (!existing || pickedNextStep) {
+      try {
+        await supabase.from("staff_notifications").insert({
+          title: existing
+            ? `Georgia 2.0 lead chose ${data.chosen_pathway.replace(/_/g, " ")} · ${data.first_name}`
+            : `Georgia 2.0 lead · ${data.first_name}`,
+          body: `${data.domain} / ${data.catalyst} · ${data.chosen_pathway} · ${data.email}`,
+          source_type: "georgia2_lead",
+          link: "/leads",
+        });
+      } catch (notifyErr) {
+        console.warn("staff_notifications insert failed (non-fatal):", notifyErr);
+      }
     }
 
-    // Confidential roadmap pathway: email the value exchange promised on
-    // the button ("Just Email My Confidential Roadmap"). Best-effort --
-    // never fail the whole submission (and never block the visitor's
-    // already-successful lead capture) if Gmail send has a problem.
-    if (data.chosen_pathway === "confidential_roadmap") {
+    // Email the results automatically the moment the lead is submitted (or
+    // if they went Back and corrected their email). Best-effort -- never
+    // fail the visitor's already-successful submission over a Gmail problem.
+    if (!existing || existing.email !== data.email) {
       try {
         const catalystLabel = data.catalyst.replace(/_/g, " ");
         const html = roadmapEmailHtml({
           firstName: data.first_name,
           catalystLabel,
           risk,
-          insights: computeNarrativeInsights(risk),
+          insights: computeNarrativeInsights(risk, data.catalyst, data.answers),
           bcNotes: computeBcContextNotes(data.domain, data.catalyst, data.answers),
         });
         const subject = "Your Confidential Roadmap — ProsperWise";
 
-        // Reflecting the lead's own self-reported catalyst back to
-        // them isn't the leak this shield exists to prevent (same
-        // rationale send-contact-email uses for the same relaxation) --
-        // every other outbound-PII rule (SIN, account numbers, health
-        // terms) still applies in full.
+        // Reflecting the lead's own self-reported answers back to them
+        // isn't the leak this shield exists to prevent (same rationale
+        // send-contact-email uses for the same relaxation) -- every other
+        // outbound-PII rule (SIN, account numbers, health terms) still
+        // applies in full.
         const pii = checkOutboundPii(`${subject}\n${html}`, { skipDollarAmountRule: true });
         if (pii.blocked) {
           console.warn(`[georgia2-lead] PII Shield blocked roadmap email: ${pii.reason}`);
@@ -334,7 +397,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, lead_id: lead.id, chosen_pathway: data.chosen_pathway }),
+      JSON.stringify({ success: true, lead_id: leadId, chosen_pathway: data.chosen_pathway }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {

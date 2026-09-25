@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo, useReducer, useRef, type ReactNode } from "react";
 import type { Answer, Answers, Catalyst, Domain, Pathway } from "@/modules/intake/lib/derive";
 
-export type Step = 1 | 2 | 3 | 4 | 5 | 6; // 6 = success
+export type Step = 1 | 2 | 3 | 4 | 5; // 5 = results
 
 export interface Contact {
   first_name: string;
@@ -67,9 +67,6 @@ function reducer(state: Georgia2State, action: Action): Georgia2State {
     case "set_answer":
       return { ...state, answers: { ...state.answers, [action.key]: action.value } };
     case "set_pathway":
-      // No step jump here -- pathway is now chosen from within StepResults
-      // itself (step 5, after lead capture), not by transitioning to a
-      // still-to-come contact form. See StepResults.tsx's pick().
       return { ...state, chosenPathway: action.pathway };
     case "set_contact":
       return { ...state, contact: { ...state.contact, ...action.contact } };

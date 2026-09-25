@@ -51,6 +51,21 @@ describe("georgia2 derive", () => {
     expect(ins.some((i) => i.tag === "Noise Exposure")).toBe(true);
   });
 
+  it("orders directives Decision Readiness, Governance Readiness, Noise Exposure, then Tax Exposure", () => {
+    const ins = georgiaInsights("personal", "inheritance", {
+      nervous_system: "overload",
+      governance: "none",
+      advisory: "siloed",
+      probate: "yes",
+    });
+    const tags = ins.map((i) => i.tag).filter((t) => t !== "Your Next Step");
+    expect(tags).toEqual(["Decision Readiness", "Governance Readiness", "Noise Exposure", "Tax Exposure"]);
+  });
+  it("folds probate into Tax Exposure instead of a separate BC note", () => {
+    expect(bcContextNotes("personal", "inheritance", { probate: "yes" }).some((n) => n.includes("Probate"))).toBe(false);
+    const tax = georgiaInsights("personal", "inheritance", { probate: "yes" }).find((i) => i.tag === "Tax Exposure");
+    expect(tax?.body).toContain("probate");
+  });
   it("asks the person-first questions before any catalyst-specific ones", () => {
     const qs = questionsFor("inheritance");
     expect(qs.slice(0, 3).map((q) => q.key)).toEqual(["nervous_system", "governance", "advisory"]);
@@ -69,6 +84,6 @@ describe("georgia2 derive", () => {
   });
   it("emits a governance insight when structure safety is low", () => {
     const ins = georgiaInsights("personal", "inheritance", { governance: "none", advisory: "siloed" });
-    expect(ins.some((i) => i.tag === "Governance Structure")).toBe(true);
+    expect(ins.some((i) => i.tag === "Governance Readiness")).toBe(true);
   });
 });
