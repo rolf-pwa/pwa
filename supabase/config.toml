@@ -172,3 +172,6 @@ verify_jwt = false
 
 [functions.georgia2-abandoned-cart]
 verify_jwt = false
+
+[functions.georgia2-analyze]
+verify_jwt = false

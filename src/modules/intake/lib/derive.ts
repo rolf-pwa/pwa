@@ -570,14 +570,18 @@ export interface DiagnosticPayload {
  * deterministically from the chosen options -- no LLM involved. Anything the
  * visitor didn't answer stays null rather than being guessed.
  */
-export function deriveDiagnosticPayload(catalyst: Catalyst, answers: Answers): DiagnosticPayload {
+export function deriveDiagnosticPayload(
+  catalyst: Catalyst,
+  answers: Answers,
+  spokeOverride?: Spoke
+): DiagnosticPayload {
   const hub: HubValues = {};
   for (const q of questionsFor(catalyst)) {
     const chosen = q.options.find((o) => o.id === answers[q.key]);
     if (chosen?.hub) Object.assign(hub, chosen.hub);
   }
   return {
-    spoke: CATALYST_SPOKE[catalyst],
+    spoke: spokeOverride ?? CATALYST_SPOKE[catalyst],
     emotional_state: hub.emotional_state ?? null,
     relational_state: hub.relational_state ?? null,
     timeline_urgency: hub.timeline_urgency ?? null,
@@ -600,6 +604,8 @@ export type Pathway =
   | "confidential_roadmap"
   // Visitor chose "Talk It Through" on the results screen.
   | "clarity_call"
+  // Emergency_Override visitor who asked for a personal reply.
+  | "urgent_contact"
   // Legacy values retained so historical lead rows still type-check.
   | "vfo_stabilization"
   | "vfo_catalyst_guide"

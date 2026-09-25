@@ -75,6 +75,11 @@ export function StepResults() {
         </div>
         <p className="shrink-0 text-right text-sm text-muted-foreground">{CATALYST_LABELS[state.catalyst]}</p>
       </div>
+      {state.validationText && (
+        <p className="mt-6 border-l-2 border-accent pl-4 font-serif text-lg italic leading-relaxed text-foreground">
+          {state.validationText}
+        </p>
+      )}
       <p className="mt-3 text-sm text-muted-foreground">
         A copy is on its way to <span className="text-foreground">{state.contact.email}</span>.
       </p>

@@ -3,9 +3,10 @@ import { useGeorgia2 } from "./state";
 import { questionsFor } from "@/modules/intake/lib/derive";
 import { trackGeorgia2 } from "@/modules/intake/lib/session-tracker";
 import { BackLink, OptionCard, Question, WizardProgress, wizardProgress } from "./WizardParts";
+import { StepFreeform } from "./StepFreeform";
 
 // One screen per question -- person-first (nervous system, governance,
-// advisory), then the catalyst-specific ones. Picking an answer advances
+// advisory), then the catalyst-specific ones, then the optional free-text screen. Picking an answer advances
 // automatically after a beat (long enough to see the selection register);
 // Back walks the same screens in reverse.
 export function StepDiagnostic() {
@@ -17,9 +18,9 @@ export function StepDiagnostic() {
   useEffect(() => () => clearTimeout(advanceTimer.current), []);
 
   const { n } = wizardProgress(state);
-  if (!question) return null;
+  // After the last question comes the optional free-text screen.
+  if (!question) return questions.length > 0 ? <StepFreeform /> : null;
 
-  const isLast = index >= questions.length - 1;
   const value = state.answers[question.key] ?? null;
 
   const back = () => {
@@ -45,8 +46,7 @@ export function StepDiagnostic() {
               trackGeorgia2({ answers: { ...state.answers, [question.key]: o.id } as Record<string, unknown> });
               clearTimeout(advanceTimer.current);
               advanceTimer.current = setTimeout(() => {
-                if (isLast) dispatch({ type: "set_step", step: 3 });
-                else dispatch({ type: "set_question_index", index: index + 1 });
+                dispatch({ type: "set_question_index", index: index + 1 });
               }, 180);
             }}
           />

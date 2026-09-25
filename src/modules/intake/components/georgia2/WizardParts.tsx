@@ -7,15 +7,17 @@ import { cn } from "@/shared/lib/utils";
 // Used only until a transition is chosen and the real question count is known.
 const ESTIMATED_QUESTION_COUNT = 7;
 
+export const FREEFORM_LABEL = "In your words";
+
 export function wizardProgress(state: Georgia2State): { n: number; total: number; label: string } {
   const questions = state.catalyst ? questionsFor(state.catalyst) : null;
   const qCount = questions?.length ?? ESTIMATED_QUESTION_COUNT;
-  // Transition, each question, Confidential.
-  const total = qCount + 2;
+  // Transition, each question, the optional free-text screen, Confidential.
+  const total = qCount + 3;
   if (state.step === 1) return { n: 1, total, label: "Transition" };
   if (state.step === 2) {
     const q = questions?.[state.questionIndex];
-    return { n: 2 + state.questionIndex, total, label: q ? q.key.replace(/_/g, " ") : "Diagnostic" };
+    return { n: 2 + state.questionIndex, total, label: q ? q.key.replace(/_/g, " ") : FREEFORM_LABEL };
   }
   return { n: total, total, label: "Confidential" };
 }

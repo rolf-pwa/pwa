@@ -57,6 +57,9 @@ type Georgia2Lead = {
   answers: Record<string, unknown>;
   status: string;
   created_at: string;
+  unstructured_stress_quote?: string | null;
+  freeform_extraction?: { threat_detected?: boolean; threat_source?: string | null } | null;
+  validation_text?: string | null;
 };
 
 // Normalized shape for the shared convert-to-contact dialog, regardless of source.
@@ -427,6 +430,14 @@ export default function Leads() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
+                          {lead.chosen_pathway === "urgent_contact" && (
+                            <Badge variant="destructive" className="text-[10px]">URGENT · asked for a personal reply</Badge>
+                          )}
+                          {lead.chosen_pathway !== "urgent_contact" && lead.freeform_extraction?.threat_detected && (
+                            <Badge variant="outline" className="border-destructive/50 text-[10px] text-destructive">
+                              Free text flagged
+                            </Badge>
+                          )}
                           {lead.status === "pending_survey_payment" && (
                             <Badge className="text-[10px]">Survey clicked · awaiting payment</Badge>
                           )}
@@ -446,6 +457,12 @@ export default function Leads() {
                           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Chosen Pathway</p>
                           <p className="text-sm text-foreground">{lead.chosen_pathway.replace(/_/g, " ")}</p>
                         </div>
+                        {lead.unstructured_stress_quote && (
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">In their words</p>
+                            <p className="mt-1 whitespace-pre-wrap text-sm italic text-foreground">{lead.unstructured_stress_quote}</p>
+                          </div>
+                        )}
                         {lead.answers && Object.keys(lead.answers).length > 0 && (
                           <div>
                             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Diagnostic Answers</p>

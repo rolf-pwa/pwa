@@ -3,6 +3,7 @@ import { Georgia2Provider, useGeorgia2 } from "./state";
 import { StepTransition } from "./StepTransition";
 import { StepDiagnostic } from "./StepDiagnostic";
 import { StepResults } from "./StepResults";
+import { StepEmergency } from "./StepEmergency";
 import { StepLeadCapture } from "./StepLeadCapture";
 import { trackGeorgia2, useGeorgia2ExitBeacon, type Georgia2SessionPatch } from "@/modules/intake/lib/session-tracker";
 
@@ -28,9 +29,11 @@ function Shell({ embed }: { embed?: boolean }) {
       catalyst: state.catalyst,
       answers: state.answers as Record<string, unknown>,
       chosen_pathway: state.chosenPathway,
-      reached_lead_capture: state.step >= 3,
-      lead_captured: state.step >= 4,
-      final_phase: state.step >= 4 ? "complete" : state.step >= 3 ? "lead_capture" : "chat",
+      // Step 5 is the safety screen, which sits outside the funnel: it is
+      // neither the contact gate nor a captured lead.
+      reached_lead_capture: state.step === 3 || state.step === 4,
+      lead_captured: state.step === 4,
+      final_phase: state.step === 4 ? "complete" : state.step === 3 ? "lead_capture" : "chat",
     }),
     state.sessionKey
   );
@@ -103,6 +106,7 @@ function Shell({ embed }: { embed?: boolean }) {
           {state.step === 2 && <StepDiagnostic />}
           {state.step === 3 && <StepLeadCapture />}
           {state.step === 4 && <StepResults />}
+          {state.step === 5 && <StepEmergency />}
         </div>
 
         <p className="mt-6 text-center text-[10px] uppercase tracking-widest text-muted-foreground">

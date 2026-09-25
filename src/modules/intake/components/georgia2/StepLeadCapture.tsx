@@ -46,7 +46,8 @@ export function StepLeadCapture() {
     dispatch({ type: "submitting", value: true });
     dispatch({ type: "submit_error", error: null });
     try {
-      await submitLead(state, "confidential_roadmap");
+      const { validation } = await submitLead(state, "confidential_roadmap");
+      dispatch({ type: "set_validation", text: validation });
       trackGeorgia2({ lead_captured: true, reached_lead_capture: true, final_phase: "complete", ended: true });
       dispatch({ type: "set_step", step: 4 });
     } catch (err) {

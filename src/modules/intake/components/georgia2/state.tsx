@@ -1,12 +1,22 @@
 import { createContext, useContext, useMemo, useReducer, useRef, type ReactNode } from "react";
 import { domainForCatalyst, type Answer, type Answers, type Catalyst, type Domain, type Pathway } from "@/modules/intake/lib/derive";
 
-export type Step = 1 | 2 | 3 | 4; // 1 transition, 2 questions, 3 gate, 4 results
+export type Step = 1 | 2 | 3 | 4 | 5; // 1 transition, 2 questions (+ free text), 3 gate, 4 results, 5 safety screen
 
 export interface Contact {
   first_name: string;
   email: string;
   mobile: string;
+}
+
+/** What georgia2-analyze reported about the optional free-text answer. */
+export interface FreeformResult {
+  /** The exact text that was analyzed, so an unchanged resubmission is not re-sent. */
+  text: string;
+  threat_detected: boolean;
+  threat_source?: "keywords" | "model" | "verifier" | null;
+  emotional_state?: string | null;
+  primary_friction?: string | null;
 }
 
 export interface Georgia2State {
@@ -23,6 +33,10 @@ export interface Georgia2State {
   analyzed: boolean;
   submitting: boolean;
   submitError: string | null;
+  freeformText: string;
+  freeformResult: FreeformResult | null;
+  /** The acknowledgment paragraph returned when the lead was created. */
+  validationText: string | null;
 }
 
 type Action =
@@ -33,6 +47,9 @@ type Action =
   | { type: "set_pathway"; pathway: Pathway }
   | { type: "set_contact"; contact: Partial<Contact> }
   | { type: "analyzed" }
+  | { type: "set_freeform_text"; text: string }
+  | { type: "set_freeform_result"; result: FreeformResult | null }
+  | { type: "set_validation"; text: string | null }
   | { type: "submitting"; value: boolean }
   | { type: "submit_error"; error: string | null }
   | { type: "reset" };
@@ -54,6 +71,9 @@ function initial(): Georgia2State {
     analyzed: false,
     submitting: false,
     submitError: null,
+    freeformText: "",
+    freeformResult: null,
+    validationText: null,
   };
 }
 
@@ -71,6 +91,8 @@ function reducer(state: Georgia2State, action: Action): Georgia2State {
         answers: {},
         questionIndex: 0,
         analyzed: false,
+        freeformText: "",
+        freeformResult: null,
         step: 2,
       };
     case "set_answer":
@@ -79,6 +101,12 @@ function reducer(state: Georgia2State, action: Action): Georgia2State {
       return { ...state, chosenPathway: action.pathway };
     case "set_contact":
       return { ...state, contact: { ...state.contact, ...action.contact } };
+    case "set_freeform_text":
+      return { ...state, freeformText: action.text };
+    case "set_freeform_result":
+      return { ...state, freeformResult: action.result };
+    case "set_validation":
+      return { ...state, validationText: action.text };
     case "analyzed":
       return { ...state, analyzed: true };
     case "submitting":

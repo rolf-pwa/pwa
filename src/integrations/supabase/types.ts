@@ -1538,6 +1538,7 @@ export type Database = {
           email: string
           emotional_state: string | null
           first_name: string
+          freeform_extraction: Json | null
           id: string
           jurisdiction: string
           mobile: string | null
@@ -1555,6 +1556,7 @@ export type Database = {
           timeline_urgency: string | null
           unstructured_stress_quote: string | null
           updated_at: string
+          validation_text: string | null
         }
         Insert: {
           abandoned_cart_sent_at?: string | null
@@ -1567,6 +1569,7 @@ export type Database = {
           email: string
           emotional_state?: string | null
           first_name: string
+          freeform_extraction?: Json | null
           id?: string
           jurisdiction?: string
           mobile?: string | null
@@ -1584,6 +1587,7 @@ export type Database = {
           timeline_urgency?: string | null
           unstructured_stress_quote?: string | null
           updated_at?: string
+          validation_text?: string | null
         }
         Update: {
           abandoned_cart_sent_at?: string | null
@@ -1596,6 +1600,7 @@ export type Database = {
           email?: string
           emotional_state?: string | null
           first_name?: string
+          freeform_extraction?: Json | null
           id?: string
           jurisdiction?: string
           mobile?: string | null
@@ -1613,6 +1618,7 @@ export type Database = {
           timeline_urgency?: string | null
           unstructured_stress_quote?: string | null
           updated_at?: string
+          validation_text?: string | null
         }
         Relationships: [
           {
@@ -1626,6 +1632,7 @@ export type Database = {
       }
       georgia2_sessions: {
         Row: {
+          analyze_count: number
           answers: Json
           catalyst: string | null
           chosen_pathway: string | null
@@ -1653,6 +1660,7 @@ export type Database = {
           user_agent: string | null
         }
         Insert: {
+          analyze_count?: number
           answers?: Json
           catalyst?: string | null
           chosen_pathway?: string | null
@@ -1680,6 +1688,7 @@ export type Database = {
           user_agent?: string | null
         }
         Update: {
+          analyze_count?: number
           answers?: Json
           catalyst?: string | null
           chosen_pathway?: string | null

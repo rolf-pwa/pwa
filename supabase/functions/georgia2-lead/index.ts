@@ -4,6 +4,9 @@ import { z } from "https://esm.sh/zod@3.25.76";
 import { checkOutboundPii } from "../_shared/pii-shield.ts";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { buildRawEmail, base64UrlEncode } from "../_shared/gmail-mime.ts";
+import { sendServiceEmail, escapeHtml as escapeHtmlShared } from "../_shared/service-email.ts";
+import { fallbackValidation } from "../_shared/georgia-safety.ts";
+import { generateValidation, loadServiceAccount } from "../_shared/georgia-llm.ts";
 import {
   actionPlanFor,
   GOVERNANCE_SHOW_AT,
@@ -191,6 +194,8 @@ const BodySchema = z.object({
     "academy_guide",
     "confidential_roadmap",
     "clarity_call",
+    // Emergency_Override visitor who asked for a personal reply.
+    "urgent_contact",
     // legacy values
     "vfo_stabilization",
     "vfo_catalyst_guide",
@@ -209,6 +214,20 @@ const BodySchema = z.object({
   risk_scores_calculated: RiskScoresSchema.nullable().optional(),
   // Optional so an older cached client build still submits successfully.
   diagnostic_payload: DiagnosticPayloadSchema.nullable().optional(),
+  // The optional free-text answer and what georgia2-analyze extracted from it.
+  unstructured_stress_quote: z.string().trim().max(1000).nullable().optional(),
+  freeform_extraction: z
+    .object({
+      threat_detected: z.boolean(),
+      threat_source: z.enum(["keywords", "model", "verifier"]).nullable().optional(),
+      emotional_state: z.enum(["relief", "anxiety", "guilt", "grief", "loss_of_identity", "euphoria"]).nullable().optional(),
+      primary_friction: z
+        .enum(["family_pressure", "professional_pressure", "internal_paralysis", "operational_overload", "liquidity_gap", "no_friction"])
+        .nullable()
+        .optional(),
+    })
+    .nullable()
+    .optional(),
 });
 
 const APP_NAME = "ProsperWise";
@@ -220,8 +239,9 @@ function roadmapEmailHtml(opts: {
   risk: z.infer<typeof RiskScoresSchema> | null;
   insights: { tag: string; body: string; details?: InsightDetail[]; nextMove?: string }[];
   bcNotes: string[];
+  validation?: string | null;
 }): string {
-  const { firstName, catalyst, risk, insights, bcNotes } = opts;
+  const { firstName, catalyst, risk, insights, bcNotes, validation } = opts;
   const gaugeRows = risk
     ? `
       <tr><td style="padding:6px 0;color:#334155;font-family:'DM Sans',sans-serif;font-size:14px;">Tax Drag Risk</td><td style="padding:6px 0;text-align:right;font-weight:600;color:#1e293b;font-family:'DM Sans',sans-serif;font-size:14px;">${risk.tax_drag_risk}/100</td></tr>
@@ -270,6 +290,7 @@ function roadmapEmailHtml(opts: {
       <p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;">Sovereignty Operating System™</p>
       <h2 style="font-family:'Cormorant Garamond',serif;font-weight:300;font-size:24px;color:#1e293b;margin:4px 0 16px;">Your Confidential Roadmap</h2>
       <p style="font-size:14px;line-height:1.6;">Hi ${escapeHtml(firstName)},</p>
+      ${validation ? `<p style="font-size:14px;line-height:1.6;font-style:italic;">${escapeHtml(validation)}</p>` : ""}
       <p style="font-size:14px;line-height:1.6;">Thanks for walking through Georgia's diagnostic. Based on what you shared about ${vocabFor(catalyst).eventPhrase}, here's your private risk snapshot:</p>
       ${gaugeRows ? `<table style="width:100%;border-collapse:collapse;margin:16px 0;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;">${gaugeRows}</table>` : ""}
       ${insightsHtml ? `<div style="margin:16px 0;">${insightsHtml}</div>` : ""}
@@ -312,11 +333,43 @@ serve(async (req) => {
     // going Back -- update that lead instead of creating a duplicate.
     const { data: existing } = await supabase
       .from("georgia2_leads")
-      .select("id, email, chosen_pathway, status")
+      .select("id, email, chosen_pathway, status, validation_text")
       .eq("session_key", data.session_key)
       .order("submitted_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    // An Emergency_Override visitor asked for a personal reply: no roadmap
+    // email, no generated copy, and an urgent staff alert instead.
+    const isEmergency = payload?.spoke === "Emergency_Override" || data.chosen_pathway === "urgent_contact";
+    const extraction = data.freeform_extraction ?? null;
+
+    // The acknowledgment paragraph is written once, when the lead is created,
+    // so the results screen and the emailed roadmap match. The model only
+    // sees category labels (never the visitor's own words) and its output is
+    // validated; anything rejected falls back to deterministic copy.
+    // A visitor who first asked for a personal reply and then chose to carry on
+    // with the regular diagnostic is treated as a fresh lead for this purpose:
+    // they have not yet been given an acknowledgment or a roadmap.
+    const startingFresh = !existing || (existing.chosen_pathway === "urgent_contact" && !isEmergency);
+    let validation: string | null = existing?.validation_text ?? null;
+    if (startingFresh && !isEmergency) {
+      const emotional = payload?.emotional_state ?? extraction?.emotional_state ?? null;
+      const friction = payload?.primary_friction ?? extraction?.primary_friction ?? null;
+      let generated: string | null = null;
+      try {
+        generated = await generateValidation(await loadServiceAccount(), {
+          spoke: payload?.spoke ?? null,
+          emotional_state: emotional,
+          primary_friction: friction,
+          relational_state: payload?.relational_state ?? null,
+          timeline_urgency: payload?.timeline_urgency ?? null,
+        });
+      } catch (e) {
+        console.error("[georgia2-lead] validation setup failed, using fallback:", e);
+      }
+      validation = generated ?? fallbackValidation(payload?.spoke ?? null, emotional, friction);
+    }
 
     const fields = {
       first_name: data.first_name,
@@ -335,6 +388,9 @@ serve(async (req) => {
       relational_state: payload?.relational_state ?? null,
       timeline_urgency: payload?.timeline_urgency ?? null,
       primary_friction: payload?.primary_friction ?? null,
+      unstructured_stress_quote: data.unstructured_stress_quote || null,
+      freeform_extraction: extraction,
+      ...(startingFresh && !isEmergency ? { validation_text: validation } : {}),
     };
 
     // Clicking "Start the Sovereignty Survey" puts the lead in the payment
@@ -396,12 +452,17 @@ serve(async (req) => {
       (data.chosen_pathway === "survey" || data.chosen_pathway === "clarity_call");
     if (!existing || pickedNextStep) {
       try {
+        const flagged = extraction?.threat_detected
+          ? ` · ⚠ free-text answer flagged (${extraction.threat_source ?? "screened"})`
+          : "";
         await supabase.from("staff_notifications").insert({
-          title: existing
-            ? `Georgia 2.0 lead chose ${data.chosen_pathway.replace(/_/g, " ")} · ${data.first_name}`
-            : `Georgia 2.0 lead · ${data.first_name}`,
-          body: `${data.domain} / ${data.catalyst} · ${data.chosen_pathway} · ${data.email}`,
-          source_type: "georgia2_lead",
+          title: isEmergency
+            ? `URGENT — Georgia visitor flagged and asked for a personal reply · ${data.first_name}`
+            : existing
+              ? `Georgia 2.0 lead chose ${data.chosen_pathway.replace(/_/g, " ")} · ${data.first_name}`
+              : `Georgia 2.0 lead · ${data.first_name}`,
+          body: `${data.domain} / ${data.catalyst} · ${data.chosen_pathway} · ${data.email}${flagged}`,
+          source_type: isEmergency ? "georgia2_emergency" : "georgia2_lead",
           link: "/leads",
         });
       } catch (notifyErr) {
@@ -409,10 +470,25 @@ serve(async (req) => {
       }
     }
 
+    // Emergency_Override: the bell may not be watched, so also email Rolf the
+    // details directly (best-effort). The visitor gets no automated email.
+    if (isEmergency && !existing) {
+      await sendServiceEmail(supabase, {
+        to: "rolf@prosperwise.ca",
+        subject: `URGENT — Georgia visitor asked for a personal reply (${data.first_name})`,
+        html: `<div style="font-family:'DM Sans',sans-serif;font-size:14px;color:#334155;max-width:520px;">
+          <p><strong>A Georgia visitor's free-text answer was flagged for safety screening and they asked for a personal reply.</strong></p>
+          <p>Name: ${escapeHtmlShared(data.first_name)}<br/>Email: ${escapeHtmlShared(data.email)}${data.mobile ? `<br/>Mobile: ${escapeHtmlShared(data.mobile)}` : ""}<br/>Event: ${escapeHtmlShared(data.catalyst.replace(/_/g, " "))}</p>
+          <p>Their words:<br/><em>${escapeHtmlShared(data.unstructured_stress_quote ?? "(none recorded)")}</em></p>
+          <p style="color:#64748b;font-size:12px;">Screening source: ${escapeHtmlShared(String(extraction?.threat_source ?? "unknown"))}. Nothing was emailed to the visitor.</p>
+        </div>`,
+      });
+    }
+
     // Email the results automatically the moment the lead is submitted (or
     // if they went Back and corrected their email). Best-effort -- never
     // fail the visitor's already-successful submission over a Gmail problem.
-    if (!existing || existing.email !== data.email) {
+    if (!isEmergency && (startingFresh || existing?.email !== data.email)) {
       try {
         const html = roadmapEmailHtml({
           firstName: data.first_name,
@@ -420,6 +496,7 @@ serve(async (req) => {
           risk,
           insights: computeNarrativeInsights(risk, data.catalyst, data.answers),
           bcNotes: computeBcContextNotes(data.domain, data.catalyst, data.answers),
+          validation,
         });
         const subject = "Your Confidential Roadmap — ProsperWise";
 
@@ -454,7 +531,12 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, lead_id: leadId, chosen_pathway: data.chosen_pathway }),
+      JSON.stringify({
+        success: true,
+        lead_id: leadId,
+        chosen_pathway: data.chosen_pathway,
+        validation: isEmergency ? null : validation,
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
