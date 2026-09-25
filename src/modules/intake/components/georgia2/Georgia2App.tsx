@@ -1,13 +1,11 @@
 import { useEffect, useRef } from "react";
 import { Georgia2Provider, useGeorgia2 } from "./state";
-import { Stepper } from "./Stepper";
 import { StepDomain } from "./StepDomain";
 import { StepCatalyst } from "./StepCatalyst";
 import { StepDiagnostic } from "./StepDiagnostic";
 import { StepResults } from "./StepResults";
 import { StepLeadCapture } from "./StepLeadCapture";
 import { StepSuccess } from "./StepSuccess";
-import { BlueprintCanvas } from "./BlueprintCanvas";
 import { trackGeorgia2, useGeorgia2ExitBeacon, type Georgia2SessionPatch } from "@/modules/intake/lib/session-tracker";
 
 // Maps the Stepper's 5 labeled steps (Domain/Catalyst/Diagnostic/
@@ -58,7 +56,7 @@ function Shell({ embed }: { embed?: boolean }) {
   }, [state.step]);
 
   // Bring the top of the wizard back into view whenever the visitor advances
-  // a step, so they don't have to scroll up manually. Step 4 is skipped because
+  // a step, so they don't have to scroll up manually. Step 5 is skipped because
   // StepResults scrolls to its own card header instead of the input pane above it.
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -66,7 +64,7 @@ function Shell({ embed }: { embed?: boolean }) {
     if (rootRef.current) {
       rootRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     }
-  }, [state.step]);
+  }, [state.step, state.questionIndex]);
 
   // When embedded, report our real content height to the parent page so it
   // can size the iframe to fit — the marketing site already listens for this
@@ -94,37 +92,26 @@ function Shell({ embed }: { embed?: boolean }) {
   // the real content size.
   return (
     <div ref={rootRef} className={embed ? "bg-background" : "min-h-screen bg-background"}>
-      <div className="mx-auto max-w-6xl px-4 py-6 md:py-10">
+      <div className="mx-auto max-w-3xl px-4 py-8 md:py-12">
         {!embed && (
-          <div className="mb-6">
-            <p className="text-xs uppercase tracking-widest text-accent">Georgia · Sovereignty Operating System™</p>
-            <h1 className="mt-1 font-serif text-3xl md:text-4xl">Sovereignty Diagnostic</h1>
-
-          </div>
+          <header className="mb-8 text-center">
+            <p className="font-mono text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+              Confidential self-assessment · 2 minutes
+            </p>
+            <h1 className="mt-3 font-serif text-3xl md:text-5xl">Sovereignty Diagnostic</h1>
+            <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-muted-foreground md:text-lg">
+              Evaluate your governance preparedness, tax exposure, and professional coordination before making
+              irreversible financial commitments.
+            </p>
+          </header>
         )}
-        {state.step < 6 && (
-          <div className="mb-6">
-            <Stepper current={state.step} />
-          </div>
-        )}
-        <div className="grid items-start gap-6 lg:grid-cols-2">
-          {/* Input pane */}
-          <div className="rounded-2xl border border-border bg-card p-5 md:p-8">
-            {state.step === 1 && <StepDomain />}
-            {state.step === 2 && <StepCatalyst />}
-            {state.step === 3 && <StepDiagnostic />}
-            {state.step === 4 && <StepLeadCapture />}
-            {state.step === 5 && <StepResults />}
-            {state.step === 6 && <StepSuccess />}
-          </div>
-
-          {/* Blueprint pane, side by side -- a constant visual companion
-              throughout, independent of whatever step is active in the
-              input pane (unlike StepResults, which now lives there as its
-              own dedicated step once lead capture is done). */}
-          <aside className="space-y-6 rounded-2xl border border-border bg-muted/30 p-5 md:p-6">
-            <BlueprintCanvas />
-          </aside>
+        <div className="rounded-lg border border-border bg-card p-6 shadow-lg md:p-10">
+          {state.step === 1 && <StepDomain />}
+          {state.step === 2 && <StepCatalyst />}
+          {state.step === 3 && <StepDiagnostic />}
+          {state.step === 4 && <StepLeadCapture />}
+          {state.step === 5 && <StepResults />}
+          {state.step === 6 && <StepSuccess />}
         </div>
 
         <p className="mt-6 text-center text-[10px] uppercase tracking-widest text-muted-foreground">

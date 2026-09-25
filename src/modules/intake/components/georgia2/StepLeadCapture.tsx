@@ -2,10 +2,11 @@ import { useGeorgia2 } from "./state";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Label } from "@/shared/components/ui/label";
-import { ArrowLeft, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
 import { z } from "zod";
 import { useState } from "react";
 import { trackGeorgia2 } from "@/modules/intake/lib/session-tracker";
+import { BackLink, Question, WizardProgress, wizardProgress } from "./WizardParts";
 
 const ContactSchema = z.object({
   first_name: z.string().trim().min(1, "First name required").max(80),
@@ -13,8 +14,9 @@ const ContactSchema = z.object({
   mobile: z.string().trim().max(40).optional().or(z.literal("")),
 });
 
-// Now the step-4 screen -- reached right after the diagnostic questions,
-// before the pathway/recommendation is ever shown. This step only
+// The step-4 screen -- reached right after the diagnostic questions,
+// before the results, directives, and pathway are ever shown (they stay
+// gated until this is submitted). This step only
 // validates and locally stores contact info; the actual submission to
 // georgia2-lead happens later, in StepResults.tsx, once a pathway is
 // chosen too (moved there when this step's position in the flow changed).
@@ -38,29 +40,19 @@ export function StepLeadCapture() {
     dispatch({ type: "set_step", step: 5 });
   };
 
+  const { n } = wizardProgress(state);
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-2xl">Confidential contact.</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Just enough to personalize your pathway and follow up privately. Nothing more.
-          </p>
-        </div>
-        <Button variant="ghost" size="sm" onClick={() => dispatch({ type: "set_step", step: 3 })}>
-          <ArrowLeft className="mr-1 h-4 w-4" /> Back
-        </Button>
-      </div>
+    <div>
+      <WizardProgress />
+      <Question
+        number={n}
+        hint="Your Sovereignty Snapshot and prescribed directives are ready. Enter your details to unlock them — just enough to personalize your pathway and follow up privately."
+      >
+        Where should we send your confidential results?
+      </Question>
 
-      <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-3 text-xs text-primary">
-        <Lock className="mt-0.5 h-4 w-4 shrink-0" />
-        <span>
-          <strong>Montréal Data Pinning Active.</strong> Zero tracking cookies. Your details never leave
-          Canadian infrastructure.
-        </span>
-      </div>
-
-      <form onSubmit={submit} className="space-y-4">
+      <form onSubmit={submit} className="mt-8 space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="g2-first">First Name</Label>
           <Input
@@ -69,6 +61,7 @@ export function StepLeadCapture() {
             onChange={(e) => dispatch({ type: "set_contact", contact: { first_name: e.target.value } })}
             autoComplete="given-name"
             maxLength={80}
+            className="h-12 bg-muted/40"
           />
           {errors.first_name && <p className="text-xs text-destructive">{errors.first_name}</p>}
         </div>
@@ -81,6 +74,7 @@ export function StepLeadCapture() {
             onChange={(e) => dispatch({ type: "set_contact", contact: { email: e.target.value } })}
             autoComplete="email"
             maxLength={255}
+            className="h-12 bg-muted/40"
           />
           {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
         </div>
@@ -93,12 +87,21 @@ export function StepLeadCapture() {
             onChange={(e) => dispatch({ type: "set_contact", contact: { mobile: e.target.value } })}
             autoComplete="tel"
             maxLength={40}
+            className="h-12 bg-muted/40"
           />
         </div>
 
-        <Button type="submit" size="lg" className="w-full">
-          See My Pathway
-        </Button>
+        <p className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
+          <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
+          <span>Montréal data pinning. Zero tracking cookies. Your details never leave Canadian infrastructure.</span>
+        </p>
+
+        <div className="flex items-center justify-between pt-2">
+          <BackLink onClick={() => dispatch({ type: "set_step", step: 3 })} />
+          <Button type="submit" size="lg" className="mt-8">
+            Reveal My Results
+          </Button>
+        </div>
       </form>
     </div>
   );

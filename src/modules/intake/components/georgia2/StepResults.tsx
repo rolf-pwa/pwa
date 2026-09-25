@@ -1,15 +1,19 @@
 import { useEffect, useRef } from "react";
 import { useGeorgia2 } from "./state";
 import { Button } from "@/shared/components/ui/button";
-import { ArrowLeft, Calendar, Loader2, Mail, Phone } from "lucide-react";
+import { Calendar, Loader2, Mail, Phone, ShieldCheck } from "lucide-react";
 import {
+  bcContextNotes,
   computeGauges,
   deriveResult,
   formatCAD,
+  georgiaInsights,
   CATALYST_LABELS,
   type Pathway,
 } from "@/modules/intake/lib/derive";
 import { trackGeorgia2 } from "@/modules/intake/lib/session-tracker";
+import { cn } from "@/shared/lib/utils";
+import { BackLink } from "./WizardParts";
 
 const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
@@ -97,41 +101,78 @@ export function StepResults() {
     }
   };
 
-  return (
-    <div ref={rootRef} className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">
-            {CATALYST_LABELS[state.catalyst]} · {formatCAD(state.scale)}
-          </p>
-          <h2 className="mt-1 text-2xl">Your Sovereignty Survey™ next step.</h2>
-        </div>
-        <Button variant="ghost" size="sm" onClick={() => dispatch({ type: "set_step", step: 4 })}>
-          <ArrowLeft className="mr-1 h-4 w-4" /> Back
-        </Button>
-      </div>
+  const gauges = computeGauges(state.domain, state.catalyst, state.answers, state.scale);
+  const directives = georgiaInsights(state.domain, state.catalyst, state.answers, state.scale).filter(
+    (i) => i.tag !== "Your Next Step"
+  );
+  const bcNotes = bcContextNotes(state.domain, state.catalyst, state.answers);
 
-      <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
-        <p className="text-[10px] uppercase tracking-widest text-primary">Rolf's Voice</p>
-        <p className="mt-1 text-xs leading-relaxed text-foreground">
-          The Sovereignty Survey is a three-step process built around exactly what you've just told
-          Georgia. We take a look at your financial system and run an Immediate Risk Scan. Then we
-          meet to go over the results of your audit — you walk away with a 30-Day Action Framework
-          report. No pitch, no commitment beyond the session itself, just total clarity about your
-          next steps.
+  return (
+    <div ref={rootRef}>
+      <div className="flex items-start justify-between gap-6">
+        <div>
+          <p className="font-mono text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+            Diagnostic completed
+          </p>
+          <h2 className="mt-2 font-serif text-3xl leading-tight md:text-4xl">Your Sovereignty Snapshot</h2>
+        </div>
+        <p className="shrink-0 text-right text-sm text-muted-foreground">
+          {CATALYST_LABELS[state.catalyst]}
+          <br />
+          {formatCAD(state.scale)}
         </p>
       </div>
 
-      <div className="rounded-xl border-2 border-primary/40 bg-primary/5 p-4 md:p-6">
-        <h3 className="text-lg md:text-xl">Your next step</h3>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Based on what you've shared, the Sovereignty Survey is the right starting point.{" "}
-          {formatCAD(result.surveyPrice)} for {result.domainLabel} situations like yours.
+      <div className="mt-6 grid grid-cols-2 gap-3 border-t border-border pt-6">
+        <Gauge label="Tax Drag Risk" value={gauges.taxDragRisk} tone="risk" />
+        <Gauge label="Structure Safety" value={gauges.structureSafety} tone="safety" />
+        <Gauge label="Noise Strain" value={gauges.noiseStrain} tone="risk" />
+        <Gauge label="Readiness" value={gauges.readiness} tone="safety" />
+      </div>
+
+      {directives.length > 0 && (
+        <div className="mt-8">
+          <h3 className="font-sans text-sm font-semibold uppercase tracking-wider">Prescribed directives</h3>
+          <div className="mt-3 space-y-3">
+            {directives.map((d, i) => (
+              <div key={i} className="rounded-md border border-border bg-muted/40 px-5 py-4">
+                <p className="flex items-center gap-2 font-sans text-base font-medium text-accent">
+                  <ShieldCheck className="h-5 w-5 shrink-0" />
+                  {d.tag}
+                </p>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{d.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {bcNotes.length > 0 && (
+        <div className="mt-8">
+          <h3 className="font-sans text-sm font-semibold uppercase tracking-wider">British Columbia context</h3>
+          <ul className="mt-3 space-y-2">
+            {bcNotes.map((n, i) => (
+              <li key={i} className="flex gap-2 text-sm leading-relaxed text-muted-foreground">
+                <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-accent" />
+                <span>{n}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="mt-10 border-t border-border pt-8">
+        <h3 className="font-serif text-2xl">Your next step</h3>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          The Sovereignty Survey is built around exactly what you've just told Georgia: we review your financial
+          system, run an Immediate Risk Scan, then meet to walk through the results — you leave with a 30-Day Action
+          Framework. {formatCAD(result.surveyPrice)} for {result.domainLabel} situations like yours. No pitch, no
+          commitment beyond the session itself.
         </p>
         <div className="mt-5 flex flex-col gap-2">
           <Button
             size="lg"
-            className="h-auto w-full whitespace-normal py-3 text-center leading-snug"
+            className="h-auto w-full whitespace-normal py-3.5 text-center leading-snug"
             onClick={() => submit("survey")}
             disabled={state.submitting}
           >
@@ -145,7 +186,7 @@ export function StepResults() {
           <Button
             size="lg"
             variant="outline"
-            className="h-auto w-full whitespace-normal py-3 text-center leading-snug"
+            className="h-auto w-full whitespace-normal py-3.5 text-center leading-snug"
             disabled={state.submitting}
             onClick={() => {
               trackGeorgia2({ chosen_pathway: "clarity_call" });
@@ -158,7 +199,7 @@ export function StepResults() {
           <Button
             size="lg"
             variant="ghost"
-            className="h-auto w-full whitespace-normal py-3 text-center leading-snug"
+            className="h-auto w-full whitespace-normal py-3.5 text-center leading-snug"
             disabled={state.submitting}
             onClick={() => submit("confidential_roadmap")}
           >
@@ -175,6 +216,25 @@ export function StepResults() {
             {state.submitError}
           </div>
         )}
+        <BackLink onClick={() => dispatch({ type: "set_step", step: 4 })} />
+      </div>
+    </div>
+  );
+}
+
+function Gauge({ label, value, tone }: { label: string; value: number; tone: "risk" | "safety" }) {
+  const isBad = tone === "risk" ? value >= 60 : value < 40;
+  return (
+    <div className="rounded-md border border-border bg-muted/40 px-4 py-3">
+      <div className="flex items-baseline justify-between">
+        <p className="text-sm font-medium">{label}</p>
+        <p className={cn("font-serif text-2xl", isBad ? "text-destructive" : "text-primary")}>{value}</p>
+      </div>
+      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+        <div
+          className={cn("h-full rounded-full", isBad ? "bg-destructive" : "bg-primary")}
+          style={{ width: `${value}%` }}
+        />
       </div>
     </div>
   );

@@ -2,99 +2,78 @@ import { useEffect, useRef } from "react";
 import { useGeorgia2 } from "./state";
 import { Button } from "@/shared/components/ui/button";
 import { Slider } from "@/shared/components/ui/slider";
-import { ArrowLeft, ArrowRight, Info } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import {
   CATALYST_QUESTIONS,
   formatCAD,
   SCALE_MAX,
   SCALE_MIN,
   SCALE_STEP,
-  
-  deriveResult,
 } from "@/modules/intake/lib/derive";
-import { cn } from "@/shared/lib/utils";
 import { trackGeorgia2 } from "@/modules/intake/lib/session-tracker";
+import { BackLink, OptionCard, Question, WizardProgress, wizardProgress } from "./WizardParts";
 
+// One screen per question, then a final scale-of-capital screen. Picking an
+// answer advances automatically after a beat (long enough to see the
+// selection register); Back walks the same screens in reverse.
 export function StepDiagnostic() {
   const { state, dispatch } = useGeorgia2();
   const questions = state.catalyst ? CATALYST_QUESTIONS[state.catalyst] : [];
-  const allAnswered = questions.every((q) => state.answers[q.key]);
-  const result = state.domain ? deriveResult(state.domain, state.scale) : null;
-  const questionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const index = state.questionIndex;
+  const question = questions[index];
+  const advanceTimer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => () => clearTimeout(advanceTimer.current), []);
 
-  // On stacked/mobile layouts, bring the next unanswered question into view
-  // after each answer so the visitor doesn't have to scroll down manually.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (window.innerWidth >= 1024) return; // side-by-side layout already shows everything
-    const next = questions.find((q) => !state.answers[q.key]);
-    if (next && questionRefs.current[next.key]) {
-      questionRefs.current[next.key].scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }, [state.answers, questions]);
+  const { n } = wizardProgress(state);
+
+  const back = () => {
+    if (index > 0) dispatch({ type: "set_question_index", index: index - 1 });
+    else dispatch({ type: "set_step", step: 2 });
+  };
+
+  if (question) {
+    const value = state.answers[question.key] ?? null;
+    return (
+      <div>
+        <WizardProgress />
+        <Question number={n} hint={question.tooltip}>
+          {question.text}
+        </Question>
+        <div className="mt-8 grid gap-3">
+          {question.options.map((o) => (
+            <OptionCard
+              key={o.id}
+              title={o.label}
+              selected={value === o.id}
+              onClick={() => {
+                dispatch({ type: "set_answer", key: question.key, value: o.id });
+                trackGeorgia2({ answers: { ...state.answers, [question.key]: o.id } as Record<string, unknown> });
+                clearTimeout(advanceTimer.current);
+                advanceTimer.current = setTimeout(
+                  () => dispatch({ type: "set_question_index", index: index + 1 }),
+                  180
+                );
+              }}
+            />
+          ))}
+        </div>
+        <BackLink onClick={back} />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-2xl">A few grounded questions.</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            No right answers. Each response quietly shapes your blueprint on the right.
-          </p>
-        </div>
-        <Button variant="ghost" size="sm" onClick={() => dispatch({ type: "set_step", step: 2 })}>
-          <ArrowLeft className="mr-1 h-4 w-4" /> Back
-        </Button>
-      </div>
-
-      <div className="space-y-4">
-        {questions.map((q) => {
-          const value = state.answers[q.key] ?? null;
-          return (
-            <div
-              key={q.key}
-              ref={(el) => {
-                questionRefs.current[q.key] = el;
-              }}
-              className="rounded-lg border border-border bg-card p-4"
-            >
-              <p className="text-sm font-medium">{q.text}</p>
-              <p className="mt-1 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground">
-                <Info className="mt-0.5 h-3 w-3 shrink-0 text-accent" />
-                <span>{q.tooltip}</span>
-              </p>
-              <div className="mt-3 grid gap-2">
-                {q.options.map((o) => (
-                  <button
-                    key={o.id}
-                    type="button"
-                    onClick={() => {
-                      dispatch({ type: "set_answer", key: q.key, value: o.id });
-                      const nextAnswers = { ...state.answers, [q.key]: o.id };
-                      trackGeorgia2({ answers: nextAnswers as Record<string, unknown> });
-                    }}
-                    className={cn(
-                      "rounded-md border px-3 py-2 text-left text-sm transition-colors",
-                      value === o.id
-                        ? "border-accent bg-accent text-accent-foreground"
-                        : "border-border bg-background hover:border-accent/60"
-                    )}
-                  >
-                    {o.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="rounded-lg border border-border bg-card p-5">
-        <div className="mb-2 flex items-baseline justify-between">
-          <span className="text-sm font-medium">Scale of Capital Transfer</span>
-          <span className="font-serif text-2xl">{formatCAD(state.scale)}</span>
-        </div>
-        <div className="relative pt-2">
+    <div>
+      <WizardProgress />
+      <Question
+        number={n}
+        hint="An approximate figure is fine — it calibrates the tax and structure exposure in your results."
+      >
+        What is the approximate scale of the capital transfer?
+      </Question>
+      <div className="mt-8 rounded-md border border-border bg-muted/40 px-5 py-6">
+        <p className="text-center font-serif text-4xl">{formatCAD(state.scale)}</p>
+        <div className="mt-6">
           <Slider
             value={[state.scale]}
             min={SCALE_MIN}
@@ -106,23 +85,17 @@ export function StepDiagnostic() {
             }}
           />
         </div>
-        <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
-
+        <div className="mt-4 flex justify-between text-xs text-muted-foreground">
           <span>{formatCAD(SCALE_MIN)}</span>
           <span>{formatCAD(SCALE_MAX)}</span>
         </div>
-        {result && allAnswered && (
-          <Button
-            size="lg"
-            className="mt-4 w-full"
-            onClick={() => dispatch({ type: "set_step", step: 4 })}
-          >
-            Continue <ArrowRight className="ml-1 h-4 w-4" />
-          </Button>
-        )}
-
       </div>
-
+      <div className="mt-6 flex items-center justify-between">
+        <BackLink onClick={back} />
+        <Button size="lg" className="mt-8" onClick={() => dispatch({ type: "set_step", step: 4 })}>
+          Continue <ArrowRight className="ml-1 h-4 w-4" />
+        </Button>
+      </div>
     </div>
   );
 }

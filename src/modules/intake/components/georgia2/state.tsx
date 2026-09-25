@@ -11,6 +11,9 @@ export interface Contact {
 
 export interface Georgia2State {
   step: Step;
+  // Which screen of the diagnostic step (3) is showing: 0..N-1 are the
+  // catalyst's questions one at a time, N is the scale-of-capital screen.
+  questionIndex: number;
   domain: Domain | null;
   catalyst: Catalyst | null;
   answers: Partial<Answers>;
@@ -24,6 +27,7 @@ export interface Georgia2State {
 
 type Action =
   | { type: "set_step"; step: Step }
+  | { type: "set_question_index"; index: number }
   | { type: "set_domain"; domain: Domain }
   | { type: "set_catalyst"; catalyst: Catalyst }
   | { type: "set_answer"; key: string; value: Answer }
@@ -41,6 +45,7 @@ function newSessionKey() {
 function initial(): Georgia2State {
   return {
     step: 1,
+    questionIndex: 0,
     domain: null,
     catalyst: null,
     answers: {},
@@ -57,10 +62,12 @@ function reducer(state: Georgia2State, action: Action): Georgia2State {
   switch (action.type) {
     case "set_step":
       return { ...state, step: action.step };
+    case "set_question_index":
+      return { ...state, questionIndex: action.index };
     case "set_domain":
-      return { ...state, domain: action.domain, catalyst: null, answers: {}, step: 2 };
+      return { ...state, domain: action.domain, catalyst: null, answers: {}, questionIndex: 0, step: 2 };
     case "set_catalyst":
-      return { ...state, catalyst: action.catalyst, step: 3 };
+      return { ...state, catalyst: action.catalyst, questionIndex: 0, step: 3 };
     case "set_answer":
       return { ...state, answers: { ...state.answers, [action.key]: action.value } };
     case "set_scale":
