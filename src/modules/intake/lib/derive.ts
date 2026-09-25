@@ -64,6 +64,14 @@ export type Answers = Record<string, OptionId>;
 export type Answer = OptionId | null;
 
 
+/**
+ * Lifetime Capital Gains Exemption limit per individual. Indexed annually --
+ * verify against CRA each January. Also hardcoded in
+ * supabase/functions/georgia2-lead/index.ts (LCGE_LIMIT_LABEL): update both.
+ */
+export const LCGE_LIMIT = 1_275_000; // 2026
+export const LCGE_LIMIT_LABEL = "$1,275,000";
+
 export const CATALYST_LABELS: Record<Catalyst, string> = {
   founder_exit: "Business Exit Planning",
   growth_stage_founder: "Growth-Stage Founder Planning",
@@ -425,7 +433,7 @@ export const CATALYST_QUESTIONS: Record<Catalyst, Question[]> = {
       key: "lcge",
       text: "Have you or your co-founders utilized your Lifetime Capital Gains Exemption (LCGE) yet?",
       tooltip:
-        "For BC founders, the LCGE represents over $1M of completely tax-sheltered capital per shareholder if structured correctly before the sale.",
+        `For BC founders, the LCGE shelters up to ${LCGE_LIMIT_LABEL} of capital gains per shareholder if structured correctly before the sale.`,
       options: [
         { id: "intact", label: "No — it is fully intact", risks: { tax: 1 } },
         { id: "used", label: "Yes — it has been used", risks: { tax: 1 } },
@@ -860,7 +868,7 @@ export function bcContextNotes(
   const notes: string[] = [];
   if (domain === "corporate") {
     notes.push(
-      "BC-registered CCPCs may access the Lifetime Capital Gains Exemption (LCGE): $1,250,000 per shareholder."
+      `BC-registered CCPCs may access the Lifetime Capital Gains Exemption (LCGE): ${LCGE_LIMIT_LABEL} per shareholder.`
     );
     if (answers.holdco && answers.holdco !== "yes") {
       notes.push("Without an active HoldCo, retained earnings face full corporate + personal tax on distribution.");

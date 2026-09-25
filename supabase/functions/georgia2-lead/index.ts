@@ -93,10 +93,14 @@ const ACTION_PLAN: { title: string; detail: string }[] = [
   },
 ];
 
+// 2026 limit, indexed annually -- keep in sync with LCGE_LIMIT_LABEL in
+// src/modules/intake/lib/derive.ts.
+const LCGE_LIMIT_LABEL = "$1,275,000";
+
 function computeBcContextNotes(domain: "corporate" | "personal", catalyst: string, answers: Record<string, unknown>): string[] {
   const notes: string[] = [];
   if (domain === "corporate") {
-    notes.push("BC-registered CCPCs may access the Lifetime Capital Gains Exemption (LCGE): $1,250,000 per shareholder.");
+    notes.push(`BC-registered CCPCs may access the Lifetime Capital Gains Exemption (LCGE): ${LCGE_LIMIT_LABEL} per shareholder.`);
     if (answers.holdco && answers.holdco !== "yes") {
       notes.push("Without an active HoldCo, retained earnings face full corporate + personal tax on distribution.");
     }
