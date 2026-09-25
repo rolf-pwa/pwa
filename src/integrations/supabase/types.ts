@@ -2230,6 +2230,7 @@ export type Database = {
           legacy_intake_upgrade: boolean
           onboarding_completed_at: string | null
           onboarding_enabled: boolean
+          onboarding_intro_text: string | null
           onboarding_step: number
           pending_capex_amount: number | null
           pending_capex_date: string | null
@@ -2251,6 +2252,7 @@ export type Database = {
           vision_notes: string | null
           wealth_event_completed_at: string | null
           wealth_event_notes: string | null
+          wealth_event_source: string | null
           wealth_event_type: string | null
         }
         Insert: {
@@ -2274,6 +2276,7 @@ export type Database = {
           legacy_intake_upgrade?: boolean
           onboarding_completed_at?: string | null
           onboarding_enabled?: boolean
+          onboarding_intro_text?: string | null
           onboarding_step?: number
           pending_capex_amount?: number | null
           pending_capex_date?: string | null
@@ -2295,6 +2298,7 @@ export type Database = {
           vision_notes?: string | null
           wealth_event_completed_at?: string | null
           wealth_event_notes?: string | null
+          wealth_event_source?: string | null
           wealth_event_type?: string | null
         }
         Update: {
@@ -2318,6 +2322,7 @@ export type Database = {
           legacy_intake_upgrade?: boolean
           onboarding_completed_at?: string | null
           onboarding_enabled?: boolean
+          onboarding_intro_text?: string | null
           onboarding_step?: number
           pending_capex_amount?: number | null
           pending_capex_date?: string | null
@@ -2339,6 +2344,7 @@ export type Database = {
           vision_notes?: string | null
           wealth_event_completed_at?: string | null
           wealth_event_notes?: string | null
+          wealth_event_source?: string | null
           wealth_event_type?: string | null
         }
         Relationships: [

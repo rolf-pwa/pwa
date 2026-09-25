@@ -12,6 +12,7 @@
 import { square } from "./square.ts";
 import { provisionClientFolderTree } from "./vault-provisioning.ts";
 import { sendOnboardingLinkEmail } from "./onboarding-link-email.ts";
+import { applyGeorgia2Handoff } from "./georgia-handoff.ts";
 
 function splitName(fullName: string): { first: string; last: string } {
   const parts = String(fullName || "").trim().split(/\s+/).filter(Boolean);
@@ -173,7 +174,7 @@ async function seedOntologyFromGeorgia2Lead(client: any, householdId: string, em
   try {
     const { data: lead } = await client
       .from("georgia2_leads")
-      .select("id, domain, catalyst, scale, answers, risk_scores_calculated, submitted_at")
+      .select("id, domain, catalyst, spoke, diagnostic_payload, scale, answers, risk_scores_calculated, submitted_at")
       .ilike("email", email)
       .order("submitted_at", { ascending: false })
       .limit(1)
@@ -194,6 +195,8 @@ async function seedOntologyFromGeorgia2Lead(client: any, householdId: string, em
       seeded_from: {
         domain: lead.domain,
         catalyst: lead.catalyst,
+        spoke: lead.spoke,
+        diagnostic_payload: lead.diagnostic_payload,
         scale: lead.scale,
         answers: lead.answers,
         risk_scores_calculated: lead.risk_scores_calculated,
@@ -343,6 +346,7 @@ export async function enrollPaidBooking(
   // ---- 3b. Seed the Ontology from that same lead's diagnostic, brand-new households only ----
   if (created && householdId) {
     await seedOntologyFromGeorgia2Lead(client, householdId, email);
+    await applyGeorgia2Handoff(client, householdId, email);
   }
 
   // ---- 4. Link the booking ----------------------------------------------

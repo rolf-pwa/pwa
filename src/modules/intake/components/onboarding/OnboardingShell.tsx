@@ -120,8 +120,8 @@ export const OnboardingShell = ({ portalToken, onBack, onAskForHelp }: Props) =>
               Welcome, {firstName}.
             </h1>
             <p className="max-w-2xl text-sm text-muted-foreground">
-              I'm Georgia. There are a few short steps to get your Sovereignty Survey underway — no
-              pressure, no sales, and you can stop and come back at any time.
+              {state.household.onboardingIntroText ??
+                "I'm Georgia. There are a few short steps to get your Sovereignty Survey underway — no pressure, no sales, and you can stop and come back at any time."}
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={onAskForHelp} className="shrink-0">

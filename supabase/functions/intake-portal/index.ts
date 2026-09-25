@@ -938,7 +938,7 @@ async function loadOnboarding(resolved: Resolved) {
       admin
         .from("households")
         .select(
-          "id, label, address, onboarding_step, onboarding_completed_at, audit_booked_at, profile_completed_at, wealth_event_type, wealth_event_notes, wealth_event_completed_at, vision_notes, values_notes, purpose_notes, intake_share_token, vault_root_folder_id, anchor_transfer_amount, anchor_transfer_amount_note, spousal_alignment_score, spousal_alignment_note, pressure_types, pressure_note, pending_capex_amount, pending_capex_date, pending_capex_description, legacy_advisor_friction_notes, household_context_completed_at",
+          "id, label, address, onboarding_step, onboarding_completed_at, audit_booked_at, profile_completed_at, wealth_event_type, wealth_event_notes, wealth_event_completed_at, vision_notes, values_notes, purpose_notes, intake_share_token, vault_root_folder_id, anchor_transfer_amount, anchor_transfer_amount_note, spousal_alignment_score, spousal_alignment_note, pressure_types, pressure_note, pending_capex_amount, pending_capex_date, pending_capex_description, legacy_advisor_friction_notes, household_context_completed_at, wealth_event_source, onboarding_intro_text",
         )
         .eq("id", resolved.householdId)
         .maybeSingle(),
@@ -993,6 +993,8 @@ async function loadOnboarding(resolved: Resolved) {
       pendingCapexDescription: household?.pending_capex_description ?? "",
       legacyAdvisorFrictionNotes: household?.legacy_advisor_friction_notes ?? "",
       householdContextCompletedAt: household?.household_context_completed_at ?? null,
+      onboardingIntroText: household?.onboarding_intro_text ?? null,
+      wealthEventFromDiagnostic: household?.wealth_event_source === "georgia_diagnostic",
     },
     contact: {
       id: contact?.id,
@@ -1208,7 +1210,22 @@ async function handleOnboardingAction(
     // on the new Household Context step next; corporate events (business exit,
     // growth-stage founder) skip it entirely and go straight to Documents.
     const isPersonalEvent = PERSONAL_WEALTH_EVENTS.includes(type as (typeof PERSONAL_WEALTH_EVENTS)[number]);
+    // A wealth event pre-filled from the Georgia diagnostic stays marked as
+    // such only while the client keeps it; changing it makes it theirs.
+    const { data: prior } = await admin
+      .from("households")
+      .select("wealth_event_type, wealth_event_source")
+      .eq("id", resolved.householdId)
+      .maybeSingle();
+    const keepsDiagnosticEvent =
+      prior?.wealth_event_source === "georgia_diagnostic" && prior?.wealth_event_type === type;
     await advanceStep(resolved.householdId, isPersonalEvent ? 4 : 5, {
+      wealth_event_source: keepsDiagnosticEvent ? "georgia_diagnostic" : null,
+      // The personalized intro describes the diagnostic's event -- once the
+      // client changes it, it would be stale, so fall back to the generic text.
+      ...(prior?.wealth_event_source === "georgia_diagnostic" && !keepsDiagnosticEvent
+        ? { onboarding_intro_text: null }
+        : {}),
       wealth_event_type: type,
       wealth_event_notes: notes || null,
       wealth_event_completed_at: new Date().toISOString(),

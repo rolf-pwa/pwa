@@ -28,6 +28,10 @@ export interface OnboardingState {
     wealthEventType: WealthEventType | null;
     wealthEventNotes: string;
     wealthEventCompletedAt: string | null;
+    /** Wealth event was pre-filled from the client's Georgia diagnostic. */
+    wealthEventFromDiagnostic?: boolean;
+    /** Personalized welcome copy built from the diagnostic; null falls back to the generic text. */
+    onboardingIntroText?: string | null;
     /** Legacy-upgrade Step 2 fields — captured separately so each can be
      *  read/quoted independently elsewhere, rather than one combined note. */
     visionNotes: string;
