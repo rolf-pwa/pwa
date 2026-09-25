@@ -30,6 +30,7 @@ const BodySchema = z.object({
   source: z.string().max(64).optional(),
   domain: z.enum(["corporate", "personal"]).nullable().optional(),
   catalyst: z.string().max(64).nullable().optional(),
+  spoke: z.string().max(40).nullable().optional(),
   answers: z.record(z.string(), z.any()).optional(),
   scale: z.number().min(0).max(1_000_000_000).optional(),
   chosen_pathway: z.string().max(64).nullable().optional(),

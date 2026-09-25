@@ -15,7 +15,7 @@ import { cn } from "@/shared/lib/utils";
 import { BackLink } from "./WizardParts";
 import { submitLead } from "./submitLead";
 
-// Step 5 -- reached only once lead capture (step 4) has been submitted, which
+// Step 4 -- reached only once lead capture (step 3) has been submitted, which
 // also emailed these results automatically. The two calls to action below
 // just record which next step the visitor picked on their existing lead.
 export function StepResults() {
@@ -156,7 +156,7 @@ export function StepResults() {
             Talk It Through
           </Button>
         </div>
-        <BackLink onClick={() => dispatch({ type: "set_step", step: 4 })} />
+        <BackLink onClick={() => dispatch({ type: "set_step", step: 3 })} />
       </div>
     </div>
   );

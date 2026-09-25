@@ -24,7 +24,7 @@ export function StepDiagnostic() {
 
   const back = () => {
     if (index > 0) dispatch({ type: "set_question_index", index: index - 1 });
-    else dispatch({ type: "set_step", step: 2 });
+    else dispatch({ type: "set_step", step: 1 });
   };
 
   return (
@@ -45,7 +45,7 @@ export function StepDiagnostic() {
               trackGeorgia2({ answers: { ...state.answers, [question.key]: o.id } as Record<string, unknown> });
               clearTimeout(advanceTimer.current);
               advanceTimer.current = setTimeout(() => {
-                if (isLast) dispatch({ type: "set_step", step: 4 });
+                if (isLast) dispatch({ type: "set_step", step: 3 });
                 else dispatch({ type: "set_question_index", index: index + 1 });
               }, 180);
             }}

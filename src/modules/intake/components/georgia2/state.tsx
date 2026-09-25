@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo, useReducer, useRef, type ReactNode } from "react";
-import type { Answer, Answers, Catalyst, Domain, Pathway } from "@/modules/intake/lib/derive";
+import { domainForCatalyst, type Answer, type Answers, type Catalyst, type Domain, type Pathway } from "@/modules/intake/lib/derive";
 
-export type Step = 1 | 2 | 3 | 4 | 5; // 5 = results
+export type Step = 1 | 2 | 3 | 4; // 1 transition, 2 questions, 3 gate, 4 results
 
 export interface Contact {
   first_name: string;
@@ -11,7 +11,7 @@ export interface Contact {
 
 export interface Georgia2State {
   step: Step;
-  // Which question of the diagnostic step (3) is showing, one per screen.
+  // Which question of the diagnostic step (2) is showing, one per screen.
   questionIndex: number;
   domain: Domain | null;
   catalyst: Catalyst | null;
@@ -19,6 +19,8 @@ export interface Georgia2State {
   chosenPathway: Pathway | null;
   contact: Contact;
   sessionKey: string;
+  // The brief "Georgia is analyzing" beat before the gate has played once.
+  analyzed: boolean;
   submitting: boolean;
   submitError: string | null;
 }
@@ -26,11 +28,11 @@ export interface Georgia2State {
 type Action =
   | { type: "set_step"; step: Step }
   | { type: "set_question_index"; index: number }
-  | { type: "set_domain"; domain: Domain }
   | { type: "set_catalyst"; catalyst: Catalyst }
   | { type: "set_answer"; key: string; value: Answer }
   | { type: "set_pathway"; pathway: Pathway }
   | { type: "set_contact"; contact: Partial<Contact> }
+  | { type: "analyzed" }
   | { type: "submitting"; value: boolean }
   | { type: "submit_error"; error: string | null }
   | { type: "reset" };
@@ -49,6 +51,7 @@ function initial(): Georgia2State {
     chosenPathway: null,
     contact: { first_name: "", email: "", mobile: "" },
     sessionKey: newSessionKey(),
+    analyzed: false,
     submitting: false,
     submitError: null,
   };
@@ -60,16 +63,24 @@ function reducer(state: Georgia2State, action: Action): Georgia2State {
       return { ...state, step: action.step };
     case "set_question_index":
       return { ...state, questionIndex: action.index };
-    case "set_domain":
-      return { ...state, domain: action.domain, catalyst: null, answers: {}, questionIndex: 0, step: 2 };
     case "set_catalyst":
-      return { ...state, catalyst: action.catalyst, questionIndex: 0, step: 3 };
+      return {
+        ...state,
+        catalyst: action.catalyst,
+        domain: domainForCatalyst(action.catalyst),
+        answers: {},
+        questionIndex: 0,
+        analyzed: false,
+        step: 2,
+      };
     case "set_answer":
       return { ...state, answers: { ...state.answers, [action.key]: action.value } };
     case "set_pathway":
       return { ...state, chosenPathway: action.pathway };
     case "set_contact":
       return { ...state, contact: { ...state.contact, ...action.contact } };
+    case "analyzed":
+      return { ...state, analyzed: true };
     case "submitting":
       return { ...state, submitting: action.value };
     case "submit_error":

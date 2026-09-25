@@ -1,27 +1,22 @@
 import { useEffect, useRef } from "react";
 import { Georgia2Provider, useGeorgia2 } from "./state";
-import { StepDomain } from "./StepDomain";
-import { StepCatalyst } from "./StepCatalyst";
+import { StepTransition } from "./StepTransition";
 import { StepDiagnostic } from "./StepDiagnostic";
 import { StepResults } from "./StepResults";
 import { StepLeadCapture } from "./StepLeadCapture";
 import { trackGeorgia2, useGeorgia2ExitBeacon, type Georgia2SessionPatch } from "@/modules/intake/lib/session-tracker";
 
-// Maps the Stepper's 5 labeled steps (Domain/Catalyst/Diagnostic/
-// Confidential/Pathway) to their first-reach tracking field. Lead capture
-// ("Confidential") now comes BEFORE the pathway reveal -- the visitor
-// gives contact info first, then sees their recommendation and picks a
-// pathway -- so step 4/5 map to the opposite tracking columns from the
-// original build; the column names themselves (step_confidential_reached_at
-// / step_pathway_reached_at) describe the CONCEPT reached, not a fixed
-// step number, so they didn't need to change, just which local step
-// number reaches which one.
+// Maps the wizard's four steps (transition, questions, confidential gate,
+// results) to their first-reach tracking columns. The column names describe
+// the funnel CONCEPT reached, not a fixed step number: the transition screen
+// covers what used to be separate Domain and Catalyst steps, so
+// step_catalyst_reached_at is stamped when a transition is chosen (see
+// StepTransition) rather than by a step of its own.
 const STEP_REACHED_FIELD: Record<number, keyof Georgia2SessionPatch> = {
   1: "step_domain_reached_at",
-  2: "step_catalyst_reached_at",
-  3: "step_diagnostic_reached_at",
-  4: "step_confidential_reached_at",
-  5: "step_pathway_reached_at",
+  2: "step_diagnostic_reached_at",
+  3: "step_confidential_reached_at",
+  4: "step_pathway_reached_at",
 };
 
 function Shell({ embed }: { embed?: boolean }) {
@@ -33,9 +28,9 @@ function Shell({ embed }: { embed?: boolean }) {
       catalyst: state.catalyst,
       answers: state.answers as Record<string, unknown>,
       chosen_pathway: state.chosenPathway,
-      reached_lead_capture: state.step >= 4,
-      lead_captured: state.step >= 5,
-      final_phase: state.step >= 5 ? "complete" : state.step >= 4 ? "lead_capture" : "chat",
+      reached_lead_capture: state.step >= 3,
+      lead_captured: state.step >= 4,
+      final_phase: state.step >= 4 ? "complete" : state.step >= 3 ? "lead_capture" : "chat",
     }),
     state.sessionKey
   );
@@ -54,11 +49,11 @@ function Shell({ embed }: { embed?: boolean }) {
   }, [state.step]);
 
   // Bring the top of the wizard back into view whenever the visitor advances
-  // a step, so they don't have to scroll up manually. Step 5 is skipped because
+  // a step, so they don't have to scroll up manually. Step 4 is skipped because
   // StepResults scrolls to its own card header instead of the input pane above it.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (state.step === 5) return; // StepResults handles its own scroll target
+    if (state.step === 4) return; // StepResults handles its own scroll target
     if (rootRef.current) {
       rootRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     }
@@ -104,11 +99,10 @@ function Shell({ embed }: { embed?: boolean }) {
           </header>
         )}
         <div className="rounded-lg border border-border bg-card p-6 shadow-lg md:p-10">
-          {state.step === 1 && <StepDomain />}
-          {state.step === 2 && <StepCatalyst />}
-          {state.step === 3 && <StepDiagnostic />}
-          {state.step === 4 && <StepLeadCapture />}
-          {state.step === 5 && <StepResults />}
+          {state.step === 1 && <StepTransition />}
+          {state.step === 2 && <StepDiagnostic />}
+          {state.step === 3 && <StepLeadCapture />}
+          {state.step === 4 && <StepResults />}
         </div>
 
         <p className="mt-6 text-center text-[10px] uppercase tracking-widest text-muted-foreground">

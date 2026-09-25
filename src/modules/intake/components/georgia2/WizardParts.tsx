@@ -1,22 +1,21 @@
 import type { ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
 import { useGeorgia2, type Georgia2State } from "./state";
-import { PERSON_QUESTIONS, questionsFor } from "@/modules/intake/lib/derive";
+import { questionsFor } from "@/modules/intake/lib/derive";
 import { cn } from "@/shared/lib/utils";
 
-// Used only until a catalyst is chosen and the real question count is known.
-const ESTIMATED_QUESTION_COUNT = PERSON_QUESTIONS.length + 3;
+// Used only until a transition is chosen and the real question count is known.
+const ESTIMATED_QUESTION_COUNT = 7;
 
 export function wizardProgress(state: Georgia2State): { n: number; total: number; label: string } {
   const questions = state.catalyst ? questionsFor(state.catalyst) : null;
   const qCount = questions?.length ?? ESTIMATED_QUESTION_COUNT;
-  // Domain, Catalyst, each question, Confidential.
-  const total = qCount + 3;
-  if (state.step === 1) return { n: 1, total, label: "Domain" };
-  if (state.step === 2) return { n: 2, total, label: "Catalyst" };
-  if (state.step === 3) {
+  // Transition, each question, Confidential.
+  const total = qCount + 2;
+  if (state.step === 1) return { n: 1, total, label: "Transition" };
+  if (state.step === 2) {
     const q = questions?.[state.questionIndex];
-    return { n: 3 + state.questionIndex, total, label: q ? q.key.replace(/_/g, " ") : "Diagnostic" };
+    return { n: 2 + state.questionIndex, total, label: q ? q.key.replace(/_/g, " ") : "Diagnostic" };
   }
   return { n: total, total, label: "Confidential" };
 }
@@ -47,14 +46,15 @@ export function Question({
   children,
   hint,
 }: {
-  number: number;
+  number?: number;
   children: ReactNode;
   hint?: string;
 }) {
   return (
     <div className="mt-10">
       <h2 className="font-serif text-2xl leading-snug md:text-3xl">
-        {number}. {children}
+        {number !== undefined && `${number}. `}
+        {children}
       </h2>
       {hint && <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{hint}</p>}
     </div>

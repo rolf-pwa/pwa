@@ -6,6 +6,7 @@ const ENDPOINT = `${FUNCTIONS_URL}/georgia2-session`;
 export interface Georgia2SessionPatch {
   domain?: string | null;
   catalyst?: string | null;
+  spoke?: string | null;
   answers?: Record<string, unknown>;
   scale?: number;
   chosen_pathway?: string | null;

@@ -4,9 +4,9 @@ import { Input } from "@/shared/components/ui/input";
 import { Label } from "@/shared/components/ui/label";
 import { Loader2, Lock } from "lucide-react";
 import { z } from "zod";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { trackGeorgia2 } from "@/modules/intake/lib/session-tracker";
-import { BackLink, Question, WizardProgress, wizardProgress } from "./WizardParts";
+import { BackLink, Question, WizardProgress } from "./WizardParts";
 import { submitLead } from "./submitLead";
 
 const ContactSchema = z.object({
@@ -15,13 +15,21 @@ const ContactSchema = z.object({
   mobile: z.string().trim().max(40).optional().or(z.literal("")),
 });
 
-// The step-4 screen -- reached right after the diagnostic questions, before
+// The step-3 screen -- reached right after the diagnostic questions, before
 // the results and action plan are shown (they stay gated until this is
 // submitted). Submitting creates the lead and the server emails the results
 // automatically; the results screen is only revealed once that succeeds.
 export function StepLeadCapture() {
   const { state, dispatch } = useGeorgia2();
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // A short "Georgia is analyzing" beat the first time the gate is reached,
+  // so the ask reads as the result of the diagnostic rather than a form.
+  useEffect(() => {
+    if (state.analyzed) return;
+    const t = setTimeout(() => dispatch({ type: "analyzed" }), 1600);
+    return () => clearTimeout(t);
+  }, [state.analyzed, dispatch]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,7 +48,7 @@ export function StepLeadCapture() {
     try {
       await submitLead(state, "confidential_roadmap");
       trackGeorgia2({ lead_captured: true, reached_lead_capture: true, final_phase: "complete", ended: true });
-      dispatch({ type: "set_step", step: 5 });
+      dispatch({ type: "set_step", step: 4 });
     } catch (err) {
       dispatch({ type: "submit_error", error: err instanceof Error ? err.message : "Something went wrong" });
     } finally {
@@ -48,16 +56,24 @@ export function StepLeadCapture() {
     }
   };
 
-  const { n } = wizardProgress(state);
+  if (!state.analyzed) {
+    return (
+      <div>
+        <WizardProgress />
+        <div className="flex flex-col items-center gap-4 py-16 text-center" role="status" aria-live="polite">
+          <Loader2 className="h-8 w-8 animate-spin text-accent" />
+          <p className="font-serif text-2xl">Georgia is analyzing your answers…</p>
+          <p className="text-sm text-muted-foreground">Mapping your transition, your pressures, and your structure.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
       <WizardProgress />
-      <Question
-        number={n}
-        hint="Your Sovereignty Snapshot and prescribed directives are ready. Enter your details to unlock them — we'll email you a copy too. Just enough to follow up privately, nothing more."
-      >
-        Where should we send your confidential results?
+      <Question hint="Enter your details to unlock your Sovereignty Snapshot, prescribed directives, and action plan — we'll email you a copy too. Just enough to follow up privately, nothing more.">
+        Your Sovereignty Diagnostic is Ready
       </Question>
 
       <form onSubmit={submit} className="mt-8 space-y-4">
@@ -111,7 +127,7 @@ export function StepLeadCapture() {
         )}
 
         <div className="flex items-center justify-between pt-2">
-          <BackLink onClick={() => dispatch({ type: "set_step", step: 3 })} />
+          <BackLink onClick={() => dispatch({ type: "set_step", step: 2 })} />
           <Button type="submit" size="lg" className="mt-8" disabled={state.submitting}>
             {state.submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Reveal My Results

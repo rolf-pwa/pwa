@@ -1532,19 +1532,25 @@ export type Database = {
           catalyst: string
           chosen_pathway: string
           created_at: string
+          diagnostic_payload: Json | null
           domain: string
           email: string
+          emotional_state: string | null
           first_name: string
           id: string
           jurisdiction: string
           mobile: string | null
           notes: string | null
+          primary_friction: string | null
           primary_noise_exposure: string | null
+          relational_state: string | null
           risk_scores_calculated: Json | null
           scale: number | null
           session_key: string | null
+          spoke: string | null
           status: string
           submitted_at: string
+          timeline_urgency: string | null
           unstructured_stress_quote: string | null
           updated_at: string
         }
@@ -1553,19 +1559,25 @@ export type Database = {
           catalyst: string
           chosen_pathway: string
           created_at?: string
+          diagnostic_payload?: Json | null
           domain: string
           email: string
+          emotional_state?: string | null
           first_name: string
           id?: string
           jurisdiction?: string
           mobile?: string | null
           notes?: string | null
+          primary_friction?: string | null
           primary_noise_exposure?: string | null
+          relational_state?: string | null
           risk_scores_calculated?: Json | null
           scale?: number | null
           session_key?: string | null
+          spoke?: string | null
           status?: string
           submitted_at?: string
+          timeline_urgency?: string | null
           unstructured_stress_quote?: string | null
           updated_at?: string
         }
@@ -1574,19 +1586,25 @@ export type Database = {
           catalyst?: string
           chosen_pathway?: string
           created_at?: string
+          diagnostic_payload?: Json | null
           domain?: string
           email?: string
+          emotional_state?: string | null
           first_name?: string
           id?: string
           jurisdiction?: string
           mobile?: string | null
           notes?: string | null
+          primary_friction?: string | null
           primary_noise_exposure?: string | null
+          relational_state?: string | null
           risk_scores_calculated?: Json | null
           scale?: number | null
           session_key?: string | null
+          spoke?: string | null
           status?: string
           submitted_at?: string
+          timeline_urgency?: string | null
           unstructured_stress_quote?: string | null
           updated_at?: string
         }
@@ -1619,6 +1637,7 @@ export type Database = {
           scale: number | null
           session_key: string
           source: string | null
+          spoke: string | null
           step_catalyst_reached_at: string | null
           step_confidential_reached_at: string | null
           step_diagnostic_reached_at: string | null
@@ -1645,6 +1664,7 @@ export type Database = {
           scale?: number | null
           session_key: string
           source?: string | null
+          spoke?: string | null
           step_catalyst_reached_at?: string | null
           step_confidential_reached_at?: string | null
           step_diagnostic_reached_at?: string | null
@@ -1671,6 +1691,7 @@ export type Database = {
           scale?: number | null
           session_key?: string
           source?: string | null
+          spoke?: string | null
           step_catalyst_reached_at?: string | null
           step_confidential_reached_at?: string | null
           step_diagnostic_reached_at?: string | null

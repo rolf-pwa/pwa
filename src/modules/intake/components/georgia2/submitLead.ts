@@ -1,4 +1,4 @@
-import { computeGauges, type Pathway } from "@/modules/intake/lib/derive";
+import { computeGauges, deriveDiagnosticPayload, type Pathway } from "@/modules/intake/lib/derive";
 import type { Georgia2State } from "./state";
 
 const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
@@ -10,6 +10,7 @@ const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 export async function submitLead(state: Georgia2State, pathway: Pathway): Promise<void> {
   if (!state.domain || !state.catalyst) throw new Error("Missing diagnostic answers");
   const gauges = computeGauges(state.domain, state.catalyst, state.answers);
+  const diagnosticPayload = deriveDiagnosticPayload(state.catalyst, state.answers);
   const res = await fetch(`${FUNCTIONS_URL}/georgia2-lead`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -23,6 +24,7 @@ export async function submitLead(state: Georgia2State, pathway: Pathway): Promis
       catalyst: state.catalyst,
       chosen_pathway: pathway,
       answers: state.answers,
+      diagnostic_payload: diagnosticPayload,
       risk_scores_calculated: {
         tax_drag_risk: gauges.taxDragRisk,
         structure_safety: gauges.structureSafety,

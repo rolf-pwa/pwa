@@ -5,6 +5,10 @@ import {
   bcContextNotes,
   georgiaInsights,
   questionsFor,
+  TRANSITION_CATALYSTS,
+  CATALYST_SPOKE,
+  domainForCatalyst,
+  deriveDiagnosticPayload,
 } from "@/modules/intake/lib/derive";
 
 describe("georgia2 derive", () => {
@@ -24,9 +28,9 @@ describe("georgia2 derive", () => {
     const high = computeGauges("corporate", "founder_exit", { lcge: "unsure" });
     expect(high.taxDragRisk).toBeGreaterThan(low.taxDragRisk);
   });
-  it("lowers structure safety when no HoldCo", () => {
-    const safe = computeGauges("corporate", "founder_exit", { holdco: "yes" });
-    const risky = computeGauges("corporate", "founder_exit", { holdco: "no" });
+  it("lowers structure safety when passive cash sits in the OpCo", () => {
+    const safe = computeGauges("corporate", "growth_stage_founder", { purification: "no" });
+    const risky = computeGauges("corporate", "growth_stage_founder", { purification: "yes" });
     expect(safe.structureSafety).toBeGreaterThan(risky.structureSafety);
   });
   it("returns BC context bullets", () => {
@@ -83,9 +87,55 @@ describe("georgia2 derive", () => {
       expect(tags.length).toBeGreaterThan(0);
     }
   });
+  it("keeps every flow to about seven questions", () => {
+    for (const c of TRANSITION_CATALYSTS) {
+      expect(questionsFor(c).length).toBeLessThanOrEqual(8);
+    }
+    expect(questionsFor("inheritance").length).toBe(7);
+  });
+  it("maps every transition tile to a spoke and derives the domain from it", () => {
+    expect(TRANSITION_CATALYSTS).toHaveLength(6);
+    expect(new Set(TRANSITION_CATALYSTS.map((c) => CATALYST_SPOKE[c])).size).toBe(6);
+    expect(CATALYST_SPOKE.insurance_settlement).toBe("Financial_Windfall");
+    expect(domainForCatalyst("founder_exit")).toBe("corporate");
+    expect(domainForCatalyst("growth_stage_founder")).toBe("corporate");
+    expect(domainForCatalyst("inheritance")).toBe("personal");
+  });
+  it("derives the Hub payload deterministically from answers, leaving unanswered values null", () => {
+    expect(deriveDiagnosticPayload("inheritance", {})).toEqual({
+      spoke: "Inheritance",
+      emotional_state: null,
+      relational_state: null,
+      timeline_urgency: null,
+      primary_friction: null,
+    });
+    expect(
+      deriveDiagnosticPayload("growth_stage_founder", {
+        friction: "paper_wealth",
+        relational: "small_circle",
+        timeline: "pre_liquidity",
+      })
+    ).toEqual({
+      spoke: "Pre_Exit_Growth",
+      emotional_state: "anxiety",
+      relational_state: "small_circle",
+      timeline_urgency: "pre_liquidity",
+      primary_friction: "liquidity_gap",
+    });
+  });
+  it("gives every transition a friction question whose options all set a friction and emotion", () => {
+    for (const c of TRANSITION_CATALYSTS) {
+      const f = questionsFor(c)[2];
+      expect(f.key).toBe("friction");
+      for (const o of f.options) {
+        expect(o.hub?.primary_friction).toBeTruthy();
+        expect(o.hub?.emotional_state).toBeTruthy();
+      }
+    }
+  });
   it("asks the person-first questions before any catalyst-specific ones", () => {
     const qs = questionsFor("inheritance");
-    expect(qs.slice(0, 3).map((q) => q.key)).toEqual(["nervous_system", "governance", "advisory"]);
+    expect(qs.slice(0, 3).map((q) => q.key)).toEqual(["nervous_system", "governance", "friction"]);
     expect(qs.length).toBeGreaterThan(3);
   });
   it("raises noise strain and lowers readiness for nervous-system overload", () => {

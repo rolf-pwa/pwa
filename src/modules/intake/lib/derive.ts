@@ -12,6 +12,50 @@ export type PersonalCatalyst =
   | "sudden_windfall";
 export type Catalyst = CorporateCatalyst | PersonalCatalyst;
 
+/**
+ * The doc's 7-value spoke enum (Georgia strategy blueprint, 2026-09-25).
+ * Internal catalysts stay finer-grained (both windfall catalysts map to
+ * Financial_Windfall); Emergency_Override is reserved for the future
+ * threat-detection protocol and is never selectable in the diagnostic.
+ */
+export type Spoke =
+  | "Business_Exit"
+  | "Pre_Exit_Growth"
+  | "Inheritance"
+  | "Divorce"
+  | "Executive_Retirement"
+  | "Financial_Windfall"
+  | "Emergency_Override";
+
+export const CATALYST_SPOKE: Record<Catalyst, Spoke> = {
+  founder_exit: "Business_Exit",
+  growth_stage_founder: "Pre_Exit_Growth",
+  inheritance: "Inheritance",
+  divorce_restructuring: "Divorce",
+  executive_exit: "Executive_Retirement",
+  insurance_settlement: "Financial_Windfall",
+  sudden_windfall: "Financial_Windfall",
+};
+
+// Hub variables -- the universal, event-independent facts about the person.
+export type EmotionalState = "relief" | "anxiety" | "guilt" | "grief" | "loss_of_identity" | "euphoria";
+export type RelationalState = "private" | "small_circle" | "public_knowledge";
+export type TimelineUrgency = "pre_liquidity" | "under_30_days" | "one_to_six_months" | "over_six_months";
+export type PrimaryFriction =
+  | "family_pressure"
+  | "professional_pressure"
+  | "internal_paralysis"
+  | "operational_overload"
+  | "liquidity_gap"
+  | "no_friction";
+
+export interface HubValues {
+  emotional_state?: EmotionalState;
+  relational_state?: RelationalState;
+  timeline_urgency?: TimelineUrgency;
+  primary_friction?: PrimaryFriction;
+}
+
 export type RiskKey = "tax" | "structure" | "noise" | "readiness";
 
 export type OptionId = string;
@@ -77,14 +121,20 @@ export const CORPORATE_CATALYSTS: CorporateCatalyst[] = [
   "founder_exit",
   "growth_stage_founder",
 ];
-// Matches the site's four personal service pages exactly.
-export const PERSONAL_CATALYSTS: PersonalCatalyst[] = [
+
+/** The six tiles of the opening question, in display order. */
+export const TRANSITION_CATALYSTS: Catalyst[] = [
+  "founder_exit",
+  "growth_stage_founder",
   "inheritance",
   "divorce_restructuring",
   "executive_exit",
   "sudden_windfall",
 ];
 
+export function domainForCatalyst(catalyst: Catalyst): Domain {
+  return (CORPORATE_CATALYSTS as Catalyst[]).includes(catalyst) ? "corporate" : "personal";
+}
 
 export const DOMAIN_GREETING: Record<Domain, string> = {
   corporate:
@@ -100,6 +150,8 @@ export interface QOption {
   label: string;
   description?: string;
   risks: Partial<Record<RiskKey, 1 | 2 | 3>>;
+  /** Hub value this answer implies (feeds the diagnostic payload, not the gauges). */
+  hub?: HubValues;
 }
 
 export interface Question {
@@ -110,12 +162,14 @@ export interface Question {
 }
 
 /**
- * Person-first questions asked of every catalyst, immediately after the
- * catalyst is chosen -- how the visitor is holding the moment (nervous
- * system), whether their intentions are written down (governance), and
- * whether the professionals around them work as one team (advisory).
+ * Person-first questions asked of every spoke -- how the visitor is holding
+ * the moment (nervous system), whether their intentions are written down
+ * (governance), who knows (relational noise), where they are on the
+ * timeline, and whether their professionals work as one team (advisory).
  * Risk weights use the same scale as the catalyst questions (1 = low,
- * 3 = high risk) and feed the same four gauges.
+ * 3 = high risk) and feed the same four gauges. Order is applied in
+ * questionsFor(): nervous_system and governance first, then the spoke's
+ * own friction question, then the rest.
  */
 export const PERSON_QUESTIONS: Question[] = [
   {
@@ -171,6 +225,71 @@ export const PERSON_QUESTIONS: Question[] = [
     ],
   },
   {
+    key: "relational",
+    text: "Who knows about this right now?",
+    tooltip:
+      "The more people who know, the more requests, opinions, and pressure arrive. We call this the noise around you.",
+    options: [
+      {
+        id: "private",
+        label: "Only me, and perhaps my partner",
+        description: "I am navigating this privately.",
+        risks: { noise: 1 },
+        hub: { relational_state: "private" },
+      },
+      {
+        id: "small_circle",
+        label: "A small circle",
+        description: "Close family and a few trusted advisors.",
+        risks: { noise: 2 },
+        hub: { relational_state: "small_circle" },
+      },
+      {
+        id: "public_knowledge",
+        label: "It's public knowledge",
+        description: "Friends, colleagues, and the wider community are already aware.",
+        risks: { noise: 3 },
+        hub: { relational_state: "public_knowledge" },
+      },
+    ],
+  },
+  {
+    key: "timeline",
+    text: "Where are you on the timeline?",
+    tooltip:
+      "The right first move depends on whether the capital has landed yet, and how recently it did.",
+    options: [
+      {
+        id: "pre_liquidity",
+        label: "Not yet — it's still ahead of me",
+        description: "I am planning before the money moves.",
+        risks: {},
+        hub: { timeline_urgency: "pre_liquidity" },
+      },
+      {
+        id: "under_30_days",
+        label: "It has landed, or lands within 30 days",
+        description: "Decisions are arriving faster than I can think.",
+        risks: { readiness: 3 },
+        hub: { timeline_urgency: "under_30_days" },
+      },
+      {
+        id: "one_to_six_months",
+        label: "One to six months ago",
+        description: "The dust is settling, but nothing is formally in place.",
+        risks: { readiness: 2 },
+        hub: { timeline_urgency: "one_to_six_months" },
+      },
+      {
+        id: "over_six_months",
+        label: "More than six months ago",
+        description: "I have been living with it for a while.",
+        risks: {},
+        hub: { timeline_urgency: "over_six_months" },
+      },
+    ],
+  },
+  {
     key: "advisory",
     text: "How do your external professionals (Accountant, Lawyer, Custodian) collaborate?",
     tooltip:
@@ -198,19 +317,110 @@ export const PERSON_QUESTIONS: Question[] = [
   },
 ];
 
+// The spoke-specific "what weighs on you most" question. Each answer sets
+// the Hub's primary_friction and emotional_state (deterministic, no LLM).
+type FrictionOption = [
+  id: string,
+  label: string,
+  friction: PrimaryFriction,
+  emotion: EmotionalState,
+];
+const FRICTION_RISKS: Record<PrimaryFriction, QOption["risks"]> = {
+  family_pressure: { noise: 3 },
+  professional_pressure: { noise: 3 },
+  internal_paralysis: { readiness: 3 },
+  operational_overload: { readiness: 2 },
+  liquidity_gap: { structure: 2, tax: 1 },
+  no_friction: { readiness: 1 },
+};
+function frictionQuestion(text: string, tooltip: string, options: FrictionOption[]): Question {
+  return {
+    key: "friction",
+    text,
+    tooltip,
+    options: options.map(([id, label, friction, emotion]) => ({
+      id,
+      label,
+      risks: FRICTION_RISKS[friction],
+      hub: { primary_friction: friction, emotional_state: emotion },
+    })),
+  };
+}
+
+const WINDFALL_FRICTION = frictionQuestion(
+  "How is this windfall landing for you?",
+  "Sudden money stirs up more than numbers. Naming what you feel is the first step to not being ruled by it.",
+  [
+    ["excited_wary", "Excited, but I don't trust myself not to make a mistake", "internal_paralysis", "euphoria"],
+    ["guilt", "Guilt or discomfort about having it", "internal_paralysis", "guilt"],
+    ["people_asking", "People are already asking for money or offering deals", "family_pressure", "anxiety"],
+    ["advisors_circling", "Advisors and salespeople are circling", "professional_pressure", "anxiety"],
+    ["steady", "Steady — I just want to park it safely and plan", "no_friction", "relief"],
+  ]
+);
+
+export const FRICTION_QUESTIONS: Record<Catalyst, Question> = {
+  founder_exit: frictionQuestion(
+    "What is weighing on you most as this exit approaches?",
+    "Founders rarely struggle with the deal itself — it is the pressure around it, and who you are afterward.",
+    [
+      ["pulled_apart", "Buyers, partners, and advisors are pulling me in different directions", "professional_pressure", "anxiety"],
+      ["identity", "Who I am once the business is gone", "internal_paralysis", "loss_of_identity"],
+      ["family_expectations", "Family expectations about what happens to the proceeds", "family_pressure", "anxiety"],
+      ["consumed", "The day-to-day is consuming me — I can't think about what comes next", "operational_overload", "anxiety"],
+      ["relief", "Mostly relief — I just want to do this right", "no_friction", "relief"],
+    ]
+  ),
+  growth_stage_founder: frictionQuestion(
+    "What is the biggest tension in the business right now?",
+    "Paper wealth, overload, and misaligned partners are the three most common pressure points before an exit.",
+    [
+      ["paper_wealth", "Most of my wealth is paper — tied up in shares I can't touch", "liquidity_gap", "anxiety"],
+      ["stretched", "I'm stretched thin running it while planning what comes next", "operational_overload", "anxiety"],
+      ["misaligned", "Co-founders, investors, or advisors want different things", "professional_pressure", "anxiety"],
+      ["family", "My family doesn't understand what's at stake, or expects a lot", "family_pressure", "anxiety"],
+      ["energized", "I'm energized — I just want the structure ready before the exit", "no_friction", "relief"],
+    ]
+  ),
+  inheritance: frictionQuestion(
+    "What feels heaviest about this inheritance?",
+    "An inheritance is money and loss at the same time. There is no wrong answer here.",
+    [
+      ["guilt", "Guilt — about receiving it, or about what I might do with it", "internal_paralysis", "guilt"],
+      ["siblings", "Tension with siblings or extended family", "family_pressure", "anxiety"],
+      ["everyone_advising", "Everyone — banks, advisors, relatives — suddenly has advice", "professional_pressure", "anxiety"],
+      ["grief", "Grief, and a sense that I can't think clearly yet", "internal_paralysis", "grief"],
+      ["honour", "Relief — I just want to honour it properly", "no_friction", "relief"],
+    ]
+  ),
+  divorce_restructuring: frictionQuestion(
+    "What is hardest right now?",
+    "Separation is a financial and personal reset at once. Where the weight sits tells us where to start.",
+    [
+      ["legal_pressure", "Negotiations and legal pressure from every direction", "professional_pressure", "anxiety"],
+      ["independence", "Rebuilding my identity and independence", "internal_paralysis", "loss_of_identity"],
+      ["sides", "Family, friends, and in-laws taking sides", "family_pressure", "anxiety"],
+      ["what_i_own", "Understanding what I actually own and owe", "operational_overload", "anxiety"],
+      ["clean_start", "Relief that it's nearly over — I want a clean foundation", "no_friction", "relief"],
+    ]
+  ),
+  executive_exit: frictionQuestion(
+    "What is weighing on you most about this transition?",
+    "Leaving a senior role is as much an identity shift as a financial one.",
+    [
+      ["title", "Who I am without the title and the team", "internal_paralysis", "loss_of_identity"],
+      ["tax_bill", "A large tax bill and deadlines I don't fully understand", "operational_overload", "anxiety"],
+      ["decide_fast", "Pressure to decide quickly on options, stock, or the package", "professional_pressure", "anxiety"],
+      ["family_retirement", "Family expectations about what retirement should look like", "family_pressure", "anxiety"],
+      ["clear_plan", "Relief — I just want a clear plan", "no_friction", "relief"],
+    ]
+  ),
+  sudden_windfall: WINDFALL_FRICTION,
+  insurance_settlement: WINDFALL_FRICTION,
+};
+
 export const CATALYST_QUESTIONS: Record<Catalyst, Question[]> = {
   founder_exit: [
-    {
-      key: "jurisdiction",
-      text: "Where is your operating company legally registered and active?",
-      tooltip:
-        "Tax optimization sequences depend heavily on provincial jurisdiction. BC has unique rules regarding corporate capital distributions.",
-      options: [
-        { id: "bc", label: "British Columbia", risks: { tax: 1 } },
-        { id: "other_ca", label: "Other Canadian Province", risks: { tax: 2 } },
-        { id: "cross_border", label: "Cross-Border / Multi-Jurisdictional", risks: { tax: 3 } },
-      ],
-    },
     {
       key: "lcge",
       text: "Have you or your co-founders utilized your Lifetime Capital Gains Exemption (LCGE) yet?",
@@ -220,17 +430,6 @@ export const CATALYST_QUESTIONS: Record<Catalyst, Question[]> = {
         { id: "intact", label: "No — it is fully intact", risks: { tax: 1 } },
         { id: "used", label: "Yes — it has been used", risks: { tax: 1 } },
         { id: "unsure", label: "Unsure / not structured yet", risks: { tax: 3, readiness: 2 } },
-      ],
-    },
-    {
-      key: "holdco",
-      text: "Are the proceeds of your active business held within, or passing through, a HoldCo?",
-      tooltip:
-        "Without a HoldCo, direct capital liquidation triggers immediate personal tax at the highest marginal rate.",
-      options: [
-        { id: "yes", label: "Yes — we have a HoldCo structure", risks: { structure: 1 } },
-        { id: "no", label: "No — paid directly to me", risks: { structure: 3, tax: 2 } },
-        { id: "unsure", label: "Unsure of the flow", risks: { structure: 2, readiness: 2 } },
       ],
     },
   ],
@@ -246,30 +445,8 @@ export const CATALYST_QUESTIONS: Record<Catalyst, Question[]> = {
         { id: "unsure", label: "Unsure / basic corporate account", risks: { structure: 2, readiness: 2 } },
       ],
     },
-    {
-      key: "shareholder_agreement",
-      text: "Do you have a current, signed Shareholder Agreement addressing sudden exits or forced transition events?",
-      tooltip:
-        "In growth phases, the lack of an updated agreement is the single biggest cause of paralyzing shareholder deadlocks.",
-      options: [
-        { id: "yes", label: "Yes — up to date", risks: { readiness: 1 } },
-        { id: "no", label: "No — or severely outdated", risks: { readiness: 3, structure: 2 } },
-        { id: "unsure", label: "Unsure", risks: { readiness: 2 } },
-      ],
-    },
   ],
   inheritance: [
-    {
-      key: "capital_location",
-      text: "Where is the inherited capital currently sitting?",
-      tooltip:
-        "Capital sitting in an estate account is often subject to BC Probate delays and administrative drag before it can be safely integrated.",
-      options: [
-        { id: "estate", label: "Held in the deceased's estate account", risks: { structure: 2 } },
-        { id: "personal", label: "Already transferred to my personal accounts", risks: { structure: 3 } },
-        { id: "trust", label: "Held in an active trust structure", risks: { structure: 1 } },
-      ],
-    },
     {
       key: "probate",
       text: "Is the transfer subject to British Columbia's flat 1.4% Probate fees?",
@@ -281,30 +458,8 @@ export const CATALYST_QUESTIONS: Record<Catalyst, Question[]> = {
         { id: "unsure", label: "Unsure", risks: { tax: 2, readiness: 2 } },
       ],
     },
-    {
-      key: "noise",
-      text: "Are family expectations or unsolicited opinions adding pressure to how you manage this money?",
-      tooltip:
-        "We call this Noise Exposure. Emotional and familial expectations often force sudden inheritors into fast, regretful investment commitments.",
-      options: [
-        { id: "yes", label: "Yes — meaningful pressure or conflict", risks: { noise: 3 } },
-        { id: "moderate", label: "Moderate — everyone is watching closely", risks: { noise: 2 } },
-        { id: "no", label: "No — I am navigating this privately", risks: { noise: 1 } },
-      ],
-    },
   ],
   executive_exit: [
-    {
-      key: "comp_structure",
-      text: "What is the primary structure of your transition compensation?",
-      tooltip:
-        "Vesting schedules and concentrated corporate stock carry massive market downside risks if not systematically hedged or liquidated.",
-      options: [
-        { id: "lump", label: "Lump-sum severance payout", risks: { structure: 2 } },
-        { id: "stock", label: "Vesting options / concentrated stock", risks: { structure: 3 } },
-        { id: "retiring", label: "Retiring allowance / deferred payouts", risks: { structure: 1 } },
-      ],
-    },
     {
       key: "tax_deferral",
       text: "Do you have a plan to roll your retirement allowance or severance into tax-deferred structures?",
@@ -329,17 +484,6 @@ export const CATALYST_QUESTIONS: Record<Catalyst, Question[]> = {
         { id: "beginning", label: "Just beginning the separation process", risks: { readiness: 2, noise: 2 } },
       ],
     },
-    {
-      key: "splitting_method",
-      text: "How will the capital transition to you?",
-      tooltip:
-        "Cash is simple. Splitting investment assets or private corporate shares carries hidden capital gains liabilities that can devastate net value.",
-      options: [
-        { id: "cash", label: "Lump-sum cash settlement", risks: { tax: 1 } },
-        { id: "portfolios", label: "Investment portfolios & real estate", risks: { tax: 2 } },
-        { id: "shares", label: "Corporate shares / HoldCo equity", risks: { tax: 3, structure: 2 } },
-      ],
-    },
   ],
   // Legacy key retained for historical session data; folded into sudden_windfall.
   insurance_settlement: [
@@ -357,20 +501,6 @@ export const CATALYST_QUESTIONS: Record<Catalyst, Question[]> = {
   ],
   sudden_windfall: [
     {
-      key: "windfall_type",
-      text: "What kind of windfall are we working with?",
-      tooltip:
-        "Each windfall type carries a different tax and structural sequence — a settlement behaves nothing like a crypto gain or an equity payout.",
-      options: [
-        { id: "settlement", label: "Insurance or legal settlement", risks: { structure: 2 } },
-        { id: "lottery", label: "Lottery or prize", risks: { structure: 2, noise: 3 } },
-        { id: "real_estate", label: "Real estate sale", risks: { tax: 2 } },
-        { id: "equity", label: "Equity, bonus, or stock payout", risks: { tax: 3 } },
-        { id: "crypto", label: "Crypto or digital assets", risks: { tax: 3, structure: 2 } },
-        { id: "gift", label: "Gift from family", risks: { noise: 2 } },
-      ],
-    },
-    {
       key: "safe_harbor",
       text: "Where does this windfall capital currently reside?",
       tooltip:
@@ -386,7 +516,36 @@ export const CATALYST_QUESTIONS: Record<Catalyst, Question[]> = {
 
 /** The full ordered question list for a catalyst: person-first, then catalyst-specific. */
 export function questionsFor(catalyst: Catalyst): Question[] {
-  return [...PERSON_QUESTIONS, ...CATALYST_QUESTIONS[catalyst]];
+  const [nervousSystem, governance, ...rest] = PERSON_QUESTIONS;
+  return [nervousSystem, governance, FRICTION_QUESTIONS[catalyst], ...rest, ...CATALYST_QUESTIONS[catalyst]];
+}
+
+export interface DiagnosticPayload {
+  spoke: Spoke;
+  emotional_state: EmotionalState | null;
+  relational_state: RelationalState | null;
+  timeline_urgency: TimelineUrgency | null;
+  primary_friction: PrimaryFriction | null;
+}
+
+/**
+ * The structured Hub + spoke handoff for a completed diagnostic, derived
+ * deterministically from the chosen options -- no LLM involved. Anything the
+ * visitor didn't answer stays null rather than being guessed.
+ */
+export function deriveDiagnosticPayload(catalyst: Catalyst, answers: Answers): DiagnosticPayload {
+  const hub: HubValues = {};
+  for (const q of questionsFor(catalyst)) {
+    const chosen = q.options.find((o) => o.id === answers[q.key]);
+    if (chosen?.hub) Object.assign(hub, chosen.hub);
+  }
+  return {
+    spoke: CATALYST_SPOKE[catalyst],
+    emotional_state: hub.emotional_state ?? null,
+    relational_state: hub.relational_state ?? null,
+    timeline_urgency: hub.timeline_urgency ?? null,
+    primary_friction: hub.primary_friction ?? null,
+  };
 }
 
 // ---- Routing ---------------------------------------------------------------
@@ -413,18 +572,18 @@ export type Pathway =
 /** The three-step plan shown on the results screen. Keep in sync with ACTION_PLAN in georgia2-lead/index.ts. */
 export const ACTION_PLAN: { title: string; detail: string }[] = [
   {
+    title: "Deposit funds into a secure Holding Account",
+    detail: "Park incoming capital somewhere secure and insured, so nothing is deployed before there is a plan.",
+  },
+  {
     title: "Institute a 90-day (minimum) Stabilization Period",
     detail:
       "Halt all irreversible commitments. Do not sign discretionary investment mandates or respond to financial solicitations until your footing is steady.",
   },
   {
-    title: "Deposit funds into a secure Holding Account",
-    detail: "Park incoming capital somewhere secure and insured, so nothing is deployed before there is a plan.",
-  },
-  {
-    title: "Conduct a Sovereignty Survey",
+    title: "Centralize your documents",
     detail:
-      "A working session that reviews your financial system, runs an Immediate Risk Scan, and leaves you with a 30-Day Action Framework.",
+      "Gather your wills, powers of attorney, account statements, tax returns, and corporate records in one secure place, so every professional works from the same facts.",
   },
 ];
 

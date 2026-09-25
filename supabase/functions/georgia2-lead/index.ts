@@ -78,19 +78,18 @@ function computeNarrativeInsights(
 // Keep in sync with ACTION_PLAN in src/modules/intake/lib/derive.ts.
 const ACTION_PLAN: { title: string; detail: string }[] = [
   {
+    title: "Deposit funds into a secure Holding Account",
+    detail: "Park incoming capital somewhere secure and insured, so nothing is deployed before there is a plan.",
+  },
+  {
     title: "Institute a 90-day (minimum) Stabilization Period",
     detail:
       "Halt all irreversible commitments. Do not sign discretionary investment mandates or respond to financial solicitations until your footing is steady.",
   },
   {
-    title: "Deposit funds into a secure Holding Account",
+    title: "Centralize your documents",
     detail:
-      "Park incoming capital somewhere secure and insured, so nothing is deployed before there is a plan.",
-  },
-  {
-    title: "Conduct a Sovereignty Survey",
-    detail:
-      "A working session that reviews your financial system, runs an Immediate Risk Scan, and leaves you with a 30-Day Action Framework.",
+      "Gather your wills, powers of attorney, account statements, tax returns, and corporate records in one secure place, so every professional works from the same facts.",
   },
 ];
 
@@ -156,6 +155,35 @@ const RiskScoresSchema = z.object({
   readiness_score: z.number().min(0).max(100),
 });
 
+// Hub + spoke handoff derived client-side from the chosen answers (see
+// deriveDiagnosticPayload in src/modules/intake/lib/derive.ts) -- validated
+// here against fixed enums so nothing free-form is ever stored in these
+// columns. Keep the enum lists in sync with derive.ts.
+const DiagnosticPayloadSchema = z.object({
+  spoke: z.enum([
+    "Business_Exit",
+    "Pre_Exit_Growth",
+    "Inheritance",
+    "Divorce",
+    "Executive_Retirement",
+    "Financial_Windfall",
+    "Emergency_Override",
+  ]),
+  emotional_state: z.enum(["relief", "anxiety", "guilt", "grief", "loss_of_identity", "euphoria"]).nullable(),
+  relational_state: z.enum(["private", "small_circle", "public_knowledge"]).nullable(),
+  timeline_urgency: z.enum(["pre_liquidity", "under_30_days", "one_to_six_months", "over_six_months"]).nullable(),
+  primary_friction: z
+    .enum([
+      "family_pressure",
+      "professional_pressure",
+      "internal_paralysis",
+      "operational_overload",
+      "liquidity_gap",
+      "no_friction",
+    ])
+    .nullable(),
+});
+
 const BodySchema = z.object({
   session_key: z.string().min(6).max(128),
   first_name: z.string().trim().min(1).max(80),
@@ -184,6 +212,8 @@ const BodySchema = z.object({
   // optional/nullable so a legacy or mid-migration client build that
   // hasn't started sending this yet still submits successfully.
   risk_scores_calculated: RiskScoresSchema.nullable().optional(),
+  // Optional so an older cached client build still submits successfully.
+  diagnostic_payload: DiagnosticPayloadSchema.nullable().optional(),
 });
 
 const APP_NAME = "ProsperWise";
@@ -272,6 +302,7 @@ serve(async (req) => {
 
     const data = parsed.data;
     const risk = data.risk_scores_calculated ?? null;
+    const payload = data.diagnostic_payload ?? null;
     const primaryNoiseExposure = risk ? bucketNoiseExposure(risk.noise_strain) : null;
 
     // The lead is created once, when the visitor submits their contact
@@ -297,6 +328,12 @@ serve(async (req) => {
       answers: data.answers,
       risk_scores_calculated: risk,
       primary_noise_exposure: primaryNoiseExposure,
+      diagnostic_payload: payload,
+      spoke: payload?.spoke ?? null,
+      emotional_state: payload?.emotional_state ?? null,
+      relational_state: payload?.relational_state ?? null,
+      timeline_urgency: payload?.timeline_urgency ?? null,
+      primary_friction: payload?.primary_friction ?? null,
     };
 
     let leadId: string;
@@ -326,6 +363,7 @@ serve(async (req) => {
           chosen_pathway: data.chosen_pathway,
           domain: data.domain,
           catalyst: data.catalyst,
+          spoke: payload?.spoke ?? null,
           scale: data.scale ?? null,
           answers: data.answers,
           risk_scores_calculated: risk,
