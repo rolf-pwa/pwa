@@ -9,6 +9,7 @@ import {
   CATALYST_SPOKE,
   domainForCatalyst,
   deriveDiagnosticPayload,
+  actionPlanFor,
 } from "@/modules/intake/lib/derive";
 
 describe("georgia2 derive", () => {
@@ -160,6 +161,64 @@ describe("georgia2 derive", () => {
     expect(lcgeQuestion?.tooltip).toContain("$1,275,000");
     expect(bcContextNotes("corporate", "founder_exit", {}).join(" ")).toContain("$1,275,000");
     expect(bcContextNotes("corporate", "founder_exit", {}).join(" ")).not.toContain("1,250,000");
+  });
+  describe("event-specific language", () => {
+    const worst = { governance: "legal_only", advisory: "siloed", nervous_system: "overload", probate: "yes" };
+    const allCopy = (c: (typeof TRANSITION_CATALYSTS)[number]) => {
+      const parts: string[] = [];
+      for (const q of questionsFor(c)) {
+        parts.push(q.text, q.tooltip);
+        for (const o of q.options) parts.push(o.label, o.description ?? "");
+      }
+      for (const i of georgiaInsights(domainForCatalyst(c), c, worst)) {
+        parts.push(i.tag, i.body, i.nextMove ?? "", ...(i.details ?? []).flatMap((d) => [d.value, d.note]));
+      }
+      for (const a of actionPlanFor(c)) parts.push(a.title, a.detail);
+      return parts.join("\n");
+    };
+    const BUSINESS_TERMS = /corporate|minute book|shareholder|holdco|opco|founder|cap table/i;
+
+    it("never leaves an unfilled {token} in any flow", () => {
+      for (const c of TRANSITION_CATALYSTS) expect(allCopy(c)).not.toMatch(/\{[A-Za-z]+\}/);
+    });
+    it("keeps business vocabulary out of the personal flows", () => {
+      for (const c of ["inheritance", "divorce_restructuring", "executive_exit", "sudden_windfall"] as const) {
+        expect(allCopy(c), c).not.toMatch(BUSINESS_TERMS);
+      }
+    });
+    it("names the right lawyer for each event", () => {
+      const advisory = (c: (typeof TRANSITION_CATALYSTS)[number]) =>
+        questionsFor(c).find((q) => q.key === "advisory")!;
+      expect(advisory("inheritance").text).toContain("Estate Lawyer");
+      expect(advisory("inheritance").options[0].description).toContain("estate lawyer");
+      expect(advisory("divorce_restructuring").text).toContain("Family Lawyer");
+      expect(advisory("executive_exit").text).toContain("Employment Lawyer");
+      expect(advisory("founder_exit").text).toContain("Corporate Lawyer");
+      expect(advisory("growth_stage_founder").options[0].description).toContain("corporate lawyer");
+    });
+    it("words the wills-only governance answer for the event", () => {
+      const legalOnly = (c: (typeof TRANSITION_CATALYSTS)[number]) =>
+        questionsFor(c).find((q) => q.key === "governance")!.options.find((o) => o.id === "legal_only")!.label;
+      expect(legalOnly("inheritance")).toContain("estate paperwork");
+      expect(legalOnly("founder_exit")).toContain("minute books");
+      expect(legalOnly("divorce_restructuring")).toContain("separation agreement");
+    });
+    it("writes the action plan for the event, including a pre-exit founder with no proceeds yet", () => {
+      const inheritance = actionPlanFor("inheritance");
+      expect(inheritance[0].detail).toContain("inheritance");
+      expect(inheritance[2].detail).toContain("probate");
+      expect(inheritance[2].detail).not.toContain("corporate");
+      const preExit = actionPlanFor("growth_stage_founder");
+      expect(preExit[0].title).toBe("Prepare a secure Holding Account");
+      expect(preExit[1].detail).toContain("ahead of the exit");
+      expect(actionPlanFor("divorce_restructuring")[2].detail).toContain("separation agreement");
+    });
+    it("only mentions probate in the Tax Exposure directive for inheritance", () => {
+      const tax = (c: (typeof TRANSITION_CATALYSTS)[number]) =>
+        georgiaInsights(domainForCatalyst(c), c, { probate: "yes" }).find((i) => i.tag === "Tax Exposure");
+      expect(tax("inheritance")?.body).toContain("probate");
+      expect(tax("divorce_restructuring")?.body ?? "").not.toContain("probate");
+    });
   });
   it("asks the person-first questions before any catalyst-specific ones", () => {
     const qs = questionsFor("inheritance");

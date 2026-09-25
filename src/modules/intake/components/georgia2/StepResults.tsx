@@ -3,7 +3,7 @@ import { useGeorgia2 } from "./state";
 import { Button } from "@/shared/components/ui/button";
 import { Calendar, Loader2, Phone, ShieldCheck } from "lucide-react";
 import {
-  ACTION_PLAN,
+  actionPlanFor,
   bcContextNotes,
   computeGauges,
   deriveResult,
@@ -151,7 +151,7 @@ export function StepResults() {
       <div className="mt-10 border-t border-border pt-8">
         <h3 className="font-serif text-2xl">Your action plan</h3>
         <ol className="mt-4 space-y-3">
-          {ACTION_PLAN.map((step, i) => (
+          {actionPlanFor(state.catalyst).map((step, i) => (
             <li key={step.title} className="flex gap-4 rounded-md border border-border bg-muted/40 px-5 py-4">
               <span className="font-serif text-2xl leading-none text-accent">{i + 1}</span>
               <div>

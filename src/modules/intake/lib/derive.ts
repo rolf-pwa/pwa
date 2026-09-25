@@ -1,6 +1,18 @@
 // Georgia 2.0 — pure derivation logic (unit-testable)
 // Copy & routing per "Georgia Interactive Questionnaire Scripts & Micro-Copy" spec.
 
+import {
+  actionPlanFor,
+  fillVocab,
+  GOVERNANCE_SHOW_AT,
+  governanceDetails,
+  taxExposureBody,
+  type InsightDetail,
+} from "../../../../supabase/functions/_shared/georgia-copy";
+
+export { actionPlanFor, GOVERNANCE_SHOW_AT };
+export type { DetailStatus, InsightDetail } from "../../../../supabase/functions/_shared/georgia-copy";
+
 export type Domain = "corporate" | "personal";
 
 export type CorporateCatalyst = "founder_exit" | "growth_stage_founder";
@@ -220,7 +232,7 @@ export const PERSON_QUESTIONS: Question[] = [
       },
       {
         id: "legal_only",
-        label: "Only standard wills and corporate minute books",
+        label: "{legalDocsOption}",
         description: "Legal documents exist, but they do not define the purpose of wealth or decision protocols.",
         risks: { structure: 2 },
       },
@@ -240,7 +252,7 @@ export const PERSON_QUESTIONS: Question[] = [
     options: [
       {
         id: "private",
-        label: "Only me, and perhaps my partner",
+        label: "Only me, and perhaps one trusted person",
         description: "I am navigating this privately.",
         risks: { noise: 1 },
         hub: { relational_state: "private" },
@@ -299,14 +311,14 @@ export const PERSON_QUESTIONS: Question[] = [
   },
   {
     key: "advisory",
-    text: "How do your external professionals (Accountant, Lawyer, Custodian) collaborate?",
+    text: "How do your external professionals (Accountant, {Lawyer}, Custodian) collaborate?",
     tooltip:
       "Uncoordinated professionals each optimize their own piece — the gaps between them are where the costly mistakes happen.",
     options: [
       {
         id: "siloed",
         label: "Completely Disconnected / Siloed",
-        description: "My CPA and corporate lawyer rarely or never speak; I am the middleman translating technical jargon.",
+        description: "My CPA and {lawyer} rarely or never speak; I am the middleman translating technical jargon.",
         risks: { structure: 3, tax: 2 },
       },
       {
@@ -523,9 +535,26 @@ export const CATALYST_QUESTIONS: Record<Catalyst, Question[]> = {
 };
 
 /** The full ordered question list for a catalyst: person-first, then catalyst-specific. */
+/** Fills the event vocabulary ({lawyer}, {legalDocsOption}) into a question's copy. */
+function tailorQuestion(q: Question, catalyst: Catalyst): Question {
+  const fill = (t: string) => fillVocab(t, catalyst);
+  return {
+    ...q,
+    text: fill(q.text),
+    tooltip: fill(q.tooltip),
+    options: q.options.map((o) => ({
+      ...o,
+      label: fill(o.label),
+      description: o.description ? fill(o.description) : o.description,
+    })),
+  };
+}
+
 export function questionsFor(catalyst: Catalyst): Question[] {
   const [nervousSystem, governance, ...rest] = PERSON_QUESTIONS;
-  return [nervousSystem, governance, FRICTION_QUESTIONS[catalyst], ...rest, ...CATALYST_QUESTIONS[catalyst]];
+  return [nervousSystem, governance, FRICTION_QUESTIONS[catalyst], ...rest, ...CATALYST_QUESTIONS[catalyst]].map((q) =>
+    tailorQuestion(q, catalyst)
+  );
 }
 
 export interface DiagnosticPayload {
@@ -576,24 +605,6 @@ export type Pathway =
   | "vfo_catalyst_guide"
   | "standalone_build"
   | "academy_pass";
-
-/** The three-step plan shown on the results screen. Keep in sync with ACTION_PLAN in georgia2-lead/index.ts. */
-export const ACTION_PLAN: { title: string; detail: string }[] = [
-  {
-    title: "Deposit funds into a secure Holding Account",
-    detail: "Park incoming capital somewhere secure and insured, so nothing is deployed before there is a plan.",
-  },
-  {
-    title: "Institute a 90-day (minimum) Stabilization Period",
-    detail:
-      "Halt all irreversible commitments. Do not sign discretionary investment mandates or respond to financial solicitations until your footing is steady.",
-  },
-  {
-    title: "Centralize your documents",
-    detail:
-      "Gather your wills, powers of attorney, account statements, tax returns, and corporate records in one secure place, so every professional works from the same facts.",
-  },
-];
 
 export const SURVEY_PRICE: Record<Domain, number> = {
   personal: 750,
@@ -777,81 +788,12 @@ export const STEADY_FOOTING = {
     "Your answers point to a steady footing — decision readiness, governance, noise, and tax exposure are all within a healthy range. The plan below is about keeping it that way while capital moves.",
 };
 
-export type DetailStatus = "gap" | "partial" | "strong";
-
-/** One line of supporting detail under an insight, drawn from the visitor's own answers. */
-export interface InsightDetail {
-  label: string;
-  value: string;
-  note: string;
-  status: DetailStatus;
-}
-
 export interface GeorgiaInsight {
   tag: string;
   body: string;
   details?: InsightDetail[];
   /** The single most useful next move implied by the details. */
   nextMove?: string;
-}
-
-// Governance Readiness is built from two answers: whether their intentions
-// are written down, and whether their professionals work as one team. Keep
-// the copy in sync with GOVERNANCE_DETAIL in georgia2-lead/index.ts.
-const GOVERNANCE_DETAIL: Record<string, { value: string; note: string; status: DetailStatus }> = {
-  none: {
-    value: "No written charter",
-    note: "Decisions are being made case-by-case, without documented rules of engagement or family boundaries — the most common way well-intentioned capital gets pulled off course.",
-    status: "gap",
-  },
-  legal_only: {
-    value: "Wills and minute books only",
-    note: "Your legal documents say who gets what, but not why the wealth exists or how decisions get made when emotions run high.",
-    status: "partial",
-  },
-  charter: {
-    value: "Written family constitution in place",
-    note: "A charter is the strongest protection you can have — the work is keeping it current as your circumstances change.",
-    status: "strong",
-  },
-};
-const ADVISORY_DETAIL: Record<string, { value: string; note: string; status: DetailStatus }> = {
-  siloed: {
-    value: "Professionals work in silos",
-    note: "Your accountant, lawyer, and custodian aren't talking, so you are the translator between them. The costly mistakes hide in the gaps.",
-    status: "gap",
-  },
-  bank: {
-    value: "One institution runs everything",
-    note: "A single bank or broker is steering the structure, and their incentive is their own product shelf — not necessarily your charter.",
-    status: "partial",
-  },
-  vfo: {
-    value: "Coordinated team under one charter",
-    note: "Your professionals are aligned around one plan, which is exactly where you want to be.",
-    status: "strong",
-  },
-};
-
-/** Threshold below which Governance Readiness is shown (avg answer is at least "partial"). */
-export const GOVERNANCE_SHOW_AT = 55;
-
-export function governanceDetails(answers: Answers): { details: InsightDetail[]; nextMove?: string } {
-  const details: InsightDetail[] = [];
-  const gov = GOVERNANCE_DETAIL[answers.governance ?? ""];
-  const adv = ADVISORY_DETAIL[answers.advisory ?? ""];
-  if (gov) details.push({ label: "Written charter", ...gov });
-  if (adv) details.push({ label: "Professional coordination", ...adv });
-
-  let nextMove: string | undefined;
-  if (gov && gov.status !== "strong") {
-    nextMove =
-      "Draft a Sovereignty Charter: put your family boundaries and the purpose of your capital in writing before capital moves.";
-  } else if (adv && adv.status !== "strong") {
-    nextMove =
-      "Bring your professionals under one plan: an independent Family CFO chairs regular sessions so your accountant, lawyer, and custodian work from the same charter.";
-  }
-  return { details, nextMove };
 }
 
 export function georgiaInsights(
@@ -883,7 +825,7 @@ export function georgiaInsights(
   }
 
   if (gauges.structureSafety <= GOVERNANCE_SHOW_AT) {
-    const { details, nextMove } = governanceDetails(answers);
+    const { details, nextMove } = governanceDetails(catalyst, answers);
     insights.push({
       tag: "Governance Readiness",
       body: details.length
@@ -906,11 +848,7 @@ export function georgiaInsights(
   if (gauges.taxDragRisk >= 70 || probateExposure) {
     insights.push({
       tag: "Tax Exposure",
-      body:
-        "There are structural tax drags apparent in your profile. In British Columbia, the sequence of how you receive and shelter capital dictates what you keep. Let's address tax exposures before any money moves." +
-        (probateExposure
-          ? " BC probate fees run about 1.4% on estate value over $50,000 — and assets held in joint tenancy or a trust may bypass probate entirely, so structure matters before anything is distributed."
-          : ""),
+      body: taxExposureBody(catalyst, probateExposure),
     });
   }
 
