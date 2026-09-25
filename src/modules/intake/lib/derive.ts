@@ -769,9 +769,81 @@ export const STEADY_FOOTING = {
     "Your answers point to a steady footing — decision readiness, governance, noise, and tax exposure are all within a healthy range. The plan below is about keeping it that way while capital moves.",
 };
 
+export type DetailStatus = "gap" | "partial" | "strong";
+
+/** One line of supporting detail under an insight, drawn from the visitor's own answers. */
+export interface InsightDetail {
+  label: string;
+  value: string;
+  note: string;
+  status: DetailStatus;
+}
+
 export interface GeorgiaInsight {
   tag: string;
   body: string;
+  details?: InsightDetail[];
+  /** The single most useful next move implied by the details. */
+  nextMove?: string;
+}
+
+// Governance Readiness is built from two answers: whether their intentions
+// are written down, and whether their professionals work as one team. Keep
+// the copy in sync with GOVERNANCE_DETAIL in georgia2-lead/index.ts.
+const GOVERNANCE_DETAIL: Record<string, { value: string; note: string; status: DetailStatus }> = {
+  none: {
+    value: "No written charter",
+    note: "Decisions are being made case-by-case, without documented rules of engagement or family boundaries — the most common way well-intentioned capital gets pulled off course.",
+    status: "gap",
+  },
+  legal_only: {
+    value: "Wills and minute books only",
+    note: "Your legal documents say who gets what, but not why the wealth exists or how decisions get made when emotions run high.",
+    status: "partial",
+  },
+  charter: {
+    value: "Written family constitution in place",
+    note: "A charter is the strongest protection you can have — the work is keeping it current as your circumstances change.",
+    status: "strong",
+  },
+};
+const ADVISORY_DETAIL: Record<string, { value: string; note: string; status: DetailStatus }> = {
+  siloed: {
+    value: "Professionals work in silos",
+    note: "Your accountant, lawyer, and custodian aren't talking, so you are the translator between them. The costly mistakes hide in the gaps.",
+    status: "gap",
+  },
+  bank: {
+    value: "One institution runs everything",
+    note: "A single bank or broker is steering the structure, and their incentive is their own product shelf — not necessarily your charter.",
+    status: "partial",
+  },
+  vfo: {
+    value: "Coordinated team under one charter",
+    note: "Your professionals are aligned around one plan, which is exactly where you want to be.",
+    status: "strong",
+  },
+};
+
+/** Threshold below which Governance Readiness is shown (avg answer is at least "partial"). */
+export const GOVERNANCE_SHOW_AT = 55;
+
+export function governanceDetails(answers: Answers): { details: InsightDetail[]; nextMove?: string } {
+  const details: InsightDetail[] = [];
+  const gov = GOVERNANCE_DETAIL[answers.governance ?? ""];
+  const adv = ADVISORY_DETAIL[answers.advisory ?? ""];
+  if (gov) details.push({ label: "Written charter", ...gov });
+  if (adv) details.push({ label: "Professional coordination", ...adv });
+
+  let nextMove: string | undefined;
+  if (gov && gov.status !== "strong") {
+    nextMove =
+      "Draft a Sovereignty Charter: put your family boundaries and the purpose of your capital in writing before capital moves.";
+  } else if (adv && adv.status !== "strong") {
+    nextMove =
+      "Bring your professionals under one plan: an independent Family CFO chairs regular sessions so your accountant, lawyer, and custodian work from the same charter.";
+  }
+  return { details, nextMove };
 }
 
 export function georgiaInsights(
@@ -802,11 +874,15 @@ export function georgiaInsights(
     });
   }
 
-  if (gauges.structureSafety <= 40) {
+  if (gauges.structureSafety <= GOVERNANCE_SHOW_AT) {
+    const { details, nextMove } = governanceDetails(answers);
     insights.push({
       tag: "Governance Readiness",
-      body:
-        "Without a written charter and professionals working as one team, decisions get made case-by-case, under pressure. Putting your family boundaries and the purpose of your capital in writing is the durable fix.",
+      body: details.length
+        ? "Governance readiness is whether your intentions are written down and your professionals are working as one team. Here is where you stand:"
+        : "Without a written charter and professionals working as one team, decisions get made case-by-case, under pressure. Putting your family boundaries and the purpose of your capital in writing is the durable fix.",
+      details: details.length ? details : undefined,
+      nextMove,
     });
   }
 

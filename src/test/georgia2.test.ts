@@ -133,6 +133,28 @@ describe("georgia2 derive", () => {
       }
     }
   });
+  it("expands Governance Readiness with detail from the visitor's own answers", () => {
+    const gov = georgiaInsights("personal", "inheritance", { governance: "none", advisory: "vfo" }).find(
+      (i) => i.tag === "Governance Readiness"
+    );
+    expect(gov?.details?.map((d) => d.label)).toEqual(["Written charter", "Professional coordination"]);
+    expect(gov?.details?.[0]).toMatchObject({ value: "No written charter", status: "gap" });
+    expect(gov?.details?.[1].status).toBe("strong");
+    expect(gov?.nextMove).toContain("Sovereignty Charter");
+  });
+  it("points the next move at professional coordination when the charter is already in place", () => {
+    const gov = georgiaInsights("personal", "inheritance", { governance: "charter", advisory: "siloed" }).find(
+      (i) => i.tag === "Governance Readiness"
+    );
+    expect(gov?.nextMove).toContain("Family CFO");
+  });
+  it("still shows Governance Readiness for a partial profile, not only the worst case", () => {
+    const gov = georgiaInsights("personal", "inheritance", { governance: "legal_only", advisory: "bank" }).find(
+      (i) => i.tag === "Governance Readiness"
+    );
+    expect(gov).toBeTruthy();
+    expect(gov?.details).toHaveLength(2);
+  });
   it("asks the person-first questions before any catalyst-specific ones", () => {
     const qs = questionsFor("inheritance");
     expect(qs.slice(0, 3).map((q) => q.key)).toEqual(["nervous_system", "governance", "friction"]);

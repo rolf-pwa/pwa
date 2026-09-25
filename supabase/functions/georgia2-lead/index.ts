@@ -28,13 +28,69 @@ function bucketNoiseExposure(noiseStrain: number): "Low" | "Moderate" | "High" |
 // rather than trusting free-text sent by the client -- this is a public,
 // unauthenticated endpoint and these strings get embedded directly into an
 // outbound email, so the content must come from server-trusted inputs only.
+type InsightDetail = { label: string; value: string; note: string; status: "gap" | "partial" | "strong" };
+
+// Keep in sync with GOVERNANCE_DETAIL / ADVISORY_DETAIL / governanceDetails()
+// in src/modules/intake/lib/derive.ts.
+const GOVERNANCE_DETAIL: Record<string, Omit<InsightDetail, "label">> = {
+  none: {
+    value: "No written charter",
+    note: "Decisions are being made case-by-case, without documented rules of engagement or family boundaries — the most common way well-intentioned capital gets pulled off course.",
+    status: "gap",
+  },
+  legal_only: {
+    value: "Wills and minute books only",
+    note: "Your legal documents say who gets what, but not why the wealth exists or how decisions get made when emotions run high.",
+    status: "partial",
+  },
+  charter: {
+    value: "Written family constitution in place",
+    note: "A charter is the strongest protection you can have — the work is keeping it current as your circumstances change.",
+    status: "strong",
+  },
+};
+const ADVISORY_DETAIL: Record<string, Omit<InsightDetail, "label">> = {
+  siloed: {
+    value: "Professionals work in silos",
+    note: "Your accountant, lawyer, and custodian aren't talking, so you are the translator between them. The costly mistakes hide in the gaps.",
+    status: "gap",
+  },
+  bank: {
+    value: "One institution runs everything",
+    note: "A single bank or broker is steering the structure, and their incentive is their own product shelf — not necessarily your charter.",
+    status: "partial",
+  },
+  vfo: {
+    value: "Coordinated team under one charter",
+    note: "Your professionals are aligned around one plan, which is exactly where you want to be.",
+    status: "strong",
+  },
+};
+
+function governanceDetails(answers: Record<string, unknown>): { details: InsightDetail[]; nextMove?: string } {
+  const details: InsightDetail[] = [];
+  const gov = GOVERNANCE_DETAIL[String(answers.governance ?? "")];
+  const adv = ADVISORY_DETAIL[String(answers.advisory ?? "")];
+  if (gov) details.push({ label: "Written charter", ...gov });
+  if (adv) details.push({ label: "Professional coordination", ...adv });
+  let nextMove: string | undefined;
+  if (gov && gov.status !== "strong") {
+    nextMove =
+      "Draft a Sovereignty Charter: put your family boundaries and the purpose of your capital in writing before capital moves.";
+  } else if (adv && adv.status !== "strong") {
+    nextMove =
+      "Bring your professionals under one plan: an independent Family CFO chairs regular sessions so your accountant, lawyer, and custodian work from the same charter.";
+  }
+  return { details, nextMove };
+}
+
 function computeNarrativeInsights(
   risk: z.infer<typeof RiskScoresSchema> | null,
   catalyst: string,
   answers: Record<string, unknown>,
-): { tag: string; body: string }[] {
+): { tag: string; body: string; details?: InsightDetail[]; nextMove?: string }[] {
   if (!risk) return [];
-  const insights: { tag: string; body: string }[] = [];
+  const insights: { tag: string; body: string; details?: InsightDetail[]; nextMove?: string }[] = [];
   // Order matters (person first): Decision Readiness, Governance Readiness,
   // Noise Exposure, then Tax Exposure -- mirrors georgiaInsights() in derive.ts.
   if (risk.readiness_score <= 40) {
@@ -43,10 +99,15 @@ function computeNarrativeInsights(
       body: "It is completely normal to feel paralyzed right now. Your nervous system is catching up with a massive life change. We will prioritize reducing your cognitive overhead — no major plans are needed today.",
     });
   }
-  if (risk.structure_safety <= 40) {
+  if (risk.structure_safety <= 55) {
+    const { details, nextMove } = governanceDetails(answers);
     insights.push({
       tag: "Governance Readiness",
-      body: "Without a written charter and professionals working as one team, decisions get made case-by-case, under pressure. Putting your family boundaries and the purpose of your capital in writing is the durable fix.",
+      body: details.length
+        ? "Governance readiness is whether your intentions are written down and your professionals are working as one team. Here is where you stand:"
+        : "Without a written charter and professionals working as one team, decisions get made case-by-case, under pressure. Putting your family boundaries and the purpose of your capital in writing is the durable fix.",
+      details: details.length ? details : undefined,
+      nextMove,
     });
   }
   if (risk.noise_strain >= 70) {
@@ -223,7 +284,7 @@ function roadmapEmailHtml(opts: {
   firstName: string;
   catalystLabel: string;
   risk: z.infer<typeof RiskScoresSchema> | null;
-  insights: { tag: string; body: string }[];
+  insights: { tag: string; body: string; details?: InsightDetail[]; nextMove?: string }[];
   bcNotes: string[];
 }): string {
   const { firstName, catalystLabel, risk, insights, bcNotes } = opts;
@@ -243,6 +304,12 @@ function roadmapEmailHtml(opts: {
       <div style="border-left:3px solid #a37c58;background:#faf9f7;padding:10px 14px;margin-bottom:10px;">
         <p style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#a37c58;margin:0 0 4px;font-family:'DM Sans',sans-serif;">${escapeHtml(ins.tag)}</p>
         <p style="font-size:13px;line-height:1.55;color:#334155;margin:0;font-family:'DM Sans',sans-serif;">${escapeHtml(ins.body)}</p>
+        ${(ins.details ?? [])
+          .map(
+            (d) => `<p style="font-size:12px;line-height:1.5;color:#334155;margin:10px 0 0;font-family:'DM Sans',sans-serif;"><strong style="color:#1e293b;">${escapeHtml(d.label)}: ${escapeHtml(d.value)}</strong> <span style="color:${d.status === "gap" ? "#b45309" : d.status === "partial" ? "#a37c58" : "#166534"};">(${d.status === "gap" ? "gap" : d.status === "partial" ? "partial" : "in place"})</span><br/>${escapeHtml(d.note)}</p>`
+          )
+          .join("")}
+        ${ins.nextMove ? `<p style="font-size:12px;line-height:1.5;color:#1e293b;margin:10px 0 0;font-family:'DM Sans',sans-serif;"><strong>Next move:</strong> ${escapeHtml(ins.nextMove)}</p>` : ""}
       </div>`
         )
         .join("")

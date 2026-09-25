@@ -97,6 +97,37 @@ export function StepResults() {
                   {d.tag}
                 </p>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{d.body}</p>
+                {d.details && (
+                  <dl className="mt-3 space-y-3 border-t border-border pt-3">
+                    {d.details.map((row) => (
+                      <div key={row.label}>
+                        <dt className="flex flex-wrap items-center gap-2 text-sm">
+                          <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+                            {row.label}
+                          </span>
+                          <span className="font-medium text-foreground">{row.value}</span>
+                          <span
+                            className={cn(
+                              "rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider",
+                              row.status === "gap" && "bg-destructive/10 text-destructive",
+                              row.status === "partial" && "bg-accent/15 text-accent",
+                              row.status === "strong" && "bg-primary/10 text-primary"
+                            )}
+                          >
+                            {row.status === "gap" ? "Gap" : row.status === "partial" ? "Partial" : "In place"}
+                          </span>
+                        </dt>
+                        <dd className="mt-1 text-sm leading-relaxed text-muted-foreground">{row.note}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+                {d.nextMove && (
+                  <p className="mt-3 rounded-md bg-background px-3 py-2 text-sm leading-relaxed">
+                    <span className="font-medium">Next move: </span>
+                    {d.nextMove}
+                  </p>
+                )}
               </div>
             ))}
           </div>
