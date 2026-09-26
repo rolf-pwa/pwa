@@ -1,4 +1,5 @@
 import { createContext, useContext, useMemo, useReducer, useRef, type ReactNode } from "react";
+import { parseEntryParams } from "@/modules/intake/lib/entry-params";
 import { domainForCatalyst, type Answer, type Answers, type Catalyst, type Domain, type Pathway } from "@/modules/intake/lib/derive";
 
 export type Step = 1 | 2 | 3 | 4 | 5; // 1 transition, 2 questions (+ free text), 3 gate, 4 results, 5 safety screen
@@ -33,6 +34,8 @@ export interface Georgia2State {
   analyzed: boolean;
   submitting: boolean;
   submitError: string | null;
+  /** Where the visitor came from (?source=), recorded with the session and lead. */
+  source: string | null;
   freeformText: string;
   freeformResult: FreeformResult | null;
   /** The acknowledgment paragraph returned when the lead was created. */
@@ -59,11 +62,13 @@ function newSessionKey() {
 }
 
 function initial(): Georgia2State {
+  // An external page can link in with ?event=<transition> and/or ?source=<label>.
+  const entry = typeof window !== "undefined" ? parseEntryParams(window.location.search) : { catalyst: null, source: null };
   return {
-    step: 1,
+    step: entry.catalyst ? 2 : 1,
     questionIndex: 0,
-    domain: null,
-    catalyst: null,
+    domain: entry.catalyst ? domainForCatalyst(entry.catalyst) : null,
+    catalyst: entry.catalyst,
     answers: {},
     chosenPathway: null,
     contact: { first_name: "", email: "", mobile: "" },
@@ -71,6 +76,7 @@ function initial(): Georgia2State {
     analyzed: false,
     submitting: false,
     submitError: null,
+    source: entry.source,
     freeformText: "",
     freeformResult: null,
     validationText: null,

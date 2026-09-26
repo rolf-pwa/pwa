@@ -28,6 +28,7 @@ export interface GeorgiaDiagnosticLead {
   unstructured_stress_quote: string | null;
   freeform_extraction: { threat_detected?: boolean } | null;
   validation_text: string | null;
+  source?: string | null;
 }
 
 const Row = ({ label, value }: { label: string; value: string | null }) =>
@@ -49,6 +50,8 @@ export function GeorgiaDiagnosticView({ lead }: { lead: GeorgiaDiagnosticLead })
       <p className="text-xs text-muted-foreground">
         Self-reported by the client before engagement. Staff-only — never shown to the client in this form.
       </p>
+
+      <Row label="Came from" value={lead.source ?? null} />
 
       {lead.unstructured_stress_quote && (
         <div className="rounded-md border border-border bg-muted/30 p-3">
@@ -134,7 +137,7 @@ export function GeorgiaDiagnosticCard({ householdId }: { householdId: string }) 
       const { data } = await supabase
         .from("georgia2_leads")
         .select(
-          "id, first_name, catalyst, chosen_pathway, submitted_at, answers, risk_scores_calculated, diagnostic_payload, unstructured_stress_quote, freeform_extraction, validation_text",
+          "id, first_name, catalyst, chosen_pathway, submitted_at, answers, risk_scores_calculated, diagnostic_payload, unstructured_stress_quote, freeform_extraction, validation_text, source",
         )
         .or(filter)
         .order("submitted_at", { ascending: false })

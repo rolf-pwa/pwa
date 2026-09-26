@@ -60,6 +60,7 @@ type Georgia2Lead = {
   unstructured_stress_quote?: string | null;
   freeform_extraction?: { threat_detected?: boolean; threat_source?: string | null } | null;
   validation_text?: string | null;
+  source?: string | null;
 };
 
 // Normalized shape for the shared convert-to-contact dialog, regardless of source.
@@ -450,6 +451,12 @@ export default function Leads() {
                           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Catalyst</p>
                           <p className="text-sm text-foreground">{lead.catalyst.replace(/_/g, " ")}</p>
                         </div>
+                        {lead.source && (
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Source</p>
+                            <p className="text-sm text-foreground">{lead.source}</p>
+                          </div>
+                        )}
                         <div>
                           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Chosen Pathway</p>
                           <p className="text-sm text-foreground">{lead.chosen_pathway.replace(/_/g, " ")}</p>

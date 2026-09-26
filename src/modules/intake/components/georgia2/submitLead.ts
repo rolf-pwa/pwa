@@ -26,6 +26,7 @@ export async function submitLead(state: Georgia2State, pathway: Pathway): Promis
       chosen_pathway: pathway,
       answers: state.answers,
       diagnostic_payload: diagnosticPayload,
+      source: state.source,
       unstructured_stress_quote: state.freeformText.trim() || null,
       freeform_extraction: freeform
         ? {

@@ -1549,6 +1549,7 @@ export type Database = {
           risk_scores_calculated: Json | null
           scale: number | null
           session_key: string | null
+          source: string | null
           spoke: string | null
           status: string
           submitted_at: string
@@ -1580,6 +1581,7 @@ export type Database = {
           risk_scores_calculated?: Json | null
           scale?: number | null
           session_key?: string | null
+          source?: string | null
           spoke?: string | null
           status?: string
           submitted_at?: string
@@ -1611,6 +1613,7 @@ export type Database = {
           risk_scores_calculated?: Json | null
           scale?: number | null
           session_key?: string | null
+          source?: string | null
           spoke?: string | null
           status?: string
           submitted_at?: string

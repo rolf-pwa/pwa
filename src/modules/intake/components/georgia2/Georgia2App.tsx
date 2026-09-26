@@ -5,6 +5,7 @@ import { StepDiagnostic } from "./StepDiagnostic";
 import { StepResults } from "./StepResults";
 import { StepEmergency } from "./StepEmergency";
 import { StepLeadCapture } from "./StepLeadCapture";
+import { CATALYST_SPOKE } from "@/modules/intake/lib/derive";
 import { trackGeorgia2, useGeorgia2ExitBeacon, type Georgia2SessionPatch } from "@/modules/intake/lib/session-tracker";
 
 // Maps the wizard's four steps (transition, questions, confidential gate,
@@ -50,6 +51,25 @@ function Shell({ embed }: { embed?: boolean }) {
     trackedStepsRef.current.add(state.step);
     trackGeorgia2({ [field]: new Date().toISOString() } as Georgia2SessionPatch);
   }, [state.step]);
+
+  // Entry-link attribution (?source=) and a pre-selected transition (?event=):
+  // the transition screen is skipped in that case, so record here what it would
+  // have recorded when a tile was clicked.
+  useEffect(() => {
+    if (!state.source && !state.catalyst) return;
+    const patch: Georgia2SessionPatch = {};
+    if (state.source) patch.source = state.source;
+    if (state.catalyst && state.step === 2) {
+      patch.catalyst = state.catalyst;
+      patch.domain = state.domain;
+      patch.spoke = CATALYST_SPOKE[state.catalyst];
+      patch.final_phase = "chat";
+      patch.step_catalyst_reached_at = new Date().toISOString();
+    }
+    trackGeorgia2(patch);
+    // Runs once, on first paint: later transition picks are tracked by StepTransition.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Bring the top of the wizard back into view whenever the visitor advances
   // a step, so they don't have to scroll up manually. Step 4 is skipped because

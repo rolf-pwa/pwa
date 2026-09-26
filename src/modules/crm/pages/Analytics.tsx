@@ -35,6 +35,7 @@ interface Georgia2Session {
   step_pathway_reached_at: string | null;
   step_confidential_reached_at: string | null;
   lead_captured: boolean;
+  source: string | null;
 }
 
 const Analytics = () => {
@@ -59,7 +60,7 @@ const Analytics = () => {
       supabase
         .from("georgia2_sessions" as any)
         .select(
-          "id, session_key, created_at, step_catalyst_reached_at, step_diagnostic_reached_at, step_pathway_reached_at, step_confidential_reached_at, lead_captured",
+          "id, session_key, created_at, step_catalyst_reached_at, step_diagnostic_reached_at, step_pathway_reached_at, step_confidential_reached_at, lead_captured, source",
         )
         .gte("created_at", rangeStart)
         .order("created_at", { ascending: false }),
@@ -149,6 +150,26 @@ const Analytics = () => {
       pctOfTotal: total > 0 ? Math.round((step.count / total) * 100) : 0,
       pctOfPrevious: i > 0 && steps[i - 1].count > 0 ? Math.round((step.count / steps[i - 1].count) * 100) : null,
     }));
+  }, [georgia2Sessions]);
+
+  // Where Georgia visitors came from (?source= on the entry link); sessions
+  // without one are direct visits or links that don't set it.
+  const sourceRows = useMemo(() => {
+    const bySource = new Map<string, { started: number; submitted: number }>();
+    for (const s of georgia2Sessions) {
+      const key = s.source || "(no source)";
+      const row = bySource.get(key) ?? { started: 0, submitted: 0 };
+      row.started += 1;
+      if (s.lead_captured) row.submitted += 1;
+      bySource.set(key, row);
+    }
+    return [...bySource.entries()]
+      .map(([source, r]) => ({
+        source,
+        ...r,
+        pct: r.started > 0 ? Math.round((r.submitted / r.started) * 100) : 0,
+      }))
+      .sort((a, b) => b.started - a.started);
   }, [georgia2Sessions]);
 
   return (
@@ -320,6 +341,40 @@ const Analytics = () => {
                 ))}
                 {georgia2Sessions.length === 0 && (
                   <p className="text-muted-foreground text-sm text-center py-2">No Georgia sessions in this period.</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Georgia sessions by entry-link source */}
+            <Card>
+              <CardHeader className="flex flex-row items-center gap-2">
+                <ExternalLink className="h-4 w-4 text-primary" />
+                <CardTitle className="text-sm">Georgia — Where Visitors Came From</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {sourceRows.length === 0 ? (
+                  <p className="text-muted-foreground text-sm text-center py-2">No Georgia sessions in this period.</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Source</TableHead>
+                        <TableHead className="text-right">Started</TableHead>
+                        <TableHead className="text-right">Submitted</TableHead>
+                        <TableHead className="text-right">Rate</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {sourceRows.map((r) => (
+                        <TableRow key={r.source}>
+                          <TableCell className="font-medium">{r.source}</TableCell>
+                          <TableCell className="text-right">{r.started}</TableCell>
+                          <TableCell className="text-right">{r.submitted}</TableCell>
+                          <TableCell className="text-right">{r.pct}%</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 )}
               </CardContent>
             </Card>

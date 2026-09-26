@@ -27,7 +27,7 @@ function getCorsHeaders(req: Request) {
 
 const BodySchema = z.object({
   session_key: z.string().min(6).max(128),
-  source: z.string().max(64).optional(),
+  source: z.string().regex(/^[a-z0-9._-]{1,64}$/).optional(),
   domain: z.enum(["corporate", "personal"]).nullable().optional(),
   catalyst: z.string().max(64).nullable().optional(),
   spoke: z.string().max(40).nullable().optional(),

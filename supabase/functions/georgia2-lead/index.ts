@@ -211,6 +211,8 @@ const BodySchema = z.object({
   risk_scores_calculated: RiskScoresSchema.nullable().optional(),
   // Optional so an older cached client build still submits successfully.
   diagnostic_payload: DiagnosticPayloadSchema.nullable().optional(),
+  // Where the visitor came from (?source= on the entry link), already sanitized client-side.
+  source: z.string().regex(/^[a-z0-9._-]{1,64}$/).nullable().optional(),
   // The optional free-text answer and what georgia2-analyze extracted from it.
   unstructured_stress_quote: z.string().trim().max(1000).nullable().optional(),
   freeform_extraction: z
@@ -379,6 +381,7 @@ serve(async (req) => {
       timeline_urgency: payload?.timeline_urgency ?? null,
       primary_friction: payload?.primary_friction ?? null,
       unstructured_stress_quote: data.unstructured_stress_quote || null,
+      ...(data.source ? { source: data.source } : {}),
       freeform_extraction: extraction,
       ...(existing ? {} : { validation_text: validation }),
     };
