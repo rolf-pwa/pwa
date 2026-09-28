@@ -23,12 +23,56 @@ export interface Georgia2SessionPatch {
   step_confidential_reached_at?: string;
 }
 
+// "Started" on the Analytics dashboard should mean a real visitor, not a
+// crawler or link-preview bot that merely renders the page (server-side bot
+// filtering in georgia2-session catches self-identifying ones, but not every
+// automated renderer names itself). Nothing is sent to georgia2-session --
+// not even the very first ping that creates the session row -- until the
+// visit looks "engaged": either a real input event, or the tab having
+// stayed visible for a couple of seconds. This never delays anything the
+// visitor sees; it only delays when analytics data is written.
+const ENGAGE_DWELL_MS = 2500;
+let engaged = false;
+let dwellTimer: ReturnType<typeof setTimeout> | null = null;
+
+function markEngaged() {
+  if (engaged) return;
+  engaged = true;
+  flushPending();
+}
+
+function armDwellTimer() {
+  if (typeof document === "undefined" || document.visibilityState !== "visible") return;
+  dwellTimer = setTimeout(markEngaged, ENGAGE_DWELL_MS);
+}
+
+function clearDwellTimer() {
+  if (dwellTimer) {
+    clearTimeout(dwellTimer);
+    dwellTimer = null;
+  }
+}
+
+if (typeof window !== "undefined") {
+  const ENGAGEMENT_EVENTS = ["pointerdown", "mousemove", "keydown", "touchstart", "scroll"] as const;
+  const onFirstInteraction = () => {
+    markEngaged();
+    for (const evt of ENGAGEMENT_EVENTS) window.removeEventListener(evt, onFirstInteraction);
+  };
+  for (const evt of ENGAGEMENT_EVENTS) window.addEventListener(evt, onFirstInteraction, { passive: true });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") armDwellTimer();
+    else clearDwellTimer();
+  });
+  armDwellTimer();
+}
+
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 const PENDING: Georgia2SessionPatch = {};
 let CURRENT_KEY: string | null = null;
 
 function flushPending() {
-  if (!CURRENT_KEY || Object.keys(PENDING).length === 0) return;
+  if (!engaged || !CURRENT_KEY || Object.keys(PENDING).length === 0) return;
   const body = JSON.stringify({ session_key: CURRENT_KEY, ...PENDING });
   for (const k of Object.keys(PENDING)) delete (PENDING as Record<string, unknown>)[k];
   fetch(ENDPOINT, {
@@ -56,6 +100,9 @@ export function useGeorgia2ExitBeacon(getState: () => Georgia2SessionPatch, sess
   useEffect(() => {
     bindGeorgia2Session(sessionKey);
     const send = () => {
+      // A visit that never became "engaged" never had a row created for it
+      // (see flushPending above) -- nothing to update on the way out either.
+      if (!engaged) return;
       const payload = JSON.stringify({
         session_key: sessionKey,
         ...stateRef.current(),
