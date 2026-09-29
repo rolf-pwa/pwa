@@ -107,7 +107,21 @@ export default function QuoCommunications({ contactId, contactPhone, contactName
           load();
           return;
         }
-        throw new Error(parsed?.error || error.message);
+        if (parsed?.error) {
+          // A real, well-formed error from quo-service itself -- the send
+          // attempt is recorded (status: 'failed') and safe to just retry.
+          throw new Error(parsed.error);
+        }
+        // The response body wasn't parseable JSON at all -- quo-service
+        // always returns valid JSON from both its validation and its
+        // catch-all, so this means the invocation itself was killed
+        // (platform timeout/crash) before it could respond. We genuinely
+        // can't tell whether OpenPhone still processed the send.
+        load();
+        toast.warning("Couldn't confirm this was sent", {
+          description: "The connection was interrupted before we got a response. Check Quo directly before resending, to avoid a duplicate.",
+        });
+        return;
       }
       if (data?.blocked) {
         toast.error(`PII Shield blocked: ${data.reason}`, {

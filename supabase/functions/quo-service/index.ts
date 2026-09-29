@@ -36,15 +36,30 @@ function resolveQuoFrom(raw: string): string {
 }
 const QUO_PHONE_NUMBER_ID = resolveQuoFrom(QUO_PHONE_NUMBER_RAW);
 
+const QUO_FETCH_TIMEOUT_MS = 15000;
+
 async function quoFetch(path: string, init: RequestInit = {}) {
-  const res = await fetch(`${QUO_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      "Authorization": QUO_API_KEY,
-      "Content-Type": "application/json",
-      ...(init.headers || {}),
-    },
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), QUO_FETCH_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`${QUO_BASE_URL}${path}`, {
+      ...init,
+      headers: {
+        "Authorization": QUO_API_KEY,
+        "Content-Type": "application/json",
+        ...(init.headers || {}),
+      },
+      signal: controller.signal,
+    });
+  } catch (err: any) {
+    if (err?.name === "AbortError") {
+      throw new Error(`Quo API timed out after ${QUO_FETCH_TIMEOUT_MS}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
   const text = await res.text();
   let data: any = {};
   try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
@@ -127,33 +142,61 @@ serve(async (req) => {
       }
 
       const toNum = normalizePhone(to);
-      const result = await quoFetch("/messages", {
-        method: "POST",
-        body: JSON.stringify({
-          from: QUO_PHONE_NUMBER_ID,
-          to: [toNum],
-          content,
-        }),
-      });
 
-      const msg = result?.data || result;
-      await adminClient.from("quo_messages").insert({
-        quo_message_id: msg?.id,
-        contact_id: contactId || null,
-        direction: "outbound",
-        from_number: msg?.from || QUO_PHONE_NUMBER_ID,
-        to_number: toNum,
-        body: content,
-        status: msg?.status || "sent",
-        sent_by: userId,
-        portal_visible: true,
-        occurred_at: msg?.createdAt || new Date().toISOString(),
-        read_at: new Date().toISOString(),
-      });
+      // Record the attempt before calling OpenPhone -- if the call throws or
+      // the invocation is killed by a platform-level timeout, this row still
+      // exists so staff can see it failed instead of it vanishing silently.
+      const { data: pendingRow, error: pendingErr } = await adminClient
+        .from("quo_messages")
+        .insert({
+          contact_id: contactId || null,
+          direction: "outbound",
+          from_number: QUO_PHONE_NUMBER_ID,
+          to_number: toNum,
+          body: content,
+          status: "pending",
+          sent_by: userId,
+          portal_visible: false,
+          occurred_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+      if (pendingErr) throw pendingErr;
 
-      return new Response(JSON.stringify({ success: true, message: msg }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      try {
+        const result = await quoFetch("/messages", {
+          method: "POST",
+          body: JSON.stringify({
+            from: QUO_PHONE_NUMBER_ID,
+            to: [toNum],
+            content,
+          }),
+        });
+
+        const msg = result?.data || result;
+        await adminClient.from("quo_messages").update({
+          quo_message_id: msg?.id,
+          from_number: msg?.from || QUO_PHONE_NUMBER_ID,
+          status: msg?.status || "sent",
+          portal_visible: true,
+          occurred_at: msg?.createdAt || new Date().toISOString(),
+          read_at: new Date().toISOString(),
+        }).eq("id", pendingRow.id);
+
+        return new Response(JSON.stringify({ success: true, message: msg }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (sendErr: any) {
+        const errorMessage = sendErr?.message || String(sendErr);
+        await adminClient.from("quo_messages").update({
+          status: "failed",
+          error_detail: errorMessage,
+          portal_visible: false,
+        }).eq("id", pendingRow.id);
+        return new Response(JSON.stringify({ error: `Send failed: ${errorMessage}` }), {
+          status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     // ---- listMessages ----
