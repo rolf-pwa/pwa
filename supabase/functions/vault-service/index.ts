@@ -1456,7 +1456,15 @@ serve(async (req) => {
         const chain = [driveId, ...ancestors];
         if (!chain.includes(actor.vaultRootId))
           return new Response(JSON.stringify({ cap: "none" }), { headers: { ...cors, "Content-Type": "application/json" } });
-        const cap = await effectiveClientPermission(actor.contactId, chain);
+        let cap = await effectiveClientPermission(actor.contactId, chain);
+        // Mirror ensureAccess's upload-need Shoebox fallback (line ~500) --
+        // every client can always upload into their household Shoebox, even
+        // with no vault_contact_roles row yet, so the button must reflect
+        // that instead of reporting "view" for a brand-new/unassigned client.
+        if (rank(cap) < 1) {
+          const shoeboxId = await getShoeboxFolderId(actor.householdId, actor.vaultRootId, accessToken);
+          if (shoeboxId && chain.includes(shoeboxId)) cap = "upload";
+        }
         return new Response(JSON.stringify({ cap }), { headers: { ...cors, "Content-Type": "application/json" } });
       }
       if (actor.kind === "share_link") {
