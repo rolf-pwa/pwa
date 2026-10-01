@@ -28,6 +28,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { indexVaultFile } from "@/shared/lib/brain";
+import ShoeboxReviewPanel from "@/modules/crm/components/vault/ShoeboxReviewPanel";
 import { toast } from "sonner";
 
 type DriveFolder = { id: string; name: string; modifiedTime?: string };
@@ -1121,6 +1122,8 @@ export function VaultView({ forcedHouseholdId, embedded = false }: { forcedHouse
           </CardContent>
         </Card>
       )}
+
+      {householdId && rootId && <ShoeboxReviewPanel householdId={householdId} />}
 
       {householdId && rootId && (
         <Card>
