@@ -1,0 +1,196 @@
+// Classifies a file sitting in a household's Vault "Shoebox" (the client
+// upload inbox) so vault-service can propose a rename + destination folder
+// for staff to approve -- never applied automatically. Mirrors
+// governance-audit-generate's PDF-to-Vertex extraction pattern.
+
+import { generateVertexContent, type ServiceAccountKey, type VertexContent } from "./vertex-ai.ts";
+
+export const SHOEBOX_SUPPORTED_MIME = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/heic",
+  "image/webp",
+]);
+
+// Stay well under Vertex's ~20MB inline-request cap (same bound governance-audit-generate uses).
+export const MAX_SHOEBOX_FILE_BYTES = 15 * 1024 * 1024;
+
+const DOCUMENT_TYPES = [
+  "DriversLicense", "Passport", "SIN_Card", "BirthCertificate", "MarriageCertificate", "DivorceDecree",
+  "Will", "PowerOfAttorney", "RepresentationAgreement", "TrustDeed",
+  "T4", "T5", "TaxReturn", "NoticeOfAssessment",
+  "InsurancePolicy", "InsuranceStatement",
+  "BankStatement", "InvestmentStatement", "AccountStatement",
+  "MortgageStatement", "PropertyDeed", "PropertyAssessment",
+  "ShareholderAgreement", "CorporateMinuteBook", "ArticlesOfIncorporation",
+  "CorrespondenceLetter",
+  "Other",
+] as const;
+
+// Real vault_folder_templates slugs -- the model is told to pick one of
+// these (or omit the field) rather than invent a category; vault-service
+// re-validates the returned value against the live, active rows before
+// ever using it.
+const CATEGORY_SLUGS = [
+  "identity-legal", "estate", "tax", "insurance", "investments",
+  "real-estate", "business", "charter-sources", "quarterly-reviews",
+  "correspondence", "from-collaborators",
+] as const;
+
+const SHOEBOX_TOOL_SCHEMA = {
+  functionDeclarations: [
+    {
+      name: "classify_shoebox_file",
+      description: "Classify a client-uploaded document sitting in a Vault Shoebox inbox, for staff review before filing.",
+      parameters: {
+        type: "OBJECT",
+        properties: {
+          document_type: {
+            type: "STRING",
+            enum: DOCUMENT_TYPES as unknown as string[],
+            description: "The single best-fitting document type. Use 'Other' only if nothing else fits.",
+          },
+          other_label: {
+            type: "STRING",
+            description: "A short (1-3 word) label, only when document_type is 'Other'.",
+          },
+          document_date: {
+            type: "STRING",
+            description: "ISO date (YYYY-MM-DD) the document itself is dated -- a statement date, date signed, issue date, etc. Omit entirely if the document does not clearly state one; never guess.",
+          },
+          document_subject_first_name: {
+            type: "STRING",
+            description: "The first name of the person this document is ABOUT (e.g. whose driver's license or tax return it is), if stated on the document. Omit if not determinable.",
+          },
+          document_subject_last_name: {
+            type: "STRING",
+            description: "The last name of the person this document is ABOUT. Omit if not determinable.",
+          },
+          proposed_category_slug: {
+            type: "STRING",
+            enum: CATEGORY_SLUGS as unknown as string[],
+            description: "Which Vault category this document belongs in. Omit entirely if you are not confident -- it is safe to leave a file in the Shoebox for a human to file by hand.",
+          },
+        },
+        required: ["document_type"],
+      },
+    },
+  ],
+};
+
+const PROMPT = `The attached file was uploaded by a client into their document Shoebox -- a holding inbox for \
+documents staff haven't yet filed. Read it and classify it so staff can review a suggested filename and \
+filing destination before anything is changed.
+
+Rules:
+- Pick exactly one document_type. Only use "Other" if none of the listed types genuinely fit, and give a \
+short other_label in that case.
+- Only set document_date if the document itself clearly states one (a statement period end date, a date \
+signed, an issue date). Never infer or guess a date that isn't actually printed on the document.
+- Only set document_subject_first_name/last_name if a person's name is clearly printed on the document as \
+its subject (the account holder, the testator, the license holder, etc.).
+- Only set proposed_category_slug if you're confident; omitting it is the safe choice and just leaves the \
+file in the Shoebox for a staff member to file manually.`;
+
+function arrayBufferToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  const CHUNK = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+
+export interface ShoeboxClassification {
+  document_type: string;
+  other_label: string | null;
+  document_date: string | null;
+  document_subject_first_name: string | null;
+  document_subject_last_name: string | null;
+  proposed_category_slug: string | null;
+}
+
+/** Returns null (no proposal, not an error) for unsupported/oversized files -- staff triages those by hand. */
+export async function classifyShoeboxFile(
+  sa: ServiceAccountKey,
+  fileBytes: ArrayBuffer,
+  mimeType: string,
+  fileName: string,
+): Promise<ShoeboxClassification | null> {
+  if (!SHOEBOX_SUPPORTED_MIME.has(mimeType)) return null;
+  if (fileBytes.byteLength > MAX_SHOEBOX_FILE_BYTES) return null;
+
+  const contents: VertexContent[] = [
+    {
+      role: "user",
+      parts: [
+        { text: `${PROMPT}\n\nOriginal filename: ${fileName}` },
+        { inlineData: { mimeType, data: arrayBufferToBase64(fileBytes) } },
+      ],
+    },
+  ];
+  const result = await generateVertexContent(
+    sa,
+    "gemini-2.5-flash",
+    contents,
+    { temperature: 0, maxOutputTokens: 1024 },
+    { tools: [SHOEBOX_TOOL_SCHEMA], toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["classify_shoebox_file"] } } },
+  );
+  // deno-lint-ignore no-explicit-any
+  const parts = result?.candidates?.[0]?.content?.parts as any[] | undefined;
+  const call = parts?.find((p) => p.functionCall)?.functionCall;
+  if (!call || call.name !== "classify_shoebox_file") return null;
+  const args = call.args ?? {};
+  return {
+    document_type: args.document_type ?? "Other",
+    other_label: args.other_label ?? null,
+    document_date: args.document_date ?? null,
+    document_subject_first_name: args.document_subject_first_name ?? null,
+    document_subject_last_name: args.document_subject_last_name ?? null,
+    proposed_category_slug: args.proposed_category_slug ?? null,
+  };
+}
+
+/**
+ * Builds the YY-MM-DD_LastName_FirstInitial-DocumentType filename string in
+ * code -- the model only ever supplies facts (date/type/name), never
+ * formats the filename itself.
+ */
+export function buildProposedFilename(opts: {
+  documentDate: string | null; // ISO YYYY-MM-DD
+  uploadedAt: Date;            // fallback when documentDate is null
+  lastName: string;
+  firstInitial: string;
+  documentTypeLabel: string;   // already resolved: other_label when document_type === "Other", else document_type
+  originalExt: string;         // including the leading dot, e.g. ".pdf"
+}): string {
+  const d = opts.documentDate ? new Date(`${opts.documentDate}T00:00:00Z`) : opts.uploadedAt;
+  const yy = String(d.getUTCFullYear()).slice(-2);
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, "");
+  const lastName = sanitize(opts.lastName) || "Client";
+  const firstInitial = sanitize(opts.firstInitial).slice(0, 1).toUpperCase() || "X";
+  const docType = sanitize(opts.documentTypeLabel) || "Document";
+  return `${yy}-${mm}-${dd}_${lastName}_${firstInitial}-${docType}${opts.originalExt}`;
+}
+
+/**
+ * Household-primary-adult fallback for the filename's subject name, used
+ * when the AI couldn't read one off the document and the uploader's own
+ * identity isn't known either. Duplicated from vault-provisioning.ts's
+ * private ADULT_ROLE_PRIORITY logic (not exported there), matching this
+ * codebase's established per-file small-helper duplication convention.
+ */
+export function resolvePrimaryAdultName(
+  contacts: { first_name: string; last_name: string; family_role: string | null }[],
+): { firstName: string; lastName: string } | null {
+  const PRIORITY: Record<string, number> = { head_of_family: 0, spouse: 1 };
+  const adults = contacts
+    .filter((c) => c.family_role && c.family_role in PRIORITY)
+    .sort((a, b) => PRIORITY[a.family_role!] - PRIORITY[b.family_role!]);
+  const pick = adults[0] ?? contacts[0];
+  return pick ? { firstName: pick.first_name, lastName: pick.last_name } : null;
+}
