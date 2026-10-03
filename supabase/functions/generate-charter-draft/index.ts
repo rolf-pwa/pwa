@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://esm.sh/zod@3.25.76";
-import { generateVertexContent, parseServiceAccountKey, extractJson, GEMINI_FLASH_MODEL, withThinking } from "../_shared/vertex-ai.ts";
+import { generateVertexContent, parseServiceAccountKey, extractJson, GEMINI_GOVERNANCE_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -10,7 +10,7 @@ const ALLOWED_ORIGINS = [
   "https://id-preview--339dfc8f-3e82-4b05-8a36-a9f66fc58449.lovable.app",
 ];
 
-const MODEL = GEMINI_FLASH_MODEL;
+const MODEL = GEMINI_GOVERNANCE_MODEL;
 const MAX_SOURCE_TEXT = 20000;
 const MAX_SOURCES = 12;
 const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID") || "";
@@ -445,6 +445,7 @@ Use the template fields to summarize and structure the charter for the designed 
 
 CRITICAL RULES:
 - Do not invent facts, numbers, institutions, or family members not supported by the materials.
+- Every dollar amount, percentage, threshold, or date you write must appear in the supplied materials (accounts, storehouse rules, sources). If the materials give no figure for something, write that the figure is to be confirmed with the advisor -- never propose or estimate one yourself.
 - For numeric fields, return JSON numbers (not strings, not currency-formatted text). Use null when unknown.
 - For string fields where data is unknown, use careful language noting the detail remains to be confirmed (do not fabricate).
 - Pull values directly from the supplied Sovereignty Charter draft document when present; only synthesize from financial structure when the draft is silent.`;
@@ -481,14 +482,24 @@ CRITICAL RULES:
     let parsedDraft: any;
     try {
       const sa = await parseServiceAccountKey(Deno.env.get("GCP_SERVICE_ACCOUNT_KEY"));
-      const vertexResult = await generateVertexContent(
-        sa,
-        MODEL,
-        [{ role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
-        withThinking(MODEL, { temperature: 0.4, maxOutputTokens: 8192, responseMimeType: "application/json" }, "medium"),
-      );
-      const rawText = vertexResult?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") || "";
-      parsedDraft = extractJson(rawText);
+      // A long structured draft occasionally comes back as malformed JSON; one
+      // retry is cheaper than making staff re-run the whole generation.
+      let lastParseErr: unknown;
+      for (let attempt = 0; attempt < 2 && parsedDraft === undefined; attempt++) {
+        const vertexResult = await generateVertexContent(
+          sa,
+          MODEL,
+          [{ role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
+          withThinking(MODEL, { temperature: 0.4, maxOutputTokens: 8192, responseMimeType: "application/json" }, "medium"),
+        );
+        const rawText = vertexResult?.candidates?.[0]?.content?.parts?.filter((p: any) => !p.thought).map((p: any) => p.text).join("") || "";
+        try {
+          parsedDraft = extractJson(rawText);
+        } catch (e) {
+          lastParseErr = e;
+        }
+      }
+      if (parsedDraft === undefined) throw lastParseErr;
     } catch (aiErr) {
       const message = aiErr instanceof Error ? aiErr.message : String(aiErr);
       return respond(req, { ok: false, error: "AI generation failed", diagnostics: { stage: "vertex_ai", message } });

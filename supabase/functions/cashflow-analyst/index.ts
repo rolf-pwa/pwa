@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { GEMINI_FLASH_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
+import { GEMINI_GOVERNANCE_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -21,7 +21,7 @@ function getCorsHeaders(req: Request) {
 // ---------- Vertex AI Auth ----------
 
 const REGION = "northamerica-northeast1"; // Montreal — PIPEDA compliance
-const MODEL = GEMINI_FLASH_MODEL;
+const MODEL = GEMINI_GOVERNANCE_MODEL;
 
 interface ServiceAccountKey {
   type: string;
@@ -259,7 +259,7 @@ Deno.serve(async (req) => {
         contents: [
           { role: "user", parts: [{ text: SYSTEM_PROMPT + "\n\n" + userPrompt }] },
         ],
-        generationConfig: withThinking(MODEL, { temperature: 0.1, maxOutputTokens: 8000 }, "medium"),
+        generationConfig: withThinking(MODEL, { temperature: 0.1, maxOutputTokens: 16000, responseMimeType: "application/json" }, "medium"),
       }),
     });
 
@@ -270,15 +270,23 @@ Deno.serve(async (req) => {
     }
 
     const aiResult = await aiResponse.json();
-    const rawContent = aiResult.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    // 3.x models can return thought parts ahead of the answer; join only the answer parts.
+    // deno-lint-ignore no-explicit-any
+    const rawContent = ((aiResult.candidates?.[0]?.content?.parts || []) as any[])
+      .filter((p) => !p.thought && typeof p.text === "string")
+      .map((p) => p.text)
+      .join("") || "";
 
     // Clean markdown fences, and strip trailing commas before a closing } or ] —
     // models routinely emit them despite instructions not to, and strict JSON.parse rejects them.
-    const jsonStr = rawContent
+    let jsonStr = rawContent
       .replace(/```json\n?/g, "")
       .replace(/```\n?/g, "")
-      .trim()
-      .replace(/,(\s*[}\]])/g, "$1");
+      .trim();
+    const firstBrace = jsonStr.indexOf("{");
+    const lastBrace = jsonStr.lastIndexOf("}");
+    if (firstBrace >= 0 && lastBrace > firstBrace) jsonStr = jsonStr.slice(firstBrace, lastBrace + 1);
+    jsonStr = jsonStr.replace(/,(\s*[}\]])/g, "$1");
     let parsed: any;
     try {
       parsed = JSON.parse(jsonStr);
