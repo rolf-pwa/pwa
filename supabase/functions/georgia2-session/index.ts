@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://esm.sh/zod@3.25.76";
+import { isBotUserAgent } from "../_shared/bot-detection.ts";
 
 function getCorsHeaders(req: Request) {
   const origin = req.headers.get("Origin") || "";
@@ -68,6 +69,17 @@ serve(async (req) => {
         JSON.stringify({ error: parsed.error.flatten().fieldErrors }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Never let a known crawler/link-preview bot create or touch a session
+    // row -- it would inflate "Started" on Analytics with a visit that never
+    // happened. Report success anyway so the client's fire-and-forget POST
+    // doesn't retry or surface an error.
+    if (isBotUserAgent(req.headers.get("user-agent"))) {
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const { session_key, ended, ...rest } = parsed.data;
