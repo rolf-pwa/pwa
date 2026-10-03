@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { GEMINI_FLASH_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
+import { GEMINI_EXTRACT_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -21,7 +21,7 @@ function getCorsHeaders(req: Request) {
 // ---------- Vertex AI Auth ----------
 
 const REGION = "northamerica-northeast1";
-const MODEL = GEMINI_FLASH_MODEL;
+const MODEL = GEMINI_EXTRACT_MODEL;
 
 interface ServiceAccountKey {
   type: string;
@@ -116,7 +116,12 @@ Deno.serve(async (req) => {
 
     // Convert to base64 for AI processing
     const arrayBuffer = await fileData.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    const base64 = (() => {
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      return btoa(binary);
+    })();
 
     // Vertex AI call — pinned to Montreal
     const gcpKeyRaw = Deno.env.get("GCP_SERVICE_ACCOUNT_KEY");
