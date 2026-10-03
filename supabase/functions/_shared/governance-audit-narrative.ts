@@ -18,7 +18,7 @@
 // session's established convention over the prototype's own
 // pydantic-structured-output mechanism.
 
-import { generateVertexContent, type ServiceAccountKey, type VertexContent, GEMINI_FLASH_MODEL, withThinking } from "./vertex-ai.ts";
+import { generateVertexContent, type ServiceAccountKey, type VertexContent, GEMINI_GOVERNANCE_MODEL, withThinking } from "./vertex-ai.ts";
 
 // Ported verbatim from narrative/style_guide.md.
 export const STYLE_GUIDE = `# Prosperwise Sovereignty Governance Audit -- voice & terminology
@@ -64,7 +64,9 @@ delivery, not a final client-facing document -- it's fine to flag open questions
 ${styleGuide}
 
 # Computed data for this review (the ONLY source of truth for numbers/facts -- do not invent \
-any figure, account number, or fact not present here)
+any figure, account number, or fact not present here). Do not compute differences, sums, \
+ratios or percentage-point gaps yourself -- quote the supplied numbers as given, and describe a \
+gap qualitatively (e.g. "equity exceeds the target") when the data doesn't state it.
 ${computedJson}
 
 # What to produce
@@ -161,6 +163,7 @@ export async function generateAuditNarrative(
   sa: ServiceAccountKey,
   computedData: Record<string, unknown>,
   scorecardElements: string[],
+  model: string = GEMINI_GOVERNANCE_MODEL,
 ): Promise<NarrativeOutput> {
   const payload = { computed: computedData, scorecard_elements: scorecardElements };
   const prompt = PROMPT_TEMPLATE(STYLE_GUIDE, JSON.stringify(payload, null, 2));
@@ -168,9 +171,9 @@ export async function generateAuditNarrative(
   const contents: VertexContent[] = [{ role: "user", parts: [{ text: prompt }] }];
   const result = await generateVertexContent(
     sa,
-    GEMINI_FLASH_MODEL,
+    model,
     contents,
-    withThinking(GEMINI_FLASH_MODEL, { temperature: 0.4, maxOutputTokens: 8192 }, "medium"),
+    withThinking(model, { temperature: 0.4, maxOutputTokens: 8192 }, "low"),
     {
       tools: [NARRATIVE_TOOL_SCHEMA],
       toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["produce_audit_narrative"] } },

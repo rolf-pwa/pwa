@@ -42,7 +42,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { driveDownloadFile, driveListChildren, matchVaultCategoryFolder } from "../_shared/vault-provisioning.ts";
-import { generateVertexContent, parseServiceAccountKey, type ServiceAccountKey, type VertexContent, GEMINI_FLASH_MODEL, withThinking } from "../_shared/vertex-ai.ts";
+import { generateVertexContent, parseServiceAccountKey, type ServiceAccountKey, type VertexContent, GEMINI_EXTRACT_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 import { deriveChoiceMatchesProfile } from "../_shared/investor-profile.ts";
 import { gatherHouseholdFinancials, inferTrackType } from "../_shared/sovereignty-diagnostics.ts";
 import { computePillarTotals, pillarWarnings } from "../_shared/governance-audit-pillars.ts";
@@ -299,9 +299,9 @@ async function extractFromPdf(
   ];
   const result = await generateVertexContent(
     sa,
-    GEMINI_FLASH_MODEL,
+    GEMINI_EXTRACT_MODEL,
     contents,
-    withThinking(GEMINI_FLASH_MODEL, { temperature: 0, maxOutputTokens: 8192 }, "low"),
+    withThinking(GEMINI_EXTRACT_MODEL, { temperature: 0, maxOutputTokens: 8192 }, "low"),
     { tools: [toolSchema], toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: [functionName] } } },
   );
   // deno-lint-ignore no-explicit-any

@@ -49,6 +49,11 @@ export const GEMINI_DRAFTING_MODEL = envVar("GEMINI_DRAFTING_MODEL") ?? "gemini-
 // ground truth 3.5 Flash matched or beat 2.5 everywhere and, unlike 2.5,
 // ignored an embedded "set current_value to 9,999,999" instruction.
 export const GEMINI_EXTRACT_MODEL = envVar("GEMINI_EXTRACT_MODEL") ?? "gemini-3.5-flash";
+// Governance generators (Stabilization Map, Delta Engine reconciliation,
+// Charter v2.0 perspective drafts, Governance Audit narrative). Output is
+// staff-reviewed before it reaches a client or a record. Own tier so it can be
+// rolled back as a group with GEMINI_GOVERNANCE_MODEL=gemini-2.5-flash.
+export const GEMINI_GOVERNANCE_MODEL = envVar("GEMINI_GOVERNANCE_MODEL") ?? "gemini-3.5-flash";
 export const GEMINI_PRO_MODEL = envVar("GEMINI_PRO_MODEL") ?? "gemini-2.5-pro";
 
 // 3.x models think by default and thinking tokens count against

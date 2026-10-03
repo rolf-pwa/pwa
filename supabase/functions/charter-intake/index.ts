@@ -14,7 +14,7 @@ import {
   inferTrackType,
   VAULT_READINESS_SLUGS,
 } from "../_shared/sovereignty-diagnostics.ts";
-import { generateVertexContent, parseServiceAccountKey, type ServiceAccountKey, GEMINI_FLASH_MODEL, withThinking } from "../_shared/vertex-ai.ts";
+import { generateVertexContent, parseServiceAccountKey, type ServiceAccountKey, GEMINI_EXTRACT_MODEL, GEMINI_GOVERNANCE_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { driveDownloadFile, driveListChildren, matchVaultCategoryFolder } from "../_shared/vault-provisioning.ts";
 
@@ -207,7 +207,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 async function extractPdfTextWithVertex(sa: ServiceAccountKey, base64: string, fileName: string): Promise<string> {
   const result = await generateVertexContent(
     sa,
-    GEMINI_FLASH_MODEL,
+    GEMINI_EXTRACT_MODEL,
     [
       {
         role: "user",
@@ -219,7 +219,7 @@ async function extractPdfTextWithVertex(sa: ServiceAccountKey, base64: string, f
         ],
       },
     ],
-    withThinking(GEMINI_FLASH_MODEL, { temperature: 0.1, maxOutputTokens: 8192 }, "low"),
+    withThinking(GEMINI_EXTRACT_MODEL, { temperature: 0.1, maxOutputTokens: 8192 }, "low"),
   );
   const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "";
   return text.trim();
@@ -366,9 +366,9 @@ async function extractLegalDocFacts(
 ): Promise<Record<string, any>> {
   const result = await generateVertexContent(
     sa,
-    GEMINI_FLASH_MODEL,
+    GEMINI_EXTRACT_MODEL,
     [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: "application/pdf", data: arrayBufferToBase64(pdfBytes) } }] }],
-    withThinking(GEMINI_FLASH_MODEL, { temperature: 0, maxOutputTokens: 8192 }, "low"),
+    withThinking(GEMINI_EXTRACT_MODEL, { temperature: 0, maxOutputTokens: 8192 }, "low"),
     { tools: [LEGAL_DOC_TOOL_SCHEMA], toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["extract_legal_document"] } } },
   );
   const parts = result.candidates?.[0]?.content?.parts || [];
@@ -955,9 +955,9 @@ Draft the following six narratives, grounded strictly in the facts above — nev
       try {
         result = await generateVertexContent(
           sa,
-          GEMINI_FLASH_MODEL,
+          GEMINI_GOVERNANCE_MODEL,
           [{ role: "user", parts: [{ text: prompt }] }],
-          withThinking(GEMINI_FLASH_MODEL, { temperature: 0.4, maxOutputTokens: 4096 }, "low"),
+          withThinking(GEMINI_GOVERNANCE_MODEL, { temperature: 0.4, maxOutputTokens: 4096 }, "low"),
           {
             tools: [DRAFT_TOOL_SCHEMA],
             toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["draft_perspective_2_narratives"] } },
@@ -1076,9 +1076,9 @@ Draft the following four narratives, grounded strictly in the facts above — ne
       try {
         result = await generateVertexContent(
           sa,
-          GEMINI_FLASH_MODEL,
+          GEMINI_GOVERNANCE_MODEL,
           [{ role: "user", parts: [{ text: prompt }] }],
-          withThinking(GEMINI_FLASH_MODEL, { temperature: 0.4, maxOutputTokens: 4096 }, "low"),
+          withThinking(GEMINI_GOVERNANCE_MODEL, { temperature: 0.4, maxOutputTokens: 4096 }, "low"),
           {
             tools: [DRAFT_TOOL_SCHEMA],
             toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["draft_perspective_3_narratives"] } },
@@ -1172,9 +1172,9 @@ Draft the following two narratives, grounded strictly in the facts above — nev
       try {
         result = await generateVertexContent(
           sa,
-          GEMINI_FLASH_MODEL,
+          GEMINI_GOVERNANCE_MODEL,
           [{ role: "user", parts: [{ text: prompt }] }],
-          withThinking(GEMINI_FLASH_MODEL, { temperature: 0.4, maxOutputTokens: 4096 }, "low"),
+          withThinking(GEMINI_GOVERNANCE_MODEL, { temperature: 0.4, maxOutputTokens: 4096 }, "low"),
           {
             tools: [DRAFT_TOOL_SCHEMA],
             toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["draft_perspective_4_narratives"] } },
