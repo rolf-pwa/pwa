@@ -3,10 +3,16 @@
 // short string), and callers treat a failure as "no result" -- the deterministic
 // paths in georgia-safety.ts cover for a missing model.
 
-import { generateVertexContent, parseServiceAccountKey, type ServiceAccountKey, GEMINI_FLASH_MODEL, withThinking } from "./vertex-ai.ts";
+import { generateVertexContent, parseServiceAccountKey, type ServiceAccountKey, modelFromEnv, withThinking } from "./vertex-ai.ts";
 import { validateValidationText } from "./georgia-safety.ts";
 
-const MODEL = GEMINI_FLASH_MODEL;
+// Georgia migrated ahead of the global Flash tier: on a 46-case red-team set
+// 3.5 Flash (thinking "low") caught 22/22 threats on both the classifier and
+// the verifier independently (incl. prompt-injection attempts), cut model
+// false alarms from 3-4 to 0, and averaged ~2.4s vs ~5.9s -- 2.5 was
+// degrading to keyword-only screening on ~46% of live calls. Roll back
+// instantly, no redeploy: set secret GEORGIA_LLM_MODEL=gemini-2.5-flash.
+const MODEL = modelFromEnv("GEORGIA_LLM_MODEL", "gemini-3.5-flash");
 const TIMEOUT_MS = 8000;
 
 export const EMOTIONAL_STATES = ["relief", "anxiety", "guilt", "grief", "loss_of_identity", "euphoria"] as const;
