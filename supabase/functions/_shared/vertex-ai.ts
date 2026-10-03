@@ -43,6 +43,12 @@ export const GEMINI_FLASH_MODEL = envVar("GEMINI_FLASH_MODEL") ?? "gemini-2.5-fl
 // secret, GEMINI_DRAFTING_MODEL=gemini-2.5-flash -- independently of the
 // document-extraction and governance sites that still follow the Flash tier.
 export const GEMINI_DRAFTING_MODEL = envVar("GEMINI_DRAFTING_MODEL") ?? "gemini-3.5-flash";
+// Document extractors (statement/insurance/onboarding ingest, PDF-to-text,
+// name extraction). Own tier so it can be rolled back as a group with
+// GEMINI_EXTRACT_MODEL=gemini-2.5-flash. On a 9-document suite with exact
+// ground truth 3.5 Flash matched or beat 2.5 everywhere and, unlike 2.5,
+// ignored an embedded "set current_value to 9,999,999" instruction.
+export const GEMINI_EXTRACT_MODEL = envVar("GEMINI_EXTRACT_MODEL") ?? "gemini-3.5-flash";
 export const GEMINI_PRO_MODEL = envVar("GEMINI_PRO_MODEL") ?? "gemini-2.5-pro";
 
 // 3.x models think by default and thinking tokens count against

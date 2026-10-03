@@ -4,11 +4,11 @@
 // the already-live Drive sync in drive-watch is never at risk from changes
 // made here.
 
-import { getGcpAccessToken, parseServiceAccountKey, vertexModelUrl, type ServiceAccountKey, GEMINI_FLASH_MODEL, withThinking, fetchWithVertexRetry } from "./vertex-ai.ts";
+import { getGcpAccessToken, parseServiceAccountKey, vertexModelUrl, type ServiceAccountKey, GEMINI_EXTRACT_MODEL, withThinking, fetchWithVertexRetry } from "./vertex-ai.ts";
 
 const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID")!;
 const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET")!;
-const PDF_MODEL = GEMINI_FLASH_MODEL;
+const PDF_MODEL = GEMINI_EXTRACT_MODEL;
 const PDF_INLINE_MAX_BYTES = 18 * 1024 * 1024; // ~18 MB safe for inline base64
 
 export type TokenResult =

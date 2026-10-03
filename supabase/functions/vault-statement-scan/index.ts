@@ -14,7 +14,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { driveListChildren, driveDownloadFile, matchVaultCategoryFolder } from "../_shared/vault-provisioning.ts";
-import { GEMINI_FLASH_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
+import { GEMINI_EXTRACT_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
 
 // Keep in sync with src/shared/lib/custodians.ts (a Deno edge function can't
 // import a frontend module directly). Normalizes AI-extracted custodian text
@@ -54,7 +54,7 @@ function getCorsHeaders(req: Request) {
 // ---------- Vertex AI auth (same self-contained pattern as ingest-statement) ----------
 
 const REGION = "northamerica-northeast1";
-const MODEL = GEMINI_FLASH_MODEL;
+const MODEL = GEMINI_EXTRACT_MODEL;
 
 interface ServiceAccountKey {
   type: string;
@@ -247,6 +247,7 @@ Guidelines:
 - For life insurance, pick the most specific policy_type the document supports: "term" if it names a level term period (10/20/T100), "whole_life" or "universal_life" if the document says so explicitly, otherwise "whole_life" as the more common default for a permanent policy — never invent a type the document doesn't support
 - IMPORTANT — joint/multi-life policies: a single policy number can cover more than one insured life (e.g. "Insured No. 01" and "Insured No. 02" on a joint spousal term policy), each with their own coverage amount and premium. When you see this, emit ONE entry per insured life, each with that same policy_number/carrier but that person's own individual insured_name and coverage_amount/premium_amount — never combine multiple people into a single insured_name like "Adrian and Luciana" or use the policy owner's joint name as insured_name
 - "insured_name" must always be exactly one person's full name (or one corporation's name) — never a policyowner field that lists multiple people
+- "premium_amount" and "premium_frequency" must describe the same period: if the document states an amount per payment period (for example 276.00 per month), report that amount with that frequency; if it only gives an annual total, report the annual total with "annual". Never pair an annual total with "monthly" or the reverse
 - Use null for any values you cannot confidently extract
 - Return ONLY the JSON, no markdown`;
 
