@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { GEMINI_FLASH_MODEL, withThinking } from "../_shared/vertex-ai.ts";
+import { GEMINI_FLASH_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -173,7 +173,7 @@ Generate 5 compelling content titles. Return ONLY a JSON array of 5 title string
 
     console.log(`[content-ai] Calling Vertex AI in ${REGION}`);
 
-    const response = await fetch(vertexUrl, {
+    const response = await fetchWithVertexRetry(vertexUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

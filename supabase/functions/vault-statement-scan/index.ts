@@ -14,7 +14,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { driveListChildren, driveDownloadFile, matchVaultCategoryFolder } from "../_shared/vault-provisioning.ts";
-import { GEMINI_FLASH_MODEL, withThinking } from "../_shared/vertex-ai.ts";
+import { GEMINI_FLASH_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
 
 // Keep in sync with src/shared/lib/custodians.ts (a Deno edge function can't
 // import a frontend module directly). Normalizes AI-extracted custodian text
@@ -162,7 +162,7 @@ async function collectFilesRecursive(
 
 async function callVertex(accessToken: string, projectId: string, systemPrompt: string, instruction: string, base64: string, mimeType: string) {
   const vertexUrl = `https://${REGION}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${REGION}/publishers/google/models/${MODEL}:generateContent`;
-  const res = await fetch(vertexUrl, {
+  const res = await fetchWithVertexRetry(vertexUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify({

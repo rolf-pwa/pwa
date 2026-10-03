@@ -4,7 +4,7 @@
 // the already-live Drive sync in drive-watch is never at risk from changes
 // made here.
 
-import { getGcpAccessToken, parseServiceAccountKey, vertexModelUrl, type ServiceAccountKey, GEMINI_FLASH_MODEL, withThinking } from "./vertex-ai.ts";
+import { getGcpAccessToken, parseServiceAccountKey, vertexModelUrl, type ServiceAccountKey, GEMINI_FLASH_MODEL, withThinking, fetchWithVertexRetry } from "./vertex-ai.ts";
 
 const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID")!;
 const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET")!;
@@ -101,7 +101,7 @@ async function extractPdfTextInline(sa: ServiceAccountKey, blob: Blob, fileName?
   const prompt = `Extract the full readable text from this PDF document titled "${fileName || "source document"}". Preserve headings, lists, and paragraph structure using plain text formatting. Do not summarize, do not add commentary, and do not wrap the output in code fences. Return only the extracted text.`;
 
   const accessToken = await getGcpAccessToken(sa);
-  const res = await fetch(vertexModelUrl(sa.project_id, PDF_MODEL), {
+  const res = await fetchWithVertexRetry(vertexModelUrl(sa.project_id, PDF_MODEL), {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify({

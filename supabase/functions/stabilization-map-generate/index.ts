@@ -6,7 +6,7 @@ import {
 } from "../_shared/sovereignty-diagnostics.ts";
 import { georgiaFactLines, type GeorgiaLeadFacts } from "../_shared/georgia-diagnostic-facts.ts";
 import { evaluateCausalDag, type OntologyAssessmentPayload, type RiskFlag } from "../_shared/causal-dag-evaluator.ts";
-import { GEMINI_FLASH_MODEL, withThinking } from "../_shared/vertex-ai.ts";
+import { GEMINI_FLASH_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -566,7 +566,7 @@ async function handleHouseholdGeneration(
       georgiaLines,
     );
 
-    const aiRes = await fetch(vertexUrl, {
+    const aiRes = await fetchWithVertexRetry(vertexUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
       body: JSON.stringify({
@@ -869,7 +869,7 @@ serve(async (req) => {
 
     console.log(`[stabilization-map-generate] Calling Vertex AI for lead ${resolvedLeadId}`);
 
-    const aiRes = await fetch(vertexUrl, {
+    const aiRes = await fetchWithVertexRetry(vertexUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
       body: JSON.stringify({
