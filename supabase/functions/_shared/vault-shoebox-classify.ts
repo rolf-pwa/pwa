@@ -3,8 +3,17 @@
 // for staff to approve -- never applied automatically. Mirrors
 // governance-audit-generate's PDF-to-Vertex extraction pattern.
 
-import { generateVertexContent, type ServiceAccountKey, type VertexContent, GEMINI_FLASH_MODEL, withThinking } from "./vertex-ai.ts";
+import { generateVertexContent, type ServiceAccountKey, type VertexContent, modelFromEnv, withThinking } from "./vertex-ai.ts";
 import { buildProposedFilename, normalizePersonName, resolvePrimaryAdultName } from "./vault-shoebox-naming.ts";
+
+// Migrated ahead of the global Flash tier after a 17-document A/B (photos,
+// scans, a blank page, a non-document image, a French slip, a real scanned
+// will, and a prompt-injection "grocery list"): 3.5 Flash at thinking
+// "minimal" matched 2.5 on every document, ignored the injection, was
+// identical across 3 runs, ran in ~2.4s vs ~4.5s, and filed the Sovereignty
+// Charter to Charter Sources where 2.5 called it a TrustDeed. Roll back with
+// no redeploy by setting secret SHOEBOX_CLASSIFY_MODEL=gemini-2.5-flash.
+const MODEL = modelFromEnv("SHOEBOX_CLASSIFY_MODEL", "gemini-3.5-flash");
 
 export const SHOEBOX_SUPPORTED_MIME = new Set([
   "application/pdf",
@@ -134,9 +143,9 @@ export async function classifyShoeboxFile(
   ];
   const result = await generateVertexContent(
     sa,
-    GEMINI_FLASH_MODEL,
+    MODEL,
     contents,
-    withThinking(GEMINI_FLASH_MODEL, { temperature: 0, maxOutputTokens: 1024 }, "minimal"),
+    withThinking(MODEL, { temperature: 0, maxOutputTokens: 1024 }, "minimal"),
     { tools: [SHOEBOX_TOOL_SCHEMA], toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["classify_shoebox_file"] } } },
   );
   // deno-lint-ignore no-explicit-any
