@@ -4,7 +4,7 @@
 import "https://deno.land/std@0.224.0/dotenv/load.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { z } from "https://esm.sh/zod@3.23.8";
-import { generateVertexContent, parseServiceAccountKey, extractJson, GEMINI_FLASH_MODEL, withThinking } from "../_shared/vertex-ai.ts";
+import { generateVertexContent, parseServiceAccountKey, extractJson, GEMINI_GOVERNANCE_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -172,9 +172,9 @@ Output STRICT JSON: { "results": [ { "fact_key": string, "charter_section_key": 
       const sa = await parseServiceAccountKey(Deno.env.get("GCP_SERVICE_ACCOUNT_KEY"));
       const vertexResult = await generateVertexContent(
         sa,
-        GEMINI_FLASH_MODEL,
+        GEMINI_GOVERNANCE_MODEL,
         [{ role: "user", parts: [{ text: `${systemPrompt}\n\n${JSON.stringify(userPayload)}` }] }],
-        withThinking(GEMINI_FLASH_MODEL, { temperature: 0.2, maxOutputTokens: 4096, responseMimeType: "application/json" }, "low"),
+        withThinking(GEMINI_GOVERNANCE_MODEL, { temperature: 0.2, maxOutputTokens: 4096, responseMimeType: "application/json" }, "low"),
       );
       const rawText = vertexResult?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") || "{}";
       parsedOut = extractJson(rawText);
