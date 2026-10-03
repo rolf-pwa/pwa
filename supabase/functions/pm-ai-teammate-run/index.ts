@@ -6,7 +6,7 @@
 // made client-visible. See the plan doc for the full design rationale.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { generateVertexContent, parseServiceAccountKey, GEMINI_FLASH_MODEL, withThinking } from "../_shared/vertex-ai.ts";
+import { generateVertexContent, parseServiceAccountKey, GEMINI_DRAFTING_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -188,9 +188,9 @@ ${facts}`;
       const sa = await parseServiceAccountKey(Deno.env.get("GCP_SERVICE_ACCOUNT_KEY"));
       const result = await generateVertexContent(
         sa,
-        GEMINI_FLASH_MODEL,
+        GEMINI_DRAFTING_MODEL,
         [{ role: "user", parts: [{ text: prompt }] }],
-        withThinking(GEMINI_FLASH_MODEL, { temperature: 0.4, maxOutputTokens: 4096 }, "low"),
+        withThinking(GEMINI_DRAFTING_MODEL, { temperature: 0.4, maxOutputTokens: 4096 }, "low"),
         { tools: [PM_TEAMMATE_TOOL_SCHEMA], toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["draft_task_output"] } } },
       );
 

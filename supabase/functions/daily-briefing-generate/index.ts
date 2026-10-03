@@ -12,7 +12,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getValidGoogleAccessToken } from "../_shared/google-token.ts";
-import { generateVertexContent, parseServiceAccountKey, GEMINI_FLASH_MODEL, withThinking } from "../_shared/vertex-ai.ts";
+import { generateVertexContent, parseServiceAccountKey, GEMINI_DRAFTING_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -443,9 +443,9 @@ ${block}`;
 
     const result = await generateVertexContent(
       sa,
-      GEMINI_FLASH_MODEL,
+      GEMINI_DRAFTING_MODEL,
       [{ role: "user", parts: [{ text: prompt }] }],
-      withThinking(GEMINI_FLASH_MODEL, { temperature: 0.3, maxOutputTokens: 2048 }, "low"),
+      withThinking(GEMINI_DRAFTING_MODEL, { temperature: 0.3, maxOutputTokens: 2048 }, "low"),
       {
         tools: [BRIEFING_TOOL_SCHEMA],
         toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["populate_daily_briefing"] } },

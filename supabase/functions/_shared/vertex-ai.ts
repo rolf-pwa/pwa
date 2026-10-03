@@ -37,6 +37,12 @@ export function modelFromEnv(name: string, fallback: string): string {
   return envVar(name) ?? fallback;
 }
 export const GEMINI_FLASH_MODEL = envVar("GEMINI_FLASH_MODEL") ?? "gemini-2.5-flash";
+// Low-risk internal drafting/summarising tools (staff-facing text drafts and
+// summaries; nothing here writes to a client record without staff review).
+// Own tier so they can move to 3.x -- and be rolled back with a single
+// secret, GEMINI_DRAFTING_MODEL=gemini-2.5-flash -- independently of the
+// document-extraction and governance sites that still follow the Flash tier.
+export const GEMINI_DRAFTING_MODEL = envVar("GEMINI_DRAFTING_MODEL") ?? "gemini-3.5-flash";
 export const GEMINI_PRO_MODEL = envVar("GEMINI_PRO_MODEL") ?? "gemini-2.5-pro";
 
 // 3.x models think by default and thinking tokens count against
