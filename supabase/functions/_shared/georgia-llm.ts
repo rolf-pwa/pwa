@@ -3,10 +3,10 @@
 // short string), and callers treat a failure as "no result" -- the deterministic
 // paths in georgia-safety.ts cover for a missing model.
 
-import { generateVertexContent, parseServiceAccountKey, type ServiceAccountKey } from "./vertex-ai.ts";
+import { generateVertexContent, parseServiceAccountKey, type ServiceAccountKey, GEMINI_FLASH_MODEL, withThinking } from "./vertex-ai.ts";
 import { validateValidationText } from "./georgia-safety.ts";
 
-const MODEL = "gemini-2.5-flash";
+const MODEL = GEMINI_FLASH_MODEL;
 const TIMEOUT_MS = 8000;
 
 export const EMOTIONAL_STATES = ["relief", "anxiety", "guilt", "grief", "loss_of_identity", "euphoria"] as const;
@@ -37,7 +37,7 @@ async function callTool(sa: ServiceAccountKey, prompt: string, tool: any, name: 
       sa,
       MODEL,
       [{ role: "user", parts: [{ text: prompt }] }],
-      { temperature: 0, maxOutputTokens: 2048 },
+      withThinking(MODEL, { temperature: 0, maxOutputTokens: 2048 }, "low"),
       {
         tools: [{ functionDeclarations: [tool] }],
         toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: [name] } },

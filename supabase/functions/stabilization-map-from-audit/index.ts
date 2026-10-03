@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { GEMINI_PRO_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -22,7 +23,7 @@ function getCorsHeaders(req: Request) {
 const REGION = "northamerica-northeast1";
 // gemini-2.5-pro handles long PDFs + complex tool calls far more reliably
 // than 2.5-flash, which frequently returns MALFORMED_FUNCTION_CALL on this schema.
-const MODEL = "gemini-2.5-pro";
+const MODEL = GEMINI_PRO_MODEL;
 const MAX_PDF_BYTES = 25 * 1024 * 1024; // 25 MB
 
 interface ServiceAccountKey {
@@ -312,7 +313,7 @@ serve(async (req) => {
         toolConfig: {
           functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["populate_stabilization_map"] },
         },
-        generationConfig: { temperature: 0.3, maxOutputTokens: 8192 },
+        generationConfig: withThinking(MODEL, { temperature: 0.3, maxOutputTokens: 8192 }, "high"),
       }),
     });
 

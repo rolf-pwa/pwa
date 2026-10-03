@@ -4,7 +4,7 @@
 // model context, and nothing is sent to Square until an advisor approves.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { generateVertexContent, parseServiceAccountKey } from "../_shared/vertex-ai.ts";
+import { generateVertexContent, parseServiceAccountKey, GEMINI_FLASH_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -29,7 +29,7 @@ function getCorsHeaders(req: Request) {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-const MODEL = "gemini-2.5-flash";
+const MODEL = GEMINI_FLASH_MODEL;
 
 function admin() {
   return createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
@@ -157,7 +157,7 @@ Respond with JSON shaped exactly as:
           ],
         },
       ],
-      { temperature: 0.2, maxOutputTokens: 1500, responseMimeType: "application/json" },
+      withThinking(MODEL, { temperature: 0.2, maxOutputTokens: 1500, responseMimeType: "application/json" }, "low"),
     );
 
     const text = result?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") || "";
@@ -196,7 +196,7 @@ Respond with JSON shaped exactly as:
         action_type: "invoice_draft",
         action_description: `AI drafted an invoice${contact ? ` for ${contact.full_name}` : ""} totalling ${total.toFixed(2)} CAD`,
         proposed_data: { prompt, lines, subtotal, discount, tax, total, due_date: dueDate, notes },
-        logic_trace: "invoice-agent (gemini-2.5-flash, Montreal). Draft for CFO Review — no Square call made.",
+        logic_trace: `invoice-agent (${MODEL}, Montreal). Draft for CFO Review — no Square call made.`,
         created_by: userId,
       })
       .select("id")

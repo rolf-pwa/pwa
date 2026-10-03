@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://esm.sh/zod@3.25.76";
-import { generateVertexContent, parseServiceAccountKey, extractJson } from "../_shared/vertex-ai.ts";
+import { generateVertexContent, parseServiceAccountKey, extractJson, GEMINI_FLASH_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -10,7 +10,7 @@ const ALLOWED_ORIGINS = [
   "https://id-preview--339dfc8f-3e82-4b05-8a36-a9f66fc58449.lovable.app",
 ];
 
-const MODEL = "gemini-2.5-flash";
+const MODEL = GEMINI_FLASH_MODEL;
 const MAX_SOURCE_TEXT = 20000;
 const MAX_SOURCES = 12;
 const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID") || "";
@@ -485,7 +485,7 @@ CRITICAL RULES:
         sa,
         MODEL,
         [{ role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
-        { temperature: 0.4, maxOutputTokens: 8192, responseMimeType: "application/json" },
+        withThinking(MODEL, { temperature: 0.4, maxOutputTokens: 8192, responseMimeType: "application/json" }, "medium"),
       );
       const rawText = vertexResult?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") || "";
       parsedDraft = extractJson(rawText);

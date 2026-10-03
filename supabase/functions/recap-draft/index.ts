@@ -1,5 +1,6 @@
 // Uses Deno.serve
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { GEMINI_FLASH_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -21,7 +22,7 @@ function getCorsHeaders(req: Request) {
 // ---------- Vertex AI Auth ----------
 
 const REGION = "northamerica-northeast1"; // Montreal — PIPEDA compliance
-const MODEL = "gemini-2.5-flash";
+const MODEL = GEMINI_FLASH_MODEL;
 
 interface ServiceAccountKey {
   type: string;
@@ -177,10 +178,7 @@ Keep it professional, concise, and action-oriented.`;
             parts: [{ text: systemPrompt + "\n\nGenerate a daily recap for " + targetDate + " based on this activity data:\n\n" + activitySummary }],
           },
         ],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 4000,
-        },
+        generationConfig: withThinking(MODEL, { temperature: 0.3, maxOutputTokens: 4000 }, "low"),
       }),
     });
 

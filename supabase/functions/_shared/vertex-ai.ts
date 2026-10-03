@@ -12,6 +12,37 @@ export interface ServiceAccountKey {
 
 const REGION = "northamerica-northeast1";
 
+// The one place that decides which Gemini model each call site uses, so
+// migrating off 2.5 is a one-line change here (or a function secret, which
+// also gives an instant no-redeploy rollback) instead of 27 files.
+// Pro and Flash are separate tiers on purpose: today both resolve to 2.5 but
+// the 3.x line has no Montréal-resident Pro model yet (see memory
+// project_gemini_25_retirement), so the two will not always be equal.
+export const GEMINI_FLASH_MODEL = Deno.env.get("GEMINI_FLASH_MODEL") ?? "gemini-2.5-flash";
+export const GEMINI_PRO_MODEL = Deno.env.get("GEMINI_PRO_MODEL") ?? "gemini-2.5-pro";
+
+// 3.x models think by default and thinking tokens count against
+// maxOutputTokens, so a tight cap can truncate a tool call mid-generation
+// (MALFORMED_FUNCTION_CALL). Each call site declares how much reasoning it
+// needs: minimal = extraction/classification, low = drafting/chat,
+// medium = multi-step synthesis, high = Pro-tier reasoning.
+export type ThinkingLevel = "minimal" | "low" | "medium" | "high";
+
+/**
+ * Returns generationConfig with `thinkingConfig` applied for Gemini 3.x
+ * models and unchanged for 2.5 (which uses a different, budget-based knob
+ * and is left on its current default so migrating the constants is the only
+ * behavior change).
+ */
+export function withThinking(
+  model: string,
+  config: Record<string, unknown>,
+  level: ThinkingLevel,
+): Record<string, unknown> {
+  if (!/^gemini-3/.test(model)) return config;
+  return { ...config, thinkingConfig: { thinkingLevel: level } };
+}
+
 export function vertexModelUrl(projectId: string, model: string) {
   return `https://${REGION}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${REGION}/publishers/google/models/${model}:generateContent`;
 }

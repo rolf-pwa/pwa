@@ -14,8 +14,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
+  GEMINI_FLASH_MODEL,
   generateVertexContent,
   parseServiceAccountKey,
+  withThinking,
 } from "../_shared/vertex-ai.ts";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { driveListChildren, matchVaultCategoryFolder } from "../_shared/vault-provisioning.ts";
@@ -45,7 +47,7 @@ function getCorsHeaders(req: Request) {
 const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const MODE = Deno.env.get("INTAKE_AGENT_MODE") ?? "proxy";
-const VERTEX_MODEL = "gemini-2.5-flash";
+const VERTEX_MODEL = GEMINI_FLASH_MODEL;
 const CLASSIFY_CONFIDENCE_THRESHOLD = 0.6;
 
 interface Resolved {
@@ -526,7 +528,7 @@ Set reviewRequired=true if the file name is vague, ambiguous, or the confidence 
       sa,
       VERTEX_MODEL,
       [{ role: "user", parts: [{ text: prompt }] }],
-      { responseMimeType: "application/json" },
+      withThinking(VERTEX_MODEL, { responseMimeType: "application/json" }, "minimal"),
     );
 
     const textPart = result.candidates?.[0]?.content?.parts?.find((p: any) => typeof p.text === "string");
