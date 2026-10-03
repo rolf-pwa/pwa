@@ -10,6 +10,11 @@ export interface ServiceAccountKey {
   token_uri: string;
 }
 
+import { fetchWithVertexRetry } from "./vertex-retry.ts";
+
+// Re-exported so call sites keep importing everything from ./vertex-ai.ts.
+export { fetchWithVertexRetry };
+
 const REGION = "northamerica-northeast1";
 
 // The one place that decides which Gemini model each call site uses, so
@@ -18,8 +23,13 @@ const REGION = "northamerica-northeast1";
 // Pro and Flash are separate tiers on purpose: today both resolve to 2.5 but
 // the 3.x line has no Montréal-resident Pro model yet (see memory
 // project_gemini_25_retirement), so the two will not always be equal.
-export const GEMINI_FLASH_MODEL = Deno.env.get("GEMINI_FLASH_MODEL") ?? "gemini-2.5-flash";
-export const GEMINI_PRO_MODEL = Deno.env.get("GEMINI_PRO_MODEL") ?? "gemini-2.5-pro";
+// Read through globalThis so this module also loads under vitest/tsc, where
+// there is no Deno global (an existing test imports it transitively).
+const envVar = (name: string): string | undefined =>
+  // deno-lint-ignore no-explicit-any
+  (globalThis as any).Deno?.env?.get(name) || undefined;
+export const GEMINI_FLASH_MODEL = envVar("GEMINI_FLASH_MODEL") ?? "gemini-2.5-flash";
+export const GEMINI_PRO_MODEL = envVar("GEMINI_PRO_MODEL") ?? "gemini-2.5-pro";
 
 // 3.x models think by default and thinking tokens count against
 // maxOutputTokens, so a tight cap can truncate a tool call mid-generation
@@ -204,10 +214,11 @@ export async function generateVertexContent(
   contents: VertexContent[],
   generationConfig?: Record<string, unknown>,
   toolsConfig?: { tools: Record<string, unknown>[]; toolConfig: Record<string, unknown> },
+  retry?: { maxRetries?: number },
 ): Promise<any> {
   const accessToken = await getGcpAccessToken(sa);
   const url = vertexModelUrl(sa.project_id, model);
-  const res = await fetch(url, {
+  const res = await fetchWithVertexRetry(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -222,7 +233,7 @@ export async function generateVertexContent(
         ...generationConfig,
       },
     }),
-  });
+  }, retry);
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Vertex AI error ${res.status}: ${text.slice(0, 500)}`);

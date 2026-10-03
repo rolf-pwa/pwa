@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { GEMINI_FLASH_MODEL, withThinking } from "../_shared/vertex-ai.ts";
+import { GEMINI_FLASH_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -158,7 +158,7 @@ Guidelines:
 - Use null for any values you cannot confidently extract
 - Return ONLY the JSON, no markdown`;
 
-    const aiResponse = await fetch(vertexUrl, {
+    const aiResponse = await fetchWithVertexRetry(vertexUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

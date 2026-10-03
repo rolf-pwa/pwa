@@ -43,6 +43,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { driveDownloadFile, driveListChildren, matchVaultCategoryFolder } from "../_shared/vault-provisioning.ts";
 import { generateVertexContent, parseServiceAccountKey, type ServiceAccountKey, type VertexContent, GEMINI_FLASH_MODEL, withThinking } from "../_shared/vertex-ai.ts";
+import { deriveChoiceMatchesProfile } from "../_shared/investor-profile.ts";
 import { gatherHouseholdFinancials, inferTrackType } from "../_shared/sovereignty-diagnostics.ts";
 import { computePillarTotals, pillarWarnings } from "../_shared/governance-audit-pillars.ts";
 import {
@@ -174,6 +175,11 @@ attention for financial/estate planning purposes (e.g. a spousal life interest i
 condition, a specific bequest) -- reference the clause number if the document numbers its clauses, and \
 describe factually what it does, not why it matters.
 
+Be exhaustive rather than selective: list EVERY numbered clause that creates a right, restriction, \
+condition or appointment in key_clauses (a will typically has 15-25 of these), list every named person \
+in parties (including witnesses, the drafting solicitor and alternates), and record each gift or \
+residuary direction as its own beneficiary_designations entry. Do not summarize or merge clauses.
+
 If this document is clearly NOT a Will/legal/estate document, still call the function, but set \
 document_type to "NOT_APPLICABLE" and leave every other field null/empty.`;
 
@@ -295,7 +301,7 @@ async function extractFromPdf(
     sa,
     GEMINI_FLASH_MODEL,
     contents,
-    withThinking(GEMINI_FLASH_MODEL, { temperature: 0, maxOutputTokens: 4096 }, "low"),
+    withThinking(GEMINI_FLASH_MODEL, { temperature: 0, maxOutputTokens: 8192 }, "low"),
     { tools: [toolSchema], toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: [functionName] } } },
   );
   // deno-lint-ignore no-explicit-any
@@ -396,7 +402,11 @@ async function extractDocuments(
           total_points: typeof args.total_points === "number" ? args.total_points : null,
           profile_category: args.profile_category ?? null,
           stated_choice_of_investments: args.stated_choice_of_investments ?? null,
-          choice_matches_profile: typeof args.choice_matches_profile === "boolean" ? args.choice_matches_profile : null,
+          choice_matches_profile: deriveChoiceMatchesProfile(
+            args.profile_category,
+            args.stated_choice_of_investments,
+            typeof args.choice_matches_profile === "boolean" ? args.choice_matches_profile : null,
+          ),
           reason_for_mismatch: args.reason_for_mismatch ?? null,
           source,
         }),

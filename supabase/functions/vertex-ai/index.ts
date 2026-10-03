@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { retrieveBrainContext } from "../_shared/brain-retrieval.ts";
-import { GEMINI_PRO_MODEL, withThinking } from "../_shared/vertex-ai.ts";
+import { GEMINI_PRO_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -534,7 +534,7 @@ serve(async (req) => {
 
     const endpoint = `https://${REGION}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${REGION}/publishers/google/models/${selectedModel}:generateContent`;
 
-    const vertexRes = await fetch(endpoint, {
+    const vertexRes = await fetchWithVertexRetry(endpoint, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,

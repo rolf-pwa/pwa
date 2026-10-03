@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { GEMINI_PRO_MODEL, withThinking } from "../_shared/vertex-ai.ts";
+import { GEMINI_PRO_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -294,7 +294,7 @@ serve(async (req) => {
 
     console.log(`[stabilization-map-from-audit] Calling Vertex for contact ${contactId} (map ${mapId})`);
 
-    const aiRes = await fetch(vertexUrl, {
+    const aiRes = await fetchWithVertexRetry(vertexUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
       body: JSON.stringify({

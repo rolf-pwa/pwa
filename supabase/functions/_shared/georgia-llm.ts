@@ -42,6 +42,8 @@ async function callTool(sa: ServiceAccountKey, prompt: string, tool: any, name: 
         tools: [{ functionDeclarations: [tool] }],
         toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: [name] } },
       },
+      // One retry fits inside the 8s TIMEOUT_MS; more would outlive the race.
+      { maxRetries: 1 },
     ),
   );
   // deno-lint-ignore no-explicit-any

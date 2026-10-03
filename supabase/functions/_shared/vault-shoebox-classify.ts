@@ -4,6 +4,7 @@
 // governance-audit-generate's PDF-to-Vertex extraction pattern.
 
 import { generateVertexContent, type ServiceAccountKey, type VertexContent, GEMINI_FLASH_MODEL, withThinking } from "./vertex-ai.ts";
+import { buildProposedFilename, normalizePersonName, resolvePrimaryAdultName } from "./vault-shoebox-naming.ts";
 
 export const SHOEBOX_SUPPORTED_MIME = new Set([
   "application/pdf",
@@ -147,50 +148,12 @@ export async function classifyShoeboxFile(
     document_type: args.document_type ?? "Other",
     other_label: args.other_label ?? null,
     document_date: args.document_date ?? null,
-    document_subject_first_name: args.document_subject_first_name ?? null,
-    document_subject_last_name: args.document_subject_last_name ?? null,
+    document_subject_first_name: normalizePersonName(args.document_subject_first_name),
+    document_subject_last_name: normalizePersonName(args.document_subject_last_name),
     proposed_category_slug: args.proposed_category_slug ?? null,
   };
 }
 
-/**
- * Builds the YY-MM-DD_LastName_FirstInitial-DocumentType filename string in
- * code -- the model only ever supplies facts (date/type/name), never
- * formats the filename itself.
- */
-export function buildProposedFilename(opts: {
-  documentDate: string | null; // ISO YYYY-MM-DD
-  uploadedAt: Date;            // fallback when documentDate is null
-  lastName: string;
-  firstInitial: string;
-  documentTypeLabel: string;   // already resolved: other_label when document_type === "Other", else document_type
-  originalExt: string;         // including the leading dot, e.g. ".pdf"
-}): string {
-  const d = opts.documentDate ? new Date(`${opts.documentDate}T00:00:00Z`) : opts.uploadedAt;
-  const yy = String(d.getUTCFullYear()).slice(-2);
-  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(d.getUTCDate()).padStart(2, "0");
-  const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, "");
-  const lastName = sanitize(opts.lastName) || "Client";
-  const firstInitial = sanitize(opts.firstInitial).slice(0, 1).toUpperCase() || "X";
-  const docType = sanitize(opts.documentTypeLabel) || "Document";
-  return `${yy}-${mm}-${dd}_${lastName}_${firstInitial}-${docType}${opts.originalExt}`;
-}
 
-/**
- * Household-primary-adult fallback for the filename's subject name, used
- * when the AI couldn't read one off the document and the uploader's own
- * identity isn't known either. Duplicated from vault-provisioning.ts's
- * private ADULT_ROLE_PRIORITY logic (not exported there), matching this
- * codebase's established per-file small-helper duplication convention.
- */
-export function resolvePrimaryAdultName(
-  contacts: { first_name: string; last_name: string; family_role: string | null }[],
-): { firstName: string; lastName: string } | null {
-  const PRIORITY: Record<string, number> = { head_of_family: 0, spouse: 1 };
-  const adults = contacts
-    .filter((c) => c.family_role && c.family_role in PRIORITY)
-    .sort((a, b) => PRIORITY[a.family_role!] - PRIORITY[b.family_role!]);
-  const pick = adults[0] ?? contacts[0];
-  return pick ? { firstName: pick.first_name, lastName: pick.last_name } : null;
-}
+// Re-exported so vault-service keeps importing everything from one module.
+export { buildProposedFilename, resolvePrimaryAdultName };

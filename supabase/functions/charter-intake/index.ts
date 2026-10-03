@@ -269,7 +269,11 @@ powers of attorney, and any other named role-holders.
 - key_clauses: any clause that creates a specific right, restriction, or condition worth an advisor's \
 attention for financial/estate planning purposes (e.g. a spousal life interest in the home, a trust \
 condition, a specific bequest) -- reference the clause number if the document numbers its clauses, and \
-describe factually what it does, not why it matters.
+describe factually what it does, not why it matters. Be exhaustive rather than selective: list EVERY \
+numbered clause that creates a right, restriction, condition or appointment (a will typically has 15-25), \
+list every named person in parties (including witnesses, the drafting solicitor and alternates), and \
+record each gift or residuary direction as its own beneficiary_designations entry. Do not summarize or \
+merge clauses.
 - summary: 2-4 plain-language sentences describing what this document is and its key terms, for a wealth \
 advisor's quick reference.
 
@@ -364,7 +368,7 @@ async function extractLegalDocFacts(
     sa,
     GEMINI_FLASH_MODEL,
     [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: "application/pdf", data: arrayBufferToBase64(pdfBytes) } }] }],
-    withThinking(GEMINI_FLASH_MODEL, { temperature: 0, maxOutputTokens: 4096 }, "low"),
+    withThinking(GEMINI_FLASH_MODEL, { temperature: 0, maxOutputTokens: 8192 }, "low"),
     { tools: [LEGAL_DOC_TOOL_SCHEMA], toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["extract_legal_document"] } } },
   );
   const parts = result.candidates?.[0]?.content?.parts || [];
