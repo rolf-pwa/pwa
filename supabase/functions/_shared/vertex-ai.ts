@@ -28,6 +28,14 @@ const REGION = "northamerica-northeast1";
 const envVar = (name: string): string | undefined =>
   // deno-lint-ignore no-explicit-any
   (globalThis as any).Deno?.env?.get(name) || undefined;
+/**
+ * A per-feature model override: `name` is a function secret that, when set,
+ * wins; otherwise `fallback`. Lets one feature migrate (or roll back
+ * instantly, with no redeploy) independently of the global Flash/Pro tiers.
+ */
+export function modelFromEnv(name: string, fallback: string): string {
+  return envVar(name) ?? fallback;
+}
 export const GEMINI_FLASH_MODEL = envVar("GEMINI_FLASH_MODEL") ?? "gemini-2.5-flash";
 export const GEMINI_PRO_MODEL = envVar("GEMINI_PRO_MODEL") ?? "gemini-2.5-pro";
 
