@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { retrieveBrainContext } from "../_shared/brain-retrieval.ts";
+import { GEMINI_PRO_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -386,7 +387,7 @@ const TOOLS = [
 // ---------- Main ----------
 
 const REGION = "northamerica-northeast1";
-const MODEL = "gemini-2.5-pro";
+const MODEL = GEMINI_PRO_MODEL;
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -524,11 +525,11 @@ serve(async (req) => {
       contents,
       systemInstruction: { parts: [{ text: systemText }] },
       tools: TOOLS,
-      generationConfig: {
+      generationConfig: withThinking(selectedModel, {
         temperature: 0.4,
         maxOutputTokens: 8192,
         responseMimeType: "text/plain",
-      },
+      }, "high"),
     };
 
     const endpoint = `https://${REGION}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${REGION}/publishers/google/models/${selectedModel}:generateContent`;

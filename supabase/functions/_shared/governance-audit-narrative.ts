@@ -18,7 +18,7 @@
 // session's established convention over the prototype's own
 // pydantic-structured-output mechanism.
 
-import { generateVertexContent, type ServiceAccountKey, type VertexContent } from "./vertex-ai.ts";
+import { generateVertexContent, type ServiceAccountKey, type VertexContent, GEMINI_FLASH_MODEL, withThinking } from "./vertex-ai.ts";
 
 // Ported verbatim from narrative/style_guide.md.
 export const STYLE_GUIDE = `# Prosperwise Sovereignty Governance Audit -- voice & terminology
@@ -168,9 +168,9 @@ export async function generateAuditNarrative(
   const contents: VertexContent[] = [{ role: "user", parts: [{ text: prompt }] }];
   const result = await generateVertexContent(
     sa,
-    "gemini-2.5-flash",
+    GEMINI_FLASH_MODEL,
     contents,
-    { temperature: 0.4, maxOutputTokens: 8192 },
+    withThinking(GEMINI_FLASH_MODEL, { temperature: 0.4, maxOutputTokens: 8192 }, "medium"),
     {
       tools: [NARRATIVE_TOOL_SCHEMA],
       toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["produce_audit_narrative"] } },

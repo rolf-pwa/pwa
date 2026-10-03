@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { GEMINI_FLASH_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -20,7 +21,9 @@ function getCorsHeaders(req: Request) {
 // ---------- Vertex AI Auth ----------
 
 const REGION = "northamerica-northeast1";
-const MODEL = "gemini-2.5-flash-lite-preview-06-17";
+// Was a -preview-06-17 model Google shut down in Aug 2025; every call 404'd and
+// degraded silently to "Unknown" client names.
+const MODEL = GEMINI_FLASH_MODEL;
 
 interface ServiceAccountKey {
   type: string;
@@ -140,7 +143,7 @@ Deno.serve(async (req) => {
                 { inlineData: { mimeType: "application/pdf", data: base64 } },
               ],
             }],
-            generationConfig: { temperature: 0, maxOutputTokens: 200 },
+            generationConfig: withThinking(MODEL, { temperature: 0, maxOutputTokens: 1024 }, "minimal"),
           }),
         });
 

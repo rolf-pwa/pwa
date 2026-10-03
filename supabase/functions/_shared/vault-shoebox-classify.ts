@@ -3,7 +3,7 @@
 // for staff to approve -- never applied automatically. Mirrors
 // governance-audit-generate's PDF-to-Vertex extraction pattern.
 
-import { generateVertexContent, type ServiceAccountKey, type VertexContent } from "./vertex-ai.ts";
+import { generateVertexContent, type ServiceAccountKey, type VertexContent, GEMINI_FLASH_MODEL, withThinking } from "./vertex-ai.ts";
 
 export const SHOEBOX_SUPPORTED_MIME = new Set([
   "application/pdf",
@@ -133,9 +133,9 @@ export async function classifyShoeboxFile(
   ];
   const result = await generateVertexContent(
     sa,
-    "gemini-2.5-flash",
+    GEMINI_FLASH_MODEL,
     contents,
-    { temperature: 0, maxOutputTokens: 1024 },
+    withThinking(GEMINI_FLASH_MODEL, { temperature: 0, maxOutputTokens: 1024 }, "minimal"),
     { tools: [SHOEBOX_TOOL_SCHEMA], toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["classify_shoebox_file"] } } },
   );
   // deno-lint-ignore no-explicit-any

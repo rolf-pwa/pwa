@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { GEMINI_FLASH_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -21,7 +22,7 @@ function getCorsHeaders(req: Request) {
 // ---------- Vertex AI Auth (Montréal pinned) ----------
 
 const REGION = "northamerica-northeast1";
-const MODEL = "gemini-2.5-flash";
+const MODEL = GEMINI_FLASH_MODEL;
 
 interface ServiceAccountKey {
   type: string;
@@ -404,7 +405,7 @@ serve(async (req) => {
       body: JSON.stringify({
         contents: vertexContents,
         tools: TOOLS,
-        generationConfig: { temperature: 0.6, maxOutputTokens: 2048 },
+        generationConfig: withThinking(MODEL, { temperature: 0.6, maxOutputTokens: 2048 }, "low"),
       }),
     });
 

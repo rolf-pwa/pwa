@@ -14,7 +14,7 @@
 // engagement-message-send, portal-sms, quo-service, vault-service).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { generateVertexContent, parseServiceAccountKey, type ServiceAccountKey } from "../_shared/vertex-ai.ts";
+import { generateVertexContent, parseServiceAccountKey, type ServiceAccountKey, GEMINI_FLASH_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 import { checkOutboundPii } from "../_shared/pii-shield.ts";
 
 const ALLOWED_ORIGINS = [
@@ -273,7 +273,7 @@ Return at most the 8 most significant deltas, ranked by delta_severity (Critical
     try {
       result = await generateVertexContent(
         sa,
-        "gemini-2.5-flash",
+        GEMINI_FLASH_MODEL,
         [{ role: "user", parts: [{ text: prompt }] }],
         // 8192, not 4096 -- deltas_detected is an unbounded array (each
         // entry carries a rationale + several verbatim quotes), and a
@@ -282,7 +282,7 @@ Return at most the 8 most significant deltas, ranked by delta_severity (Critical
         // call. Capped further by the prompt's own "at most 8 deltas"
         // instruction above, so this is real headroom, not a bet against
         // the same failure recurring on an even richer transcript.
-        { temperature: 0.2, maxOutputTokens: 8192 },
+        withThinking(GEMINI_FLASH_MODEL, { temperature: 0.2, maxOutputTokens: 8192 }, "medium"),
         {
           tools: [DELTA_TOOL_SCHEMA],
           toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["identify_causal_deltas"] } },

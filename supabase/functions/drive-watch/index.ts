@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { GEMINI_FLASH_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -177,7 +178,7 @@ async function uploadBlobToStorage(supabaseAdmin: any, contactId: string, fileNa
 
 // ---------- Vertex AI PDF extraction (Montreal region) ----------
 const VERTEX_REGION = "northamerica-northeast1";
-const VERTEX_MODEL = "gemini-2.5-flash";
+const VERTEX_MODEL = GEMINI_FLASH_MODEL;
 const PDF_INLINE_MAX_BYTES = 18 * 1024 * 1024; // ~18 MB safe for inline base64
 
 interface VertexServiceAccountKey {
@@ -269,7 +270,7 @@ async function extractPdfTextWithVertex(blob: Blob, fileName?: string): Promise<
           ],
         },
       ],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+      generationConfig: withThinking(VERTEX_MODEL, { temperature: 0.1, maxOutputTokens: 8192 }, "minimal"),
     }),
   });
 

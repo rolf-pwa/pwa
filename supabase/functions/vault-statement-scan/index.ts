@@ -14,6 +14,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { driveListChildren, driveDownloadFile, matchVaultCategoryFolder } from "../_shared/vault-provisioning.ts";
+import { GEMINI_FLASH_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 
 // Keep in sync with src/shared/lib/custodians.ts (a Deno edge function can't
 // import a frontend module directly). Normalizes AI-extracted custodian text
@@ -53,7 +54,7 @@ function getCorsHeaders(req: Request) {
 // ---------- Vertex AI auth (same self-contained pattern as ingest-statement) ----------
 
 const REGION = "northamerica-northeast1";
-const MODEL = "gemini-2.5-flash";
+const MODEL = GEMINI_FLASH_MODEL;
 
 interface ServiceAccountKey {
   type: string;
@@ -171,7 +172,7 @@ async function callVertex(accessToken: string, projectId: string, systemPrompt: 
           parts: [{ text: systemPrompt + "\n\n" + instruction }, { inlineData: { mimeType, data: base64 } }],
         },
       ],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 8000 },
+      generationConfig: withThinking(MODEL, { temperature: 0.1, maxOutputTokens: 8000 }, "minimal"),
     }),
   });
   if (!res.ok) throw new Error(`AI parsing failed: ${await res.text()}`);
