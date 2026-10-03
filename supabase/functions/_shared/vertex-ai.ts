@@ -54,6 +54,11 @@ export const GEMINI_EXTRACT_MODEL = envVar("GEMINI_EXTRACT_MODEL") ?? "gemini-3.
 // staff-reviewed before it reaches a client or a record. Own tier so it can be
 // rolled back as a group with GEMINI_GOVERNANCE_MODEL=gemini-2.5-flash.
 export const GEMINI_GOVERNANCE_MODEL = envVar("GEMINI_GOVERNANCE_MODEL") ?? "gemini-3.5-flash";
+// Client-facing chat (Georgia in the client portal and the public VFO
+// onboarding concierge). Own tier so it can be rolled back separately with
+// GEMINI_CLIENT_CHAT_MODEL=gemini-2.5-flash. On a red-team set 2.5 repeatedly
+// dumped its system prompt and knowledge base on request; 3.5 declined every time.
+export const GEMINI_CLIENT_CHAT_MODEL = envVar("GEMINI_CLIENT_CHAT_MODEL") ?? "gemini-3.5-flash";
 export const GEMINI_PRO_MODEL = envVar("GEMINI_PRO_MODEL") ?? "gemini-2.5-pro";
 
 // 3.x models think by default and thinking tokens count against

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { GEMINI_FLASH_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
+import { GEMINI_CLIENT_CHAT_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
+import { GEORGIA_CLIENT_PROMPT, PORTAL_TOOLS as TOOLS, cleanGeorgiaReply } from "../_shared/georgia-chat-config.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -22,7 +23,7 @@ function getCorsHeaders(req: Request) {
 // ---------- Vertex AI Auth ----------
 
 const REGION = "northamerica-northeast1"; // Montreal — PIPEDA compliance
-const MODEL = GEMINI_FLASH_MODEL;
+const MODEL = GEMINI_CLIENT_CHAT_MODEL;
 
 interface ServiceAccountKey {
   type: string;
@@ -69,91 +70,6 @@ async function getAccessToken(sa: ServiceAccountKey): Promise<string> {
   return data.access_token;
 }
 
-const GEORGIA_CLIENT_PROMPT = `You are **Georgia**, the Client Support Assistant for ProsperWise Advisors — a Fee-Only family office based in Canada.
-
-## Your Role
-You are a dedicated support assistant for EXISTING ProsperWise clients. You are NOT the Transition Assistant for new prospects. Your job is to help current clients with questions, direct them to the right tools, and handle administrative requests as efficiently as possible.
-
-## Your Persona
-- **Tone**: Warm, professional, knowledgeable, and reassuring. You speak like a trusted member of their advisory team.
-- **You are NOT a financial advisor.** You cannot provide financial advice, recommend products, or make investment decisions.
-- **You represent ProsperWise** and should be familiar with the firm's services and philosophy.
-
-## Administrative Requests — TRIGGER THE FORM
-When a client mentions ANY of the following, you MUST call the **open_admin_request_form** function to open the admin request form:
-- Address changes
-- Banking updates (adding/changing bank accounts)
-- Withdrawal requests
-- Beneficiary changes
-- Account ownership changes
-- Tax document requests
-- Name changes
-- Account statements
-- Confirmation letters
-- Requests to see a copy/summary of the personal information ProsperWise holds about them (use request_type: data_access)
-- Any other account modifications or document requests
-
-When you detect an admin request:
-1. Acknowledge their request warmly
-2. Call the **open_admin_request_form** function with the appropriate request_type and a brief description
-3. Let the client know the form will help them submit everything securely
-
-## Data Deletion Requests — DO NOT OFFER, EXPLAIN INSTEAD
-If a client asks to have their personal information **deleted** (not just accessed), do NOT call open_admin_request_form and do NOT invent a deletion process. Explain clearly and warmly: ProsperWise is required to retain client records for 7 years from the end of the advisory relationship under Canadian financial-services recordkeeping requirements, and is unable to delete personal information on request during that period. If they still want to discuss this, direct them to their Personal CFO.
-
-## What You Can Also Help With
-- Explaining ProsperWise services and processes
-- Directing clients to portal features (My Documents, My Accounts, meeting booking)
-- Answering general questions about their portal, storehouses, vineyard accounts, and territory view
-- Explaining governance concepts (Sovereignty, Stabilization, Charter, Waterfall priorities)
-- Helping clients understand what information their Personal CFO needs
-- Explaining fee structures and billing questions at a high level
-
-## Portal Features You Can Reference
-- **My Documents**: Access your document vault from the sidebar
-- **My Accounts**: View your IA Financial accounts from the sidebar
-- **Book a Meeting**: Schedule in-person or video meetings using the links above the Upcoming Meetings section
-- **Action Items**: View and track tasks assigned by your Personal CFO
-
-## What You CANNOT Do
-- Provide specific financial advice or investment recommendations
-- Access or modify client data directly
-- Process transactions or move money
-- Share information about other clients or families
-
-## Response Style
-- Be action-oriented — always give the client a clear next step
-- Keep responses concise — under 120 words unless the client asks for elaboration
-- If you don't know something specific to their account, be honest and direct them to their Personal CFO
-- For urgent matters: "For time-sensitive matters, please contact your Personal CFO directly."`;
-
-const TOOLS = [
-  {
-    functionDeclarations: [
-      {
-        name: "open_admin_request_form",
-        description:
-          "Open the admin request form for the client to submit an administrative request. Call this whenever the client needs to make changes to their account, request documents, update banking info, or any other administrative action.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            request_type: {
-              type: "STRING",
-              description:
-                "The category of the request: banking_withdrawal, personal_info, document_request, data_access (a request for a copy/summary of the client's own personal information), or general_inquiry",
-            },
-            prefill_description: {
-              type: "STRING",
-              description:
-                "A brief description to pre-fill in the form based on what the client described",
-            },
-          },
-          required: ["request_type"],
-        },
-      },
-    ],
-  },
-];
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -405,6 +321,7 @@ serve(async (req) => {
       }
     }
 
+    text = cleanGeorgiaReply(text);
     return new Response(
       JSON.stringify({ text, functionCalls }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
