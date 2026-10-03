@@ -4,7 +4,7 @@
 // model context, and nothing is sent to Square until an advisor approves.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { generateVertexContent, parseServiceAccountKey, GEMINI_FLASH_MODEL, withThinking } from "../_shared/vertex-ai.ts";
+import { generateVertexContent, parseServiceAccountKey, GEMINI_DRAFTING_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -29,7 +29,7 @@ function getCorsHeaders(req: Request) {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-const MODEL = GEMINI_FLASH_MODEL;
+const MODEL = GEMINI_DRAFTING_MODEL;
 
 function admin() {
   return createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });

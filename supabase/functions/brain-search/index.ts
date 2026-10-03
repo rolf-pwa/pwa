@@ -3,7 +3,7 @@
 // and `ask` (retrieval + grounded Gemini answer with numbered citations).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { generateVertexContent, parseServiceAccountKey, GEMINI_FLASH_MODEL, withThinking } from "../_shared/vertex-ai.ts";
+import { generateVertexContent, parseServiceAccountKey, GEMINI_DRAFTING_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 import { retrieveBrainContext } from "../_shared/brain-retrieval.ts";
 
 const ALLOWED_ORIGINS = [
@@ -29,7 +29,7 @@ function getCorsHeaders(req: Request) {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-const ASK_MODEL = GEMINI_FLASH_MODEL;
+const ASK_MODEL = GEMINI_DRAFTING_MODEL;
 
 const ASK_SYSTEM_PROMPT = `You are the retrieval assistant for ProsperWise's private Second Brain.
 Answer ONLY from the "Second Brain Context" provided below — never from general knowledge.
@@ -114,7 +114,7 @@ Deno.serve(async (req) => {
             parts: [{ text: `${ASK_SYSTEM_PROMPT}\n\n${context.block}\n\nQUESTION:\n${query}` }],
           },
         ],
-        withThinking(ASK_MODEL, { temperature: 0.2, maxOutputTokens: 1024 }, "low"),
+        withThinking(ASK_MODEL, { temperature: 0.2, maxOutputTokens: 1024 }, "minimal"),
       );
       const text = result?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ||
         "I couldn't generate an answer from the brain.";
