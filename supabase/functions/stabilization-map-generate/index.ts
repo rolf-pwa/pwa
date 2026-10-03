@@ -6,7 +6,7 @@ import {
 } from "../_shared/sovereignty-diagnostics.ts";
 import { georgiaFactLines, type GeorgiaLeadFacts } from "../_shared/georgia-diagnostic-facts.ts";
 import { evaluateCausalDag, type OntologyAssessmentPayload, type RiskFlag } from "../_shared/causal-dag-evaluator.ts";
-import { GEMINI_FLASH_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
+import { GEMINI_GOVERNANCE_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -27,7 +27,7 @@ function getCorsHeaders(req: Request) {
 
 // ---------- Vertex AI ----------
 const REGION = "northamerica-northeast1";
-const MODEL = GEMINI_FLASH_MODEL;
+const MODEL = GEMINI_GOVERNANCE_MODEL;
 
 interface ServiceAccountKey {
   type: string;
