@@ -59,7 +59,13 @@ export const GEMINI_GOVERNANCE_MODEL = envVar("GEMINI_GOVERNANCE_MODEL") ?? "gem
 // GEMINI_CLIENT_CHAT_MODEL=gemini-2.5-flash. On a red-team set 2.5 repeatedly
 // dumped its system prompt and knowledge base on request; 3.5 declined every time.
 export const GEMINI_CLIENT_CHAT_MODEL = envVar("GEMINI_CLIENT_CHAT_MODEL") ?? "gemini-3.5-flash";
-export const GEMINI_PRO_MODEL = envVar("GEMINI_PRO_MODEL") ?? "gemini-2.5-pro";
+// Pro tier: the Sovereignty Assistant (staff chat with document ingestion) and
+// the Stabilization Map from an audit PDF. There is still no Montréal-resident
+// 3.x Pro model, so this tier runs 3.5 Flash with high thinking (3.x calls here
+// get a larger output cap because thinking tokens count against it). On charter
+// ingestion 3.5 Flash passed 4/4 where 2.5 Pro failed 2/4 (MAX_TOKENS,
+// UNEXPECTED_TOOL_CALL). Roll back with GEMINI_PRO_MODEL=gemini-2.5-pro.
+export const GEMINI_PRO_MODEL = envVar("GEMINI_PRO_MODEL") ?? "gemini-3.5-flash";
 
 // 3.x models think by default and thinking tokens count against
 // maxOutputTokens, so a tight cap can truncate a tool call mid-generation

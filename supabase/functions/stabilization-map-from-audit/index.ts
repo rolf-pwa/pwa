@@ -21,8 +21,8 @@ function getCorsHeaders(req: Request) {
 
 // ---------- Vertex AI ----------
 const REGION = "northamerica-northeast1";
-// gemini-2.5-pro handles long PDFs + complex tool calls far more reliably
-// than 2.5-flash, which frequently returns MALFORMED_FUNCTION_CALL on this schema.
+// Pro tier (see _shared/vertex-ai.ts). 2.5-flash frequently returned MALFORMED_FUNCTION_CALL
+// on this schema; 3.5 Flash with a larger output cap completed 3/3 on the test audit.
 const MODEL = GEMINI_PRO_MODEL;
 const MAX_PDF_BYTES = 25 * 1024 * 1024; // 25 MB
 
@@ -313,7 +313,8 @@ serve(async (req) => {
         toolConfig: {
           functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["populate_stabilization_map"] },
         },
-        generationConfig: withThinking(MODEL, { temperature: 0.3, maxOutputTokens: 8192 }, "high"),
+        // 3.x counts thinking tokens against the cap, so give it more headroom than 2.5.
+        generationConfig: withThinking(MODEL, { temperature: 0.3, maxOutputTokens: /^gemini-3/.test(MODEL) ? 32768 : 8192 }, "high"),
       }),
     });
 
