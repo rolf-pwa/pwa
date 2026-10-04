@@ -17,12 +17,10 @@ export { fetchWithVertexRetry };
 
 const REGION = "northamerica-northeast1";
 
-// The one place that decides which Gemini model each call site uses, so
-// migrating off 2.5 is a one-line change here (or a function secret, which
-// also gives an instant no-redeploy rollback) instead of 27 files.
-// Pro and Flash are separate tiers on purpose: today both resolve to 2.5 but
-// the 3.x line has no Montréal-resident Pro model yet (see memory
-// project_gemini_25_retirement), so the two will not always be equal.
+// The one place that decides which Gemini model each call site uses. Every tier
+// below defaults to gemini-3.5-flash (the only 3.x model that serves from the
+// Montréal region; 2.5 retires 2027-03-31) and each has a function secret for an
+// instant, no-redeploy rollback -- see memory project_gemini_25_retirement.
 // Read through globalThis so this module also loads under vitest/tsc, where
 // there is no Deno global (an existing test imports it transitively).
 const envVar = (name: string): string | undefined =>
@@ -36,7 +34,6 @@ const envVar = (name: string): string | undefined =>
 export function modelFromEnv(name: string, fallback: string): string {
   return envVar(name) ?? fallback;
 }
-export const GEMINI_FLASH_MODEL = envVar("GEMINI_FLASH_MODEL") ?? "gemini-2.5-flash";
 // Low-risk internal drafting/summarising tools (staff-facing text drafts and
 // summaries; nothing here writes to a client record without staff review).
 // Own tier so they can move to 3.x -- and be rolled back with a single

@@ -10,7 +10,7 @@ This is a template, not a finished record. It lists the third-party services Pro
 | Quo / OpenPhone | Contact name, phone number, call recordings, transcripts, SMS content | Dialer / client communication (US-hosted infrastructure) | _Not yet confirmed_ | | |
 | Wix | Marketing site content; historically some email relay functionality (being phased out — see `PRIVACY_AND_SECURITY_POLICY.md`) | Public marketing site, legacy email relay | _Not yet confirmed_ | | |
 | Supabase | All application data (database, auth, storage, edge functions) | Core application backend | Confirmed (automatic) | [supabase.com/legal/dpa](https://supabase.com/legal/dpa) — incorporated into Terms of Service for all orgs, no separate signature needed | 2026-08-26 |
-| Google Cloud (Vertex AI) | Content sent to AI features (charter drafts, governance alignment, cashflow analysis, portal assistant) | AI-assisted features | _Not yet confirmed_ | | |
+| Google Cloud (Vertex AI) | Content sent to AI features (charter drafts, governance alignment, cashflow analysis, client and staff assistants, document extraction, Shoebox classification, safety screening); processed in the Montréal region (see CONTROLS_MAPPING section 17) | AI-assisted features | _Not yet confirmed_ | | |
 | Google Cloud (Firebase) | No client data directly — hosts the compiled frontend application | Application hosting | _Not yet confirmed_ | | |
 
 ## How to use this document

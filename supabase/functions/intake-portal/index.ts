@@ -14,7 +14,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  GEMINI_FLASH_MODEL,
+  GEMINI_EXTRACT_MODEL,
   generateVertexContent,
   parseServiceAccountKey,
   withThinking,
@@ -47,7 +47,7 @@ function getCorsHeaders(req: Request) {
 const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const MODE = Deno.env.get("INTAKE_AGENT_MODE") ?? "proxy";
-const VERTEX_MODEL = GEMINI_FLASH_MODEL;
+const VERTEX_MODEL = GEMINI_EXTRACT_MODEL;
 const CLASSIFY_CONFIDENCE_THRESHOLD = 0.6;
 
 interface Resolved {
