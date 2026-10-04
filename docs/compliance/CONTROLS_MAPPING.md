@@ -142,6 +142,14 @@ Category-level summary (not exhaustive column list) — see `supabase/migrations
 
 **Gap identified 2026-08-10:** the Supabase dashboard shows "No backups" configured for the production project. This is a real Availability-domain gap — there is currently no database backup/point-in-time-recovery in place. This should be treated as a priority item, not just a documentation nicety, since it affects actual data-loss risk, not only compliance posture.
 
+## 17. AI processing (Vertex AI)
+
+- **Region:** every Gemini call is pinned to `northamerica-northeast1` (Montréal) -- `REGION` in `supabase/functions/_shared/vertex-ai.ts` (and the same constant in the few functions that build their own request URL). No call uses a global endpoint.
+- **Models (as of 2026-10-03):** all features run `gemini-3.5-flash`, the only 3.x model served from the Montréal region (the 3.1/3-flash variants return 404 there; the "-preview" variants are global-only and are deliberately not used because they would leave the Canadian region). Google retires Gemini 2.5 on 2027-03-31. Model choice lives in one place (`_shared/vertex-ai.ts`), in per-feature tiers, each with a function secret for an instant rollback to `gemini-2.5-flash`/`-pro` (`GEMINI_EXTRACT_MODEL`, `GEMINI_DRAFTING_MODEL`, `GEMINI_GOVERNANCE_MODEL`, `GEMINI_CLIENT_CHAT_MODEL`, `GEMINI_PRO_MODEL`, `GEORGIA_LLM_MODEL`, `SHOEBOX_CLASSIFY_MODEL`).
+- **Data retention at Google:** Gemini 3.x enables "durable caching" by default (cached prompt data at rest up to 24h). The project-level cache setting was set to `EPHEMERAL` retention (`PATCH .../projects/gen-lang-client-0223396536/cacheConfig`, confirmed `done: true`, 2026-10), preserving the no-retention-at-rest posture that applied to 2.5.
+- **Outbound PII controls** are unchanged by the model move: `_shared/pii-shield.ts` still gates the outbound paths listed in section 11 (the Delta Engine transcript path included); the free-text safety screen on the public Georgia diagnostic never sends raw text to the model for the acknowledgment paragraph (only fixed category facts).
+- **Client-facing assistants** (portal Georgia, VFO concierge): output rules in `_shared/georgia-chat-config.ts`; on a red-team set the previous model dumped its instructions/knowledge base on request while 3.5 declined every time. Replies are still advisory-free by design and every AI-drafted record is staff-reviewed before it is used.
+
 ---
 
 ## Roadmap / planned improvements
@@ -149,7 +157,7 @@ Category-level summary (not exhaustive column list) — see `supabase/migrations
 These are known, deliberate gaps — listed here rather than silently omitted, so this document stays honest as a living reference:
 
 1. **Formal data retention & deletion policy — retention period confirmed at 7 years from the end of the advisory relationship.** In progress: a staff-reviewed retention-monitoring mechanism (§16) that flags households past the 7-year floor for manual staff decision. Deletion is never automatic and is never triggered by a client request — see item 2.
-2. **Client-facing self-service data request mechanism** in the portal. In progress: clients can request a *copy* of their data (see §17). Deletion is explicitly **not** offered as a client-initiated action — ProsperWise is required to retain client records for 7 years from relationship end regardless of any request, so there is no client-facing deletion path by design, now or planned.
+2. **Client-facing self-service data request mechanism** in the portal. In progress: clients can request a *copy* of their data (see §14). Deletion is explicitly **not** offered as a client-initiated action — ProsperWise is required to retain client records for 7 years from relationship end regardless of any request, so there is no client-facing deletion path by design, now or planned.
 3. ~~Role-based access control~~ / ~~household-scoped `portal-uploads` policy~~ — reclassified as deliberate design decisions, not gaps. See §1 and §2 above.
 4. **Documented sub-processor / DPA registry** maintained outside of code, confirmed with each vendor (Google, Square, Asana, OpenPhone, Wix). See `SUBPROCESSORS.md` (template drafted, vendor confirmation still needed — not something this document can self-certify).
 5. **Reconcile the stale cron reference** to the old Supabase project ✅ **DONE** — `brain-index-drain`'s live schedule was pointed at the decommissioned project (`skcgdoiestzqxsooaxur`); fixed via a follow-up migration re-scheduling the job at the correct project URL, verified directly against `cron.job`.
