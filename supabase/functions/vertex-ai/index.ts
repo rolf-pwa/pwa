@@ -130,7 +130,7 @@ When the Personal CFO uploads a Sovereignty Charter PDF:
    - **current_value**: The dollar value shown.
    - **notes**: Capture the harvest classification (e.g. "Eligible Harvest", "Protected (Growth)") in the notes field — this indicates whether the asset produces harvestable income or is growth-protected.
     Rows categorized as **"Storehouse"** (Liquidity Reserve, Strategic Reserve, Philanthropic Trust, Legacy Trust) should NOT go to vineyard_accounts — those map to the **storehouses** table via propose_storehouse_update.
-    Use the **ingest_vineyard_accounts** tool to propose Vineyard rows as a batch.
+    Use the **ingest_vineyard_accounts** tool to propose Vineyard rows as a batch. Include ONLY the rows whose Structure column says "Vineyard" in the balance sheet table — never accounts mentioned elsewhere in the narrative (e.g. gifts, legacy bequests) and never rows categorised Keep, Armoury, Vault, Residence or Liability.
   2. **Storehouse Balance Extraction**: For each Storehouse row in the balance sheet, extract the **current_value** (dollar balance) and **target_value** (funding goal/floor) and include them in the **propose_storehouse_update** tool call. Do NOT put balances in the notes field — use the dedicated current_value and target_value fields.
   3. **Storehouse Rule Generation**: Look for "Storehouse Funding Goals" or similar sections. Extract funding floors (e.g. Liquidity Reserve's $48,000 floor), funding ceilings, governance clauses (e.g. Secondary Quiet Period for inflows >$50,000), and quiet period rules. Use the **ingest_storehouse_rules** tool.
   4. **Sovereign Waterfall**: Look for priority allocation order (e.g. 1. Replenish Liquidity Reserve, 2. Debt Reduction, 3. Replanting). Use the **ingest_waterfall_priorities** tool.
@@ -521,15 +521,21 @@ serve(async (req) => {
       }
     }
 
+    const hasDocument = !!documentData || messages.some((m: any) => m.documentData);
+
     const vertexBody: any = {
       contents,
       systemInstruction: { parts: [{ text: systemText }] },
       tools: TOOLS,
+      // 3.x models count thinking tokens against maxOutputTokens. A multi-tool
+      // charter/audit ingestion (several large function calls in one reply) ran
+      // out of budget at 8192 on 3.5 Flash (MAX_TOKENS / MALFORMED_FUNCTION_CALL),
+      // so 3.x gets a larger cap and document ingestion thinks less.
       generationConfig: withThinking(selectedModel, {
         temperature: 0.4,
-        maxOutputTokens: 8192,
+        maxOutputTokens: /^gemini-3/.test(selectedModel) ? 32768 : 8192,
         responseMimeType: "text/plain",
-      }, "high"),
+      }, hasDocument ? "medium" : "high"),
     };
 
     const endpoint = `https://${REGION}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${REGION}/publishers/google/models/${selectedModel}:generateContent`;
