@@ -28,7 +28,6 @@ import {
   Search,
   Folder,
   FolderOpen,
-  CheckSquare,
   ShieldCheck,
   Mail,
   Phone,
@@ -47,13 +46,11 @@ interface Contact {
   households: { governance_status: string | null; fiduciary_entity: string | null } | null;
   updated_at: string;
   google_drive_url: string | null;
-  asana_url: string | null;
   ia_financial_url: string | null;
 }
 
 const RESOURCE_ICONS = [
   { key: "google_drive_url" as const, label: "Google Drive", icon: FolderOpen },
-  { key: "asana_url" as const, label: "Asana", icon: CheckSquare },
   { key: "ia_financial_url" as const, label: "IA Financial", icon: ShieldCheck },
 ];
 
@@ -65,7 +62,7 @@ const Contacts = () => {
   const fetchContacts = useCallback(async () => {
     const { data } = await supabase
       .from("contacts")
-      .select("id, first_name, last_name, email, phone, address, household_id, households(governance_status, fiduciary_entity), updated_at, google_drive_url, asana_url, ia_financial_url")
+      .select("id, first_name, last_name, email, phone, address, household_id, households(governance_status, fiduciary_entity), updated_at, google_drive_url, ia_financial_url")
       .order("last_name")
       .order("first_name");
     setContacts(data || []);

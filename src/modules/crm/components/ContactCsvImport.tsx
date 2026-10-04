@@ -40,7 +40,6 @@ const CONTACT_FIELDS = [
   { value: "poa_firm", label: "POA Firm" },
   
   { value: "google_drive_url", label: "Google Drive URL" },
-  { value: "asana_url", label: "Asana URL" },
   { value: "ia_financial_url", label: "IA Financial URL" },
 ];
 
@@ -102,7 +101,6 @@ function guessMapping(header: string): string {
   if (h.includes("poafirm") || h.includes("powerofattorneyfirm")) return "poa_firm";
   
   if (h.includes("googledrive") || h.includes("gdrive")) return "google_drive_url";
-  if (h.includes("asana")) return "asana_url";
   if (h.includes("iafinancial")) return "ia_financial_url";
   return "__skip__";
 }

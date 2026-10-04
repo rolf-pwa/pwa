@@ -6,7 +6,6 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID")!;
 const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET")!;
-const ASANA_BASE_URL = "https://app.asana.com/api/1.0";
 const CHARTER_SUBFOLDER_NAME = "Sovereignty Charter Sources";
 const CHARTER_BUCKET = "charter-source-uploads";
 const CHARTER_TEXT_LIMIT = 20000;
@@ -78,25 +77,6 @@ async function getValidGoogleToken(supabaseAdmin: any): Promise<TokenResult> {
 function extractFolderId(driveUrl: string): string | null {
   const match = driveUrl.match(/\/folders\/([a-zA-Z0-9_-]+)/);
   return match ? match[1] : null;
-}
-
-function extractTaskGid(asanaUrl: string | null): string | null {
-  if (!asanaUrl) return null;
-  const newTaskMatch = asanaUrl.match(/\/task\/(\d+)/);
-  if (newTaskMatch) return newTaskMatch[1];
-  const listTaskMatch = asanaUrl.match(/\/project\/\d+\/list\/(\d+)/);
-  if (listTaskMatch) return listTaskMatch[1];
-  const twoSegment = asanaUrl.match(/app\.asana\.com\/0\/\d+\/(\d+)/);
-  if (twoSegment) return twoSegment[1];
-  return null;
-}
-
-function extractProjectGid(asanaUrl: string | null): string | null {
-  if (!asanaUrl) return null;
-  const newMatch = asanaUrl.match(/\/project\/(\d+)/);
-  if (newMatch) return newMatch[1];
-  const oldMatch = asanaUrl.match(/app\.asana\.com\/0\/(\d+)/);
-  return oldMatch ? oldMatch[1] : null;
 }
 
 async function listDriveFilesRecursively(
@@ -305,77 +285,75 @@ function inferSourceKind(name: string, mimeType?: string): "quarterly_review" | 
   return "note";
 }
 
-async function lookupVisibilityField(taskGid: string, asanaToken: string): Promise<{ fieldGid: string; internalOnlyGid: string } | null> {
-  const res = await fetch(`${ASANA_BASE_URL}/tasks/${taskGid}?opt_fields=custom_fields`, {
-    headers: { Authorization: `Bearer ${asanaToken}`, "Content-Type": "application/json" },
-  });
-  if (!res.ok) return null;
-  const json = await res.json();
-  const cfs = json.data?.custom_fields || [];
-  const visField = cfs.find((cf: any) => cf.name === "PW_Visibility" || cf.name?.toLowerCase().includes("visibility"));
-  if (!visField || !visField.enum_options) return null;
-  const internalOpt = visField.enum_options.find((o: any) => o.name === "Internal Only");
-  if (!internalOpt) return null;
-  return { fieldGid: visField.gid, internalOnlyGid: internalOpt.gid };
+// Automated tasks are attributed to the first connected Google user (the same
+// convention the charter sync uses for created_by on imported sources).
+let cachedAutomationUserId: string | null | undefined;
+async function automationUserId(supabaseAdmin: any): Promise<string | null> {
+  if (cachedAutomationUserId !== undefined) return cachedAutomationUserId;
+  const { data } = await supabaseAdmin.from("google_tokens").select("user_id").limit(1).maybeSingle();
+  cachedAutomationUserId = data?.user_id ?? null;
+  return cachedAutomationUserId;
 }
 
-async function createAsanaSubtask(parentTaskGid: string, projectGid: string | null, contactName: string, fileName: string, fileUrl: string, asanaToken: string): Promise<boolean> {
+// Internal-only (client_visible: false) task on the contact in the in-house PM system.
+async function createInternalTask(
+  supabaseAdmin: any,
+  contact: { id: string; household_id?: string | null },
+  fields: { title: string; description: string; due_date?: string | null; parent_task_id?: string | null },
+): Promise<string | null> {
+  const createdBy = await automationUserId(supabaseAdmin);
+  if (!createdBy) {
+    console.warn("[DriveWatch] No connected Google user to attribute the task to; skipping task creation.");
+    return null;
+  }
+  const { data, error } = await supabaseAdmin
+    .from("pm_tasks")
+    .insert({
+      title: fields.title,
+      description: fields.description,
+      due_date: fields.due_date ?? null,
+      parent_task_id: fields.parent_task_id ?? null,
+      contact_id: contact.id,
+      household_id: contact.household_id ?? null,
+      status: "open",
+      client_visible: false,
+      created_by: createdBy,
+    })
+    .select("id")
+    .single();
+  if (error) {
+    console.error(`[DriveWatch] Task creation failed ("${fields.title}"):`, error.message);
+    return null;
+  }
+  return data.id;
+}
+
+async function createSignedDocTask(
+  supabaseAdmin: any,
+  contact: { id: string; full_name: string; household_id?: string | null },
+  fileName: string,
+  fileUrl: string,
+): Promise<boolean> {
   const today = new Date().toISOString().split("T")[0];
-  const notes = `A signed PDF "${fileName}" was detected in ${contactName}'s Google Drive folder on ${today}.
+  const id = await createInternalTask(supabaseAdmin, contact, {
+    title: `Signed document received: ${fileName}`,
+    description: `A signed PDF "${fileName}" was detected in ${contact.full_name}'s Google Drive folder on ${today}.
 
 Document: ${fileUrl}
 
 Next steps:
 - Review the document
 - File to the Vault (when ready)
-- Confirm with client`;
-
-  try {
-    const taskData = { data: { name: `Signed document received: ${fileName}`, notes, due_on: today } };
-    const res = await fetch(`${ASANA_BASE_URL}/tasks/${parentTaskGid}/subtasks`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${asanaToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify(taskData),
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      console.error(`[DriveWatch] Subtask creation failed [${res.status}]:`, err);
-      return false;
-    }
-    const subtask = (await res.json()).data;
-    if (!subtask?.gid) return false;
-
-    if (projectGid) {
-      const addRes = await fetch(`${ASANA_BASE_URL}/tasks/${subtask.gid}/addProject`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${asanaToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ data: { project: projectGid } }),
-      });
-      if (!addRes.ok) console.warn(`[DriveWatch] Failed to add subtask to project:`, await addRes.text());
-    }
-
-    const visInfo = await lookupVisibilityField(parentTaskGid, asanaToken);
-    if (visInfo) {
-      const cfRes = await fetch(`${ASANA_BASE_URL}/tasks/${subtask.gid}`, {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${asanaToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ data: { custom_fields: { [visInfo.fieldGid]: visInfo.internalOnlyGid } } }),
-      });
-      if (!cfRes.ok) console.warn(`[DriveWatch] Failed to set visibility:`, await cfRes.text());
-    }
-
-    return true;
-  } catch (e) {
-    console.error("[DriveWatch] Subtask creation error:", e);
-    return false;
-  }
+- Confirm with client`,
+    due_date: today,
+  });
+  return !!id;
 }
 
-async function processSignedDocsWatch(supabaseAdmin: any, accessToken: string, asanaToken: string) {
+async function processSignedDocsWatch(supabaseAdmin: any, accessToken: string) {
   const { data: contacts, error: contactsError } = await supabaseAdmin
     .from("contacts")
-    .select("id, full_name, google_drive_url, asana_url")
+    .select("id, full_name, google_drive_url, household_id")
     .not("google_drive_url", "is", null)
     .neq("google_drive_url", "");
 
@@ -409,17 +387,11 @@ async function processSignedDocsWatch(supabaseAdmin: any, accessToken: string, a
     try {
       const newPdfs = await listDriveFilesRecursively(accessToken, folderId, earliestChecked, { pdfsOnly: true });
       if (newPdfs.length > 0) {
-        let primaryContact = folderContacts.find((c) => extractTaskGid(c.asana_url));
-        if (!primaryContact) primaryContact = folderContacts[0];
-
-        const parentTaskGid = extractTaskGid(primaryContact.asana_url);
-        const projectGid = extractProjectGid(primaryContact.asana_url);
+        const primaryContact = folderContacts[0];
 
         for (const pdf of newPdfs) {
           const fileUrl = pdf.webViewLink || `https://drive.google.com/file/d/${pdf.id}/view`;
-          if (parentTaskGid) {
-            await createAsanaSubtask(parentTaskGid, projectGid, primaryContact.full_name, pdf.name, fileUrl, asanaToken);
-          }
+          await createSignedDocTask(supabaseAdmin, primaryContact, pdf.name, fileUrl);
           await supabaseAdmin.from("staff_notifications").insert({
             title: `📄 Signed document: ${pdf.name}`,
             body: `New PDF detected in ${primaryContact.full_name}'s Google Drive folder.`,
@@ -448,60 +420,13 @@ async function processSignedDocsWatch(supabaseAdmin: any, accessToken: string, a
   return { success: true, foldersScanned: folderMap.size, contactsScanned: contacts.length, totalNewFiles, results };
 }
 
-async function findExistingSubtaskByName(parentTaskGid: string, name: string, asanaToken: string): Promise<string | null> {
-  const url = `${ASANA_BASE_URL}/tasks/${parentTaskGid}/subtasks?opt_fields=name,gid&limit=100`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${asanaToken}`, "Content-Type": "application/json" } });
-  if (!res.ok) return null;
-  const json = await res.json();
-  const match = (json.data || []).find((t: any) => (t.name || "").trim() === name.trim());
-  return match?.gid || null;
-}
-
-async function createPlainSubtask(parentTaskGid: string, projectGid: string | null, name: string, notes: string, asanaToken: string): Promise<string | null> {
-  const taskData = { data: { name, notes } };
-  const res = await fetch(`${ASANA_BASE_URL}/tasks/${parentTaskGid}/subtasks`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${asanaToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify(taskData),
-  });
-  if (!res.ok) {
-    console.error(`[DriveWatch] Failed to create subtask "${name}":`, await res.text());
-    return null;
-  }
-  const subtaskGid = (await res.json()).data?.gid;
-  if (!subtaskGid) return null;
-
-  if (projectGid) {
-    await fetch(`${ASANA_BASE_URL}/tasks/${subtaskGid}/addProject`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${asanaToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ data: { project: projectGid } }),
-    });
-  }
-
-  // Mark Internal Only via the parent's PW_Visibility custom field
-  const visInfo = await lookupVisibilityField(parentTaskGid, asanaToken);
-  if (visInfo) {
-    await fetch(`${ASANA_BASE_URL}/tasks/${subtaskGid}`, {
-      method: "PUT",
-      headers: { Authorization: `Bearer ${asanaToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ data: { custom_fields: { [visInfo.fieldGid]: visInfo.internalOnlyGid } } }),
-    });
-  }
-
-  return subtaskGid;
-}
-
 async function createReviewActionTask(
   supabaseAdmin: any,
-  contactId: string,
-  contactName: string,
-  parentTaskGid: string,
-  projectGid: string | null,
+  contact: { id: string; full_name: string; household_id?: string | null },
   fileName: string,
   fileUrl: string,
-  asanaToken: string,
 ): Promise<void> {
+  const contactId = contact.id;
   // Pull the most recent quarterly review for this contact
   const { data: review, error: reviewErr } = await supabaseAdmin
     .from("quarterly_system_reviews")
@@ -528,22 +453,29 @@ async function createReviewActionTask(
   const reviewDateLabel = review.review_date || new Date().toISOString().split("T")[0];
   const parentName = `Quarterly Governance Review priorities — ${reviewDateLabel}`;
 
-  // Idempotency: skip if a subtask with this exact name already exists under the contact's parent task
-  const existing = await findExistingSubtaskByName(parentTaskGid, parentName, asanaToken);
+  // Idempotency: skip if a task with this exact title already exists for the contact
+  const { data: existing } = await supabaseAdmin
+    .from("pm_tasks")
+    .select("id")
+    .eq("contact_id", contactId)
+    .is("parent_task_id", null)
+    .eq("title", parentName)
+    .limit(1)
+    .maybeSingle();
   if (existing) {
-    console.log(`[DriveWatch] Action task already exists for review ${review.id} (subtask gid ${existing}); skipping.`);
+    console.log(`[DriveWatch] Action task already exists for review ${review.id} (task ${existing.id}); skipping.`);
     return;
   }
 
-  const parentNotes = `Internal action items derived from the latest Quarterly Governance Review for ${contactName}.
+  const parentNotes = `Internal action items derived from the latest Quarterly Governance Review for ${contact.full_name}.
 
 Review document: ${fileName}
 ${fileUrl}
 
 Each subtask below corresponds to a priority captured in the review. Resolve them before the next quarterly cycle.`;
 
-  const reviewParentGid = await createPlainSubtask(parentTaskGid, projectGid, parentName, parentNotes, asanaToken);
-  if (!reviewParentGid) {
+  const reviewParentId = await createInternalTask(supabaseAdmin, contact, { title: parentName, description: parentNotes });
+  if (!reviewParentId) {
     console.error(`[DriveWatch] Failed to create review action parent task for contact ${contactId}.`);
     return;
   }
@@ -551,8 +483,8 @@ Each subtask below corresponds to a priority captured in the review. Resolve the
   for (let i = 0; i < priorities.length; i++) {
     const priorityText = priorities[i];
     const subtaskName = `Priority ${i + 1}: ${priorityText.length > 120 ? priorityText.slice(0, 117) + "…" : priorityText}`;
-    const subtaskNotes = `${priorityText}\n\nFrom Quarterly Governance Review (${reviewDateLabel}) for ${contactName}.`;
-    await createPlainSubtask(reviewParentGid, projectGid, subtaskName, subtaskNotes, asanaToken);
+    const subtaskNotes = `${priorityText}\n\nFrom Quarterly Governance Review (${reviewDateLabel}) for ${contact.full_name}.`;
+    await createInternalTask(supabaseAdmin, contact, { title: subtaskName, description: subtaskNotes, parent_task_id: reviewParentId });
   }
 
   console.log(`[DriveWatch] Created review action task with ${priorities.length} priority subtasks for contact ${contactId}.`);
@@ -561,7 +493,7 @@ Each subtask below corresponds to a priority captured in the review. Resolve the
 async function processCharterFolderSync(supabaseAdmin: any, accessToken: string, contactId: string) {
   const { data: contact, error: contactError } = await supabaseAdmin
     .from("contacts")
-    .select("id, full_name, google_drive_url, asana_url")
+    .select("id, full_name, google_drive_url, household_id")
     .eq("id", contactId)
     .maybeSingle();
 
@@ -666,28 +598,17 @@ async function processCharterFolderSync(supabaseAdmin: any, accessToken: string,
       importedIds.add(file.id);
 
       // When a Quarterly Governance Review is freshly imported, create an internal
-      // Asana task with one subtask per priority captured in quarterly_system_reviews.
+      // task with one subtask per priority captured in quarterly_system_reviews.
       if (sourceKind === "quarterly_review") {
-        const parentTaskGid = extractTaskGid(contact.asana_url);
-        const projectGid = extractProjectGid(contact.asana_url);
-        const asanaToken = Deno.env.get("ASANA_ACCESS_TOKEN");
-        if (parentTaskGid && asanaToken) {
-          try {
-            await createReviewActionTask(
-              supabaseAdmin,
-              contactId,
-              contact.full_name,
-              parentTaskGid,
-              projectGid,
-              file.name,
-              file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`,
-              asanaToken,
-            );
-          } catch (taskErr) {
-            console.error(`[DriveWatch] Review action task creation failed for contact ${contactId}:`, taskErr);
-          }
-        } else {
-          console.warn(`[DriveWatch] Skipping review action task — missing parent task or Asana token (contact ${contactId}).`);
+        try {
+          await createReviewActionTask(
+            supabaseAdmin,
+            contact,
+            file.name,
+            file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`,
+          );
+        } catch (taskErr) {
+          console.error(`[DriveWatch] Review action task creation failed for contact ${contactId}:`, taskErr);
         }
       }
     } catch (error) {
@@ -795,12 +716,7 @@ serve(async (req) => {
       return new Response(JSON.stringify(result), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const asanaToken = Deno.env.get("ASANA_ACCESS_TOKEN");
-    if (!asanaToken) {
-      return new Response(JSON.stringify({ error: "ASANA_ACCESS_TOKEN not configured" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    const result = await processSignedDocsWatch(supabaseAdmin, accessToken, asanaToken);
+    const result = await processSignedDocsWatch(supabaseAdmin, accessToken);
     return new Response(JSON.stringify(result), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error("[DriveWatch] Fatal error:", e);

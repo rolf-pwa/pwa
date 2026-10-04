@@ -45,7 +45,6 @@ import {
   User,
   Percent,
   Crown,
-  ExternalLink,
   GitBranch,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -609,16 +608,6 @@ const CorporationDetail = () => {
             <div>
               <label className="text-xs font-medium text-muted-foreground">Fiscal Year End</label>
               <InlineEdit value={corp.fiscal_year_end || ""} onSave={(v) => updateField("fiscal_year_end", v || null)} placeholder="e.g. December 31" />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">Asana Project</label>
-              {corp.asana_project_url ? (
-                <a href={corp.asana_project_url} target="_blank" rel="noopener noreferrer" className="text-sm text-accent hover:underline flex items-center gap-1">
-                  Open in Asana <ExternalLink className="h-3 w-3" />
-                </a>
-              ) : (
-                <InlineEdit value="" onSave={(v) => updateField("asana_project_url", v || null)} placeholder="Paste Asana project URL…" />
-              )}
             </div>
             <div>
               <label className="text-xs font-medium text-muted-foreground">Notes</label>

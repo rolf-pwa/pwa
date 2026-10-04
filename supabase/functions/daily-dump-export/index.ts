@@ -5,8 +5,6 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID")!;
 const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET")!;
-const ASANA_ACCESS_TOKEN = Deno.env.get("ASANA_ACCESS_TOKEN");
-const ASANA_WORKSPACE_ID = Deno.env.get("ASANA_WORKSPACE_ID");
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -252,12 +250,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ---------- Fetch Asana tasks modified/completed on target day ----------
-    const asanaTasks = await fetchAsanaTasks(targetDate);
+    // ---------- Fetch tasks modified/completed on target day ----------
+    const dayTasks = await fetchDayTasks(sb, targetDate);
 
     // ---------- Build markdown ----------
     const displayDate = toDisplayDate(targetDate);
-    const md = buildMarkdown({ displayDate, byContact, contactNames, asanaTasks });
+    const md = buildMarkdown({ displayDate, byContact, contactNames, dayTasks });
 
     // ---------- Locate today's pre-created Doc & append ----------
     const gToken = await getValidToken(sb, googleUserId);
@@ -384,58 +382,61 @@ function toDisplayDate(isoDate: string): string {
   }).format(d);
 }
 
-interface AsanaTask {
-  gid: string;
+interface DayTask {
+  id: string;
   name: string;
   completed: boolean;
-  completed_at?: string | null;
-  modified_at?: string | null;
   assignee_name?: string | null;
   project_name?: string | null;
-  section_name?: string | null;
   parent_name?: string | null;
   due_on?: string | null;
   notes?: string | null;
 }
 
-async function fetchAsanaTasks(targetDate: string): Promise<AsanaTask[]> {
-  if (!ASANA_ACCESS_TOKEN || !ASANA_WORKSPACE_ID) {
-    console.log("[daily-dump-export] Asana not configured; skipping tasks");
-    return [];
-  }
+// Tasks from the in-house PM system touched on the target day (UTC window,
+// matching how the rest of this export treats a "day").
+// deno-lint-ignore no-explicit-any
+async function fetchDayTasks(sb: any, targetDate: string): Promise<DayTask[]> {
   try {
-    // Search API: tasks modified in the day window
-    const dayStart = `${targetDate}T00:00:00Z`;
-    const dayEnd = `${targetDate}T23:59:59Z`;
-    const url =
-      `https://app.asana.com/api/1.0/workspaces/${ASANA_WORKSPACE_ID}/tasks/search` +
-      `?modified_at.after=${encodeURIComponent(dayStart)}` +
-      `&modified_at.before=${encodeURIComponent(dayEnd)}` +
-      `&opt_fields=name,completed,completed_at,modified_at,assignee.name,projects.name,memberships.section.name,parent.name,due_on,notes` +
-      `&limit=100`;
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${ASANA_ACCESS_TOKEN}` },
-    });
-    if (!res.ok) {
-      console.error(`[daily-dump-export] Asana search failed ${res.status}: ${await res.text()}`);
+    const { data: tasks, error } = await sb
+      .from("pm_tasks")
+      .select("id, title, description, status, due_date, assignee_id, project_id, parent_task_id")
+      .gte("updated_at", `${targetDate}T00:00:00Z`)
+      .lte("updated_at", `${targetDate}T23:59:59Z`)
+      .order("updated_at", { ascending: true })
+      .limit(200);
+    if (error || !tasks?.length) {
+      if (error) console.error("[daily-dump-export] task fetch failed:", error.message);
       return [];
     }
-    const json = await res.json();
-    return (json.data || []).map((t: any) => ({
-      gid: t.gid,
-      name: t.name,
-      completed: !!t.completed,
-      completed_at: t.completed_at,
-      modified_at: t.modified_at,
-      assignee_name: t.assignee?.name || null,
-      project_name: t.projects?.[0]?.name || null,
-      section_name: t.memberships?.[0]?.section?.name || null,
-      parent_name: t.parent?.name || null,
-      due_on: t.due_on,
-      notes: t.notes ? truncate(t.notes, 300) : null,
+    // deno-lint-ignore no-explicit-any
+    const uniq = (xs: any[]) => [...new Set(xs.filter(Boolean))];
+    const projectIds = uniq(tasks.map((t: any) => t.project_id));
+    const assigneeIds = uniq(tasks.map((t: any) => t.assignee_id));
+    const parentIds = uniq(tasks.map((t: any) => t.parent_task_id));
+    const [{ data: projects }, { data: profiles }, { data: parents }] = await Promise.all([
+      projectIds.length ? sb.from("pm_projects").select("id, name").in("id", projectIds) : { data: [] },
+      assigneeIds.length ? sb.from("profiles").select("user_id, full_name").in("user_id", assigneeIds) : { data: [] },
+      parentIds.length ? sb.from("pm_tasks").select("id, title").in("id", parentIds) : { data: [] },
+    ]);
+    // deno-lint-ignore no-explicit-any
+    const nameBy = (rows: any[] | null, k: string, v: string) => new Map((rows || []).map((r: any) => [r[k], r[v]]));
+    const projectName = nameBy(projects, "id", "name");
+    const assigneeName = nameBy(profiles, "user_id", "full_name");
+    const parentName = nameBy(parents, "id", "title");
+    // deno-lint-ignore no-explicit-any
+    return tasks.map((t: any) => ({
+      id: t.id,
+      name: t.title,
+      completed: t.status === "done",
+      assignee_name: assigneeName.get(t.assignee_id) || null,
+      project_name: projectName.get(t.project_id) || null,
+      parent_name: parentName.get(t.parent_task_id) || null,
+      due_on: t.due_date,
+      notes: t.description ? truncate(t.description, 300) : null,
     }));
   } catch (e) {
-    console.error("[daily-dump-export] Asana fetch error:", e);
+    console.error("[daily-dump-export] task fetch error:", e);
     return [];
   }
 }
@@ -444,9 +445,9 @@ function buildMarkdown(args: {
   displayDate: string;
   byContact: Record<string, ActivityRow[]>;
   contactNames: Record<string, string>;
-  asanaTasks: AsanaTask[];
+  dayTasks: DayTask[];
 }): string {
-  const { displayDate, byContact, contactNames, asanaTasks } = args;
+  const { displayDate, byContact, contactNames, dayTasks } = args;
   const lines: string[] = [];
   lines.push(`# [${displayDate}-PWA] Daily Dump`);
   lines.push("");
@@ -476,14 +477,14 @@ function buildMarkdown(args: {
   }
 
   // Tasks section
-  lines.push("# Tasks (Asana)");
+  lines.push("# Tasks");
   lines.push("");
-  if (asanaTasks.length === 0) {
+  if (dayTasks.length === 0) {
     lines.push("_No task activity for this date._");
   } else {
     // Group by project (family)
-    const byProject: Record<string, AsanaTask[]> = {};
-    for (const t of asanaTasks) {
+    const byProject: Record<string, DayTask[]> = {};
+    for (const t of dayTasks) {
       const p = t.project_name || "(No project)";
       (byProject[p] ||= []).push(t);
     }
@@ -492,10 +493,9 @@ function buildMarkdown(args: {
       for (const t of byProject[proj]) {
         const status = t.completed ? "✅ Completed" : "🔄 Updated";
         const parent = t.parent_name ? ` [subtask of: ${t.parent_name}]` : "";
-        const section = t.section_name ? ` — ${t.section_name}` : "";
         const assignee = t.assignee_name ? ` — @${t.assignee_name}` : "";
         const due = t.due_on ? ` (due ${t.due_on})` : "";
-        lines.push(`- **${status}** ${t.name}${section}${assignee}${due}${parent}`);
+        lines.push(`- **${status}** ${t.name}${assignee}${due}${parent}`);
         if (t.notes) lines.push(`  - ${t.notes}`);
       }
       lines.push("");

@@ -1,6 +1,6 @@
 // Shared helper for the client Portal. Mirrors pro-portal-auth.ts's shape for
 // `pro_portal_tokens`, but for `portal_tokens` -- the same portal_tokens lookup
-// this repo has so far re-implemented inline in vault-service and asana-service.
+// this repo has so far re-implemented inline in vault-service and (formerly) asana-service.
 
 export interface PortalContact {
   contactId: string;

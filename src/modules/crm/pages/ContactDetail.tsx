@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/shared/compo
 import {
   ArrowLeft, Bell, BellOff, Trash2, Clock, AlertCircle, Shield,
   ExternalLink, Bot, Grape, FileUp, Loader2, Building2, Users, Plus, X,
-  Folder, FolderOpen, CheckSquare, ShieldCheck, Landmark, ChevronDown, ChevronRight, ListChecks,
+  Folder, FolderOpen, ShieldCheck, Landmark, ChevronDown, ChevronRight, ListChecks,
   Mail, Phone, MapPin, Home, Calendar, Pencil, Eye, Merge, Link2, BarChart3, Anchor,
   ArrowRight, ChevronLeft, Wallet
 } from "lucide-react";
@@ -544,7 +544,6 @@ const ContactDetail = () => {
 
   const resourceLinks = [
     { label: "Google Drive", url: contact.google_drive_url, icon: FolderOpen },
-    { label: "Asana", url: contact.asana_url, icon: CheckSquare },
     { label: "IA Financial", url: contact.ia_financial_url, icon: ShieldCheck },
     { label: "Just Wealth", url: (contact as any).just_wealth_url, icon: Landmark },
   ];
@@ -636,13 +635,6 @@ const ContactDetail = () => {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
-                    {contact.asana_url && (
-                      <DropdownMenuItem asChild>
-                        <a href={contact.asana_url} target="_blank" rel="noopener noreferrer">
-                          <CheckSquare className="mr-2 h-4 w-4" /> Open Asana
-                        </a>
-                      </DropdownMenuItem>
-                    )}
                     {contact.google_drive_url && (
                       <DropdownMenuItem asChild>
                         <a href={contact.google_drive_url} target="_blank" rel="noopener noreferrer">

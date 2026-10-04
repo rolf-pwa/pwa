@@ -45,7 +45,6 @@ const ContactForm = () => {
     vineyard_balance_sheet_summary: "",
     quiet_period_start_date: "",
 
-    asana_url: "",
     ia_financial_url: "",
     just_wealth_url: "",
     google_drive_url: "",
@@ -71,7 +70,6 @@ const ContactForm = () => {
         vineyard_balance_sheet_summary: data.vineyard_balance_sheet_summary || "",
         quiet_period_start_date: data.quiet_period_start_date || "",
 
-        asana_url: data.asana_url || "",
         ia_financial_url: data.ia_financial_url || "",
         just_wealth_url: (data as any).just_wealth_url || "",
         google_drive_url: data.google_drive_url || "",
@@ -122,7 +120,6 @@ const ContactForm = () => {
         form.vineyard_balance_sheet_summary || null,
       quiet_period_start_date: form.quiet_period_start_date || null,
       
-      asana_url: form.asana_url || null,
       ia_financial_url: form.ia_financial_url || null,
       just_wealth_url: form.just_wealth_url || null,
       google_drive_url: form.google_drive_url || null,
@@ -324,10 +321,6 @@ const ContactForm = () => {
             <CardTitle className="text-lg">Resources</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <Label>Asana URL</Label>
-              <Input value={form.asana_url} onChange={(e) => update("asana_url", e.target.value)} placeholder="https://..." />
-            </div>
             <div>
               <Label>IA Financial URL</Label>
               <Input value={form.ia_financial_url} onChange={(e) => update("ia_financial_url", e.target.value)} placeholder="https://..." />

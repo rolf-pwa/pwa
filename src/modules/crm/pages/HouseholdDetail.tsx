@@ -171,7 +171,7 @@ const HouseholdDetail = () => {
       { data: charterV2 },
     ] = await Promise.all([
       supabase.from("families").select("name").eq("id", hh.family_id).single(),
-      supabase.from("contacts").select("id, first_name, last_name, family_role, email, phone, address, is_minor, asana_url, lawyer_name, lawyer_firm, accountant_name, accountant_firm, executor_name, executor_firm, poa_name, poa_firm").eq("household_id", id),
+      supabase.from("contacts").select("id, first_name, last_name, family_role, email, phone, address, is_minor, lawyer_name, lawyer_firm, accountant_name, accountant_firm, executor_name, executor_firm, poa_name, poa_firm").eq("household_id", id),
       supabase.from("household_charters").select("status").eq("household_id", id).maybeSingle(),
     ]);
     if (!mountedRef.current) return;
