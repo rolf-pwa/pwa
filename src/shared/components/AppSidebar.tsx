@@ -4,7 +4,6 @@ import { useAuth } from "@/shared/hooks/useAuth";
 import {
   LayoutDashboard,
   Users,
-  CheckSquare,
   ShieldCheck,
   ExternalLink,
   ClipboardCheck,
@@ -118,7 +117,6 @@ const GROUPS = [
 ] as const;
 
 const externalLinks = [
-  { href: "https://app.asana.com", label: "Asana", icon: CheckSquare },
   { href: "https://iaa.secureweb.inalco.com/MKMWPN23/home", label: "IA Financial", icon: ShieldCheck },
   { href: "https://calendar.google.com", label: "Google Calendar", icon: Calendar },
   { href: "https://mail.google.com", label: "Gmail", icon: Mail },

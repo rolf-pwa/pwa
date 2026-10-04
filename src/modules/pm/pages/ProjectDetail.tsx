@@ -78,9 +78,6 @@ export default function ProjectDetail() {
             <h1 className="font-serif text-2xl">{project.name}</h1>
             {project.description && <p className="mt-1 text-sm text-muted-foreground">{project.description}</p>}
           </div>
-          <Button variant="outline" asChild>
-            <Link to={`/projects/import?projectId=${project.id}`}>Import from Asana</Link>
-          </Button>
         </div>
 
         <Card>

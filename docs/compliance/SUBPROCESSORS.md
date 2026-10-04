@@ -6,7 +6,7 @@ This is a template, not a finished record. It lists the third-party services Pro
 |---|---|---|---|---|---|
 | Google Workspace | Client emails, calendar events, Drive/Vault documents, Sheets analytics data | Staff productivity, secure document storage (Vault), Gmail/Calendar integration | _Not yet confirmed_ | | |
 | Square | Client name, email, invoice line items (no card data — Square hosts the payment page directly) | Payment processing / invoicing | _Not yet confirmed_ | | |
-| Asana | Client names (where staff include them in task titles/notes) | Internal task and workflow management | _Not yet confirmed_ | | |
+| ~~Asana~~ | Client names (where staff included them in task titles/notes) | **Deprecated 2026-10** — no longer used; task workflows run in the in-house PM system. Remove the account/PAT and request deletion of retained data. | n/a | | |
 | Quo / OpenPhone | Contact name, phone number, call recordings, transcripts, SMS content | Dialer / client communication (US-hosted infrastructure) | _Not yet confirmed_ | | |
 | Wix | Marketing site content; historically some email relay functionality (being phased out — see `PRIVACY_AND_SECURITY_POLICY.md`) | Public marketing site, legacy email relay | _Not yet confirmed_ | | |
 | Supabase | All application data (database, auth, storage, edge functions) | Core application backend | Confirmed (automatic) | [supabase.com/legal/dpa](https://supabase.com/legal/dpa) — incorporated into Terms of Service for all orgs, no separate signature needed | 2026-08-26 |

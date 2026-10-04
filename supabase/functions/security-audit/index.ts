@@ -173,7 +173,7 @@ async function testCorsIntegrity(): Promise<TestResult> {
   try {
     const FUNCTIONS_TO_CHECK = [
       "merge-contacts", "portal-assistant", "export-data",
-      "asana-service", "content-ai", "ingest-statement",
+      "content-ai", "ingest-statement",
     ];
     const traces: string[] = [];
     let allPass = true;

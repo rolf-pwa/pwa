@@ -4,10 +4,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { Button } from "@/shared/components/ui/button";
 import { Badge } from "@/shared/components/ui/badge";
-import { Input } from "@/shared/components/ui/input";
 import {
   Calendar, Plus, Loader2, Link2Off, Inbox, ChevronRight,
-  Grape, Landmark, Anchor, Building2, Pin, Pencil, Check, X, Sparkles, Mail,
+  Grape, Landmark, Anchor, Building2, Pencil, Check, X, Sparkles, Mail,
 } from "lucide-react";
 import { format, parseISO, isToday, differenceInCalendarDays } from "date-fns";
 import { parseLocalDate } from "@/shared/lib/date-utils";
@@ -25,18 +24,6 @@ import {
   useGmailMessages,
 } from "@/shared/hooks/useGoogle";
 import { useAuth } from "@/shared/hooks/useAuth";
-
-const DEFAULT_PINNED_PROJECT_GID = "1214066166978534";
-const PINNED_PROJECT_LABEL = "Pinned Project";
-const PINNED_PROJECT_STORAGE_KEY = "dashboard.pinnedProjectGid";
-
-function extractProjectGid(input: string): string | null {
-  const trimmed = input.trim();
-  if (!trimmed) return null;
-  if (/^\d+$/.test(trimmed)) return trimmed;
-  const m = trimmed.match(/(?:project\/|\/0\/)(\d+)/);
-  return m ? m[1] : null;
-}
 
 export function CommandCenter() {
   const { data: status, isLoading: statusLoading } = useGoogleStatus();
@@ -95,10 +82,7 @@ export function CommandCenter() {
         <EmailWidget isConnected={isConnected} statusLoading={statusLoading} />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <FirmAumWidget />
-        <PinnedProjectTasks />
-      </div>
+      <FirmAumWidget />
     </div>
   );
 }
@@ -712,143 +696,6 @@ function EmailWidget({ isConnected, statusLoading }: { isConnected: boolean; sta
                     {formatSender(m.from || "")}
                   </span>
                   <span className="truncate text-foreground">{m.subject || "(no subject)"}</span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-// Staff pin an arbitrary Asana project (URL or GID) and see its next-7-days
-// tasks. Deliberately still Asana-backed — out of scope for the PM
-// migration, since a staff member may want to pin any project firm-wide.
-function PinnedProjectTasks() {
-  const [projectGid, setProjectGid] = useState<string>(() => {
-    if (typeof window === "undefined") return DEFAULT_PINNED_PROJECT_GID;
-    return localStorage.getItem(PINNED_PROJECT_STORAGE_KEY) || DEFAULT_PINNED_PROJECT_GID;
-  });
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [projectName, setProjectName] = useState<string>(PINNED_PROJECT_LABEL);
-  const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState("");
-
-  useEffect(() => {
-    if (!projectGid) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    (async () => {
-      try {
-        const [tasksRes, projRes] = await Promise.all([
-          supabase.functions.invoke("asana-service", {
-            body: { action: "getTasksForProject", project_gid: projectGid },
-          }),
-          supabase.functions.invoke("asana-service", {
-            body: { action: "getProject", project_gid: projectGid },
-          }),
-        ]);
-        const all = tasksRes.data?.data || tasksRes.data || [];
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const upcoming = (Array.isArray(all) ? all : [])
-          .filter((t: any) => !t.completed && t.due_on)
-          .map((t: any) => ({ ...t, _due: parseLocalDate(t.due_on) }))
-          .filter((t: any) => {
-            const diff = differenceInCalendarDays(t._due, today);
-            return diff >= 0 && diff <= 7;
-          })
-          .sort((a: any, b: any) => a._due.getTime() - b._due.getTime());
-        setTasks(upcoming);
-        const name = projRes.data?.data?.name || projRes.data?.name;
-        setProjectName(name || PINNED_PROJECT_LABEL);
-      } catch {
-        // silent
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [projectGid]);
-
-  const saveDraft = () => {
-    const gid = extractProjectGid(draft);
-    if (!gid) return;
-    localStorage.setItem(PINNED_PROJECT_STORAGE_KEY, gid);
-    setProjectGid(gid);
-    setEditing(false);
-  };
-
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-          <Pin className="h-4 w-4 shrink-0" />
-          {editing ? (
-            <div className="flex items-center gap-1 flex-1">
-              <Input
-                autoFocus
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") saveDraft();
-                  if (e.key === "Escape") setEditing(false);
-                }}
-                placeholder="Asana project URL or GID"
-                className="h-7 text-xs"
-              />
-              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={saveDraft}>
-                <Check className="h-3.5 w-3.5" />
-              </Button>
-              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditing(false)}>
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          ) : (
-            <>
-              <span className="truncate flex-1">{projectName} — Next 7 Days</span>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6 shrink-0"
-                onClick={() => {
-                  setDraft(projectGid);
-                  setEditing(true);
-                }}
-                title="Change pinned project"
-              >
-                <Pencil className="h-3 w-3" />
-              </Button>
-            </>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {!projectGid ? (
-          <p className="text-sm text-muted-foreground">No project pinned.</p>
-        ) : loading ? (
-          <div className="flex justify-center py-4">
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-          </div>
-        ) : tasks.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nothing due in the next 7 days.</p>
-        ) : (
-          <ul className="space-y-2">
-            {tasks.slice(0, 6).map((t) => (
-              <li key={t.gid}>
-                <a
-                  href={t.permalink_url || `https://app.asana.com/0/${projectGid}/${t.gid}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex w-full items-start gap-2 text-sm rounded-md px-1 py-0.5 -mx-1 hover:bg-muted/50 transition-colors text-left"
-                >
-                  <span className="text-xs text-muted-foreground w-14 shrink-0 mt-0.5">
-                    {format(t._due, "MMM d")}
-                  </span>
-                  <span className="truncate text-foreground">{t.name}</span>
                 </a>
               </li>
             ))}
