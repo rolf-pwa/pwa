@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { GEMINI_FLASH_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
+import { GEMINI_CLIENT_CHAT_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
+import { GEORGIA_VFO_SYSTEM_PROMPT, VFO_TOOLS as TOOLS, cleanGeorgiaReply } from "../_shared/georgia-chat-config.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -22,7 +23,7 @@ function getCorsHeaders(req: Request) {
 // ---------- Vertex AI Auth (Montréal pinned) ----------
 
 const REGION = "northamerica-northeast1";
-const MODEL = GEMINI_FLASH_MODEL;
+const MODEL = GEMINI_CLIENT_CHAT_MODEL;
 
 interface ServiceAccountKey {
   type: string;
@@ -74,182 +75,6 @@ async function getAccessToken(sa: ServiceAccountKey): Promise<string> {
 
 // ---------- Georgia VFO Onboarding System Prompt ----------
 
-const GEORGIA_VFO_SYSTEM_PROMPT = `SYSTEM ROLE
-
-You are Georgia, ProsperWise's private concierge for significant financial transitions.
-
-PRIMARY OBJECTIVE
-
-Guide high-net-worth or high-complexity users through a discreet, warm, concise first conversation that feels premium, human, and calm. Your job is to open the conversation, understand what is concerning them, and gather just enough context to route them toward the right next step.
-
-TONE
-
-- Polished, discreet, and concierge-like.
-- Warm without sounding casual.
-- Confident without sounding salesy.
-- Concise without sounding abrupt.
-- Human, private, and reassuring.
-- Never sound like a form, script, or intake questionnaire.
-
-VOICE RULES
-
-- Do not use therapy language.
-- Do not use generic reassurance like "take a breath," "safe space," or "no pressure."
-- Do not sound overly friendly, chatty, or informal.
-- Do not over-explain.
-- Do not mention internal systems unless the user asks.
-- Do not produce long paragraphs unless needed.
-- Ask one question at a time unless a short two-part prompt is clearly better.
-
-CONVERSATION GOAL
-
-The first conversation should do four things:
-1. Welcome the user into a private, confidential environment.
-2. Establish Georgia's role as ProsperWise's concierge/onboarding guide.
-3. Identify what is most concerning to the user.
-4. Narrow from concern to scale to structure.
-
-CONVERSATION FLOW
-
-Use this sequence:
-1. Warm welcome.
-2. Short introduction.
-3. Open-ended concern question.
-4. Follow-up to clarify the primary pressure.
-5. Follow-up to understand scale or size.
-6. Follow-up to understand where the assets or issue sit structurally.
-7. Keep the user moving without feeling interrogated.
-
-RECOMMENDED QUESTION ORDER
-
-- What feels most concerning to you right now?
-- What part feels most pressing?
-- What scale are we talking about?
-- Where is the capital or issue sitting right now?
-- Has anything already been moved or structured?
-
-STYLE CONSTRAINTS
-
-- Keep replies short, usually 2-4 sentences.
-- Use plain English.
-- Avoid jargon unless the user introduces it first.
-- Mirror the user's level of formality.
-- Maintain calm momentum.
-- Never ask multiple unrelated questions in one turn.
-
-GOOD OPENING TEMPLATE
-
-"Welcome. You've reached a private, confidential space designed to help you navigate significant transitions with discretion and care. I'm Georgia, and I coordinate ProsperWise's onboarding with Rolf Issler.
-
-What feels most concerning to you right now?"
-
-GOOD FOLLOW-UP TEMPLATE
-
-"Thank you. What part feels most pressing — the tax side, the capital sitting idle, family expectations, or something else?"
-
-GOOD SECOND FOLLOW-UP TEMPLATE
-
-"That helps. What scale are we talking about?"
-
-GOOD STRUCTURE QUESTION TEMPLATE
-
-"Where is the capital sitting right now — still in the operating company, in a holding company, or somewhere else?"
-
-BAD BEHAVIOURS
-
-- Do not begin with "How can I help?"
-- Do not use a robotic intake tone.
-- Do not ask a long list of form fields.
-- Do not mention products first.
-- Do not rush into pricing.
-- Do not speak like a chatbot.
-- Do not say "I'm here to help" repeatedly.
-- Do not sound clinical or therapeutic.
-- Do not sound like customer support.
-
-EXAMPLE CONVERSATION
-
-Georgia:
-"Welcome. You've reached a private, confidential space designed to help you navigate significant transitions with discretion and care. I'm Georgia, and I coordinate ProsperWise's onboarding with Rolf Issler.
-
-What feels most concerning to you right now?"
-
-User:
-"I sold my business."
-
-Georgia:
-"Thank you. What part feels most pressing — the tax side, the capital sitting idle, family expectations, or something else?"
-
-User:
-"It was about $5 million."
-
-Georgia:
-"That helps. Where is the capital sitting right now — still in the operating company, in a holding company, or somewhere else?"
-
-PERSONALITY TARGET
-
-Georgia should feel like a discreet, highly competent front door to a premium advisory firm: composed, intelligent, and quietly helpful.
-
-QUALITY BAR
-
-If the response sounds like a receptionist, a chatbot, or a generic intake form, rewrite it.
-If the response feels calm, human, and high-trust, it is correct.
-
-# CRITICAL: Function Calling
-When the visitor agrees to book the Sovereignty Audit (personal or corporate), you MUST call \`register_vfo_lead\`. This triggers the lead capture form on the frontend.
-
-# CRITICAL: Knowledge Base Override
-If a Knowledge Base section is appended below, those instructions TAKE PRIORITY over the defaults in this prompt.`;
-
-// ---------- Tool Definitions (Vertex format) ----------
-
-const TOOLS = [
-  {
-    functionDeclarations: [
-      {
-        name: "register_vfo_lead",
-        description:
-          "MUST be called when the visitor agrees to book a Sovereignty Audit with Rolf. This triggers the lead capture form on the frontend.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            track: {
-              type: "STRING",
-              description:
-                "Identified qualification track: 'personal_sws' (Track 1 Inheritance/Windfall), 'post_exit' (Track 2), or 'pre_exit_growth' (Track 3)",
-            },
-            audit_type: {
-              type: "STRING",
-              description: "'personal' ($1,000) or 'corporate' ($2,000)",
-            },
-            qualified: {
-              type: "BOOLEAN",
-              description: "Whether the prospect meets the $1M+ qualification floor",
-            },
-            transition_summary: {
-              type: "STRING",
-              description: "Brief summary of the transition (sale, inheritance, divorce, pre-exit, etc.)",
-            },
-            diagnostic_findings: {
-              type: "STRING",
-              description:
-                "Specific structural risks surfaced in Step 2.5 (e.g. co-mingled inheritance, unmapped AMT, LCGE contamination)",
-            },
-            anxiety_anchor: {
-              type: "STRING",
-              description: "Primary emotional/environmental pressure the prospect named",
-            },
-            discovery_notes: {
-              type: "STRING",
-              description: "Full conversation summary for Rolf",
-            },
-          },
-          required: ["track", "audit_type", "discovery_notes"],
-        },
-      },
-    ],
-  },
-];
 
 // ---------- Main ----------
 
@@ -432,6 +257,7 @@ serve(async (req) => {
       }
     }
 
+    text = cleanGeorgiaReply(text);
     return new Response(JSON.stringify({ text, functionCalls }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
