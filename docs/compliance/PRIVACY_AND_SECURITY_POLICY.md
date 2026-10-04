@@ -88,11 +88,11 @@ We are committed to protecting your personal information in accordance with PIPE
 We work with the following categories of service providers, each of whom processes a limited scope of information necessary for their function:
 
 - **Google Workspace** — email, calendar, document storage, and spreadsheet tools used by staff in serving your account
-- **Google Cloud (Vertex AI)** — used to draft certain internal planning documents (such as a household's Sovereignty Survey and governance materials) from data already on file. A staff member reviews and can edit anything AI-assisted before it's used or shared with you.
-- **Supabase** — our core database and application backend, where your records are stored
+- **Google Cloud (Vertex AI)** — used to draft certain internal planning documents (such as a household's Sovereignty Survey and governance materials) from data already on file, processed in Google's Montréal region. A staff member reviews and can edit anything AI-assisted before it's used or shared with you.
+- **Supabase** — our core database and application backend, where your records are stored (Canada Central region)
 - **Square** — payment processing for invoicing (Square handles card details directly; ProsperWise's own systems do not store card numbers)
 - **Asana** — internal task and workflow management
-- **A telephony/SMS provider** — client calls and text communication, with calls and messages retained for service continuity
+- **A telephony/SMS provider** — client calls and text communication, with calls and messages retained for service continuity (hosted in the United States)
 - **Wix** — powers our public marketing website; being phased out of any role that touches client data
 
 A full registry of these providers, including data-processing agreement status, is maintained internally and available on request.
@@ -103,7 +103,18 @@ ProsperWise retains client records for **7 years from the end of the advisory re
 
 ### Where your data is stored
 
-Our production database is operated in the Canada Central data center region.
+We keep the core of your information in Canada:
+
+- **Your records** (contact details, household and account information, and our working notes) are stored in our production database, which runs in the **Canada Central** data center region.
+- **AI-assisted drafting and document reading** is processed in Google Cloud's **Montréal** region. Our AI requests are pinned to that region and are not sent to a global endpoint.
+
+Some of the providers we rely on operate outside Canada or do not guarantee Canadian-only processing, so we do not claim that every piece of information stays in Canada. In particular:
+
+- Our **telephony/SMS provider** (calls, recordings and text messages) uses infrastructure in the United States.
+- **Document storage, email and calendar** (Google Workspace), **payment processing** (Square) and **task management** (Asana) are operated by global providers; we have not committed those services to Canadian-only processing.
+- Our application is delivered through a global content network, which carries pages and files you request but is not where your records are kept.
+
+Information handled by a provider outside Canada may be subject to the laws of the country where it is processed, including lawful access by that country's authorities. We limit what each provider receives to what it needs for its function, and we apply the safeguards described above, including filtering of sensitive identifiers before anything is sent to an outside service. If you have questions about where a particular kind of information is handled, please ask your advisor.
 
 ---
 
