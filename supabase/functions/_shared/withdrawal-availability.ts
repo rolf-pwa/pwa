@@ -3,8 +3,8 @@
 //   surplus   = current value - opening (BOY) value
 //             = net gain + net transactions: the growth NOT yet withdrawn, so
 //               taking it never touches principal.
-//   income    = value held in the Income funds (the funds withdrawals are
-//               drawn from). A surplus that sits in equity funds is on paper
+//   income    = value held in income-type holdings (income / fixed-income funds,
+//               money market, cash, HISA): what withdrawals are drawn from. A surplus that sits in equity funds is on paper
 //               only: drawing it would mean selling equities.
 //   available = the lesser of the two (never below zero).
 //
@@ -28,8 +28,19 @@ export interface AvailabilityInput {
   funds?: FundLine[] | null;
 }
 
-/** Which category headings count as Income funds. One place to change if other custodians label them differently. */
-export const INCOME_CATEGORY = /\bincome\b/i;
+/**
+ * What counts as "income" money, i.e. what withdrawals are drawn from: income / fixed-income
+ * funds, money market, cash and high-interest savings (HISA). Matched on the category heading
+ * printed above the fund (or on the fund's name when no heading was printed). One place to
+ * change if other custodians label things differently. GICs and equity/balanced funds do not count.
+ */
+export const INCOME_CATEGORY = /\b(income|money[\s-]?market|cash|hisa|high[\s-]?interest[\s-]?savings?)\b/i;
+
+/** Income test for one fund line: its category heading, or its name when it has no heading. */
+export function isIncomeFund(f: { name?: string | null; category?: string | null }): boolean {
+  const category = (f.category ?? "").trim();
+  return INCOME_CATEGORY.test(category || (f.name ?? ""));
+}
 
 export type AvailabilityStatus =
   | "confirmed"        // surplus and income funds known, and the funds list adds up to the statement value
@@ -69,7 +80,7 @@ export function computeAvailability(a: AvailabilityInput): Availability {
       name: (f.name ?? "").trim() || "Unnamed fund",
       category: (f.category ?? "").trim() || "Uncategorised",
       value: f.value,
-      is_income: INCOME_CATEGORY.test(f.category ?? ""),
+      is_income: isIncomeFund(f),
     }));
 
   if (funds.length === 0) {
@@ -79,7 +90,7 @@ export function computeAvailability(a: AvailabilityInput): Availability {
 
   const fundsTotal = round2(funds.reduce((s, f) => s + f.value, 0));
   const incomeFunds = round2(funds.filter((f) => f.is_income).reduce((s, f) => s + f.value, 0));
-  if (!funds.some((f) => f.is_income)) notes.push('No fund was listed under an "Income" heading, so the income funds balance is $0.');
+  if (!funds.some((f) => f.is_income)) notes.push("Nothing was listed as income, money market, cash or HISA, so the income funds balance is $0.");
 
   let gap: number | null = null;
   let complete = false;

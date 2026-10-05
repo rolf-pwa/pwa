@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeAvailability, INCOME_CATEGORY } from "../../supabase/functions/_shared/withdrawal-availability";
+import { computeAvailability, INCOME_CATEGORY, isIncomeFund } from "../../supabase/functions/_shared/withdrawal-availability";
 
 // The Investment Funds table on page 2 of the real iA statement (Series 75/100).
 const page2 = [
@@ -63,7 +63,7 @@ describe("computeAvailability", () => {
     const av = computeAvailability({ ...account, funds: [{ name: "Eq", category: "Equity", value: 53_143.02 }] });
     expect(av.income_funds).toBe(0);
     expect(av.available).toBe(0);
-    expect(av.notes.join(" ")).toMatch(/No fund was listed under an "Income" heading/);
+    expect(av.notes.join(" ")).toMatch(/Nothing was listed as income, money market, cash or HISA/);
   });
   it("ignores fund lines without a numeric value and tolerates only rounding in the sum", () => {
     const withJunk = computeAvailability({ ...account, funds: [...page2, rest, { name: "bad", category: "Income Funds", value: null }] });
@@ -71,8 +71,31 @@ describe("computeAvailability", () => {
     expect(computeAvailability({ ...account, funds: [...page2, { ...rest, value: 4_495.34 }] }).status).toBe("confirmed"); // $0.50 off
     expect(computeAvailability({ ...account, funds: [...page2, { ...rest, value: 4_595.34 }] }).status).toBe("unconfirmed"); // $100.50 off
   });
-  it("income heading matcher: 'Income Funds' and 'Fixed Income' count; money market and equity do not", () => {
-    for (const c of ["Income Funds", "Fixed Income", "income"]) expect(INCOME_CATEGORY.test(c)).toBe(true);
-    for (const c of ["Canadian Equity funds", "Money Market", "Balanced Funds", "Incomex"]) expect(INCOME_CATEGORY.test(c)).toBe(false);
+  it("income definition: income, fixed income, money market, cash and HISA count; equity, balanced, GICs and look-alikes do not", () => {
+    for (const c of ["Income Funds", "Fixed Income", "income", "Money Market", "Money-Market Funds", "Cash", "Cash & equivalents", "HISA", "High Interest Savings Account", "High-interest savings", "Cash and Short-Term"]) {
+      expect(INCOME_CATEGORY.test(c), c).toBe(true);
+    }
+    for (const c of ["Canadian Equity funds", "U.S. & International Equity Funds", "Balanced Funds", "Incomex", "Cashable GICs", "Guaranteed Investment Certificates", "Savings and Retirement"]) {
+      expect(INCOME_CATEGORY.test(c), c).toBe(false);
+    }
+  });
+  it("falls back to the fund's name when no category heading was printed", () => {
+    expect(isIncomeFund({ name: "High Interest Savings Account", category: null })).toBe(true);
+    expect(isIncomeFund({ name: "Money Market Fund", category: "" })).toBe(true);
+    expect(isIncomeFund({ name: "Dividend Growth", category: null })).toBe(false);
+    // a printed heading wins over the name
+    expect(isIncomeFund({ name: "Cash Management Equity Fund", category: "Canadian Equity funds" })).toBe(false);
+  });
+  it("money market, cash and HISA lines add to the income funds balance and the available amount", () => {
+    // The six page-2 funds ($48,648.18) + $1,100 of HISA / money market / cash + $3,394.84 of other holdings = $53,143.02.
+    const av = computeAvailability({ ...account, funds: [...page2,
+      { name: "Daily Interest Savings", category: "HISA", value: 400 },
+      { name: "Money Market Fund", category: "Money Market", value: 600 },
+      { name: "Cash", category: "Cash", value: 100 },
+      { ...rest, value: 3_394.84 }] });
+    expect(av.status).toBe("confirmed");
+    expect(av.income_funds).toBe(1_123.52); // 23.52 income + 400 + 600 + 100
+    expect(av.available).toBe(1_123.52);
+    expect(av.limited_by).toBe("income_funds");
   });
 });
