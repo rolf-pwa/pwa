@@ -108,7 +108,7 @@ export function PortalRequests({ requests, contactId, contactName, portalToken, 
         <ClipboardList className="mx-auto h-8 w-8 text-muted-foreground/40 mb-3" />
         <p className="text-sm text-muted-foreground">No requests submitted yet.</p>
         <p className="text-xs text-muted-foreground mt-1">
-          Use "Ask for Help" to submit a request to your Personal CFO.
+          Use "Ask Georgia for Help" to submit a request to your Personal CFO.
         </p>
       </div>
     );

@@ -1074,6 +1074,20 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
   const renderIndividualView = () => {
     const ind = getIndividualData();
     const isSelf = !currentMember;
+
+    // One definition for both placements (sidebar on desktop, top of page on small screens). Uses the
+    // navy token directly, not the theme's `primary`, which flips to paper in the dark theme, so it is always navy.
+    const askGeorgiaButton = (visibility: string) =>
+      isSelf ? (
+        <Button
+          onClick={() => setGeorgiaOpen(true)}
+          className={`w-full justify-center gap-2 bg-[hsl(var(--pw-navy))] text-[hsl(var(--pw-paper))] hover:bg-[hsl(var(--pw-navy)/0.9)] ${visibility}`}
+        >
+          <MessageCircle className="h-4 w-4" />
+          Ask Georgia for Help
+        </Button>
+      ) : null;
+
     const hasTerritory = (ind.vineyardAccounts?.length || 0) > 0 || (ind.memberStorehouses?.length || 0) > 0;
     const hasInsurance = (ind.insurancePolicies?.length || 0) > 0;
     const hasFinancials = hasTerritory || hasInsurance || (isSelf && holding_tank.length > 0);
@@ -1095,17 +1109,9 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
             />
           )}
 
-          {/* Ask for Help — pinned above tabs */}
-          {isSelf && (
-            <Button
-              variant="outline"
-              onClick={() => setGeorgiaOpen(true)}
-              className="w-full justify-center gap-2"
-            >
-              <MessageCircle className="h-4 w-4" />
-              Ask for Help
-            </Button>
-          )}
+          {/* Ask Georgia for Help — below the lg breakpoint the sidebar stacks under the tabs and
+              their content, so keep the button at the top there; on desktop it lives in the sidebar. */}
+          {askGeorgiaButton("lg:hidden")}
 
           {/* Main Tabs */}
           <Tabs value={effectiveTab} onValueChange={setActiveTab} className="w-full">
@@ -1285,6 +1291,9 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
 
         {/* Right Sidebar */}
         <div className="space-y-4">
+          {/* Ask Georgia for Help — top of the sidebar on desktop */}
+          {askGeorgiaButton("hidden lg:inline-flex")}
+
           {/* Family Tile — top of sidebar */}
           {family && (
             <Card>
