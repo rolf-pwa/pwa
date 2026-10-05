@@ -90,7 +90,7 @@ export function PortalMessages({ portalToken, contactName }: PortalMessagesProps
       <p className="text-xs text-muted-foreground">
         Please send a quick text for non-support related messages. Note that this is not a secure
         connection, so please do not send confidential or sensitive information like account numbers
-        or health details. For those items, please <strong>Ask for Help</strong> instead, as these
+        or health details. For those items, please <strong>Ask Georgia for Help</strong> instead, as these
         messages are filtered for privacy, and will not be received.
       </p>
 
