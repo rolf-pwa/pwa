@@ -9,13 +9,14 @@
 //                                                       -> must equal A exactly
 //   C. this branch, flag ON (V2)                        -> must NOT touch live
 //      tables, must hold each file's extraction in stage2_verification_audit,
-//      and must append only the provenance suffix to the prompts.
+//      and must append only the V2 suffixes (provenance; net-gain terms for investments) to the prompts.
 //
 // Run: deno run --allow-all --node-modules-dir=none scripts/verify/vault-scan-parity.ts
 // Exits non-zero on any mismatch.
 
 // deno-lint-ignore-file no-explicit-any
 import { V2_PROVENANCE_PROMPT_SUFFIX } from "../../supabase/functions/_shared/provenance.ts";
+import { V2_INVESTMENT_NETGAIN_SUFFIX } from "../../supabase/functions/_shared/stage1-v2-prompts.ts";
 const FN_DIR = new URL("../../supabase/functions/vault-statement-scan/", import.meta.url);
 const BASELINE = new URL("index.main.ts", FN_DIR);
 const CURRENT = new URL("index.ts", FN_DIR);
@@ -166,7 +167,7 @@ try {
 
   check("C (V2) writes nothing to live account/policy tables", C.mutations.filter((m) => /^(PATCH|POST|DELETE) (vineyard_accounts|storehouses|holding_tank|insurance_policies)/.test(m)).length === 0, JSON.stringify(C.mutations));
   check("C (V2) holds one audit row per file (2)", C.mutations.filter((m) => m.startsWith("POST stage2_verification_audit")).length === 2);
-  check("C (V2) prompts = baseline + provenance suffix only", C.prompts.length === A.prompts.length && C.prompts.every((p, i) => p !== A.prompts[i] && p.replace(V2_PROVENANCE_PROMPT_SUFFIX, "") === A.prompts[i]), JSON.stringify(C.prompts.map((p) => p.length)));
+  check("C (V2) prompts = baseline + provenance (+ net-gain terms for investments) only", C.prompts.length === A.prompts.length && C.prompts.every((p, i) => p !== A.prompts[i] && p.replace(V2_INVESTMENT_NETGAIN_SUFFIX, "").replace(V2_PROVENANCE_PROMPT_SUFFIX, "") === A.prompts[i]), JSON.stringify(C.prompts.map((p) => p.length)));
   check("C (V2) response reports held-for-review", C.status === 200 && C.response.v2HeldForReview === 2 && C.response.investmentAccountsMatched === 0 && C.response.insurancePoliciesCreated === 0, JSON.stringify(C.response));
   check("V1 response has no V2 fields", !("v2HeldForReview" in B.response));
 } finally {

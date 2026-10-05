@@ -30,7 +30,7 @@ const today = new Date().toISOString().slice(0, 10);
 const a = await runStage2(admin, { householdId: hh.id, kind: "investment", source: { file_name: "iA RRSP + TFSA statement.pdf" }, extraction: {
   statement_date: "2024-01-15", // stale on purpose: the demo CONFLICT (a stated gain that differs from value - book is accepted, not a conflict) missing_fields: [],
   accounts: [
-    { account_name: "iA - RRSP", account_number: "RR-123", account_type: "RRSP", account_owner: "Alex Demo", custodian: "IA Financial", book_value: 100000, current_harvest: 20000, current_value: 112500, source: { page_number: 1, bounding_box: [152, 121, 173, 457], quote: "Current value: $112,500.00" } },
+    { account_name: "iA - RRSP", account_number: "RR-123", account_type: "RRSP", account_owner: "Alex Demo", custodian: "IA Financial", book_value: 100000, withdrawals: 7500, current_harvest: 20000, current_value: 112500, source: { page_number: 1, bounding_box: [152, 121, 173, 457], quote: "Current value: $112,500.00" } },
     { account_name: "iA - TFSA", account_number: "TF-9", account_type: "TFSA", account_owner: "Sam Demo", custodian: "IA Financial", book_value: null, current_harvest: null, current_value: 5400, source: { page_number: 2, bounding_box: null, quote: null } },
   ] } });
 const b = await runStage2(admin, { householdId: hh.id, kind: "investment", source: { file_name: "JustWealth Q3.pdf" }, extraction: {

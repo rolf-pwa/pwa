@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  EDITABLE_FIELDS,
   boxToPercent, itemIndexForCheck, parseFieldInput, riskLevel, summarizeChecks, type Stage2AuditRow,
 } from "../modules/audit/lib/stage2";
 
@@ -31,5 +32,12 @@ describe("stage2 ui helpers", () => {
     expect(parseFieldInput("", true)).toBeNull();
     expect(parseFieldInput("abc", true)).toBeUndefined();
     expect(parseFieldInput("  RRSP ", false)).toBe("RRSP");
+  });
+  it("labels the gain as Net gain and exposes the reconciliation terms for correction", () => {
+    const labels = EDITABLE_FIELDS.investment.map((f) => f.label);
+    expect(labels).toEqual(expect.arrayContaining(["BOY value", "Withdrawals", "Contributions", "Net gain", "Current value"]));
+    expect(labels).not.toContain("Gain");
+    const keys = EDITABLE_FIELDS.investment.map((f) => f.key);
+    expect(keys).toEqual(expect.arrayContaining(["book_value", "withdrawals", "contributions", "current_harvest"]));
   });
 });

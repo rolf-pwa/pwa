@@ -22,6 +22,7 @@ import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { driveListChildren, driveDownloadFile, matchVaultCategoryFolder } from "../_shared/vault-provisioning.ts";
 import { GEMINI_EXTRACT_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
 import { V2_PROVENANCE_PROMPT_SUFFIX } from "../_shared/provenance.ts";
+import { V2_INVESTMENT_NETGAIN_SUFFIX } from "../_shared/stage1-v2-prompts.ts";
 import { runStage2 } from "../_shared/stage2-run.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
 
@@ -415,7 +416,7 @@ Deno.serve(async (req) => {
         const parsed = await callVertex(
           vertexAccessToken,
           sa.project_id,
-          v2 ? INVESTMENT_SYSTEM_PROMPT + V2_PROVENANCE_PROMPT_SUFFIX : INVESTMENT_SYSTEM_PROMPT,
+          v2 ? INVESTMENT_SYSTEM_PROMPT + V2_PROVENANCE_PROMPT_SUFFIX + V2_INVESTMENT_NETGAIN_SUFFIX : INVESTMENT_SYSTEM_PROMPT,
           `Parse this financial statement for the ${household.label} household. Extract all investment accounts.`,
           base64,
           file.mimeType,

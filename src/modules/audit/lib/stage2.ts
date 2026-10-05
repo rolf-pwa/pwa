@@ -52,8 +52,10 @@ export const EDITABLE_FIELDS: Record<"investment" | "insurance", Array<{ key: st
   investment: [
     { key: "account_name", label: "Account", numeric: false },
     { key: "account_number", label: "Number", numeric: false },
-    { key: "book_value", label: "Book value", numeric: true },
-    { key: "current_harvest", label: "Gain", numeric: true },
+    { key: "book_value", label: "BOY value", numeric: true },
+    { key: "withdrawals", label: "Withdrawals", numeric: true },
+    { key: "contributions", label: "Contributions", numeric: true },
+    { key: "current_harvest", label: "Net gain", numeric: true },
     { key: "current_value", label: "Current value", numeric: true },
   ],
   insurance: [

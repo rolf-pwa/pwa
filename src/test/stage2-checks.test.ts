@@ -9,36 +9,60 @@ const good = {
 const by = (cs: ReturnType<typeof checkInvestment>, id: string) => cs.find((c) => c.id === id);
 
 describe("checkInvestment", () => {
-  it("verifies a self-consistent statement", () => {
+  const NG = "net_gain_reconciliation";
+  // The real iA statement from the first production scan: BOY 51,295.72 - withdrawals 5,541.86 + net gain 7,389.16 = 53,143.02.
+  const ia = { account_number: "1819479981", book_value: 51_295.72, current_harvest: 7_389.16, current_value: 53_143.02 };
+
+  it("verifies a self-consistent statement with no withdrawals (BOY + net gain = current)", () => {
     const checks = checkInvestment(good, NOW);
-    expect(by(checks, "harvest_arithmetic")?.status).toBe("pass");
+    expect(by(checks, NG)?.status).toBe("pass");
+    expect(by(checks, NG)?.reasoning).toMatch(/no withdrawals needed/);
     expect(verdictFor(checks).overall_status).toBe("VERIFIED");
   });
-  it("accepts the stated gain when it differs from value - book (contributions/withdrawals), and says so", () => {
-    const checks = checkInvestment({ ...good, accounts: [{ ...good.accounts[0], current_harvest: 20_000 }] }, NOW);
-    const c = by(checks, "harvest_arithmetic")!;
-    expect(c.status).toBe("pass");
-    expect(c.reasoning).toMatch(/accepted as printed/);
-    expect(c.reasoning).toMatch(/\$20,000/);
-    expect(c.reasoning).toMatch(/\$12,500/); // the derived figure is shown for transparency
+  it("reconciles BOY - withdrawals + net gain = current when the withdrawals are extracted (the real iA statement)", () => {
+    const checks = checkInvestment({ statement_date: "2026-09-30", accounts: [{ ...ia, withdrawals: 5_541.86 }] }, NOW);
+    expect(by(checks, NG)?.status).toBe("pass");
+    expect(by(checks, NG)?.reasoning).toMatch(/withdrawals \$5,541\.86/);
     expect(verdictFor(checks)).toMatchObject({ overall_status: "VERIFIED", advisor_override_required: false });
   });
-  it("accepts a stated gain even when no book value was extracted", () => {
+  it("without withdrawals extracted it never fails: it notes the withdrawals the figures imply (no false conflict)", () => {
+    const checks = checkInvestment({ statement_date: "2026-09-30", accounts: [ia] }, NOW);
+    const c = by(checks, NG)!;
+    expect(c.status).toBe("pass");
+    expect(c.reasoning).toMatch(/withdrawals of \$5,541\.86/);
+    expect(c.reasoning).toMatch(/no withdrawals were extracted/);
+    expect(verdictFor(checks).overall_status).toBe("VERIFIED");
+  });
+  it("fails when the extracted terms don't reconcile, showing every figure", () => {
+    const checks = checkInvestment({ statement_date: "2026-09-30", accounts: [{ ...ia, withdrawals: 3_000 }] }, NOW);
+    const c = by(checks, NG)!;
+    expect(c.status).toBe("fail");
+    expect(c.reasoning).toMatch(/\$51,295\.72/); expect(c.reasoning).toMatch(/withdrawals \$3,000/); expect(c.reasoning).toMatch(/net gain \$7,389\.16/); expect(c.reasoning).toMatch(/\$53,143\.02/);
+    expect(verdictFor(checks)).toMatchObject({ overall_status: "CONFLICT", advisor_override_required: true });
+  });
+  it("includes contributions when the statement shows them", () => {
+    const ok = { account_number: "C1", book_value: 100_000, contributions: 10_000, withdrawals: 2_000, current_harvest: 5_000, current_value: 113_000 };
+    expect(by(checkInvestment({ ...good, accounts: [ok] }, NOW), NG)?.status).toBe("pass");
+    expect(by(checkInvestment({ ...good, accounts: [{ ...ok, current_value: 120_000 }] }, NOW), NG)?.status).toBe("fail");
+  });
+  it("notes (without failing) a current value above BOY + net gain when no contributions were extracted", () => {
+    const c = by(checkInvestment({ ...good, accounts: [{ account_number: "D1", book_value: 100_000, current_harvest: 1_000, current_value: 120_000 }] }, NOW), NG)!;
+    expect(c.status).toBe("pass");
+    expect(c.reasoning).toMatch(/contributions or transfers in/);
+  });
+  it("accepts a net gain when no BOY value was extracted", () => {
     const checks = checkInvestment({ ...good, accounts: [{ account_number: "A1", current_harvest: 7_389.16, current_value: 53_143.02 }] }, NOW);
-    expect(by(checks, "harvest_arithmetic")?.status).toBe("pass");
+    expect(by(checks, NG)?.status).toBe("pass");
     expect(verdictFor(checks).overall_status).toBe("VERIFIED");
   });
-  it("reproduces the real iA statement from the first production scan: no conflict", () => {
-    const checks = checkInvestment({ statement_date: "2026-09-30", accounts: [{ account_number: "1819479981", book_value: 51_295.72, current_harvest: 7_389.16, current_value: 53_143.02 }] }, NOW);
-    expect(verdictFor(checks).overall_status).toBe("VERIFIED");
+  it("tolerates only rounding ($1 or 0.02%)", () => {
+    const base = { ...ia, withdrawals: 5_541.86 };
+    expect(by(checkInvestment({ ...good, accounts: [{ ...base, current_value: 53_143.52 }] }, NOW), NG)?.status).toBe("pass");
+    expect(by(checkInvestment({ ...good, accounts: [{ ...base, current_value: 53_243.02 }] }, NOW), NG)?.status).toBe("fail");
   });
-  it("tolerates statement rounding", () => {
-    const checks = checkInvestment({ ...good, accounts: [{ ...good.accounts[0], current_harvest: 12_500.4 }] }, NOW);
-    expect(by(checks, "harvest_arithmetic")?.status).toBe("pass");
-  });
-  it("is INCOMPLETE (not VERIFIED) when a check can't run, e.g. no gain was extracted", () => {
+  it("is INCOMPLETE (not VERIFIED) when a check can't run, e.g. no net gain was extracted", () => {
     const checks = checkInvestment({ ...good, accounts: [{ account_number: "A1", current_value: 5 }] }, NOW);
-    expect(by(checks, "harvest_arithmetic")?.status).toBe("skipped");
+    expect(by(checks, NG)?.status).toBe("skipped");
     expect(verdictFor(checks).overall_status).toBe("INCOMPLETE");
     expect(verdictFor(checks, ["custodian"]).missing_items).toContain("custodian");
   });

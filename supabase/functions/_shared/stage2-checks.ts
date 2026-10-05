@@ -1,7 +1,7 @@
 // stage2-checks.ts — Stage 2 of the two-stage document pipeline. Stage 1
 // (the LLM) extracts figures; Stage 2 is deterministic code that re-checks
 // them: plausibility, internal consistency, and completeness. Figures printed
-// on an official statement (e.g. the gain) are taken as authoritative. Every check
+// on an official statement (e.g. the net gain) are taken as authoritative. Every check
 // carries a plain-English reasoning string (Glass-Box), and a check that
 // can't run because inputs are missing is "skipped" with the reason, never a
 // silent pass. Pure: no LLM, no I/O.
@@ -23,6 +23,10 @@ export interface ExtractedAccount {
   book_value?: number | null;
   current_harvest?: number | null;
   current_value?: number | null;
+  /** Withdrawals / redemptions for the period, as printed (positive). */
+  withdrawals?: number | null;
+  /** Contributions / deposits / transfers in for the period, as printed (positive). */
+  contributions?: number | null;
 }
 export interface InvestmentExtraction {
   statement_date?: string | null;
@@ -47,8 +51,8 @@ const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFin
 const label = (a: { account_name?: string | null; account_number?: string | null; policy_number?: string | null }) =>
   a.account_number ?? a.policy_number ?? a.account_name ?? "unlabelled";
 
-/** Absolute tolerance: 50 cents or 0.5% of the value, whichever is larger (statements round). */
-const tolerance = (basis: number) => Math.max(0.5, Math.abs(basis) * 0.005);
+/** Reconciliation is an exact identity on the statement, so only rounding is tolerated: $1 or 0.02% of the value. */
+const reconcileTolerance = (basis: number) => Math.max(1, Math.abs(basis) * 0.0002);
 const MAX_STATEMENT_AGE_DAYS = 548; // ~18 months
 
 export function checkInvestment(x: InvestmentExtraction, now: Date = new Date()): CheckResult[] {
@@ -88,26 +92,41 @@ export function checkInvestment(x: InvestmentExtraction, now: Date = new Date())
     if (a.current_value < 0) {
       out.push({ id: "value_non_negative", status: "fail", subject, reasoning: `Current value ${money(a.current_value)} is negative; accounts held here shouldn't be.` });
     }
-    // The gain printed on an official statement is authoritative. It routinely
-    // includes contributions, withdrawals and fees, so it is NOT expected to
-    // equal current value minus book value; a mismatch is noted, never a
-    // conflict. Only a missing gain is a gap.
+    // Net gain reconciliation. A statement reconciles as
+    //   BOY value - withdrawals (+ contributions) + net gain = current value.
+    // The net gain is taken as printed (it is NOT "current - book": withdrawals
+    // reduce the balance without touching principal). The identity can only be
+    // checked when the statement's other terms were extracted, so without them
+    // this never fails -- it notes what the figures imply instead.
     if (isNum(a.current_harvest)) {
+      const gain = a.current_harvest;
       if (isNum(a.book_value)) {
-        const expected = a.current_value - a.book_value;
-        const diff = Math.abs(expected - a.current_harvest);
-        const tol = tolerance(a.current_value);
-        out.push({
-          id: "harvest_arithmetic", status: "pass", subject,
-          reasoning: diff <= tol
-            ? `Current value ${money(a.current_value)} minus book value ${money(a.book_value)} is ${money(expected)}, matching the stated gain of ${money(a.current_harvest)} (tolerance ${money(tol)}).`
-            : `Stated gain ${money(a.current_harvest)} accepted as printed on the statement. It differs from current value minus book value (${money(expected)}) by ${money(diff)}, which is normal when the period includes contributions, withdrawals or fees.`,
-        });
+        const tol = reconcileTolerance(a.current_value);
+        const hasWithdrawals = isNum(a.withdrawals);
+        const hasContributions = isNum(a.contributions);
+        if (hasWithdrawals || hasContributions) {
+          const w = hasWithdrawals ? (a.withdrawals as number) : 0;
+          const c = hasContributions ? (a.contributions as number) : 0;
+          const expected = a.book_value + c - w + gain;
+          const diff = Math.abs(expected - a.current_value);
+          const terms = `BOY value ${money(a.book_value)}${hasContributions ? ` + contributions ${money(c)}` : ""}${hasWithdrawals ? ` - withdrawals ${money(w)}` : ""} + net gain ${money(gain)} = ${money(expected)}`;
+          out.push(diff <= tol
+            ? { id: "net_gain_reconciliation", status: "pass", subject, reasoning: `${terms}, matching the statement's current value of ${money(a.current_value)}.` }
+            : { id: "net_gain_reconciliation", status: "fail", subject, reasoning: `${terms}, but the statement's current value is ${money(a.current_value)} (off by ${money(diff)}, tolerance ${money(tol)}). Check the withdrawals, contributions and net gain against the statement.` });
+        } else {
+          const implied = a.book_value + gain - a.current_value; // withdrawals needed to reconcile
+          const note = Math.abs(implied) <= tol
+            ? `BOY value ${money(a.book_value)} + net gain ${money(gain)} equals the current value of ${money(a.current_value)}: no withdrawals needed.`
+            : implied > 0
+              ? `Net gain ${money(gain)} accepted as printed. BOY value ${money(a.book_value)} + net gain only reaches the current value ${money(a.current_value)} if withdrawals of ${money(implied)} were made; no withdrawals were extracted to confirm.`
+              : `Net gain ${money(gain)} accepted as printed. The current value ${money(a.current_value)} is ${money(-implied)} above BOY value + net gain, which implies contributions or transfers in; none were extracted to confirm.`;
+          out.push({ id: "net_gain_reconciliation", status: "pass", subject, reasoning: note });
+        }
       } else {
-        out.push({ id: "harvest_arithmetic", status: "pass", subject, reasoning: `Stated gain ${money(a.current_harvest)} accepted as printed on the statement (no book value was extracted to compare it with).` });
+        out.push({ id: "net_gain_reconciliation", status: "pass", subject, reasoning: `Net gain ${money(gain)} accepted as printed (no BOY value was extracted to reconcile it with).` });
       }
     } else {
-      out.push({ id: "harvest_arithmetic", status: "skipped", subject, reasoning: `No gain was extracted for ${subject}, so there is nothing to confirm.` });
+      out.push({ id: "net_gain_reconciliation", status: "skipped", subject, reasoning: `No net gain was extracted for ${subject}, so there is nothing to confirm.` });
     }
   }
 
