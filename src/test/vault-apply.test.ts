@@ -66,6 +66,11 @@ describe("applyCorrections", () => {
     expect(ex.accounts[0].current_value).toBe(100);
     expect(r.overrides).toEqual([{ field_name: "accounts[0].current_value", original_ai_value: 100, corrected_value: 120, reasoning_notes: "misread" }]);
   });
+  it("lets an advisor correct the signed net transactions term (negative = net withdrawals)", () => {
+    const r = applyCorrections("investment", ex, [{ index: 0, field: "net_transactions", value: -5541.86 }]);
+    expect(r.extraction.accounts[0].net_transactions).toBe(-5541.86);
+    expect(r.overrides).toEqual([{ field_name: "accounts[0].net_transactions", original_ai_value: null, corrected_value: -5541.86, reasoning_notes: null }]);
+  });
   it("rejects unknown fields, bad indexes and wrong types", () => {
     expect(() => applyCorrections("investment", ex, [{ index: 0, field: "id", value: "x" }])).toThrow(/can't be corrected/);
     expect(() => applyCorrections("investment", ex, [{ index: 5, field: "current_value", value: 1 }])).toThrow(/doesn't exist/);

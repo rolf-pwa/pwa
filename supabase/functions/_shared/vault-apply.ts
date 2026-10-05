@@ -46,9 +46,9 @@ export function headOfHousehold(members: Member[]): Member | undefined {
 
 // ---- Corrections ---------------------------------------------------------
 
-export const INVESTMENT_FIELDS = ["account_name", "account_number", "account_type", "account_owner", "custodian", "book_value", "current_harvest", "current_value"] as const;
+export const INVESTMENT_FIELDS = ["account_name", "account_number", "account_type", "account_owner", "custodian", "book_value", "current_harvest", "current_value", "net_transactions"] as const;
 export const INSURANCE_FIELDS = ["carrier", "policy_number", "policy_type", "insured_name", "coverage_amount", "cash_value", "premium_amount", "premium_frequency", "issue_date", "renewal_date"] as const;
-const NUMERIC = new Set(["book_value", "current_harvest", "current_value", "coverage_amount", "cash_value", "premium_amount"]);
+const NUMERIC = new Set(["book_value", "current_harvest", "current_value", "net_transactions", "coverage_amount", "cash_value", "premium_amount"]);
 
 export interface Correction { index: number; field: string; value: unknown; notes?: string }
 export interface AppliedOverride {
