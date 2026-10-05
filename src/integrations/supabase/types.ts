@@ -645,7 +645,6 @@ export type Database = {
           accountant_firm: string | null
           accountant_name: string | null
           address: string | null
-          asana_url: string | null
           charter_url: string | null
           created_at: string
           created_by: string
@@ -682,7 +681,6 @@ export type Database = {
           accountant_firm?: string | null
           accountant_name?: string | null
           address?: string | null
-          asana_url?: string | null
           charter_url?: string | null
           created_at?: string
           created_by: string
@@ -719,7 +717,6 @@ export type Database = {
           accountant_firm?: string | null
           accountant_name?: string | null
           address?: string | null
-          asana_url?: string | null
           charter_url?: string | null
           created_at?: string
           created_by?: string
@@ -958,7 +955,6 @@ export type Database = {
       }
       corporations: {
         Row: {
-          asana_project_url: string | null
           corporation_type: Database["public"]["Enums"]["corporation_type"]
           created_at: string
           created_by: string
@@ -971,7 +967,6 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          asana_project_url?: string | null
           corporation_type?: Database["public"]["Enums"]["corporation_type"]
           created_at?: string
           created_by: string
@@ -984,7 +979,6 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          asana_project_url?: string | null
           corporation_type?: Database["public"]["Enums"]["corporation_type"]
           created_at?: string
           created_by?: string
@@ -3349,7 +3343,6 @@ export type Database = {
       }
       pm_tasks: {
         Row: {
-          asana_gid: string | null
           assigned_agent_key: string | null
           assignee_id: string | null
           client_visible: boolean
@@ -3370,7 +3363,6 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          asana_gid?: string | null
           assigned_agent_key?: string | null
           assignee_id?: string | null
           client_visible?: boolean
@@ -3391,7 +3383,6 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          asana_gid?: string | null
           assigned_agent_key?: string | null
           assignee_id?: string | null
           client_visible?: boolean
@@ -4331,6 +4322,7 @@ export type Database = {
           contact_id: string | null
           created_at: string
           direction: string
+          error_detail: string | null
           from_number: string
           id: string
           media_urls: string[] | null
@@ -4351,6 +4343,7 @@ export type Database = {
           contact_id?: string | null
           created_at?: string
           direction: string
+          error_detail?: string | null
           from_number: string
           id?: string
           media_urls?: string[] | null
@@ -4371,6 +4364,7 @@ export type Database = {
           contact_id?: string | null
           created_at?: string
           direction?: string
+          error_detail?: string | null
           from_number?: string
           id?: string
           media_urls?: string[] | null
@@ -5890,6 +5884,78 @@ export type Database = {
           use_count?: number
         }
         Relationships: []
+      }
+      vault_shoebox_proposals: {
+        Row: {
+          contact_id: string | null
+          created_at: string
+          document_date: string | null
+          document_subject_first_name: string | null
+          document_subject_last_name: string | null
+          document_type: string
+          drive_id: string
+          household_id: string
+          id: string
+          original_name: string
+          other_label: string | null
+          proposed_category_slug: string | null
+          proposed_name: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+        }
+        Insert: {
+          contact_id?: string | null
+          created_at?: string
+          document_date?: string | null
+          document_subject_first_name?: string | null
+          document_subject_last_name?: string | null
+          document_type: string
+          drive_id: string
+          household_id: string
+          id?: string
+          original_name: string
+          other_label?: string | null
+          proposed_category_slug?: string | null
+          proposed_name: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+        }
+        Update: {
+          contact_id?: string | null
+          created_at?: string
+          document_date?: string | null
+          document_subject_first_name?: string | null
+          document_subject_last_name?: string | null
+          document_type?: string
+          drive_id?: string
+          household_id?: string
+          id?: string
+          original_name?: string
+          other_label?: string | null
+          proposed_category_slug?: string | null
+          proposed_name?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vault_shoebox_proposals_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vault_shoebox_proposals_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       vineyard_accounts: {
         Row: {
