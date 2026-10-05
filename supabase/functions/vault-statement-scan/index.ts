@@ -7,6 +7,12 @@
 // statement), just widened to a whole household's Vault folders and to a
 // second document category (insurance policies) that nothing parses today.
 //
+// V2 (households.v2_ai_engine_enabled = true): Stage 1 only EXTRACTS (with
+// page/bounding-box provenance). Each file's extraction goes through Stage 2
+// verification and is held in stage2_verification_audit for advisor review;
+// no vineyard_accounts / storehouses / holding_tank / insurance_policies row
+// is written. V1 households take the original write-through path unchanged.
+//
 // No automatic trigger — staff clicks "Scan Vault for Updates" on the
 // household page. Building real Drive push-notification automation is a
 // separate, bigger piece of infra, deliberately out of scope for this pass.
@@ -15,6 +21,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { driveListChildren, driveDownloadFile, matchVaultCategoryFolder } from "../_shared/vault-provisioning.ts";
 import { GEMINI_EXTRACT_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
+import { V2_PROVENANCE_PROMPT_SUFFIX } from "../_shared/provenance.ts";
+import { runStage2 } from "../_shared/stage2-run.ts";
+import { logSystemHealth } from "../_shared/system-health.ts";
 
 // Keep in sync with src/shared/lib/custodians.ts (a Deno edge function can't
 // import a frontend module directly). Normalizes AI-extracted custodian text
@@ -292,6 +301,27 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Separate, failure-tolerant read (not part of the select above): if this
+    // function ever deploys before the v2_ai_engine_enabled migration is
+    // applied, the query errors, `v2` stays false, and V1 behaves as before.
+    const { data: flagRow } = await admin
+      .from("households").select("v2_ai_engine_enabled").eq("id", householdId).maybeSingle();
+    const v2 = flagRow?.v2_ai_engine_enabled === true;
+    let heldForReview = 0;
+    // Stage 2 hold: verify + audit-log one file's extraction, never touching live rows.
+    const holdForReview = async (kind: "investment" | "insurance", parsed: Record<string, unknown>, file: { id: string; name: string }) => {
+      try {
+        await runStage2(admin, { householdId, kind, extraction: parsed, source: { drive_id: file.id, file_name: file.name } });
+        heldForReview += 1;
+      } catch (e) {
+        await logSystemHealth(admin, {
+          function_name: "vault-statement-scan", severity: "ERROR", household_id: householdId,
+          error_message: e instanceof Error ? e.message : String(e), stack_trace: e instanceof Error ? e.stack : null,
+        });
+        throw e;
+      }
+    };
+
     const { data: contacts } = await admin
       .from("contacts")
       .select("id, first_name, last_name, family_role")
@@ -385,12 +415,18 @@ Deno.serve(async (req) => {
         const parsed = await callVertex(
           vertexAccessToken,
           sa.project_id,
-          INVESTMENT_SYSTEM_PROMPT,
+          v2 ? INVESTMENT_SYSTEM_PROMPT + V2_PROVENANCE_PROMPT_SUFFIX : INVESTMENT_SYSTEM_PROMPT,
           `Parse this financial statement for the ${household.label} household. Extract all investment accounts.`,
           base64,
           file.mimeType,
         );
         investmentFilesParsed.push(file.name);
+
+        if (v2) {
+          investmentAccountsExtracted += (parsed.accounts || []).length;
+          await holdForReview("investment", parsed, file);
+          continue;
+        }
 
         for (const account of parsed.accounts || []) {
           investmentAccountsExtracted += 1;
@@ -491,12 +527,18 @@ Deno.serve(async (req) => {
         const parsed = await callVertex(
           vertexAccessToken,
           sa.project_id,
-          INSURANCE_SYSTEM_PROMPT,
+          v2 ? INSURANCE_SYSTEM_PROMPT + V2_PROVENANCE_PROMPT_SUFFIX : INSURANCE_SYSTEM_PROMPT,
           `Parse this insurance document for the ${household.label} household. Extract all policies shown.`,
           base64,
           file.mimeType,
         );
         insuranceFilesParsed.push(file.name);
+
+        if (v2) {
+          insurancePoliciesExtracted += (parsed.policies || []).length;
+          await holdForReview("insurance", parsed, file);
+          continue;
+        }
 
         for (const policy of parsed.policies || []) {
           insurancePoliciesExtracted += 1;
@@ -565,7 +607,7 @@ Deno.serve(async (req) => {
 
     await admin.from("review_queue").insert({
       action_type: "vault_statement_scan",
-      action_description: `Scanned Vault for ${household.label}: ${investmentFilesParsed.length} investment file(s), ${insuranceFilesParsed.length} insurance file(s).`,
+      action_description: `Scanned Vault for ${household.label}: ${investmentFilesParsed.length} investment file(s), ${insuranceFilesParsed.length} insurance file(s).${v2 ? ` V2: ${heldForReview} extraction(s) held for advisor review; no live records changed.` : ""}`,
       contact_id: headOfHousehold?.id ?? null,
       created_by: user.id,
       proposed_data: {
@@ -597,6 +639,7 @@ Deno.serve(async (req) => {
         insurancePoliciesMatched,
         insurancePoliciesCreated,
         errors: [...investmentErrors, ...insuranceErrors],
+        ...(v2 ? { v2HeldForReview: heldForReview } : {}),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
