@@ -19,8 +19,8 @@ commands below hit production. Always pass `--project-ref rpxevcovasrgmrzkpknu` 
 ## Pre-flight (do all before touching production)
 
 1. `git fetch origin` and confirm `main` hasn't moved under the branch: `git log --oneline release/v2-desktop..origin/main` should be empty (if not, rebase and re-run everything below).
-2. **Reconcile `drop_asana`.** Production already has migration `20261003180000`, which is not on `main`. Check:
-   `npx supabase migration list --project-ref rpxevcovasrgmrzkpknu` — the only difference between local and remote must be our two new migrations (local only). If `20261003180000` shows as remote-only, merge that branch to `main` first, then rebase this one. **Do not** use `--include-all` to paper over it.
+2. **`drop_asana` must be on `main` first.** Production already has migration `20261003180000` (it drops the unused Asana columns); it lives in one commit on `origin/drop-asana-columns` (`852c5ee`), which is a fast-forward of `main` and touches only that migration and the regenerated `types.ts`. This branch is already rebased on top of that commit. Before releasing, `origin/main` must contain `852c5ee`. Then confirm (read-only):
+   `npx supabase migration list --project-ref rpxevcovasrgmrzkpknu` — expect `REMOTE ONLY` to be empty and the only local-only migrations to be `20261004120000` and `20261004140000` (verified this way on 2026-10-05: 209 in both). If a remote-only entry appears, stop; **do not** use `--include-all` to paper over it.
 3. Tests and build: `npx tsc -p tsconfig.app.json --noEmit && npx vitest run && npx vite build` (expect 178 tests passing).
 4. **V1 parity harness** (runs the real `vault-statement-scan` handler against fakes, original vs modified):
    `npx deno run --allow-all --node-modules-dir=none scripts/verify/vault-scan-parity.ts` — must print `ALL CHECKS PASSED` (11 checks). It verifies that with the flag off, or if the flag lookup fails, every write, prompt and response is identical to `origin/main`.
@@ -95,7 +95,7 @@ Look for, and report before enabling anyone else:
 
 ## Go / no-go checklist
 - [ ] `main` unchanged since the branch was cut (or rebased and re-verified)
-- [ ] `drop_asana` reconciled; `migration list` shows only our two new migrations as local-only
+- [ ] `origin/main` contains `852c5ee` (drop_asana); `migration list` shows no remote-only entries and only our two new migrations as local-only
 - [ ] tsc, 178 tests, build all green
 - [ ] Parity harness: `ALL CHECKS PASSED`
 - [ ] Test household chosen; baseline V1 scan counts recorded
