@@ -14,6 +14,7 @@ import {
   applyCorrections, applyPlan, planInsuranceApply, planInvestmentApply, type Correction,
 } from "../_shared/vault-apply.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
+import { logActionEvent } from "../_shared/action-brain.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -68,6 +69,12 @@ Deno.serve(async (req) => {
         .update({ review_status: "rejected", reviewed_by: user.id, reviewed_at: now })
         .eq("id", auditId).eq("review_status", "pending").select("id");
       if (!done?.length) return json({ error: "Already reviewed" }, 409);
+      await logActionEvent(admin, {
+        household_id: audit.household_id, actor_id: user.id, actor_role: "ADVISOR", action_type: "stage2_reject", workflow_module: "vault_statement_scan",
+        input_context_snapshot: { kind: audit.extracted_entities?.kind, overall_status: audit.overall_status, checks: (audit.arithmetic_checks ?? []).map((c: any) => ({ id: c.id, status: c.status })) },
+        system_proposed_payload: audit.extracted_entities?.extraction, human_final_payload: { decision: "rejected" }, rejected: true,
+        metadata: { audit_id: auditId },
+      });
       return json({ audit_id: auditId, review_status: "rejected" });
     }
 
@@ -134,6 +141,12 @@ Deno.serve(async (req) => {
     await admin.from("stage2_verification_audit")
       .update({ applied_at: new Date().toISOString(), apply_result: { ...result, overrides: corrected.overrides.length, acknowledged_conflicts: verdict.overall_status === "CONFLICT" } })
       .eq("id", auditId);
+    await logActionEvent(admin, {
+      household_id: audit.household_id, actor_id: user.id, actor_role: "ADVISOR", action_type: "stage2_approve", workflow_module: "vault_statement_scan",
+      input_context_snapshot: { kind, overall_status: audit.overall_status, checks: (audit.arithmetic_checks ?? []).map((c: any) => ({ id: c.id, status: c.status })) },
+      system_proposed_payload: audit.extracted_entities.extraction, human_final_payload: corrected.extraction,
+      metadata: { audit_id: auditId, overrides: corrected.overrides.length, acknowledged_conflicts: verdict.overall_status === "CONFLICT" },
+    });
     return json({ audit_id: auditId, review_status: "approved", overall_status: verdict.overall_status, ...result, overrides: corrected.overrides.length });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

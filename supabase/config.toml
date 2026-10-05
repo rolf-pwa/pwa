@@ -122,6 +122,13 @@ verify_jwt = false
 [functions.sentinel-sre-agent]
 verify_jwt = false
 
+[functions.push-send-drain]
+verify_jwt = false
+
+# Client-facing (portal_token auth, no Supabase session)
+[functions.portal-pwa]
+verify_jwt = false
+
 [functions.process-email-digest]
 verify_jwt = false
 

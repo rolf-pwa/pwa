@@ -21,11 +21,11 @@ Work from a **copy** of `supabase/` so the repo stays linked to production. In t
 3. `supabase link --project-ref <sandbox>` then `supabase db push`; afterwards `select cron.unschedule(jobid) from cron.job`.
 4. Add `http://localhost:8081` to `ALLOWED_ORIGINS` in the functions you deploy (they only allow production origins), then
    `supabase functions deploy <name> --use-api --project-ref <sandbox>`.
-   Desktop set: stage2-review, stage2-verify, sentinel-sre-agent. (The sandbox may additionally hold the
-   held-back mobile/training functions from `feature/v2-ai-engine-mobile-pwa`; those aren't part of the desktop release.)
+   Deployed: stage2-review, stage2-verify, portal-pwa, training-export, sentinel-sre-agent.
 5. Seed: `deno run --allow-all --node-modules-dir=none scripts/sandbox/seed.ts` with `SANDBOX_URL` / `SANDBOX_SERVICE_ROLE_KEY` set.
 
 ## Not available in the sandbox
 No Google Drive / Vertex / Square / Quo credentials, so: the source-document viewer ("No source file is linked"),
-Vault scans, payments and SMS don't work. The header's
-`quo-service` poll logs a CORS error because that function isn't deployed.
+Vault scans, payments and SMS don't work. Web Push needs VAPID keys (unset) and a real device. The header's
+`quo-service` poll logs a CORS error because that function isn't deployed. Training export stays off
+(`AI_TRAINING_EXPORT_ENABLED` unset), as it must until the privacy policy covers it.

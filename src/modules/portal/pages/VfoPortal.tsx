@@ -28,6 +28,7 @@ import { insuranceCashForStorehouses, sumValues, isAumStorehouse, formatCurrency
 import { MEETING_BOOKING_LINKS } from "@/shared/lib/meetingBookingLinks";
 import { PortalDynamicLinks } from "@/modules/portal/components/PortalDynamicLinks";
 import { PortalShoeboxUpload } from "@/modules/portal/components/PortalShoeboxUpload";
+import { PortalMobileTools } from "@/modules/portal/components/PortalMobileTools";
 import prosperwiseLogo from "@/assets/prosperwise-logo.png";
 import prosperwiseIconPaper from "@/assets/prosperwise-icon-paper.png";
 
@@ -604,6 +605,7 @@ const VfoPortal = () => {
           </div>
         )}
         <PortalShoeboxUpload portalToken={portalToken} householdId={household?.id} />
+        <PortalMobileTools portalToken={portalToken} householdId={household?.id} />
       </CardContent>
     </Card>
   );

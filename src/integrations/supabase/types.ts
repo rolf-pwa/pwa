@@ -140,6 +140,59 @@ export type Database = {
           },
         ]
       }
+      action_brain_events: {
+        Row: {
+          action_type: string
+          actor_id: string | null
+          actor_role: string
+          created_at: string
+          delta_score: number | null
+          household_id: string | null
+          human_final_payload: Json
+          id: string
+          input_context_snapshot: Json
+          metadata: Json | null
+          system_proposed_payload: Json | null
+          workflow_module: string
+        }
+        Insert: {
+          action_type: string
+          actor_id?: string | null
+          actor_role: string
+          created_at?: string
+          delta_score?: number | null
+          household_id?: string | null
+          human_final_payload: Json
+          id?: string
+          input_context_snapshot: Json
+          metadata?: Json | null
+          system_proposed_payload?: Json | null
+          workflow_module: string
+        }
+        Update: {
+          action_type?: string
+          actor_id?: string | null
+          actor_role?: string
+          created_at?: string
+          delta_score?: number | null
+          household_id?: string | null
+          human_final_payload?: Json
+          id?: string
+          input_context_snapshot?: Json
+          metadata?: Json | null
+          system_proposed_payload?: Json | null
+          workflow_module?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_brain_events_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       adobe_webforms: {
         Row: {
           created_at: string
@@ -173,6 +226,42 @@ export type Database = {
           name?: string
           updated_at?: string
           widget_url?: string
+        }
+        Relationships: []
+      }
+      ai_training_trajectories: {
+        Row: {
+          created_at: string
+          feedback_signal: string
+          id: string
+          is_exported_for_training: boolean
+          scrubbed_ai_response: string
+          scrubbed_human_response: string
+          scrubbed_input_prompt: string
+          source_event_id: string | null
+          workflow_type: string
+        }
+        Insert: {
+          created_at?: string
+          feedback_signal: string
+          id?: string
+          is_exported_for_training?: boolean
+          scrubbed_ai_response: string
+          scrubbed_human_response: string
+          scrubbed_input_prompt: string
+          source_event_id?: string | null
+          workflow_type: string
+        }
+        Update: {
+          created_at?: string
+          feedback_signal?: string
+          id?: string
+          is_exported_for_training?: boolean
+          scrubbed_ai_response?: string
+          scrubbed_human_response?: string
+          scrubbed_input_prompt?: string
+          source_event_id?: string | null
+          workflow_type?: string
         }
         Relationships: []
       }
@@ -4070,6 +4159,72 @@ export type Database = {
           id?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      push_deliveries: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          failed_count: number
+          notification_id: string
+          sent_count: number
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          failed_count?: number
+          notification_id: string
+          sent_count?: number
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          failed_count?: number
+          notification_id?: string
+          sent_count?: number
+        }
+        Relationships: []
+      }
+      pwa_push_subscriptions: {
+        Row: {
+          auth: string
+          contact_id: string | null
+          created_at: string
+          failure_count: number
+          household_id: string | null
+          endpoint: string
+          id: string
+          last_success_at: string | null
+          p256dh: string
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          auth: string
+          contact_id?: string | null
+          created_at?: string
+          endpoint: string
+          failure_count?: number
+          household_id?: string | null
+          id?: string
+          last_success_at?: string | null
+          p256dh: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          auth?: string
+          contact_id?: string | null
+          created_at?: string
+          endpoint?: string
+          failure_count?: number
+          household_id?: string | null
+          id?: string
+          last_success_at?: string | null
+          p256dh?: string
+          user_agent?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
