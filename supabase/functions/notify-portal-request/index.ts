@@ -200,89 +200,17 @@ if (req.method === "OPTIONS") {
     const body = await req.json();
     const { notify_type } = body;
 
-    // ─── Marketing update notifications ───
+    // ─── Marketing update notifications: RETIRED ───
+    // Updates are now published on Substack (linked from the portal sidebar) and the portal's Updates
+    // surface no longer exists, so this no longer creates portal notifications, mints one-tap links or
+    // sends email. It answers 410 rather than a quiet 200 so a stray or scheduled caller (e.g.
+    // process-scheduled-updates, which marks an update "sent" on any OK response) sees a failure
+    // instead of recording a send that never happened.
     if (notify_type === "marketing_update") {
-      const { title, url, target_governance_status, target_contact_ids, target_household_ids } = body;
-      if (!title || !url) {
-        return new Response(JSON.stringify({ error: "title and url required" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      // Fetch targeted contacts based on targeting rules
-      let contacts: any[] = [];
-
-      if (target_contact_ids && target_contact_ids.length > 0) {
-        // Targeted to specific contacts
-        const { data } = await supabase
-          .from("contacts")
-          .select("id, email, first_name, email_notifications_enabled")
-          .in("id", target_contact_ids)
-          .not("email", "is", null)
-          .eq("email_notifications_enabled", true);
-        contacts = data || [];
-      } else if (target_household_ids && target_household_ids.length > 0) {
-        // Targeted to specific households — get all contacts in those households
-        const { data } = await supabase
-          .from("contacts")
-          .select("id, email, first_name, email_notifications_enabled")
-          .in("household_id", target_household_ids)
-          .not("email", "is", null)
-          .eq("email_notifications_enabled", true);
-        contacts = data || [];
-      } else if (target_governance_status && target_governance_status !== "all") {
-        // Governance-status-based targeting -- now a household-level field,
-        // so this needs an inner join to filter on it (PostgREST requires
-        // `!inner` to filter by an embedded resource's own column).
-        const { data } = await supabase
-          .from("contacts")
-          .select("id, email, first_name, email_notifications_enabled, households!inner(governance_status)")
-          .not("email", "is", null)
-          .eq("email_notifications_enabled", true)
-          .eq("households.governance_status", target_governance_status);
-        contacts = data || [];
-      } else {
-        // No targeting at all -- every notification-eligible contact.
-        const { data } = await supabase
-          .from("contacts")
-          .select("id, email, first_name, email_notifications_enabled")
-          .not("email", "is", null)
-          .eq("email_notifications_enabled", true);
-        contacts = data || [];
-      }
-
-      let sent = 0;
-
-      for (const c of contacts || []) {
-        if (!c.email) continue;
-        const cleanEmail = c.email.trim().toLowerCase();
-        const firstName = c.first_name || "there";
-
-        // Insert portal client notification (visible in client portal)
-        await supabase.from("portal_client_notifications").insert({
-          contact_id: c.id,
-          title: `New update: ${title}`,
-          body: `A new update "${title}" has been posted for you.`,
-          source_type: "marketing_update",
-          link_tab: "updates",
-        });
-
-        const link = await mintMagicLink(supabase, { contactId: c.id, targetHash: "updates" });
-        const url = link?.url || plainPortalUrl();
-        await dispatchNotification({
-          email: cleanEmail,
-          subject: title,
-          message: `Hi ${firstName},\n\nA new update has been posted for you: "${title}"\n\nOpen it here:\n${url}\n\n(This one-tap link is valid for 1 hour and works once. After that, sign in at https://app.prosperwise.ca)\n\nThank you,\nProsperWise Team`,
-          event_type: "marketing_update",
-          template_id: "VEXE9Be",
-        });
-        sent++;
-      }
-
-      return new Response(JSON.stringify({ sent, total: (contacts || []).length }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Marketing updates are retired; updates are published on Substack." }),
+        { status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     // notify_type: "request" (default) | "task"

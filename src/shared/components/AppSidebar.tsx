@@ -12,7 +12,6 @@ import {
   Mail,
   FolderOpen,
   PanelLeftClose,
-  Megaphone,
   Cpu,
   TrendingUp,
   Receipt,
@@ -101,7 +100,6 @@ const GROUPS = [
     icon: BarChart3,
     items: [
       { to: "/analytics", label: "Analytics", icon: BarChart3 },
-      { to: "/marketing-updates", label: "Marketing Updates", icon: Megaphone },
       { to: "/admin/vfo", label: "VFO Roster", icon: Crown },
     ],
   },

@@ -42,7 +42,6 @@ const Households = lazy(() => import("@/modules/crm/pages/Households"));
 const HouseholdDetail = lazy(() => import("@/modules/crm/pages/HouseholdDetail"));
 const Corporations = lazy(() => import("@/modules/crm/pages/Corporations"));
 const CorporationDetail = lazy(() => import("@/modules/crm/pages/CorporationDetail"));
-const MarketingUpdates = lazy(() => import("@/modules/crm/pages/MarketingUpdates"));
 const Workbench = lazy(() => import("@/modules/audit/pages/Workbench"));
 const Pipeline = lazy(() => import("@/modules/crm/pages/Pipeline"));
 const Vault = lazy(() => import("@/modules/crm/pages/Vault"));
@@ -139,7 +138,6 @@ const App = () => (
               <Route path="/requests" element={<ProtectedRoute><Requests /></ProtectedRoute>} />
               <Route path="/review-queue" element={<ProtectedRoute><ReviewQueue /></ProtectedRoute>} />
               <Route path="/glass-box-review" element={<ProtectedRoute><Stage2Review /></ProtectedRoute>} />
-              <Route path="/marketing-updates" element={<ProtectedRoute><MarketingUpdates /></ProtectedRoute>} />
               <Route path="/workbench" element={<ProtectedRoute><Workbench /></ProtectedRoute>} />
               <Route path="/pipeline" element={<ProtectedRoute><Pipeline /></ProtectedRoute>} />
               <Route path="/services" element={<ProtectedRoute><BillingServices /></ProtectedRoute>} />
