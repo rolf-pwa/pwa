@@ -118,6 +118,7 @@ Deno.serve(async (req) => {
       plan = planInvestmentApply(corrected.extraction[listKey] ?? [], {
         householdId: audit.household_id, members: members ?? [], vineyard: vineyard ?? [], storehouses: storehouses ?? [], holdingTank: tank ?? [],
         sourceFile: source.drive_id ? `vault:${source.drive_id}:${source.file_name ?? ""}` : null,
+        statementDate: typeof corrected.extraction.statement_date === "string" ? corrected.extraction.statement_date : null,
       });
     } else {
       const { data: shareholders } = memberIds.length

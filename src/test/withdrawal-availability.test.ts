@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeAvailability, INCOME_CATEGORY, isIncomeFund } from "../../supabase/functions/_shared/withdrawal-availability";
+import { availableForWithdrawal, computeAvailability, INCOME_CATEGORY, isIncomeFund } from "../../supabase/functions/_shared/withdrawal-availability";
 
 // The Investment Funds table on page 2 of the real iA statement (Series 75/100).
 const page2 = [
@@ -97,5 +97,26 @@ describe("computeAvailability", () => {
     expect(av.income_funds).toBe(1_123.52); // 23.52 income + 400 + 600 + 100
     expect(av.available).toBe(1_123.52);
     expect(av.limited_by).toBe("income_funds");
+  });
+});
+
+describe("availableForWithdrawal (the rule the account cards use from three stored numbers)", () => {
+  it("the real iA account: surplus $1,847.30, income funds $23.52 -> $23.52 available, limited by income funds", () => {
+    expect(availableForWithdrawal({ book_value: 51_295.72, current_value: 53_143.02, income_funds_value: 23.52 }))
+      .toEqual({ surplus: 1_847.3, available: 23.52, limited_by: "income_funds" });
+  });
+  it("is limited by the surplus when income funds exceed it, and by neither when equal", () => {
+    expect(availableForWithdrawal({ book_value: 100, current_value: 150, income_funds_value: 500 })).toEqual({ surplus: 50, available: 50, limited_by: "surplus" });
+    expect(availableForWithdrawal({ book_value: 100, current_value: 150, income_funds_value: 50 })).toEqual({ surplus: 50, available: 50, limited_by: "none" });
+  });
+  it("never goes below zero when there is no surplus (that would be principal)", () => {
+    expect(availableForWithdrawal({ book_value: 200, current_value: 150, income_funds_value: 150 })).toEqual({ surplus: -50, available: 0, limited_by: "surplus" });
+  });
+  it("is null when a figure is missing, and agrees with computeAvailability", () => {
+    expect(availableForWithdrawal({ book_value: 100, current_value: 150 }).available).toBeNull();
+    expect(availableForWithdrawal({ book_value: null, current_value: 150, income_funds_value: 10 }).available).toBeNull();
+    const funds = [{ name: "Bond", category: "Income Funds", value: 23.52 }, { name: "Eq", category: "Equity", value: 53_119.5 }];
+    const av = computeAvailability({ book_value: 51_295.72, current_value: 53_143.02, funds });
+    expect(availableForWithdrawal({ book_value: 51_295.72, current_value: 53_143.02, income_funds_value: av.income_funds }).available).toBe(av.available);
   });
 });

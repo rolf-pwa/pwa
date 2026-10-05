@@ -116,6 +116,8 @@ interface VineyardAccount {
   visibility_scope: string;
   custodian?: string | null;
   beneficiary_designation?: string | null;
+  income_funds_value?: number | null;
+  income_funds_as_of?: string | null;
 }
 
 interface HarvestSnapshot {
@@ -953,6 +955,9 @@ const ContactDetail = () => {
                     accountNumber: acc.account_number,
                     custodian: acc.custodian,
                     beneficiaryDesignation: acc.beneficiary_designation,
+                    bookValue: acc.book_value,
+                    incomeFundsValue: acc.income_funds_value,
+                    incomeFundsAsOf: acc.income_funds_as_of,
                     sourceTable: "vineyard_accounts" as const,
                   }))}
                   moveTargets={[

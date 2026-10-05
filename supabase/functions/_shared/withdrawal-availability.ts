@@ -69,6 +69,27 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 const sumTolerance = (basis: number) => Math.max(1, Math.abs(basis) * 0.0002);
 const money = (n: number) => n.toLocaleString("en-CA", { style: "currency", currency: "CAD" });
 
+export interface WithdrawalFigures {
+  /** current value - opening value (may be negative); null if either is missing. */
+  surplus: number | null;
+  /** The lesser of surplus and income funds, floored at 0; null unless both are known. */
+  available: number | null;
+  limited_by: "income_funds" | "surplus" | "none" | null;
+}
+
+/**
+ * The core rule, shared by the statement review and the account cards (which only have the three
+ * stored numbers, not the fund lines): available = max(0, min(surplus, income funds on hand)).
+ */
+export function availableForWithdrawal(a: { book_value?: number | null; current_value?: number | null; income_funds_value?: number | null }): WithdrawalFigures {
+  const surplus = isNum(a.book_value) && isNum(a.current_value) ? round2(a.current_value - a.book_value) : null;
+  if (surplus === null || !isNum(a.income_funds_value)) return { surplus, available: null, limited_by: null };
+  const income = a.income_funds_value;
+  const available = round2(Math.max(0, Math.min(Math.max(0, surplus), income)));
+  const limited_by = surplus <= 0 ? "surplus" : income < surplus ? "income_funds" : income > surplus ? "surplus" : "none";
+  return { surplus, available, limited_by };
+}
+
 export function computeAvailability(a: AvailabilityInput): Availability {
   const notes: string[] = [];
   const surplus = isNum(a.book_value) && isNum(a.current_value) ? round2(a.current_value - a.book_value) : null;
@@ -102,12 +123,8 @@ export function computeAvailability(a: AvailabilityInput): Availability {
     notes.push("No current value to confirm the funds list against.");
   }
 
-  let available: number | null = null;
-  let limitedBy: Availability["limited_by"] = null;
+  const { available, limited_by: limitedBy } = availableForWithdrawal({ book_value: a.book_value, current_value: a.current_value, income_funds_value: incomeFunds });
   if (surplus !== null) {
-    const cap = Math.max(0, surplus);
-    available = round2(Math.max(0, Math.min(cap, incomeFunds)));
-    limitedBy = surplus <= 0 ? "surplus" : incomeFunds < surplus ? "income_funds" : incomeFunds > surplus ? "surplus" : "none";
     if (surplus <= 0) notes.push("There is no surplus: any withdrawal would come out of principal.");
     else if (limitedBy === "income_funds") notes.push(`The surplus of ${money(surplus)} exceeds the income funds on hand (${money(incomeFunds)}); the rest is held in other funds.`);
   }

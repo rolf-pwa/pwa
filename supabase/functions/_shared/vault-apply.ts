@@ -8,6 +8,7 @@
 
 // deno-lint-ignore-file no-explicit-any
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { computeAvailability } from "./withdrawal-availability.ts";
 
 export const normalizeToken = (v: string | null | undefined) => (v || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
@@ -101,6 +102,8 @@ export interface InvestmentContext {
   storehouses: Array<{ id: string; label: string | null; asset_type: string | null }>;
   holdingTank: Array<{ id: string; account_name: string; account_number: string | null }>;
   sourceFile: string | null;
+  /** The statement's date (YYYY-MM-DD), recorded as the as-of date of the income funds figure. */
+  statementDate?: string | null;
 }
 
 const numericOnly = (o: Record<string, unknown>) => Object.fromEntries(Object.entries(o).filter(([, v]) => typeof v === "number"));
@@ -119,16 +122,24 @@ export function planInvestmentApply(accounts: Record<string, any>[], ctx: Invest
     const name = normalizeToken(a.account_name);
     const figures = numericOnly({ book_value: a.book_value, current_value: a.current_value });
     const label = String(a.account_name ?? a.account_number ?? "account");
+    // Income funds are remembered only when the statement's fund list was proven complete (it adds up
+    // to the statement value); an unconfirmed figure is never written. Storehouses have no such column.
+    const av = computeAvailability(a);
+    const income = av.status === "confirmed" && av.income_funds !== null && /^\d{4}-\d{2}-\d{2}$/.test(ctx.statementDate ?? "")
+      ? { income_funds_value: av.income_funds, income_funds_as_of: ctx.statementDate as string }
+      : {};
 
     const live = (num && vByNum.get(num)) || vByName.get(name) || sByName.get(name);
     if (live) {
       const isVineyard = "account_name" in live;
-      if (Object.keys(figures).length) writes.push({ op: "update", table: isVineyard ? "vineyard_accounts" : "storehouses", id: live.id, values: figures, label });
+      const values = isVineyard ? { ...figures, ...income } : figures;
+      if (Object.keys(values).length) writes.push({ op: "update", table: isVineyard ? "vineyard_accounts" : "storehouses", id: live.id, values, label });
       continue;
     }
     const tank = (num && hByNum.get(num)) || hByName.get(name);
     if (tank) {
-      if (Object.keys(figures).length) writes.push({ op: "update", table: "holding_tank", id: tank.id, values: figures, label });
+      const values = { ...figures, ...income };
+      if (Object.keys(values).length) writes.push({ op: "update", table: "holding_tank", id: tank.id, values, label });
       continue;
     }
     const owner = findMemberByLooseName(ctx.members, a.account_owner) || head;
@@ -138,7 +149,7 @@ export function planInvestmentApply(accounts: Record<string, any>[], ctx: Invest
         contact_id: owner?.id, household_id: ctx.householdId, account_name: a.account_name, account_number: a.account_number ?? null,
         account_type: a.account_type || "Portfolio", account_owner: a.account_owner ?? null, custodian: normalizeCustodian(a.custodian),
         book_value: a.book_value ?? null, current_value: a.current_value ?? null, notes: a.notes ?? null,
-        source_file: ctx.sourceFile, status: "holding",
+        source_file: ctx.sourceFile, status: "holding", ...income,
       },
     });
     // Register so a duplicate within this same approval matches instead of re-inserting.
