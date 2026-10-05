@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
+import { heldForReviewMessage, isHeldForReview } from "@/modules/crm/lib/vaultScanMessage";
 import { format } from "date-fns";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { AppLayout } from "@/shared/components/AppLayout";
@@ -988,6 +989,19 @@ const HouseholdDetail = () => {
                               });
                               if (error) throw error;
                               if (data?.error) throw new Error(data.error);
+                              if (isHeldForReview(data)) {
+                                // V2 household: nothing was written; the extractions wait for approval in Glass-Box Review.
+                                toast.success(heldForReviewMessage(data.v2HeldForReview), {
+                                  duration: 15000,
+                                  action: { label: "Review now", onClick: () => navigate("/glass-box-review") },
+                                });
+                                if (data.errors?.length) {
+                                  console.error("vault-statement-scan file errors:", data.errors);
+                                  toast.warning(`${data.errors.length} file(s) couldn't be parsed: ${data.errors.slice(0, 3).join("; ")}`);
+                                }
+                                fetchData();
+                                return;
+                              }
                               const parts: string[] = [];
                               if (data.investmentFilesParsed) {
                                 const bits = [];
