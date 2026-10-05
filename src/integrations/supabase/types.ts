@@ -1714,6 +1714,57 @@ export type Database = {
         }
         Relationships: []
       }
+      golden_dataset_overrides: {
+        Row: {
+          advisor_id: string
+          corrected_value: Json
+          created_at: string
+          document_id: string | null
+          field_name: string
+          household_id: string
+          id: string
+          original_ai_value: Json
+          reasoning_notes: string | null
+        }
+        Insert: {
+          advisor_id: string
+          corrected_value: Json
+          created_at?: string
+          document_id?: string | null
+          field_name: string
+          household_id: string
+          id?: string
+          original_ai_value: Json
+          reasoning_notes?: string | null
+        }
+        Update: {
+          advisor_id?: string
+          corrected_value?: Json
+          created_at?: string
+          document_id?: string | null
+          field_name?: string
+          household_id?: string
+          id?: string
+          original_ai_value?: Json
+          reasoning_notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "golden_dataset_overrides_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "vault_shoebox_proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "golden_dataset_overrides_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       google_tokens: {
         Row: {
           access_token: string
@@ -2252,6 +2303,7 @@ export type Database = {
           spousal_alignment_note: string | null
           spousal_alignment_score: number | null
           updated_at: string
+          v2_ai_engine_enabled: boolean
           values_notes: string | null
           vault_root_folder_id: string | null
           vault_shoebox_folder_id: string | null
@@ -2298,6 +2350,7 @@ export type Database = {
           spousal_alignment_note?: string | null
           spousal_alignment_score?: number | null
           updated_at?: string
+          v2_ai_engine_enabled?: boolean
           values_notes?: string | null
           vault_root_folder_id?: string | null
           vault_shoebox_folder_id?: string | null
@@ -2344,6 +2397,7 @@ export type Database = {
           spousal_alignment_note?: string | null
           spousal_alignment_score?: number | null
           updated_at?: string
+          v2_ai_engine_enabled?: boolean
           values_notes?: string | null
           vault_root_folder_id?: string | null
           vault_shoebox_folder_id?: string | null
@@ -5280,6 +5334,75 @@ export type Database = {
           },
         ]
       }
+      stage2_verification_audit: {
+        Row: {
+          advisor_override_required: boolean
+          applied_at: string | null
+          apply_result: Json | null
+          arithmetic_checks: Json
+          causal_dag_evaluations: Json
+          created_at: string
+          document_id: string | null
+          extracted_entities: Json
+          household_id: string
+          id: string
+          missing_items: Json | null
+          overall_status: string
+          review_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+        }
+        Insert: {
+          advisor_override_required?: boolean
+          applied_at?: string | null
+          apply_result?: Json | null
+          arithmetic_checks: Json
+          causal_dag_evaluations: Json
+          created_at?: string
+          document_id?: string | null
+          extracted_entities: Json
+          household_id: string
+          id?: string
+          missing_items?: Json | null
+          overall_status: string
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+        }
+        Update: {
+          advisor_override_required?: boolean
+          applied_at?: string | null
+          apply_result?: Json | null
+          arithmetic_checks?: Json
+          causal_dag_evaluations?: Json
+          created_at?: string
+          document_id?: string | null
+          extracted_entities?: Json
+          household_id?: string
+          id?: string
+          missing_items?: Json | null
+          overall_status?: string
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stage2_verification_audit_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "vault_shoebox_proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stage2_verification_audit_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       storehouse_rules: {
         Row: {
           created_at: string
@@ -5401,6 +5524,62 @@ export type Database = {
             columns: ["corporation_id"]
             isOneToOne: false
             referencedRelation: "corporations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      system_health_logs: {
+        Row: {
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          execution_id: string | null
+          function_name: string
+          household_id: string | null
+          id: string
+          input_payload: Json | null
+          max_retries: number
+          retry_count: number
+          severity: string
+          stack_trace: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          execution_id?: string | null
+          function_name: string
+          household_id?: string | null
+          id?: string
+          input_payload?: Json | null
+          max_retries?: number
+          retry_count?: number
+          severity: string
+          stack_trace?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          execution_id?: string | null
+          function_name?: string
+          household_id?: string | null
+          id?: string
+          input_payload?: Json | null
+          max_retries?: number
+          retry_count?: number
+          severity?: string
+          stack_trace?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "system_health_logs_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
             referencedColumns: ["id"]
           },
         ]
