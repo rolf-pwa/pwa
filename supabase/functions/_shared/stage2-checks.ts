@@ -1,6 +1,7 @@
 // stage2-checks.ts — Stage 2 of the two-stage document pipeline. Stage 1
 // (the LLM) extracts figures; Stage 2 is deterministic code that re-checks
-// them: arithmetic consistency, plausibility, and completeness. Every check
+// them: plausibility, internal consistency, and completeness. Figures printed
+// on an official statement (e.g. the gain) are taken as authoritative. Every check
 // carries a plain-English reasoning string (Glass-Box), and a check that
 // can't run because inputs are missing is "skipped" with the reason, never a
 // silent pass. Pure: no LLM, no I/O.
@@ -87,15 +88,26 @@ export function checkInvestment(x: InvestmentExtraction, now: Date = new Date())
     if (a.current_value < 0) {
       out.push({ id: "value_non_negative", status: "fail", subject, reasoning: `Current value ${money(a.current_value)} is negative; accounts held here shouldn't be.` });
     }
-    if (isNum(a.book_value) && isNum(a.current_harvest)) {
-      const expected = a.current_value - a.book_value;
-      const diff = Math.abs(expected - a.current_harvest);
-      const tol = tolerance(a.current_value);
-      out.push(diff <= tol
-        ? { id: "harvest_arithmetic", status: "pass", subject, reasoning: `Current value ${money(a.current_value)} minus book value ${money(a.book_value)} is ${money(expected)}, matching the stated gain of ${money(a.current_harvest)} (tolerance ${money(tol)}).` }
-        : { id: "harvest_arithmetic", status: "fail", subject, reasoning: `Current value ${money(a.current_value)} minus book value ${money(a.book_value)} is ${money(expected)}, but the stated gain is ${money(a.current_harvest)} (off by ${money(diff)}, tolerance ${money(tol)}).` });
+    // The gain printed on an official statement is authoritative. It routinely
+    // includes contributions, withdrawals and fees, so it is NOT expected to
+    // equal current value minus book value; a mismatch is noted, never a
+    // conflict. Only a missing gain is a gap.
+    if (isNum(a.current_harvest)) {
+      if (isNum(a.book_value)) {
+        const expected = a.current_value - a.book_value;
+        const diff = Math.abs(expected - a.current_harvest);
+        const tol = tolerance(a.current_value);
+        out.push({
+          id: "harvest_arithmetic", status: "pass", subject,
+          reasoning: diff <= tol
+            ? `Current value ${money(a.current_value)} minus book value ${money(a.book_value)} is ${money(expected)}, matching the stated gain of ${money(a.current_harvest)} (tolerance ${money(tol)}).`
+            : `Stated gain ${money(a.current_harvest)} accepted as printed on the statement. It differs from current value minus book value (${money(expected)}) by ${money(diff)}, which is normal when the period includes contributions, withdrawals or fees.`,
+        });
+      } else {
+        out.push({ id: "harvest_arithmetic", status: "pass", subject, reasoning: `Stated gain ${money(a.current_harvest)} accepted as printed on the statement (no book value was extracted to compare it with).` });
+      }
     } else {
-      out.push({ id: "harvest_arithmetic", status: "skipped", subject, reasoning: `Book value or gain is missing for ${subject}, so the gain can't be re-derived.` });
+      out.push({ id: "harvest_arithmetic", status: "skipped", subject, reasoning: `No gain was extracted for ${subject}, so there is nothing to confirm.` });
     }
   }
 

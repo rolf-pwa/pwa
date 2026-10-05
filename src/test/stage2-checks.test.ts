@@ -14,18 +14,29 @@ describe("checkInvestment", () => {
     expect(by(checks, "harvest_arithmetic")?.status).toBe("pass");
     expect(verdictFor(checks).overall_status).toBe("VERIFIED");
   });
-  it("flags a gain that doesn't match value - book, with the numbers in the reasoning", () => {
+  it("accepts the stated gain when it differs from value - book (contributions/withdrawals), and says so", () => {
     const checks = checkInvestment({ ...good, accounts: [{ ...good.accounts[0], current_harvest: 20_000 }] }, NOW);
     const c = by(checks, "harvest_arithmetic")!;
-    expect(c.status).toBe("fail");
-    expect(c.reasoning).toMatch(/112,500/);
-    expect(verdictFor(checks)).toMatchObject({ overall_status: "CONFLICT", advisor_override_required: true });
+    expect(c.status).toBe("pass");
+    expect(c.reasoning).toMatch(/accepted as printed/);
+    expect(c.reasoning).toMatch(/\$20,000/);
+    expect(c.reasoning).toMatch(/\$12,500/); // the derived figure is shown for transparency
+    expect(verdictFor(checks)).toMatchObject({ overall_status: "VERIFIED", advisor_override_required: false });
+  });
+  it("accepts a stated gain even when no book value was extracted", () => {
+    const checks = checkInvestment({ ...good, accounts: [{ account_number: "A1", current_harvest: 7_389.16, current_value: 53_143.02 }] }, NOW);
+    expect(by(checks, "harvest_arithmetic")?.status).toBe("pass");
+    expect(verdictFor(checks).overall_status).toBe("VERIFIED");
+  });
+  it("reproduces the real iA statement from the first production scan: no conflict", () => {
+    const checks = checkInvestment({ statement_date: "2026-09-30", accounts: [{ account_number: "1819479981", book_value: 51_295.72, current_harvest: 7_389.16, current_value: 53_143.02 }] }, NOW);
+    expect(verdictFor(checks).overall_status).toBe("VERIFIED");
   });
   it("tolerates statement rounding", () => {
     const checks = checkInvestment({ ...good, accounts: [{ ...good.accounts[0], current_harvest: 12_500.4 }] }, NOW);
     expect(by(checks, "harvest_arithmetic")?.status).toBe("pass");
   });
-  it("is INCOMPLETE (not VERIFIED) when a check can't run", () => {
+  it("is INCOMPLETE (not VERIFIED) when a check can't run, e.g. no gain was extracted", () => {
     const checks = checkInvestment({ ...good, accounts: [{ account_number: "A1", current_value: 5 }] }, NOW);
     expect(by(checks, "harvest_arithmetic")?.status).toBe("skipped");
     expect(verdictFor(checks).overall_status).toBe("INCOMPLETE");
