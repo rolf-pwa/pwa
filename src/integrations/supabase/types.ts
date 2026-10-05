@@ -1750,6 +1750,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "golden_dataset_overrides_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "vault_shoebox_proposals"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "golden_dataset_overrides_household_id_fkey"
             columns: ["household_id"]
             isOneToOne: false
@@ -5330,8 +5337,8 @@ export type Database = {
       stage2_verification_audit: {
         Row: {
           advisor_override_required: boolean
-          apply_result: Json | null
           applied_at: string | null
+          apply_result: Json | null
           arithmetic_checks: Json
           causal_dag_evaluations: Json
           created_at: string
@@ -5347,8 +5354,8 @@ export type Database = {
         }
         Insert: {
           advisor_override_required?: boolean
-          apply_result?: Json | null
           applied_at?: string | null
+          apply_result?: Json | null
           arithmetic_checks: Json
           causal_dag_evaluations: Json
           created_at?: string
@@ -5364,8 +5371,8 @@ export type Database = {
         }
         Update: {
           advisor_override_required?: boolean
-          apply_result?: Json | null
           applied_at?: string | null
+          apply_result?: Json | null
           arithmetic_checks?: Json
           causal_dag_evaluations?: Json
           created_at?: string
@@ -5380,6 +5387,13 @@ export type Database = {
           reviewed_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "stage2_verification_audit_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "vault_shoebox_proposals"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "stage2_verification_audit_household_id_fkey"
             columns: ["household_id"]
