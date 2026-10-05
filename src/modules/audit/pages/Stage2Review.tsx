@@ -14,7 +14,8 @@ import { SourceViewer, type Highlight } from "../components/stage2/SourceViewer"
 import { CheckTimeline } from "../components/stage2/CheckTimeline";
 import { CausalRiskPanel } from "../components/stage2/CausalRiskPanel";
 import { EntityEditor } from "../components/stage2/EntityEditor";
-import { itemIndexForCheck, itemsOf, summarizeChecks, type Correction, type Stage2AuditRow } from "../lib/stage2";
+import { AvailabilityPanel } from "../components/stage2/AvailabilityPanel";
+import { applyUiCorrections, itemIndexForCheck, itemsOf, summarizeChecks, type Correction, type Stage2AuditRow } from "../lib/stage2";
 
 const FUNCTION_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/stage2-review`;
 
@@ -92,6 +93,13 @@ function ReviewDetail({ row, onDone }: { row: Stage2AuditRow; onDone: () => void
             )}
           </CardContent>
         </Card>
+
+        {kind === "investment" && (
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-base">Available for withdrawal</CardTitle></CardHeader>
+            <CardContent><AvailabilityPanel items={applyUiCorrections(items, corrections)} /></CardContent>
+          </Card>
+        )}
 
         <Card>
           <Tabs defaultValue="checks">

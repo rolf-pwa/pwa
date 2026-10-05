@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   EDITABLE_FIELDS,
+  applyUiCorrections,
   boxToPercent, itemIndexForCheck, parseFieldInput, riskLevel, summarizeChecks, type Stage2AuditRow,
 } from "../modules/audit/lib/stage2";
 
@@ -42,5 +43,12 @@ describe("stage2 ui helpers", () => {
   });
   it("accepts a negative net transactions entry", () => {
     expect(parseFieldInput("-5,541.86", true)).toBe(-5541.86);
+  });
+  it("applyUiCorrections overlays pending corrections without mutating the originals", () => {
+    const items = [{ current_value: 100 }, { current_value: 200, account_name: "x" }];
+    const out = applyUiCorrections(items, [{ index: 1, field: "current_value", value: 250 }, { index: 1, field: "book_value", value: null }]);
+    expect(out[0]).toBe(items[0]);
+    expect(out[1]).toEqual({ current_value: 250, account_name: "x", book_value: null });
+    expect(items[1].current_value).toBe(200);
   });
 });

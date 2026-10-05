@@ -14,6 +14,7 @@ import {
   applyCorrections, applyPlan, planInsuranceApply, planInvestmentApply, type Correction,
 } from "../_shared/vault-apply.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
+import { computeAvailability } from "../_shared/withdrawal-availability.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -132,7 +133,7 @@ Deno.serve(async (req) => {
 
     const result = await applyPlan(admin, plan);
     await admin.from("stage2_verification_audit")
-      .update({ applied_at: new Date().toISOString(), apply_result: { ...result, overrides: corrected.overrides.length, acknowledged_conflicts: verdict.overall_status === "CONFLICT" } })
+      .update({ applied_at: new Date().toISOString(), apply_result: { ...result, overrides: corrected.overrides.length, acknowledged_conflicts: verdict.overall_status === "CONFLICT", ...(kind === "investment" ? { availability: (corrected.extraction.accounts ?? []).map((a: any) => computeAvailability(a)) } : {}) } })
       .eq("id", auditId);
     return json({ audit_id: auditId, review_status: "approved", overall_status: verdict.overall_status, ...result, overrides: corrected.overrides.length });
   } catch (e) {

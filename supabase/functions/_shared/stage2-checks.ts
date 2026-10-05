@@ -6,6 +6,8 @@
 // can't run because inputs are missing is "skipped" with the reason, never a
 // silent pass. Pure: no LLM, no I/O.
 
+import { computeAvailability, type FundLine } from "./withdrawal-availability.ts";
+
 export type CheckStatus = "pass" | "fail" | "skipped";
 export interface CheckResult {
   id: string;
@@ -25,6 +27,8 @@ export interface ExtractedAccount {
   current_value?: number | null;
   /** Net transactions for the period as printed: deposits minus withdrawals (negative = net withdrawals). */
   net_transactions?: number | null;
+  /** Fund holdings as printed, each with its category heading and value. */
+  funds?: FundLine[] | null;
 }
 export interface InvestmentExtraction {
   statement_date?: string | null;
@@ -121,6 +125,19 @@ export function checkInvestment(x: InvestmentExtraction, now: Date = new Date())
       }
     } else {
       out.push({ id: "net_gain_reconciliation", status: "skipped", subject, reasoning: `No net gain was extracted for ${subject}, so there is nothing to confirm.` });
+    }
+
+    // Fund holdings: the listed funds should add up to the statement value. If they
+    // don't, the extraction may have missed a page/section (or the statement holds
+    // something the table doesn't list), so the income-funds figure can't be relied
+    // on. That is a gap for the advisor, not a contradiction, so it never fails.
+    if (Array.isArray(a.funds) && a.funds.length > 0) {
+      const av = computeAvailability({ book_value: a.book_value, current_value: a.current_value, funds: a.funds });
+      if (av.funds_gap !== null && av.status !== "unconfirmed") {
+        out.push({ id: "funds_sum_to_value", status: "pass", subject, reasoning: `The ${av.funds.length} listed fund${av.funds.length === 1 ? "" : "s"} total ${money(av.funds_total ?? 0)}, matching the statement value of ${money(a.current_value)}.` });
+      } else if (av.funds_gap !== null) {
+        out.push({ id: "funds_sum_to_value", status: "skipped", subject, reasoning: `The ${av.funds.length} listed fund${av.funds.length === 1 ? "" : "s"} total ${money(av.funds_total ?? 0)} but the statement value is ${money(a.current_value)}: ${money(Math.abs(av.funds_gap))} ${av.funds_gap > 0 ? "isn't accounted for" : "is over"}. The income funds balance can't be confirmed until the full fund list is checked.` });
+      }
     }
   }
 

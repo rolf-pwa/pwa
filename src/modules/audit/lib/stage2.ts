@@ -106,3 +106,11 @@ export function parseFieldInput(raw: string, numeric: boolean): string | number 
   const n = Number(t.replace(/[$,\s]/g, ""));
   return Number.isFinite(n) ? n : undefined;
 }
+
+/** The extracted items with the advisor's pending corrections applied (what approval would use). */
+export function applyUiCorrections(items: ReviewItem[], corrections: Correction[]): ReviewItem[] {
+  return items.map((item, index) => {
+    const mine = corrections.filter((c) => c.index === index);
+    return mine.length ? { ...item, ...Object.fromEntries(mine.map((c) => [c.field, c.value])) } : item;
+  });
+}
