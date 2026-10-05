@@ -91,6 +91,7 @@ const GROUPS = [
       { to: "/brain", label: "Second Brain", icon: Brain },
       { to: "/workbench", label: "Workbench", icon: Cpu },
       { to: "/review-queue", label: "Review Queue", icon: ClipboardCheck, badgeKey: "review" },
+      { to: "/glass-box-review", label: "Glass-Box Review", icon: ShieldCheck },
       { to: "/knowledge-base", label: "Bot Knowledge", icon: BookOpen },
     ],
   },

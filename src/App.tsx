@@ -36,6 +36,7 @@ const ProPortalHousehold = lazy(() => import("@/modules/pro/pages/ProPortalHouse
 const ProPortalContact = lazy(() => import("@/modules/pro/pages/ProPortalContact"));
 const Leads = lazy(() => import("@/modules/crm/pages/Leads"));
 const ReviewQueue = lazy(() => import("@/modules/audit/pages/ReviewQueue"));
+const Stage2Review = lazy(() => import("@/modules/audit/pages/Stage2Review"));
 const Requests = lazy(() => import("@/modules/crm/pages/Requests"));
 const Households = lazy(() => import("@/modules/crm/pages/Households"));
 const HouseholdDetail = lazy(() => import("@/modules/crm/pages/HouseholdDetail"));
@@ -137,6 +138,7 @@ const App = () => (
               <Route path="/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />
               <Route path="/requests" element={<ProtectedRoute><Requests /></ProtectedRoute>} />
               <Route path="/review-queue" element={<ProtectedRoute><ReviewQueue /></ProtectedRoute>} />
+              <Route path="/glass-box-review" element={<ProtectedRoute><Stage2Review /></ProtectedRoute>} />
               <Route path="/marketing-updates" element={<ProtectedRoute><MarketingUpdates /></ProtectedRoute>} />
               <Route path="/workbench" element={<ProtectedRoute><Workbench /></ProtectedRoute>} />
               <Route path="/pipeline" element={<ProtectedRoute><Pipeline /></ProtectedRoute>} />
