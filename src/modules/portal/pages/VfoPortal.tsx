@@ -9,7 +9,7 @@ import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
 import {
   Loader2, Crown, ShieldCheck, Calendar, CheckSquare, Landmark, FolderLock,
-  ClipboardList, MessageCircle, ScrollText, Megaphone, Home, Users, ChevronLeft,
+  ClipboardList, MessageCircle, ScrollText, Home, Users, ChevronLeft,
   ChevronDown, ChevronRight, ArrowRight, Building2, Briefcase, Anchor, Grape,
 } from "lucide-react";
 import { PortalTerritory } from "@/modules/portal/components/PortalTerritory";
@@ -20,7 +20,6 @@ import { PortalMeetings } from "@/modules/portal/components/PortalMeetings";
 import { PortalCharter } from "@/modules/portal/components/PortalCharter";
 import { PortalTasks, useTaskCounts } from "@/modules/portal/components/PortalTasks";
 import { PortalVault } from "@/modules/portal/components/PortalVault";
-import { PortalUpdates, useUnreadUpdateCount } from "@/modules/portal/components/PortalUpdates";
 import { PortalGeorgiaChat } from "@/modules/portal/components/PortalGeorgiaChat";
 import { PortalYourTeam } from "@/modules/portal/components/PortalYourTeam";
 import { PortalProfessionals } from "@/modules/portal/components/PortalProfessionals";
@@ -81,7 +80,7 @@ function DashboardCard({
   bgClass?: string;
   muted?: boolean;
   // "lg" for financial totals (the primary numbers on this page); "sm" for
-  // status text like "2 New · 1 Ongoing" on Action Items/Requests/Updates,
+  // status text like "2 New · 1 Ongoing" on Action Items/Requests,
   // which shouldn't compete visually with the dollar figures.
   valueSize?: "lg" | "sm";
   // "row" matches PortalInsurance's "The Shield" exactly (single row,
@@ -247,28 +246,6 @@ const VfoPortal = () => {
     } catch {}
   };
 
-  // Called unconditionally, before any early return below — a hook call
-  // placed after a loading/error return would only fire once data is
-  // ready, violating the rules of hooks. Recomputes the viewed member
-  // directly off `data` (the destructured `contact`/`hierarchy` don't
-  // exist yet at this point in the component).
-  const earlyMember = drilldown.memberId
-    ? ((drilldown.householdId
-        ? data?.hierarchy?.households?.find((h: any) => h.id === drilldown.householdId)?.members
-        : data?.hierarchy?.members) || []
-      ).find((m: any) => m.id === drilldown.memberId)
-    : null;
-  const earlyViewedPerson = earlyMember || data?.contact;
-  const unreadUpdateCount = useUnreadUpdateCount(
-    // earlyMember already carries a real per-member governance_status
-    // (denormalized from its household in portal-validate); the data?.contact
-    // fallback (viewing self, no drilldown) has none post-migration, so
-    // fall through to the logged-in contact's own household value.
-    earlyViewedPerson?.governance_status ?? data?.household?.governance_status ?? "",
-    earlyViewedPerson?.id ?? "",
-    drilldown.householdId || data?.household?.id || null,
-    token || ""
-  );
   // Action Items are always the logged-in user's own — never a housemate's
   // (PortalTasks is only ever rendered when isSelf) — so this uses the
   // logged-in contact specifically, not whichever page is being viewed.
@@ -963,19 +940,11 @@ const VfoPortal = () => {
                   <Briefcase className="h-4 w-4" />Professionals
                 </TabsTrigger>
               )}
-              <TabsTrigger value="updates" className="flex-1 gap-1.5 data-[state=active]:bg-accent/10 data-[state=active]:text-accent">
-                <Megaphone className="h-4 w-4" />Updates
-                {unreadUpdateCount > 0 && (
-                  <Badge variant="secondary" className="bg-accent/15 text-accent border-accent/30 h-4 px-1 text-[10px]">
-                    {unreadUpdateCount > 99 ? "99+" : unreadUpdateCount}
-                  </Badge>
-                )}
-              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="dashboard" className="mt-4 space-y-3">
               {/* Financial cards always start their own row(s) — a separate
-                  grid from Tasks/Requests/Updates below, so the two groups
+                  grid from Tasks/Requests below, so the two groups
                   never share a row regardless of how many financial cards
                   are present (e.g. Holding Tank hidden when empty). */}
               <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
@@ -1010,7 +979,7 @@ const VfoPortal = () => {
                   onClick={() => { setFinancialsFocus("storehouses"); setTab("financials"); }}
                 />
               </div>
-              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
                 <DashboardCard
                   icon={CheckSquare}
                   label="Action Items"
@@ -1028,15 +997,6 @@ const VfoPortal = () => {
                   muted={requestsOpenCount === 0}
                   valueSize="sm"
                   onClick={() => setRequestsOpen(true)}
-                />
-                <DashboardCard
-                  icon={Megaphone}
-                  label="Updates"
-                  caption="From Your Team"
-                  value={unreadUpdateCount > 0 ? `${unreadUpdateCount} New` : "All caught up"}
-                  muted={unreadUpdateCount === 0}
-                  valueSize="sm"
-                  onClick={() => setTab("updates")}
                 />
               </div>
             </TabsContent>
@@ -1172,15 +1132,6 @@ const VfoPortal = () => {
               </TabsContent>
             )}
 
-
-            <TabsContent value="updates" className="mt-4">
-              <PortalUpdates
-                governanceStatus={household?.governance_status ?? ""}
-                contactId={contact.id}
-                householdId={contact.household_id}
-                portalToken={portalToken}
-              />
-            </TabsContent>
 
             {professionals.length > 0 && (
               <TabsContent value="team" className="mt-4">

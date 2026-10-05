@@ -12,7 +12,6 @@ import { PortalMeetings } from "@/modules/portal/components/PortalMeetings";
 import { PortalCharter } from "@/modules/portal/components/PortalCharter";
 import { PortalTimeline } from "@/modules/portal/components/PortalTimeline";
 import { PortalTasks } from "@/modules/portal/components/PortalTasks";
-import { PortalUpdates, useUnreadUpdateCount } from "@/modules/portal/components/PortalUpdates";
 import { PortalGeorgiaChat } from "@/modules/portal/components/PortalGeorgiaChat";
 import { PortalNotificationBell } from "@/modules/portal/components/PortalNotificationBell";
 import { PortalMessages } from "@/modules/portal/components/PortalMessages";
@@ -24,7 +23,7 @@ import { Input } from "@/shared/components/ui/input";
 import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/shared/components/ui/input-otp";
-import { Grape, ScrollText, Clock, Calendar, FolderOpen, CheckSquare, ShieldCheck, ExternalLink, FileBarChart, Mail, MailX, Loader2, Home, Users, ChevronLeft, ChevronDown, ChevronRight, ArrowRight, Landmark, MessageCircle, Video, MapPin, ClipboardList, LogOut, Megaphone, Building2, FolderLock } from "lucide-react";
+import { Grape, ScrollText, Clock, Calendar, FolderOpen, CheckSquare, ShieldCheck, ExternalLink, FileBarChart, Mail, MailX, Loader2, Home, Users, ChevronLeft, ChevronDown, ChevronRight, ArrowRight, Landmark, MessageCircle, Video, MapPin, ClipboardList, LogOut, Building2, FolderLock } from "lucide-react";
 import prosperwiseLogo from "@/assets/prosperwise-icon-paper.png";
 import { insuranceCashForStorehouses, sumValues, isAumStorehouse, formatCurrency } from "@/modules/portal/lib/portalAum";
 
@@ -239,9 +238,6 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
   const [togglingNotif, setTogglingNotif] = useState(false);
   const [expandedCorps, setExpandedCorps] = useState<Set<string>>(new Set());
   const [accountsOpen, setAccountsOpen] = useState(false);
-
-  // Unread update count — must be called unconditionally (Rules of Hooks)
-  const unreadUpdateCount = useUnreadUpdateCount(data?.household?.governance_status ?? "", data?.contact?.id ?? "", data?.contact?.household_id ?? null, token || data?.portal_token || "");
 
   // OTP login state
   const [email, setEmail] = useState("");
@@ -1075,8 +1071,6 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
     };
   };
 
-  // unreadUpdateCount is already declared at the top level
-
   const renderIndividualView = () => {
     const ind = getIndividualData();
     const isSelf = !currentMember;
@@ -1355,24 +1349,6 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
             return charterUrl ? <PortalCharter charterUrl={charterUrl} /> : null;
           })()}
 
-
-          {/* Updates — moved from tabs */}
-          {isSelf && (
-            <Card>
-              <CardContent className="p-4 space-y-2">
-                <div className="flex items-center gap-2">
-                  <Megaphone className="h-4 w-4 text-accent" />
-                  <h3 className="text-sm font-semibold text-foreground font-serif">Updates</h3>
-                  {unreadUpdateCount > 0 && (
-                    <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground px-1">
-                      {unreadUpdateCount > 99 ? "99+" : unreadUpdateCount}
-                    </span>
-                  )}
-                </div>
-                <PortalUpdates governanceStatus={household?.governance_status ?? ""} contactId={contact.id} householdId={contact.household_id} portalToken={portalToken} />
-              </CardContent>
-            </Card>
-          )}
 
           {/* Requests — moved from tabs */}
           {isSelf && (
