@@ -119,6 +119,9 @@ verify_jwt = false
 [functions.retention-review]
 verify_jwt = false
 
+[functions.sentinel-sre-agent]
+verify_jwt = false
+
 [functions.process-email-digest]
 verify_jwt = false
 
