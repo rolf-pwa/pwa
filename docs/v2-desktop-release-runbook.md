@@ -25,7 +25,7 @@ commands below hit production. Always pass `--project-ref rpxevcovasrgmrzkpknu` 
 4. **V1 parity harness** (runs the real `vault-statement-scan` handler against fakes, original vs modified):
    `npx deno run --allow-all --node-modules-dir=none scripts/verify/vault-scan-parity.ts` — must print `ALL CHECKS PASSED` (11 checks). It verifies that with the flag off, or if the flag lookup fails, every write, prompt and response is identical to `origin/main`.
    Caveat: it uses fake Drive/Vertex/Supabase, so it proves the logic path, not live integration. Step 4 below is the live check.
-5. Pick a **test household** that has a provisioned Vault with a few real investment/insurance PDFs, ideally one that is not an active client. Note its id. Take note of what a normal (V1) scan of it returns today (counts), for comparison in step 4.
+5. Pick a **test household** that has a provisioned Vault with a few real investment/insurance PDFs in its "Investment Statements" and "Insurance" folders, ideally not an active client (a V1 scan updates records). Note its id. For a household with **no existing records** (e.g. the "Demo" household, id `9f3f0699-2c01-4f46-a219-23e1179e38c8`), the live V1 check is a two-scan test (step 3): scan #1 on the *current* production code creates the records; scan #2 on the *new* code must match them all and change nothing.
 
 ## Deployment order (each step is independently reversible)
 
@@ -60,7 +60,11 @@ Deploy it alone, right after the schema:
 ```
 npx supabase functions deploy vault-statement-scan --use-api --project-ref rpxevcovasrgmrzkpknu
 ```
-**Live V1 check, immediately:** with the flag still off, run "Scan Vault for Updates" on the test household and compare the counts and the resulting records with what you noted in pre-flight. Watch the function logs for boot errors.
+**Live V1 check (two scans).**
+1. *Before deploying*, run "Scan Vault for Updates" on the test household (current production code, v58). Note the numbers it reports, then snapshot the records (read-only):
+   `npx supabase db query --linked "select account_name, account_number, current_value, book_value from holding_tank where contact_id in (select id from contacts where household_id='<id>') order by 1"` (and the same for `vineyard_accounts`, `storehouses`, `insurance_policies`).
+2. Deploy `vault-statement-scan` (command above).
+3. Run the **same scan again** on the new code. Pass criteria: no errors; every extracted account/policy reports as *matched/updated* (none newly created, `unmatched` = 0); the record snapshot is identical to scan #1's (same rows, same values, **no duplicates**); function logs show no boot or runtime errors. (Counts differ from scan #1 by design: #1 creates, #2 matches.)
 **Rollback (one minute):** `git checkout origin/main -- supabase/functions/vault-statement-scan && npx supabase functions deploy vault-statement-scan --use-api --project-ref rpxevcovasrgmrzkpknu`, then restore the file.
 
 ### 4. Frontend
