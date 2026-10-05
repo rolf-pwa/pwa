@@ -1969,6 +1969,8 @@ export type Database = {
           expected_deposit_date: string | null
           household_id: string | null
           id: string
+          income_funds_as_of: string | null
+          income_funds_value: number | null
           notes: string | null
           source_file: string | null
           status: string
@@ -1989,6 +1991,8 @@ export type Database = {
           expected_deposit_date?: string | null
           household_id?: string | null
           id?: string
+          income_funds_as_of?: string | null
+          income_funds_value?: number | null
           notes?: string | null
           source_file?: string | null
           status?: string
@@ -2009,6 +2013,8 @@ export type Database = {
           expected_deposit_date?: string | null
           household_id?: string | null
           id?: string
+          income_funds_as_of?: string | null
+          income_funds_value?: number | null
           notes?: string | null
           source_file?: string | null
           status?: string
@@ -6148,6 +6154,8 @@ export type Database = {
           current_value: number | null
           custodian: string | null
           id: string
+          income_funds_as_of: string | null
+          income_funds_value: number | null
           notes: string | null
           updated_at: string
           visibility_scope: Database["public"]["Enums"]["visibility_scope"]
@@ -6163,6 +6171,8 @@ export type Database = {
           current_value?: number | null
           custodian?: string | null
           id?: string
+          income_funds_as_of?: string | null
+          income_funds_value?: number | null
           notes?: string | null
           updated_at?: string
           visibility_scope?: Database["public"]["Enums"]["visibility_scope"]
@@ -6178,6 +6188,8 @@ export type Database = {
           current_value?: number | null
           custodian?: string | null
           id?: string
+          income_funds_as_of?: string | null
+          income_funds_value?: number | null
           notes?: string | null
           updated_at?: string
           visibility_scope?: Database["public"]["Enums"]["visibility_scope"]
