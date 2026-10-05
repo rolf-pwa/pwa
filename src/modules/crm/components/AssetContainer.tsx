@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { WithdrawalAvailableLine } from "@/shared/components/WithdrawalAvailableLine";
 import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
@@ -50,6 +51,10 @@ export interface AssetAccount {
   accountNumber?: string | null;
   custodian?: string | null;
   beneficiaryDesignation?: string | null;
+  /** For the "available to withdraw" line (Vineyard accounts only; storehouses leave these unset). */
+  bookValue?: number | null;
+  incomeFundsValue?: number | null;
+  incomeFundsAsOf?: string | null;
   /** Source table for move operations */
   sourceTable: "vineyard_accounts" | "storehouses";
 }
@@ -412,6 +417,13 @@ function AccountRow({ acc, contactId, webforms, moveTargets, onMoveAccount, upda
         </button>
 
         {acc.notes && <span className="text-[10px] text-muted-foreground italic">{acc.notes}</span>}
+
+        <WithdrawalAvailableLine
+          bookValue={acc.bookValue}
+          currentValue={acc.currentValue}
+          incomeFundsValue={acc.incomeFundsValue}
+          incomeFundsAsOf={acc.incomeFundsAsOf}
+        />
 
         {target > 0 && (
           <span className="text-[10px] text-muted-foreground">Target: ${target.toLocaleString()}</span>

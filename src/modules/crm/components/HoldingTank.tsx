@@ -25,6 +25,7 @@ import { format } from "date-fns";
 import { Input } from "@/shared/components/ui/input";
 import { toast } from "sonner";
 import { CUSTODIAN_OPTIONS } from "@/shared/lib/custodians";
+import { WithdrawalAvailableLine } from "@/shared/components/WithdrawalAvailableLine";
 import { WebFormDialog } from "./WebFormDialog";
 import type { WebFormRecord } from "./WebFormEditorDialog";
 
@@ -46,6 +47,9 @@ interface HoldingTankAccount {
   created_at: string;
   expected_deposit_date: string | null;
   beneficiary_designation: string | null;
+  /** Income-type holdings per the last approved V2 statement review (null = not recorded). */
+  income_funds_value?: number | null;
+  income_funds_as_of?: string | null;
 }
 
 const SCOPE_OPTIONS = [
@@ -150,6 +154,9 @@ export function HoldingTank({ contactId, householdId, onAccountMoved }: HoldingT
           visibility_scope: scope,
           custodian: account.custodian,
           beneficiary_designation: account.beneficiary_designation,
+          // carry the remembered income funds over so the line survives the move
+          income_funds_value: account.income_funds_value ?? null,
+          income_funds_as_of: account.income_funds_as_of ?? null,
         } as any).select("id").single();
         if (error) throw error;
         newRowId = (inserted as any).id;
@@ -638,6 +645,13 @@ function HoldingTankRow({
           )}
         </div>
       </div>
+
+      <WithdrawalAvailableLine
+        bookValue={account.book_value}
+        currentValue={account.current_value}
+        incomeFundsValue={account.income_funds_value}
+        incomeFundsAsOf={account.income_funds_as_of}
+      />
 
       {snapshot && (
         <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 space-y-2">

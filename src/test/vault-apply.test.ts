@@ -38,6 +38,53 @@ describe("planInvestmentApply", () => {
   });
 });
 
+describe("planInvestmentApply: income funds are remembered only from a confirmed extraction", () => {
+  // iA statement: funds add up to the statement value (53,143.02) -> confirmed.
+  const funds = [
+    { name: "Fixed Income Managed Portfolio", category: "Income Funds", value: 23.52 },
+    { name: "Dividend Growth", category: "Canadian Equity funds", value: 3_430.94 },
+    { name: "Global funds", category: "U.S. & International Equity Funds", value: 45_193.72 },
+    { name: "Specialty", category: "Specialty Funds", value: 4_494.84 },
+  ];
+  const acct = (extra = {}) => ({ account_name: "iA Financial", account_number: "TF-9", book_value: 51_295.72, current_value: 53_143.02, funds, ...extra });
+  const tctx = { ...ctx, statementDate: "2026-08-12" };
+
+  it("writes income_funds_value and income_funds_as_of when updating a holding-tank account", () => {
+    const [w] = planInvestmentApply([acct()], tctx) as any[];
+    expect(w).toMatchObject({ op: "update", table: "holding_tank", id: "t1" });
+    expect(w.values).toMatchObject({ book_value: 51_295.72, current_value: 53_143.02, income_funds_value: 23.52, income_funds_as_of: "2026-08-12" });
+  });
+  it("writes them when updating a vineyard account and when inserting a new holding-tank row", () => {
+    const [v] = planInvestmentApply([acct({ account_number: "RR-123" })], tctx) as any[];
+    expect(v).toMatchObject({ op: "update", table: "vineyard_accounts" });
+    expect(v.values).toMatchObject({ income_funds_value: 23.52, income_funds_as_of: "2026-08-12" });
+    const [ins] = planInvestmentApply([acct({ account_number: "NEW-1", account_name: "Brand new" })], tctx) as any[];
+    expect(ins).toMatchObject({ op: "insert", table: "holding_tank" });
+    expect(ins.values).toMatchObject({ income_funds_value: 23.52, income_funds_as_of: "2026-08-12" });
+  });
+  it("never writes them to storehouses (no such column)", () => {
+    const [w] = planInvestmentApply([acct({ account_name: "Cash", account_number: null })], tctx) as any[];
+    expect(w).toMatchObject({ op: "update", table: "storehouses" });
+    expect(w.values).not.toHaveProperty("income_funds_value");
+    expect(w.values).not.toHaveProperty("income_funds_as_of");
+  });
+  it("does not write an unconfirmed figure (funds don't add up to the statement value)", () => {
+    const [w] = planInvestmentApply([acct({ funds: funds.slice(0, 3) })], tctx) as any[]; // $4,494.84 short
+    expect(w.values).not.toHaveProperty("income_funds_value");
+    expect(w.values).toMatchObject({ current_value: 53_143.02 }); // the ordinary figures still apply
+  });
+  it("does not write it when no funds were extracted, or without a valid statement date", () => {
+    expect((planInvestmentApply([acct({ funds: null })], tctx)[0] as any).values).not.toHaveProperty("income_funds_value");
+    expect((planInvestmentApply([acct()], { ...ctx, statementDate: null })[0] as any).values).not.toHaveProperty("income_funds_value");
+    expect((planInvestmentApply([acct()], { ...ctx, statementDate: "Aug 12" })[0] as any).values).not.toHaveProperty("income_funds_value");
+  });
+  it("an account with only income-fund data still produces an update even if figures are null", () => {
+    const [w] = planInvestmentApply([acct({ book_value: null, current_value: null })], tctx) as any[];
+    // surplus unknown -> not confirmed, so nothing to write and no spurious update
+    expect(w).toBeUndefined();
+  });
+});
+
 describe("planInsuranceApply", () => {
   const ictx = { members, corporations: [{ id: "k1", name: "Scillato Holdings Inc." }], vaultFolderId: "f1", fileName: "p.pdf",
     policies: [{ id: "p1", carrier: "iA", policy_number: "P-1", insured_name: "Adrian Scillato" }] };
