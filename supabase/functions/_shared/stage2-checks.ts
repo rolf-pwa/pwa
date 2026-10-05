@@ -23,10 +23,8 @@ export interface ExtractedAccount {
   book_value?: number | null;
   current_harvest?: number | null;
   current_value?: number | null;
-  /** Withdrawals / redemptions for the period, as printed (positive). */
-  withdrawals?: number | null;
-  /** Contributions / deposits / transfers in for the period, as printed (positive). */
-  contributions?: number | null;
+  /** Net transactions for the period as printed: deposits minus withdrawals (negative = net withdrawals). */
+  net_transactions?: number | null;
 }
 export interface InvestmentExtraction {
   statement_date?: string | null;
@@ -93,37 +91,33 @@ export function checkInvestment(x: InvestmentExtraction, now: Date = new Date())
       out.push({ id: "value_non_negative", status: "fail", subject, reasoning: `Current value ${money(a.current_value)} is negative; accounts held here shouldn't be.` });
     }
     // Net gain reconciliation. A statement reconciles as
-    //   BOY value - withdrawals (+ contributions) + net gain = current value.
-    // The net gain is taken as printed (it is NOT "current - book": withdrawals
-    // reduce the balance without touching principal). The identity can only be
-    // checked when the statement's other terms were extracted, so without them
-    // this never fails -- it notes what the figures imply instead.
+    //   opening (BOY) balance + net transactions + net gain = current value,
+    // where net transactions = deposits - withdrawals is printed as one signed
+    // figure. The net gain is taken as printed (it is NOT "current - book":
+    // withdrawals reduce the balance without touching principal). The identity
+    // can only be checked when the net transactions figure was extracted, so
+    // without it this never fails -- it notes what the figures imply instead.
     if (isNum(a.current_harvest)) {
       const gain = a.current_harvest;
       if (isNum(a.book_value)) {
         const tol = reconcileTolerance(a.current_value);
-        const hasWithdrawals = isNum(a.withdrawals);
-        const hasContributions = isNum(a.contributions);
-        if (hasWithdrawals || hasContributions) {
-          const w = hasWithdrawals ? (a.withdrawals as number) : 0;
-          const c = hasContributions ? (a.contributions as number) : 0;
-          const expected = a.book_value + c - w + gain;
+        const signed = (n: number) => `${n < 0 ? "-" : "+"} ${money(Math.abs(n))}`;
+        if (isNum(a.net_transactions)) {
+          const expected = a.book_value + a.net_transactions + gain;
           const diff = Math.abs(expected - a.current_value);
-          const terms = `BOY value ${money(a.book_value)}${hasContributions ? ` + contributions ${money(c)}` : ""}${hasWithdrawals ? ` - withdrawals ${money(w)}` : ""} + net gain ${money(gain)} = ${money(expected)}`;
+          const terms = `Opening balance ${money(a.book_value)} ${signed(a.net_transactions)} net transactions ${signed(gain)} net gain = ${money(expected)}`;
           out.push(diff <= tol
             ? { id: "net_gain_reconciliation", status: "pass", subject, reasoning: `${terms}, matching the statement's current value of ${money(a.current_value)}.` }
-            : { id: "net_gain_reconciliation", status: "fail", subject, reasoning: `${terms}, but the statement's current value is ${money(a.current_value)} (off by ${money(diff)}, tolerance ${money(tol)}). Check the withdrawals, contributions and net gain against the statement.` });
+            : { id: "net_gain_reconciliation", status: "fail", subject, reasoning: `${terms}, but the statement's current value is ${money(a.current_value)} (off by ${money(diff)}, tolerance ${money(tol)}). Check the opening balance, net transactions and net gain against the statement.` });
         } else {
-          const implied = a.book_value + gain - a.current_value; // withdrawals needed to reconcile
+          const implied = a.current_value - a.book_value - gain; // net transactions needed to reconcile
           const note = Math.abs(implied) <= tol
-            ? `BOY value ${money(a.book_value)} + net gain ${money(gain)} equals the current value of ${money(a.current_value)}: no withdrawals needed.`
-            : implied > 0
-              ? `Net gain ${money(gain)} accepted as printed. BOY value ${money(a.book_value)} + net gain only reaches the current value ${money(a.current_value)} if withdrawals of ${money(implied)} were made; no withdrawals were extracted to confirm.`
-              : `Net gain ${money(gain)} accepted as printed. The current value ${money(a.current_value)} is ${money(-implied)} above BOY value + net gain, which implies contributions or transfers in; none were extracted to confirm.`;
+            ? `Opening balance ${money(a.book_value)} + net gain ${money(gain)} equals the current value of ${money(a.current_value)}: no net transactions needed.`
+            : `Net gain ${money(gain)} accepted as printed. Opening balance ${money(a.book_value)} + net gain only reaches the current value ${money(a.current_value)} if net transactions were ${implied < 0 ? "-" : "+"}${money(Math.abs(implied))} (${implied < 0 ? "net withdrawals" : "net deposits"}); no net transactions figure was extracted to confirm.`;
           out.push({ id: "net_gain_reconciliation", status: "pass", subject, reasoning: note });
         }
       } else {
-        out.push({ id: "net_gain_reconciliation", status: "pass", subject, reasoning: `Net gain ${money(gain)} accepted as printed (no BOY value was extracted to reconcile it with).` });
+        out.push({ id: "net_gain_reconciliation", status: "pass", subject, reasoning: `Net gain ${money(gain)} accepted as printed (no opening balance was extracted to reconcile it with).` });
       }
     } else {
       out.push({ id: "net_gain_reconciliation", status: "skipped", subject, reasoning: `No net gain was extracted for ${subject}, so there is nothing to confirm.` });

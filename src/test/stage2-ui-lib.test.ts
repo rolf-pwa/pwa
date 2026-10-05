@@ -35,9 +35,12 @@ describe("stage2 ui helpers", () => {
   });
   it("labels the gain as Net gain and exposes the reconciliation terms for correction", () => {
     const labels = EDITABLE_FIELDS.investment.map((f) => f.label);
-    expect(labels).toEqual(expect.arrayContaining(["BOY value", "Withdrawals", "Contributions", "Net gain", "Current value"]));
+    expect(labels).toEqual(expect.arrayContaining(["BOY value", "Net transactions", "Net gain", "Current value"]));
     expect(labels).not.toContain("Gain");
     const keys = EDITABLE_FIELDS.investment.map((f) => f.key);
-    expect(keys).toEqual(expect.arrayContaining(["book_value", "withdrawals", "contributions", "current_harvest"]));
+    expect(keys).toEqual(expect.arrayContaining(["book_value", "net_transactions", "current_harvest"]));
+  });
+  it("accepts a negative net transactions entry", () => {
+    expect(parseFieldInput("-5,541.86", true)).toBe(-5541.86);
   });
 });
