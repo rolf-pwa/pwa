@@ -33,7 +33,8 @@ const VINEYARD = [{ id: "v1", contact_id: "c-alex", account_name: "iA - RRSP", a
 const INVESTMENT_REPLY = {
   statement_date: "2026-09-30", summary: "x", missing_fields: [],
   accounts: [
-    { account_name: "iA - RRSP", account_number: "RR-123", account_type: "RRSP", account_owner: "Alex Demo", custodian: "IA Financial", book_value: 100000, current_harvest: 12500, current_value: 112500 },
+    { account_name: "iA - RRSP", account_number: "RR-123", account_type: "RRSP", account_owner: "Alex Demo", custodian: "IA Financial", book_value: 100000, current_harvest: 12500, current_value: 112500,
+      funds: [{ name: "Bond", category: "Income Funds", value: 2000 }, { name: "Equity", category: "Equity Funds", value: 110500 }] },
     { account_name: "JustWealth - TFSA", account_number: "JW-9", account_type: "TFSA", account_owner: "Sam Demo", custodian: "Just Wealth", book_value: 5000, current_harvest: 400, current_value: 5400 },
   ],
 };
@@ -44,7 +45,7 @@ const INSURANCE_REPLY = {
 
 // ---- fake world ----
 type Flag = "off" | "on" | "error";
-interface Run { mutations: string[]; prompts: string[]; response: any; status: number }
+interface Run { mutations: string[]; prompts: string[]; maxTokens: number[]; response: any; status: number }
 
 async function makePem(): Promise<string> {
   const kp = await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"]);
@@ -105,8 +106,10 @@ function installWorld(flag: Flag, rec: Run) {
     }
     if (url.hostname === "www.googleapis.com" && url.pathname.startsWith("/drive/v3/files/")) return new Response(new TextEncoder().encode("%PDF-fake"), { status: 200 });
     if (url.hostname.endsWith("aiplatform.googleapis.com")) {
-      const prompt: string = JSON.parse(text).contents[0].parts[0].text;
+      const body = JSON.parse(text);
+      const prompt: string = body.contents[0].parts[0].text;
       rec.prompts.push(prompt);
+      rec.maxTokens.push(body.generationConfig?.maxOutputTokens);
       const reply = prompt.includes("financial statement parser") ? INVESTMENT_REPLY : INSURANCE_REPLY;
       return jsonRes({ candidates: [{ content: { parts: [{ text: JSON.stringify(reply) }] }, finishReason: "STOP" }] });
     }
@@ -117,7 +120,7 @@ function installWorld(flag: Flag, rec: Run) {
 
 let counter = 0;
 async function runScenario(file: URL, flag: Flag): Promise<Run> {
-  const rec: Run = { mutations: [], prompts: [], response: null, status: 0 };
+  const rec: Run = { mutations: [], prompts: [], maxTokens: [], response: null, status: 0 };
   const uninstall = installWorld(flag, rec);
   let handler: ((r: Request) => Promise<Response>) | null = null;
   const realServe = Deno.serve;
@@ -170,6 +173,11 @@ try {
   check("C (V2) prompts = baseline + provenance (+ net-gain terms for investments) only", C.prompts.length === A.prompts.length && C.prompts.every((p, i) => p !== A.prompts[i] && p.replace(V2_INVESTMENT_NETGAIN_SUFFIX, "").replace(V2_PROVENANCE_PROMPT_SUFFIX, "") === A.prompts[i]), JSON.stringify(C.prompts.map((p) => p.length)));
   check("C (V2) response reports held-for-review", C.status === 200 && C.response.v2HeldForReview === 2 && C.response.investmentAccountsMatched === 0 && C.response.insurancePoliciesCreated === 0, JSON.stringify(C.response));
   check("V1 response has no V2 fields", !("v2HeldForReview" in B.response));
+  check("V1 output cap unchanged (8000) in baseline, flag-off and flag-lookup-fails runs", [A, B, D].every((r) => r.maxTokens.length === 2 && r.maxTokens.every((n) => n === 8000)), JSON.stringify([A.maxTokens, B.maxTokens, D.maxTokens]));
+  check("C (V2) allows a longer response for investment statements only (16000 / 8000)", JSON.stringify(C.maxTokens) === JSON.stringify([16000, 8000]), JSON.stringify(C.maxTokens));
+  const audit = C.mutations.find((m) => m.startsWith("POST stage2_verification_audit") && m.includes('"kind":"investment"')) ?? "";
+  check("C (V2) stores the derived availability computed from the fund lines (surplus 12,500; income 2,000; available 2,000)", audit.includes('"availability"') && audit.includes('"surplus":12500') && audit.includes('"income_funds":2000') && audit.includes('"available":2000') && audit.includes('"status":"confirmed"'), audit.slice(0, 300));
+  check("C (V2) investment prompt asks for the fund lines; V1 prompt does not", C.prompts[0].includes('"funds"') && !A.prompts[0].includes('"funds"'));
 } finally {
   await Deno.remove(BASELINE).catch(() => {});
 }

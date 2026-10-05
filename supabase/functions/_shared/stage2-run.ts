@@ -12,6 +12,7 @@ import { compareInterventions, evaluate } from "./causal-dag-engine.ts";
 import { CAUSAL_MODEL_V2, evidenceFromOntology, V2_INTERVENTIONS } from "./causal-model-v2.ts";
 import { evaluateCausalDag, type OntologyAssessmentPayload } from "./causal-dag-evaluator.ts";
 import { withSanitizedSources } from "./provenance.ts";
+import { computeAvailability } from "./withdrawal-availability.ts";
 
 export interface Stage2Input {
   householdId: string;
@@ -78,7 +79,11 @@ export async function runStage2(admin: any, input: Stage2Input): Promise<Stage2O
       household_id: householdId,
       document_id: input.documentId ?? null,
       overall_status: verdict.overall_status,
-      extracted_entities: { kind, source: input.source ?? null, extraction: cleaned },
+      // `derived` is computed by Stage 2 from the extraction (never by the model), kept apart from it so corrections recompute it.
+      extracted_entities: {
+        kind, source: input.source ?? null, extraction: cleaned,
+        ...(kind === "investment" ? { derived: { availability: ((cleaned as any).accounts ?? []).map((a: any) => computeAvailability(a)) } } : {}),
+      },
       arithmetic_checks: checks,
       causal_dag_evaluations: causal,
       missing_items: verdict.missing_items,

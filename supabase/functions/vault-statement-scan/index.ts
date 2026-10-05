@@ -170,7 +170,7 @@ async function collectFilesRecursive(
   return files.slice(0, MAX_SCAN_FILES);
 }
 
-async function callVertex(accessToken: string, projectId: string, systemPrompt: string, instruction: string, base64: string, mimeType: string) {
+async function callVertex(accessToken: string, projectId: string, systemPrompt: string, instruction: string, base64: string, mimeType: string, maxOutputTokens = 8000) {
   const vertexUrl = `https://${REGION}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${REGION}/publishers/google/models/${MODEL}:generateContent`;
   const res = await fetchWithVertexRetry(vertexUrl, {
     method: "POST",
@@ -182,7 +182,7 @@ async function callVertex(accessToken: string, projectId: string, systemPrompt: 
           parts: [{ text: systemPrompt + "\n\n" + instruction }, { inlineData: { mimeType, data: base64 } }],
         },
       ],
-      generationConfig: withThinking(MODEL, { temperature: 0.1, maxOutputTokens: 8000 }, "minimal"),
+      generationConfig: withThinking(MODEL, { temperature: 0.1, maxOutputTokens }, "minimal"),
     }),
   });
   if (!res.ok) throw new Error(`AI parsing failed: ${await res.text()}`);
@@ -420,6 +420,7 @@ Deno.serve(async (req) => {
           `Parse this financial statement for the ${household.label} household. Extract all investment accounts.`,
           base64,
           file.mimeType,
+          v2 ? 16000 : undefined, // V2 also returns every fund line, so allow a longer response (V1 keeps the default 8000)
         );
         investmentFilesParsed.push(file.name);
 

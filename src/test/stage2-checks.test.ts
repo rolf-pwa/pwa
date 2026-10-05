@@ -80,6 +80,24 @@ describe("checkInvestment", () => {
     expect(verdictFor(checks).overall_status).toBe("INCOMPLETE");
     expect(verdictFor(checks, ["custodian"]).missing_items).toContain("custodian");
   });
+  it("funds_sum_to_value: passes when the listed funds add up to the statement value", () => {
+    const funds = [{ name: "Bond", category: "Income Funds", value: 23.52 }, { name: "Eq", category: "Equity", value: 53_119.5 }];
+    const checks = checkInvestment({ ...good, accounts: [{ ...ia, net_transactions: -5_541.86, funds }] }, NOW);
+    expect(by(checks, "funds_sum_to_value")?.status).toBe("pass");
+    expect(verdictFor(checks).overall_status).toBe("VERIFIED");
+  });
+  it("funds_sum_to_value: an incomplete fund list is a gap (INCOMPLETE), never a conflict", () => {
+    const page2Only = [{ name: "Bond", category: "Income Funds", value: 23.52 }, { name: "Eq", category: "Equity", value: 48_624.66 }];
+    const checks = checkInvestment({ ...good, accounts: [{ ...ia, net_transactions: -5_541.86, funds: page2Only }] }, NOW);
+    const c = by(checks, "funds_sum_to_value")!;
+    expect(c.status).toBe("skipped");
+    expect(c.reasoning).toMatch(/\$4,494\.84 isn't accounted for/);
+    expect(verdictFor(checks).overall_status).toBe("INCOMPLETE");
+  });
+  it("funds_sum_to_value: no check when the statement lists no funds", () => {
+    expect(by(checkInvestment({ ...good, accounts: [{ ...ia, net_transactions: -5_541.86, funds: null }] }, NOW), "funds_sum_to_value")).toBeUndefined();
+    expect(by(checkInvestment({ ...good, accounts: [{ ...ia, net_transactions: -5_541.86 }] }, NOW), "funds_sum_to_value")).toBeUndefined();
+  });
   it("fails future, stale and invalid statement dates", () => {
     expect(by(checkInvestment({ ...good, statement_date: "2026-12-01" }, NOW), "statement_date_plausible")?.status).toBe("fail");
     expect(by(checkInvestment({ ...good, statement_date: "2024-01-01" }, NOW), "statement_date_plausible")?.status).toBe("fail");

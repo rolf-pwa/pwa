@@ -1,0 +1,78 @@
+import { describe, expect, it } from "vitest";
+import { computeAvailability, INCOME_CATEGORY } from "../../supabase/functions/_shared/withdrawal-availability";
+
+// The Investment Funds table on page 2 of the real iA statement (Series 75/100).
+const page2 = [
+  { name: "36033-NSC-Fixed Income Managed Portfolio (iA)", category: "Income Funds", value: 23.52 },
+  { name: "36953-NSC-Dividend Growth (iA)", category: "Canadian Equity funds", value: 3_430.94 },
+  { name: "37903-NSC-Fidelity Canadian Opportunities", category: "Canadian Equity funds", value: 9_494.54 },
+  { name: "30193-NSC-Global Opportunities (Loomis Sayles)", category: "U.S. & International Equity Funds", value: 15_202.07 },
+  { name: "33583-NSC-Global Equity Opportunistic Value", category: "U.S. & International Equity Funds", value: 10_469.58 },
+  { name: "32333-NSC-Thematic Innovation (iA)", category: "U.S. & International Equity Funds", value: 10_027.53 },
+];
+const account = { book_value: 51_295.72, current_value: 53_143.02 };
+// What the six funds above don't explain: 53,143.02 - 48,648.18.
+const rest = { name: "Other holdings (rest of statement)", category: "Balanced Funds", value: 4_494.84 };
+
+describe("computeAvailability", () => {
+  it("real iA statement, full fund list: surplus $1,847.30 but only $23.52 of income funds, so $23.52 is available", () => {
+    const av = computeAvailability({ ...account, funds: [...page2, rest] });
+    expect(av.status).toBe("confirmed");
+    expect(av.surplus).toBe(1_847.3);
+    expect(av.income_funds).toBe(23.52);
+    expect(av.available).toBe(23.52);
+    expect(av.limited_by).toBe("income_funds");
+    expect(av.funds_total).toBe(53_143.02);
+    expect(av.notes.join(" ")).toMatch(/exceeds the income funds on hand/);
+  });
+  it("flags the page-2-only extraction as unconfirmed (funds total $48,648.18 vs $53,143.02) instead of presenting it as fact", () => {
+    const av = computeAvailability({ ...account, funds: page2 });
+    expect(av.status).toBe("unconfirmed");
+    expect(av.funds_total).toBe(48_648.18);
+    expect(av.funds_gap).toBe(4_494.84);
+    expect(av.available).toBe(23.52); // still shown, but marked unconfirmed
+    expect(av.notes.join(" ")).toMatch(/\$4,494\.84 not accounted for/);
+  });
+  it("surplus is the limit when income funds exceed it", () => {
+    const av = computeAvailability({ ...account, funds: [{ name: "Bond", category: "Income Funds", value: 5_000 }, { name: "Eq", category: "Equity", value: 48_143.02 }] });
+    expect(av.available).toBe(1_847.3);
+    expect(av.limited_by).toBe("surplus");
+    expect(av.status).toBe("confirmed");
+  });
+  it("no surplus (current at or below opening) means nothing is available without touching principal", () => {
+    const av = computeAvailability({ book_value: 60_000, current_value: 53_143.02, funds: [{ name: "Bond", category: "Income Funds", value: 53_143.02 }] });
+    expect(av.surplus).toBe(-6_856.98);
+    expect(av.available).toBe(0);
+    expect(av.limited_by).toBe("surplus");
+    expect(av.notes.join(" ")).toMatch(/no surplus/);
+  });
+  it("no fund holdings extracted: the surplus is known but the income funds, and so the availability, are not", () => {
+    const av = computeAvailability({ ...account, funds: null });
+    expect(av.status).toBe("insufficient");
+    expect(av.surplus).toBe(1_847.3);
+    expect(av.income_funds).toBeNull();
+    expect(av.available).toBeNull();
+  });
+  it("no opening balance: cannot work out a surplus", () => {
+    const av = computeAvailability({ current_value: 53_143.02, funds: [...page2, rest] });
+    expect(av.status).toBe("insufficient");
+    expect(av.surplus).toBeNull();
+    expect(av.available).toBeNull();
+  });
+  it("no fund under an Income heading means $0 income funds (and says so)", () => {
+    const av = computeAvailability({ ...account, funds: [{ name: "Eq", category: "Equity", value: 53_143.02 }] });
+    expect(av.income_funds).toBe(0);
+    expect(av.available).toBe(0);
+    expect(av.notes.join(" ")).toMatch(/No fund was listed under an "Income" heading/);
+  });
+  it("ignores fund lines without a numeric value and tolerates only rounding in the sum", () => {
+    const withJunk = computeAvailability({ ...account, funds: [...page2, rest, { name: "bad", category: "Income Funds", value: null }] });
+    expect(withJunk.funds.length).toBe(7);
+    expect(computeAvailability({ ...account, funds: [...page2, { ...rest, value: 4_495.34 }] }).status).toBe("confirmed"); // $0.50 off
+    expect(computeAvailability({ ...account, funds: [...page2, { ...rest, value: 4_595.34 }] }).status).toBe("unconfirmed"); // $100.50 off
+  });
+  it("income heading matcher: 'Income Funds' and 'Fixed Income' count; money market and equity do not", () => {
+    for (const c of ["Income Funds", "Fixed Income", "income"]) expect(INCOME_CATEGORY.test(c)).toBe(true);
+    for (const c of ["Canadian Equity funds", "Money Market", "Balanced Funds", "Incomex"]) expect(INCOME_CATEGORY.test(c)).toBe(false);
+  });
+});

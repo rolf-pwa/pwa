@@ -11,7 +11,8 @@
  * "since the beginning of the year" and "since contract issue"), each of which
  * reconciles on its own, so every term must come from the SAME period.
  * Stage 2 can only verify the identity if each term is extracted exactly as
- * printed, so the model is told never to compute any of them.
+ * printed, so the model is told never to compute any of them. The same goes
+ * for the fund lines, which Stage 2 sums itself (withdrawal-availability.ts).
  */
 export const V2_INVESTMENT_NETGAIN_SUFFIX = `
 
@@ -23,4 +24,8 @@ For each account return these terms EXACTLY AS PRINTED. Never calculate or infer
 - "net_transactions": the net transactions figure (deposits - withdrawals) as a SIGNED number: negative when withdrawals exceed deposits. Use null if the statement prints no such figure.
 - "current_harvest": the NET GAIN (or loss), often labelled "variation in value" or similar, as a signed number (negative for a loss).
 If the statement shows several periods (for example "since the beginning of the year" and "since contract issue"), use the beginning-of-year / year-to-date column for ALL of book_value, net_transactions and current_harvest, so they reconcile to the same period.
-Add "net_transactions" to every account object. Use null for anything not printed.`;
+Add "net_transactions" to every account object. Use null for anything not printed.
+
+Fund holdings: if the statement lists the funds held in an account (a table of funds with values), add to that account
+"funds": [ { "name": the fund's name, "category": the category heading printed above it (for example "Income Funds" or "Canadian Equity funds"), "value": the fund's value as printed } ]
+Include EVERY fund of that account on EVERY page, even if the table continues across pages or is split into several series or sections. Copy each value exactly as printed; never add them up and never skip a fund. Use "funds": null if the statement lists no fund holdings.`;
