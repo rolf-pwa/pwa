@@ -19,9 +19,10 @@ CREATE INDEX IF NOT EXISTS idx_vault_bulk_import_items_batch ON public.vault_bul
 CREATE UNIQUE INDEX IF NOT EXISTS uq_vault_bulk_import_items_contract_date
   ON public.vault_bulk_import_items (contract_number, statement_date);
 
+-- Staff read only; the default privileges also hand out write/TRUNCATE (which RLS does not stop), so revoke them.
+REVOKE ALL ON public.vault_bulk_import_items FROM anon, authenticated;
 GRANT SELECT ON public.vault_bulk_import_items TO authenticated;
 GRANT ALL ON public.vault_bulk_import_items TO service_role;
-REVOKE ALL ON public.vault_bulk_import_items FROM anon;
 ALTER TABLE public.vault_bulk_import_items ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Staff view bulk import items" ON public.vault_bulk_import_items
   FOR SELECT TO authenticated USING (true);
