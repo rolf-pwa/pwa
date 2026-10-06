@@ -19,11 +19,12 @@ export async function allocateForHousehold(
   diag: { aum: number; net_worth: number; holding_tank_total: number; vineyard_total: number; storehouse_reserves: Allocation["reserves"] },
 ) {
   const { data: tankRows } = financials.holdingTank.length
-    ? await supabase.from("holding_tank").select("id, account_number, current_value, income_funds_value, withdrawals_ytd").in("id", financials.holdingTank.map((h: any) => h.id))
+    ? await supabase.from("holding_tank").select("id, account_number, current_value, income_funds_value, withdrawals_ytd, income_funds_as_of, withdrawals_as_of").in("id", financials.holdingTank.map((h: any) => h.id))
     : { data: [] };
   const toAccount = (bucket: AllocAccount["bucket"]) => (a: any): AllocAccount => ({
     bucket, current_value: nn(a.current_value), income_funds_value: nn(a.income_funds_value),
     withdrawals_ytd: nn(a.withdrawals_ytd), expects_statement: !!String(a.account_number ?? "").trim(),
+    as_of: (a.income_funds_as_of ?? a.withdrawals_as_of ?? null) as string | null,
   });
   const allocAccounts: AllocAccount[] = [
     ...financials.vineyardAccounts.map(toAccount("vineyard")),

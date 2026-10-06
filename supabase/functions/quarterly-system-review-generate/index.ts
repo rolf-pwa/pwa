@@ -14,9 +14,12 @@ import { extractCharter, locateVaultCharter, type CharterExtract } from "../_sha
 import type { CharterFile } from "../_shared/charter-vault-pick.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
 import {
-  buildAlignmentCards, computeDeltas, dataCompleteness, overallAlignment, quarterLabel, reviewMode, type ReviewCard, type ReviewFacts, type ReviewMode,
+  buildAlignmentCards, computeDeltas, dataCompleteness, overallAlignment, quarterLabel, reviewMode,
+  type EstateAdult, type EstateFacts, type ReviewCard, type ReviewFacts, type ReviewMode,
 } from "../_shared/quarterly-review-cards.ts";
-import { allocateForHousehold, applyAllocation } from "../_shared/review-allocation.ts";
+import { allocateForHousehold, applyAllocation, REAL_ESTATE_ASSET_TYPE } from "../_shared/review-allocation.ts";
+import { evaluateTargets, type BalanceFigures } from "../_shared/charter-targets.ts";
+import { hasLiquidityReserve } from "../_shared/quarterly-review-allocation.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -31,7 +34,7 @@ const BodySchema = z.object({
   reviewId: z.string().uuid().optional(),
 }).refine((v) => v.householdId || v.contactId || v.reviewId, { message: "householdId, contactId or reviewId is required" });
 
-const FRESH_DAYS = 120; // a harvest snapshot older than this counts as not updated this quarter
+const FRESH_DAYS = 120; // a statement read longer ago than this counts as not updated this quarter
 
 function getCorsHeaders(req: Request) {
   const origin = req.headers.get("Origin") || "";
@@ -62,16 +65,20 @@ const TOOL_SCHEMA = {
         review_summary: { type: "STRING" },
         charter_alignment: { type: "STRING" },
         urgency_flag: { type: "STRING" },
+        area_notes: {
+          type: "OBJECT",
+          properties: Object.fromEntries(["charter", "vineyard", "liquidity", "strategic", "philanthropic", "legacy", "liabilities"].map((k) => [k, { type: "STRING" }])),
+        },
         action_plan_phase_1: { type: "ARRAY", items: { type: "OBJECT", properties: { title: { type: "STRING" }, detail: { type: "STRING" } }, required: ["title", "detail"] } },
         action_plan_phase_2: { type: "ARRAY", items: { type: "OBJECT", properties: { title: { type: "STRING" }, detail: { type: "STRING" } }, required: ["title", "detail"] } },
         action_plan_phase_3: { type: "ARRAY", items: { type: "OBJECT", properties: { title: { type: "STRING" }, detail: { type: "STRING" } }, required: ["title", "detail"] } },
       },
-      required: ["review_summary", "charter_alignment", "urgency_flag", "action_plan_phase_1", "action_plan_phase_2", "action_plan_phase_3"],
+      required: ["review_summary", "charter_alignment", "urgency_flag", "area_notes", "action_plan_phase_1", "action_plan_phase_2", "action_plan_phase_3"],
     },
   }],
 };
 
-const PROMPT = `You are drafting the narrative portions of a ProsperWise **Quarterly Review** for a Virtual Family Office (VFO) client household. The review checks that the household's whole financial system -- investments, reserves, insurance, estate documents, tax and liabilities -- is still aligned with the family's written Sovereignty Charter. Rolf Issler will review it with the client.
+const PROMPT = `You are drafting the narrative portions of a ProsperWise **Quarterly Review** for a Virtual Family Office (VFO) client household. The review checks that the household's whole financial system -- the Vineyard, the four Storehouse reserves (Liquidity, Strategic, Philanthropic, Legacy) and liabilities -- is still aligned with the family's written Sovereignty Charter. Rolf Issler will review it with the client.
 
 You will receive verified, already-computed facts: figures, an alignment status and a one-line detail for each area, and the Charter's own words where they exist. These are final and correct.
 
@@ -82,6 +89,7 @@ Your job: draft ONLY the narrative fields. **Never invent, recompute or alter a 
 - review_summary: 1-2 sentences on where the household's system stands this quarter overall.
 - charter_alignment: 2-4 sentences on whether the household's assets, reserves, protection and documents are serving what the Charter says the family is for. Quote or paraphrase the Charter's purpose/mission/vision where it is provided. If no Charter exists, say plainly that nothing written yet governs the system and treat drafting and ratifying it as the first priority. Do not claim alignment that the statuses do not support.
 - urgency_flag: ONE sentence naming the single most important thing to resolve this quarter.
+- area_notes: for EACH area (charter, vineyard, liquidity, strategic, philanthropic, legacy, liabilities) write ONE sentence (max ~35 words) saying whether that area meets the Charter's provisions. Use the "Charter targets" lines: cite the stated figure or the Charter's own words and the actual figure. If a target was checked, say whether it was met and by how much. If the Charter is silent on an area, say so plainly. Never contradict the computed status.
 - Action plan: 2-4 concrete items for EACH phase, grounded only in the facts and statuses provided; do not propose work for areas that are already Aligned except to maintain them:
   - Phase 1 (Immediate, Days 1-30): protective and administrative fixes (missing records, unfiled documents, unreviewed items).
   - Phase 2 (Structural Alignment, Days 31-60): the structural changes needed to bring a Partial/Needs Attention area into line with the Charter.
@@ -104,6 +112,7 @@ Your job: draft ONLY the narrative fields. **Never invent, recompute or alter a 
 - review_summary: 1-2 sentences on what ProsperWise can see of the household's system today and how complete that picture is.
 - charter_alignment: 3-4 sentences on what a Sovereignty Charter would govern for THIS household: use their actual figures and the specific gaps in the statuses (for example reserves with no written purpose, estate documents not reviewed, accounts not tracked). Describe the value concretely; do not use generic marketing language and do not promise outcomes.
 - urgency_flag: ONE sentence naming the single most useful thing to settle first.
+- area_notes: for EACH area (charter, vineyard, liquidity, strategic, philanthropic, legacy, liabilities) write ONE sentence (max ~35 words) saying what a Charter would set for that area (there is no ratified Charter yet; if one exists but is unratified, whether the area meets its provisions). Use the "Charter targets" lines: cite the stated figure or the Charter's own words and the actual figure. If a target was checked, say whether it was met and by how much. If the Charter is silent on an area, say so plainly. Never contradict the computed status.
 - Action plan: 2-4 concrete items for EACH phase, grounded only in the facts and statuses:
   - Phase 1 (Immediate, Days 1-30): complete and verify the household's records and close any protective gaps.
   - Phase 2 (Structural Purification, Days 31-60): clarify the structure the Charter will rest on (reserves, estate documents, accounts).
@@ -133,7 +142,7 @@ function factsBlock(o: {
       : "No previous review to compare against.",
     "",
     "Alignment status by area (computed):",
-    ...o.cards.map((c) => `- ${c.label}: ${c.status} -- ${c.detail}`),
+    ...o.cards.flatMap((c) => [`- ${c.label}: ${c.status} -- ${c.detail}`, ...(c.targets ?? []).map((t) => `    ${t.summary}`)]),
     "",
     "The family's Charter:",
     o.charter.source ? `(source: ${o.charter.source === "household" ? "household Charter" : "earlier-format Charter"}; ${o.charter.ratified ? "ratified" : "not yet ratified"})` : "No Charter is on file.",
@@ -143,6 +152,9 @@ function factsBlock(o: {
     o.charter.values?.length ? `Core values: ${o.charter.values.join(", ")}` : "",
     o.charter.reserveRules ? `Reserve and liquidity rules in the Charter: ${o.charter.reserveRules}` : "",
     o.charter.governance ? `Governance in the Charter: ${o.charter.governance}` : "",
+    o.charter.targets?.length
+      ? `Every numeric target the Charter states (exactly as stated; those marked 'checked' above were compared with the balance sheet in code): ${o.charter.targets.map((t: any) => `${t.label}${t.quote ? ` ("${t.quote}")` : ""}`).join(" | ")}`
+      : o.charter.source ? "No numeric targets were read from the Charter." : "",
     o.charter.unreadable ? "A Charter document is on file in the Vault, but its text could not be read this time; do not claim to know its contents." : "",
   ];
   return lines.filter((l) => l !== "").join("\n");
@@ -310,10 +322,10 @@ serve(async (req) => {
     const { data: lastMap } = await supabase.from("stabilization_maps").select("diagnostic_inputs").eq("household_id", householdId).order("created_at", { ascending: false }).limit(1).maybeSingle();
     const { track_type, diagnostics: diag, financials } = await computeSovereigntyDiagnostics(supabase, householdId, lastMap?.diagnostic_inputs ?? {});
 
-    const [{ data: hCharter }, { data: cCharters }, { data: snaps }] = await Promise.all([
+    const [{ data: hCharter }, { data: cCharters }, { data: estateRows }] = await Promise.all([
       supabase.from("household_charters").select("status, completed_at, vision_text, core_values").eq("household_id", householdId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("sovereignty_charters").select("intro_callout, intro_note, mission_of_capital, vision_20_year").in("contact_id", contactIds).limit(1),
-      supabase.from("account_harvest_snapshots").select("vineyard_account_id, holding_tank_id, storehouse_id, snapshot_date, boy_value, current_harvest").in("contact_id", contactIds).order("snapshot_date", { ascending: false }),
+      supabase.from("estate_documents").select("contact_id, document_type, signed, document_date").eq("household_id", householdId),
     ]);
     const cc = (cCharters ?? [])[0] ?? null;
 
@@ -347,30 +359,10 @@ serve(async (req) => {
       reserveRules: vaultExtract?.reserve_rules ?? "",
       governance: vaultExtract?.governance ?? "",
       unreadable: !!vaultCharter && !vaultExtract,
+      targets: vaultExtract?.targets ?? [],
     };
 
-    // Latest snapshot per account.
-    const latest = new Map<string, any>();
-    for (const s of snaps ?? []) {
-      const key = s.vineyard_account_id ? `v:${s.vineyard_account_id}` : s.holding_tank_id ? `h:${s.holding_tank_id}` : null;
-      if (key && !latest.has(key)) latest.set(key, s);
-    }
-    const accounts = [
-      ...financials.vineyardAccounts.map((a: any) => ({ key: `v:${a.id}` })),
-      ...financials.holdingTank.map((a: any) => ({ key: `h:${a.id}` })),
-    ];
-    const tracked = accounts.filter((a) => latest.has(a.key));
-    const cutoff = Date.now() - FRESH_DAYS * 86400000;
-    const stale = tracked.filter((a) => new Date(latest.get(a.key).snapshot_date).getTime() < cutoff);
-    const negative = tracked.filter((a) => (Number(latest.get(a.key).current_harvest) || 0) < 0);
-    const harvest = tracked.reduce((acc, a) => {
-      const s = latest.get(a.key);
-      return { boy: acc.boy + (Number(s.boy_value) || 0), current: acc.current + (Number(s.current_harvest) || 0) };
-    }, { boy: 0, current: 0 });
-
     const sh = financials.storehouses as any[];
-    const underfunded = sh.filter((x) => (Number(x.target_value) || 0) > 0 && (Number(x.current_value) || 0) < (Number(x.target_value) || 0));
-    const missingLanes = [1, 2, 3, 4].filter((n) => !sh.some((x) => x.storehouse_number === n));
     const vaultBased = financials.isLegacyClient;
     const missingDocs: string[] = diag.document_readiness.missingCritical ?? [];
     const policies = financials.insurancePolicies as any[];
@@ -383,31 +375,67 @@ serve(async (req) => {
     const { allocation, allocAccounts } = await allocateForHousehold(supabase, financials, diag);
     const adjDiag = applyAllocation(diag, allocation);
 
+    // ---- Charter targets, checked against the SAME balance sheet figures the document shows.
+    const liabilitiesTotal = (diag.personal_liabilities_total ?? 0) + (diag.corp_liabilities_total ?? 0);
+    const figures: BalanceFigures = {
+      areas: { vineyard: allocation.vineyard, liquidity: allocation.reserves.liquidity, strategic: allocation.reserves.strategic, philanthropic: allocation.reserves.philanthropic, legacy: allocation.reserves.legacy, liabilities: liabilitiesTotal },
+      totalAssets: allocation.aum, investableAssets: allocation.aum - allocation.realEstateAdded, netWorth: allocation.netWorth,
+      monthlySpending: vaultExtract?.monthly_spending ?? null,
+    };
+    const targetResults = evaluateTargets(vaultExtract?.targets ?? [], figures);
+
+    // ---- Estate: documents approved in Glass-Box when there are any, else the hand-entered statuses.
+    const adultRows = (contacts ?? []).filter((c: any) => c.family_role === "head_of_family" || c.family_role === "spouse");
+    const adults = adultRows.length ? adultRows : [primary];
+    const docs = (estateRows ?? []) as any[];
+    const estateAdults: EstateAdult[] = adults.map((a: any) => {
+      const wills = docs.filter((d) => d.contact_id === a.id && d.document_type === "will");
+      const signed = wills.find((d) => d.signed === true);
+      return {
+        name: a.first_name || "Member",
+        will: signed ? "signed" : wills.length ? "unsigned" : "missing",
+        willDate: signed?.document_date ?? null,
+        poa: docs.some((d) => d.contact_id === a.id && d.document_type === "power_of_attorney") ? "on_file" : "missing",
+      };
+    });
+    const hasManual = !!(eh?.will_status || eh?.poa_status || eh?.beneficiary_coordination_status);
+    const estate: EstateFacts = {
+      source: docs.length ? "documents" : hasManual ? "manual" : "none",
+      adults: estateAdults, trusts: docs.filter((d) => d.document_type === "trust").length,
+      manual: { will: eh?.will_status ?? null, poa: eh?.poa_status ?? null, beneficiaries: eh?.beneficiary_coordination_status ?? null },
+    };
+
+    // ---- Vineyard: accounts that issue a statement and whether they've been read recently.
+    const withStatements = allocAccounts.filter((a) => a.expects_statement);
+    const readAccounts = withStatements.filter((a) => a.income_funds_value !== null || a.withdrawals_ytd !== null);
+    const staleCutoff = Date.now() - FRESH_DAYS * 86400000;
+    const staleAccounts = readAccounts.filter((a) => a.as_of && new Date(a.as_of).getTime() < staleCutoff);
+    const liquidityRow = sh.find((x) => x.storehouse_number === 1 && x.asset_type !== REAL_ESTATE_ASSET_TYPE);
+    const liquidityTarget = Number(liquidityRow?.target_value) > 0 ? Number(liquidityRow.target_value) : null;
+
     const facts: ReviewFacts = {
       charter: { source: charterSource, ratified, hasVision: !!charterText.vision },
-      investments: {
-        accountCount: accounts.length, total: diag.vineyard_total + diag.holding_tank_total, trackedCount: tracked.length,
-        negativeCount: negative.length, staleCount: stale.length, statementsFiled: folderFiled(missingDocs, "investment", vaultBased),
+      balance: {
+        vineyard: allocation.vineyard, holdingTank: allocation.holdingTank, liquidity: allocation.reserves.liquidity,
+        strategic: allocation.reserves.strategic, philanthropic: allocation.reserves.philanthropic, legacy: allocation.reserves.legacy,
+        totalAssets: allocation.aum, liabilities: liabilitiesTotal, netWorth: allocation.netWorth,
+        realEstate: allocation.realEstateAdded, cashValue: allocation.cashValueAdded, incomeFundsInLiquidity: allocation.incomeFundsMoved,
       },
-      storehouses: {
-        count: sh.length, aligned: sh.filter((x) => x.charter_alignment === "aligned").length,
-        pending: sh.filter((x) => x.charter_alignment === "pending_review").length,
-        misaligned: sh.filter((x) => x.charter_alignment === "misaligned").length, underfunded: underfunded.length, missingLanes,
+      vineyard: {
+        accountCount: withStatements.length, statementsRead: readAccounts.length, staleCount: staleAccounts.length,
+        statementsFiled: folderFiled(missingDocs, "investment", vaultBased), withdrawalsYtd: allocation.harvest,
       },
-      insurance: {
+      liquidity: { setUp: hasLiquidityReserve({ exists: !!liquidityRow, target: liquidityTarget }), target: liquidityTarget },
+      strategic: {
         policyCount: policies.length, coverageTotal: diag.insurance_coverage_total,
         missingCoverageCount: policies.filter((p) => !(Number(p.coverage_amount) > 0)).length,
         missingBeneficiaryCount: policies.filter((p) => !p.primary_beneficiary).length,
         renewalsDueSoon: policies.filter((p) => p.renewal_date && new Date(p.renewal_date).getTime() <= soon && new Date(p.renewal_date).getTime() >= Date.now()).length,
         documentsFiled: folderFiled(missingDocs, "insurance", vaultBased),
       },
-      estate: {
-        will: eh?.will_status ?? null, poa: eh?.poa_status ?? null, beneficiaries: eh?.beneficiary_coordination_status ?? null,
-        documentsFiled: folderFiled(missingDocs, "estate", vaultBased),
-      },
-      tax: { documentsFiled: folderFiled(missingDocs, "tax", vaultBased) },
+      legacy: { realEstate: allocation.realEstateAdded, estate },
       liabilities: {
-        personal: diag.personal_liabilities_total, corporate: diag.corp_liabilities_total, overdueLoans: loanFlags.length,
+        total: diag.personal_liabilities_total, corporate: diag.corp_liabilities_total, overdueLoans: loanFlags.length,
         // Credit limit minus balance on HELOCs, credit cards and lines of credit that have a limit recorded.
         revolving: (() => {
           const rows = (financials.liabilities as any[]).filter((r) => ["heloc", "credit_card", "line_of_credit"].includes(r.liability_type) && Number(r.credit_limit) > 0);
@@ -416,15 +444,12 @@ serve(async (req) => {
           return rows.length ? { limit, available } : null;
         })(),
       },
-      documents: {
-        percent: diag.document_readiness.percent, satisfied: diag.document_readiness.criticalSatisfied,
-        total: diag.document_readiness.criticalTotal, missing: missingDocs.map((m) => m.replace(/\s*\(.*$/, "")),
-      },
+      targets: targetResults,
       statementData: {
         // Only accounts that issue a statement (have an account number) can be read from one.
-        accounts: allocAccounts.filter((a) => a.expects_statement).length,
-        withIncomeFunds: allocAccounts.filter((a) => a.expects_statement && a.income_funds_value !== null).length,
-        withWithdrawals: allocAccounts.filter((a) => a.expects_statement && a.withdrawals_ytd !== null).length,
+        accounts: withStatements.length,
+        withIncomeFunds: withStatements.filter((a) => a.income_funds_value !== null).length,
+        withWithdrawals: withStatements.filter((a) => a.withdrawals_ytd !== null).length,
       },
       corporate: track_type === "corporate"
         ? {
@@ -469,6 +494,11 @@ serve(async (req) => {
           review_summary: clip(a.review_summary, 1200), charter_alignment: clip(a.charter_alignment, 1500), urgency_flag: clip(a.urgency_flag, 600),
           action_plan: { phase_1: p1, phase_2: p2, phase_3: p3 },
         };
+        // One sentence per area on whether it meets the Charter's provisions. Wording only: it never changes a status.
+        for (const c of cards) {
+          const note = a.area_notes?.[c.key];
+          if (typeof note === "string" && note.trim()) c.charter_note = clip(note.trim(), 300);
+        }
         aiNote = `Narrative drafted by ${GEMINI_GOVERNANCE_MODEL} from the computed facts.`;
       }
     } catch (e) {
@@ -476,14 +506,24 @@ serve(async (req) => {
     }
 
     const charterFile = vaultCharter ? { name: vaultCharter.name, modifiedTime: vaultCharter.modifiedTime, ratified: vaultCharter.ratified, viaSubfolder: vaultCharter.viaSubfolder, textRead: !!vaultExtract } : null;
-    const diagnostics = { ...adjDiag, charter_file: charterFile, track_type, deltas, harvest: { current: allocation.harvest, snapshot_growth: harvest.current, accounts_read: allocation.accountsWithWithdrawalData }, allocation: { notes: allocation.notes, income_funds_moved: allocation.incomeFundsMoved, income_funds_on_file: allocation.incomeFundsOnFile, cash_value_added: allocation.cashValueAdded, real_estate_added: allocation.realEstateAdded }, tracked_accounts: tracked.length, accounts: accounts.length, data_completeness: completeness };
+    // What was read from the Charter is kept so staff can check it: the provisions, every numeric target and how each was checked.
+    const charterExtract = vaultExtract
+      ? { purpose: vaultExtract.purpose, mission: vaultExtract.mission, vision: vaultExtract.vision, values: vaultExtract.values, reserve_rules: vaultExtract.reserve_rules, governance: vaultExtract.governance, monthly_spending: vaultExtract.monthly_spending, targets: targetResults }
+      : null;
+    const diagnostics = {
+      ...adjDiag, charter_file: charterFile, charter_extract: charterExtract, track_type, deltas,
+      harvest: { current: allocation.harvest, accounts_read: allocation.accountsWithWithdrawalData },
+      allocation: { notes: allocation.notes, income_funds_moved: allocation.incomeFundsMoved, income_funds_on_file: allocation.incomeFundsOnFile, cash_value_added: allocation.cashValueAdded, real_estate_added: allocation.realEstateAdded },
+      estate: { source: estate.source, adults: estate.adults, trusts: estate.trusts },
+      tracked_accounts: readAccounts.length, accounts: withStatements.length, data_completeness: completeness,
+    };
     const logic = [
       `Document type: ${mode === "survey" ? "Sovereignty Survey (no ratified Charter on file)" : "Quarterly Review (ratified Charter)"}. Records on file for ${completeness.onFile}/${completeness.total} areas${completeness.missing.length ? ` (not yet on file: ${completeness.missing.join(", ")})` : ""}.`,
       `Statuses are computed from live records: ${cards.map((c) => `${c.label} = ${c.status}`).join("; ")}.`,
       `Overall: ${overall.status} (${overall.attention} need attention, ${overall.partial} partial).`,
       vaultCharter ? `Charter found in the Vault: "${vaultCharter.name}"${vaultCharter.viaSubfolder ? " (Charter subfolder)" : " (Correspondence folder)"}; ${vaultExtract ? "its text was read for the narrative" : "its text could not be read"}.` : "No Charter file found in the Vault Correspondence folder.",
-      `Charter source: ${charterSource ?? "none"}${charterSource ? (ratified ? ", ratified" : ", not ratified") : ""}. Estate statuses come from the advisor-entered fields on the latest Stabilization Map.`,
-      `Harvest snapshots older than ${FRESH_DAYS} days count as not updated. Vault document checks apply to legacy-Vault households only (otherwise "not assessed").`,
+      `Charter source: ${charterSource ?? "none"}${charterSource ? (ratified ? ", ratified" : ", not ratified") : ""}. ${targetResults.length ? `${targetResults.length} numeric target(s) read from the Charter and checked against the balance sheet: ${targetResults.map((t) => `${t.label} = ${t.status}`).join("; ")}.` : "No numeric Charter targets were read."}`,
+      `Estate status comes from ${estate.source === "documents" ? "documents read from the Vault and approved in Glass-Box" : estate.source === "manual" ? "the advisor-entered fields on the latest Stabilization Map" : "nothing yet (no estate documents or entered statuses)"}. Accounts read more than ${FRESH_DAYS} days ago count as not updated. Tax is not part of this review.`,
       aiNote,
     ].join(" ");
 

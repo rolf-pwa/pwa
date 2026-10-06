@@ -18,6 +18,8 @@ export interface AllocAccount {
   withdrawals_ytd: number | null; // net withdrawals this year, read from the statement
   /** False for accounts that don't issue a statement (e.g. a GIC with no account number): never counted as 'still to read'. */
   expects_statement?: boolean;
+  /** Date of the statement the figures were read from (YYYY-MM-DD), when known. */
+  as_of?: string | null;
 }
 
 export interface AllocInput {
