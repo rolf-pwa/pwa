@@ -24,6 +24,8 @@ export interface ReviewFacts {
   tax: { documentsFiled: boolean | null };
   liabilities: { personal: number; corporate: number; overdueLoans: number };
   documents: { percent: number; satisfied: number; total: number; missing: string[] };
+  /** What the statements have given us so far (optional: omitted when not looked up). */
+  statementData?: { accounts: number; withIncomeFunds: number; withWithdrawals: number } | null;
   corporate?: { activeAssetRatio: number | null; usaOnFile: boolean | null; usaStale: boolean | null; sbdClawback: number | null } | null;
 }
 
@@ -208,6 +210,10 @@ export function dataCompleteness(f: ReviewFacts): { total: number; onFile: numbe
     ["Estate review (Will, POA, beneficiaries)", [f.estate.will, f.estate.poa, f.estate.beneficiaries].some(Boolean)],
     ["Vault documents", f.documents.total > 0 && f.tax.documentsFiled !== null],
   ];
+  if (f.statementData && f.statementData.accounts > 0) {
+    checks.push(["Income funds read from statements", f.statementData.withIncomeFunds > 0]);
+    checks.push(["Income-fund withdrawals read from statements", f.statementData.withWithdrawals > 0]);
+  }
   const missing = checks.filter(([, ok]) => !ok).map(([name]) => name);
   return { total: checks.length, onFile: checks.length - missing.length, missing };
 }

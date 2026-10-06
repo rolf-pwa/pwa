@@ -28,4 +28,8 @@ Add "net_transactions" to every account object. Use null for anything not printe
 
 Fund holdings: if the statement lists the funds held in an account (a table of funds with values), add to that account
 "funds": [ { "name": the fund's name, "category": the category heading printed above it (for example "Income Funds" or "Canadian Equity funds"), "value": the fund's value as printed } ]
-Include EVERY fund of that account on EVERY page, even if the table continues across pages or is split into several series or sections. Copy each value exactly as printed; never add them up and never skip a fund. Use "funds": null if the statement lists no fund holdings.`;
+Include EVERY fund of that account on EVERY page, even if the table continues across pages or is split into several series or sections. Copy each value exactly as printed; never add them up and never skip a fund. Use "funds": null if the statement lists no fund holdings.
+
+Withdrawals: if the statement has a "Transaction details for the period" section (fund-by-fund list of dated transactions), add to that account
+"income_withdrawals": [ { "fund": the fund or section name the transaction is listed under, "category": the category heading printed for that fund or section if any, "date": the transaction date as YYYY-MM-DD, "amount": the amount of the withdrawal as a POSITIVE number exactly as printed } ]
+List EVERY transaction whose type is a withdrawal (for example "Withdrawal", "Redemption", "Partial surrender"). Do NOT list deposits or premiums, interest, switches, transfers or reallocations between funds, or fees. Use an empty list [] if the statement has a transaction details section but no withdrawals, and null if the statement has no transaction details at all. Never add the amounts up.`;

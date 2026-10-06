@@ -15,6 +15,7 @@ import type { CharterFile } from "../_shared/charter-vault-pick.ts";
 import {
   buildAlignmentCards, computeDeltas, dataCompleteness, overallAlignment, quarterLabel, reviewMode, type ReviewCard, type ReviewFacts, type ReviewMode,
 } from "../_shared/quarterly-review-cards.ts";
+import { allocateCapital, type AllocAccount } from "../_shared/quarterly-review-allocation.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -308,6 +309,30 @@ serve(async (req) => {
     const eh = diag.estate_hygiene;
     const loanFlags = (diag.intercompany_loan_flags ?? []).filter((f: any) => f.isOverdue);
 
+    // ---- Capital allocation: income funds -> Liquidity (when none is set up), insurance cash value -> Strategic,
+    // harvest incl. income-fund withdrawals. Computed here for the review only; the shared diagnostics are untouched.
+    const { data: tankRows } = financials.holdingTank.length
+      ? await supabase.from("holding_tank").select("id, current_value, income_funds_value, income_withdrawals_ytd").in("id", financials.holdingTank.map((h: any) => h.id))
+      : { data: [] };
+    const nn = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
+    const allocAccounts: AllocAccount[] = [
+      ...financials.vineyardAccounts.map((a: any) => ({ bucket: "vineyard" as const, current_value: nn(a.current_value), income_funds_value: nn(a.income_funds_value), income_withdrawals_ytd: nn(a.income_withdrawals_ytd) })),
+      ...(tankRows ?? []).map((a: any) => ({ bucket: "holding_tank" as const, current_value: nn(a.current_value), income_funds_value: nn(a.income_funds_value), income_withdrawals_ytd: nn(a.income_withdrawals_ytd) })),
+    ];
+    const liquidityRow = (financials.storehouses as any[]).find((x) => x.storehouse_number === 1);
+    const allocation = allocateCapital({
+      aum: diag.aum, netWorth: diag.net_worth, holdingTank: diag.holding_tank_total, vineyard: diag.vineyard_total,
+      reserves: diag.storehouse_reserves,
+      liquidityStorehouse: { exists: !!liquidityRow, target: nn(liquidityRow?.target_value) },
+      accounts: allocAccounts,
+      policies: (financials.insurancePolicies as any[]).map((p) => ({ cash_value: nn(p.cash_value), cash_value_storehouse_id: p.cash_value_storehouse_id ?? null })),
+      snapshotHarvest: harvest.current,
+    });
+    const adjDiag = {
+      ...diag, aum: allocation.aum, net_worth: allocation.netWorth, holding_tank_total: allocation.holdingTank,
+      vineyard_total: allocation.vineyard, storehouse_reserves: allocation.reserves,
+    };
+
     const facts: ReviewFacts = {
       charter: { source: charterSource, ratified, hasVision: !!charterText.vision },
       investments: {
@@ -336,6 +361,11 @@ serve(async (req) => {
         percent: diag.document_readiness.percent, satisfied: diag.document_readiness.criticalSatisfied,
         total: diag.document_readiness.criticalTotal, missing: missingDocs.map((m) => m.replace(/\s*\(.*$/, "")),
       },
+      statementData: {
+        accounts: allocAccounts.length,
+        withIncomeFunds: allocAccounts.filter((a) => a.income_funds_value !== null).length,
+        withWithdrawals: allocAccounts.filter((a) => a.income_withdrawals_ytd !== null).length,
+      },
       corporate: track_type === "corporate"
         ? {
           activeAssetRatio: diag.active_asset_ratio?.ratio ?? null, usaOnFile: diag.usa_staleness?.onFile ?? null,
@@ -349,7 +379,7 @@ serve(async (req) => {
     const { data: prev } = await supabase.from("quarterly_system_reviews").select("period_label, diagnostics")
       .eq("household_id", householdId).neq("id", reviewId).eq("layout_version", 2).not("diagnostics", "is", null)
       .order("review_date", { ascending: false }).limit(1).maybeSingle();
-    const deltas = computeDeltas({ aum: diag.aum, net_worth: diag.net_worth }, prev?.diagnostics ? { aum: prev.diagnostics.aum, net_worth: prev.diagnostics.net_worth, label: prev.period_label } : null);
+    const deltas = computeDeltas({ aum: allocation.aum, net_worth: allocation.netWorth }, prev?.diagnostics ? { aum: prev.diagnostics.aum, net_worth: prev.diagnostics.net_worth, label: prev.period_label } : null);
 
     // ---- Narrative (AI, with a rule-based fallback) ----
     const mode = reviewMode({ source: charterSource, ratified });
@@ -365,7 +395,7 @@ serve(async (req) => {
           { role: "model", parts: [{ text: "Understood. Provide the household facts and I will draft the narrative." }] },
           { role: "user", parts: [{ text: factsBlock({
             household: diag.household_label, family: diag.family_name, period, track: track_type, today: today.toISOString().slice(0, 10),
-            diag, cards, deltas, charter: charterText, harvest, mode, notOnFile: completeness.missing,
+            diag: adjDiag, cards, deltas, charter: charterText, harvest: { boy: harvest.boy, current: allocation.harvest }, mode, notOnFile: completeness.missing,
           }) }] },
         ],
         withThinking(GEMINI_GOVERNANCE_MODEL, { temperature: 0.3, maxOutputTokens: 8192 }, "medium"),
@@ -386,7 +416,7 @@ serve(async (req) => {
     }
 
     const charterFile = vaultCharter ? { name: vaultCharter.name, modifiedTime: vaultCharter.modifiedTime, ratified: vaultCharter.ratified, viaSubfolder: vaultCharter.viaSubfolder, textRead: !!vaultExtract } : null;
-    const diagnostics = { ...diag, charter_file: charterFile, track_type, deltas, harvest, tracked_accounts: tracked.length, accounts: accounts.length, data_completeness: completeness };
+    const diagnostics = { ...adjDiag, charter_file: charterFile, track_type, deltas, harvest: { boy: harvest.boy, current: allocation.harvest, snapshot: harvest.current, income_withdrawals: allocation.incomeWithdrawals }, allocation: { notes: allocation.notes, income_funds_moved: allocation.incomeFundsMoved, income_funds_on_file: allocation.incomeFundsOnFile, cash_value_added: allocation.cashValueAdded }, tracked_accounts: tracked.length, accounts: accounts.length, data_completeness: completeness };
     const logic = [
       `Document type: ${mode === "survey" ? "Sovereignty Survey (no ratified Charter on file)" : "Quarterly Review (ratified Charter)"}. Records on file for ${completeness.onFile}/${completeness.total} areas${completeness.missing.length ? ` (not yet on file: ${completeness.missing.join(", ")})` : ""}.`,
       `Statuses are computed from live records: ${cards.map((c) => `${c.label} = ${c.status}`).join("; ")}.`,

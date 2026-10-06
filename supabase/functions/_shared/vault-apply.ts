@@ -128,17 +128,22 @@ export function planInvestmentApply(accounts: Record<string, any>[], ctx: Invest
     const income = av.status === "confirmed" && av.income_funds !== null && /^\d{4}-\d{2}-\d{2}$/.test(ctx.statementDate ?? "")
       ? { income_funds_value: av.income_funds, income_funds_as_of: ctx.statementDate as string }
       : {};
+    // Withdrawals from income funds (from the statement's transaction details): kept whenever they were read,
+    // since the advisor approves the statement; null (not read) never overwrites a stored figure.
+    const withdrawals = av.income_withdrawals_ytd !== null && /^\d{4}-\d{2}-\d{2}$/.test(ctx.statementDate ?? "")
+      ? { income_withdrawals_ytd: av.income_withdrawals_ytd, income_withdrawals_as_of: ctx.statementDate as string }
+      : {};
 
     const live = (num && vByNum.get(num)) || vByName.get(name) || sByName.get(name);
     if (live) {
       const isVineyard = "account_name" in live;
-      const values = isVineyard ? { ...figures, ...income } : figures;
+      const values = isVineyard ? { ...figures, ...income, ...withdrawals } : figures;
       if (Object.keys(values).length) writes.push({ op: "update", table: isVineyard ? "vineyard_accounts" : "storehouses", id: live.id, values, label });
       continue;
     }
     const tank = (num && hByNum.get(num)) || hByName.get(name);
     if (tank) {
-      const values = { ...figures, ...income };
+      const values = { ...figures, ...income, ...withdrawals };
       if (Object.keys(values).length) writes.push({ op: "update", table: "holding_tank", id: tank.id, values, label });
       continue;
     }
@@ -149,7 +154,7 @@ export function planInvestmentApply(accounts: Record<string, any>[], ctx: Invest
         contact_id: owner?.id, household_id: ctx.householdId, account_name: a.account_name, account_number: a.account_number ?? null,
         account_type: a.account_type || "Portfolio", account_owner: a.account_owner ?? null, custodian: normalizeCustodian(a.custodian),
         book_value: a.book_value ?? null, current_value: a.current_value ?? null, notes: a.notes ?? null,
-        source_file: ctx.sourceFile, status: "holding", ...income,
+        source_file: ctx.sourceFile, status: "holding", ...income, ...withdrawals,
       },
     });
     // Register so a duplicate within this same approval matches instead of re-inserting.
