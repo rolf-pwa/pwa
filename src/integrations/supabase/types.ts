@@ -1416,6 +1416,85 @@ export type Database = {
           },
         ]
       }
+      estate_documents: {
+        Row: {
+          approved_by: string | null
+          beneficiaries: string | null
+          contact_id: string | null
+          created_at: string
+          document_date: string | null
+          document_type: string
+          drive_id: string
+          executor: string | null
+          file_name: string | null
+          household_id: string
+          id: string
+          notes: string | null
+          signed: boolean | null
+          source_audit_id: string | null
+          subject_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          approved_by?: string | null
+          beneficiaries?: string | null
+          contact_id?: string | null
+          created_at?: string
+          document_date?: string | null
+          document_type: string
+          drive_id: string
+          executor?: string | null
+          file_name?: string | null
+          household_id: string
+          id?: string
+          notes?: string | null
+          signed?: boolean | null
+          source_audit_id?: string | null
+          subject_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          approved_by?: string | null
+          beneficiaries?: string | null
+          contact_id?: string | null
+          created_at?: string
+          document_date?: string | null
+          document_type?: string
+          drive_id?: string
+          executor?: string | null
+          file_name?: string | null
+          household_id?: string
+          id?: string
+          notes?: string | null
+          signed?: boolean | null
+          source_audit_id?: string | null
+          subject_name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estate_documents_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estate_documents_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estate_documents_source_audit_id_fkey"
+            columns: ["source_audit_id"]
+            isOneToOne: false
+            referencedRelation: "stage2_verification_audit"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       families: {
         Row: {
           annual_savings: number
