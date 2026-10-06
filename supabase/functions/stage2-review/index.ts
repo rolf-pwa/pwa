@@ -9,9 +9,9 @@
 
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { checkInsurance, checkInvestment, verdictFor } from "../_shared/stage2-checks.ts";
+import { checkEstate, checkInsurance, checkInvestment, verdictFor } from "../_shared/stage2-checks.ts";
 import {
-  applyCorrections, applyPlan, planInsuranceApply, planInvestmentApply, type Correction,
+  applyCorrections, applyPlan, planEstateApply, planInsuranceApply, planInvestmentApply, type Correction,
 } from "../_shared/vault-apply.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
 import { logActionEvent } from "../_shared/action-brain.ts";
@@ -80,10 +80,10 @@ Deno.serve(async (req) => {
     }
 
     // ---- approve ----
-    const kind: "investment" | "insurance" = audit.extracted_entities?.kind;
-    if (kind !== "investment" && kind !== "insurance") return json({ error: "Audit row has an unknown kind" }, 422);
+    const kind: "investment" | "insurance" | "estate" = audit.extracted_entities?.kind;
+    if (kind !== "investment" && kind !== "insurance" && kind !== "estate") return json({ error: "Audit row has an unknown kind" }, 422);
     const source = audit.extracted_entities?.source ?? {};
-    const listKey = kind === "investment" ? "accounts" : "policies";
+    const listKey = kind === "investment" ? "accounts" : kind === "estate" ? "documents" : "policies";
 
     const corrections: Correction[] = Array.isArray(body.corrections) ? body.corrections : [];
     let corrected;
@@ -93,7 +93,10 @@ Deno.serve(async (req) => {
       return json({ error: e instanceof Error ? e.message : String(e) }, 400);
     }
 
-    const checks = kind === "investment" ? checkInvestment(corrected.extraction) : checkInsurance(corrected.extraction);
+    const { data: memberNames } = kind === "estate"
+      ? await admin.from("contacts").select("first_name, last_name").eq("household_id", audit.household_id) : { data: [] };
+    const checks = kind === "investment" ? checkInvestment(corrected.extraction)
+      : kind === "estate" ? checkEstate(corrected.extraction, memberNames ?? []) : checkInsurance(corrected.extraction);
     const verdict = verdictFor(checks, Array.isArray(corrected.extraction.missing_fields) ? corrected.extraction.missing_fields : []);
     if (verdict.overall_status === "CONFLICT" && body.acknowledgeConflicts !== true) {
       return json({ error: "Conflicts remain after corrections; correct them or acknowledge to apply anyway.", ...verdict, checks }, 422);
@@ -116,7 +119,12 @@ Deno.serve(async (req) => {
     const { data: members } = await admin.from("contacts").select("id, first_name, last_name, family_role").eq("household_id", audit.household_id);
     const memberIds = (members ?? []).map((m: any) => m.id);
     let plan;
-    if (kind === "investment") {
+    if (kind === "estate") {
+      plan = planEstateApply(corrected.extraction[listKey] ?? [], {
+        householdId: audit.household_id, members: members ?? [], driveId: source.drive_id ?? null, fileName: source.file_name ?? null,
+        auditId, approvedBy: user.id,
+      });
+    } else if (kind === "investment") {
       const [{ data: vineyard }, { data: storehouses }, { data: tank }] = await Promise.all([
         memberIds.length ? admin.from("vineyard_accounts").select("id, account_name, account_number").in("contact_id", memberIds) : { data: [] },
         memberIds.length ? admin.from("storehouses").select("id, label, asset_type").in("contact_id", memberIds) : { data: [] },

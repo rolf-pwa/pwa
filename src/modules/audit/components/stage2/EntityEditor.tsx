@@ -3,10 +3,10 @@ import { Check, Crosshair, Pencil, X } from "lucide-react";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { cn } from "@/shared/lib/utils";
-import { EDITABLE_FIELDS, parseFieldInput, type Correction, type ReviewItem } from "../../lib/stage2";
+import { EDITABLE_FIELDS, ITEM_NOUN, parseFieldInput, type Correction, type ReviewItem } from "../../lib/stage2";
 
 interface Props {
-  kind: "investment" | "insurance";
+  kind: "investment" | "insurance" | "estate";
   items: ReviewItem[];
   corrections: Correction[];
   selectedIndex: number | null;
@@ -46,7 +46,7 @@ export function EntityEditor({ kind, items, corrections, selectedIndex, readOnly
       {items.map((item, index) => (
         <div key={index} className={cn("rounded border p-2", selectedIndex === index && "border-amber-500 bg-amber-50/50")}>
           <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
-            <span>{kind === "investment" ? "Account" : "Policy"} {index + 1}</span>
+            <span>{ITEM_NOUN[kind].one} {index + 1}</span>
             <Button size="sm" variant="ghost" className="h-6 gap-1 px-2" onClick={() => onSelect(index)}>
               <Crosshair className="h-3 w-3" /> {item.source?.page_number ? `Locate · p.${item.source.page_number}` : "Locate"}
             </Button>
@@ -85,6 +85,11 @@ export function EntityEditor({ kind, items, corrections, selectedIndex, readOnly
               );
             })}
           </dl>
+          {kind === "estate" && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Signed: {item.signed === true ? "yes" : item.signed === false ? "no (signature lines look blank)" : "couldn't tell"}
+            </p>
+          )}
         </div>
       ))}
     </div>
