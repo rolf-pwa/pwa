@@ -123,7 +123,6 @@ function StatusCard({ card }: { card: Card }) {
       ) : (
         <p style={{ ...PART_LINE, marginTop: "1mm" }}>{card.detail || "—"}</p>
       )}
-      {card.charter_note && <p style={{ fontSize: "6.8pt", lineHeight: 1.45, marginTop: "1.6mm", color: "#64748b", fontStyle: "italic" }}>{card.charter_note}</p>}
     </div>
   );
 }
@@ -171,6 +170,8 @@ export default function QuarterlySystemReview() {
   const autoSave = useAutoSave<Review>({
     data: review,
     enabled: editing,
+    // Without this the hook never notices an edit (it only saves after markDirty), so nothing was being saved.
+    autoDetectDirty: true,
     onSave: async (r) => {
       const { error } = await supabase
         .from("quarterly_system_reviews")
@@ -356,7 +357,6 @@ export default function QuarterlySystemReview() {
                   ) : (
                     <Textarea rows={2} value={c.detail} onChange={(e) => patchCard(i, { detail: e.target.value })} />
                   )}
-                  <Textarea rows={2} placeholder="Charter note" value={c.charter_note ?? ""} onChange={(e) => patchCard(i, { charter_note: e.target.value })} />
                 </div>
               </div>
             ))}

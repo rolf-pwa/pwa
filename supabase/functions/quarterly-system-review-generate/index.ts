@@ -65,15 +65,11 @@ const TOOL_SCHEMA = {
         review_summary: { type: "STRING" },
         charter_alignment: { type: "STRING" },
         urgency_flag: { type: "STRING" },
-        area_notes: {
-          type: "OBJECT",
-          properties: Object.fromEntries(["charter", "vineyard", "liquidity", "strategic", "philanthropic", "legacy", "liabilities"].map((k) => [k, { type: "STRING" }])),
-        },
         action_plan_phase_1: { type: "ARRAY", items: { type: "OBJECT", properties: { title: { type: "STRING" }, detail: { type: "STRING" } }, required: ["title", "detail"] } },
         action_plan_phase_2: { type: "ARRAY", items: { type: "OBJECT", properties: { title: { type: "STRING" }, detail: { type: "STRING" } }, required: ["title", "detail"] } },
         action_plan_phase_3: { type: "ARRAY", items: { type: "OBJECT", properties: { title: { type: "STRING" }, detail: { type: "STRING" } }, required: ["title", "detail"] } },
       },
-      required: ["review_summary", "charter_alignment", "urgency_flag", "area_notes", "action_plan_phase_1", "action_plan_phase_2", "action_plan_phase_3"],
+      required: ["review_summary", "charter_alignment", "urgency_flag", "action_plan_phase_1", "action_plan_phase_2", "action_plan_phase_3"],
     },
   }],
 };
@@ -89,7 +85,6 @@ Your job: draft ONLY the narrative fields. **Never invent, recompute or alter a 
 - review_summary: 1-2 sentences on where the household's system stands this quarter overall.
 - charter_alignment: 2-4 sentences on whether the household's assets, reserves, protection and documents are serving what the Charter says the family is for. Quote or paraphrase the Charter's purpose/mission/vision where it is provided. If no Charter exists, say plainly that nothing written yet governs the system and treat drafting and ratifying it as the first priority. Do not claim alignment that the statuses do not support.
 - urgency_flag: ONE sentence naming the single most important thing to resolve this quarter.
-- area_notes: for EACH area (charter, vineyard, liquidity, strategic, philanthropic, legacy, liabilities) write ONE sentence (max ~35 words) explaining WHY the computed action matters for the family given the Charter's purpose, or, if the action is 'No action required', why the area is in line. Use the Desired / Current / Action lines; do not restate every number and never change an amount or a status.
 - Action plan: 2-4 concrete items for EACH phase, grounded only in the facts and statuses provided; do not propose work for areas that are already Aligned except to maintain them:
   - Phase 1 (Immediate, Days 1-30): protective and administrative fixes (missing records, unfiled documents, unreviewed items).
   - Phase 2 (Structural Alignment, Days 31-60): the structural changes needed to bring a Partial/Needs Attention area into line with the Charter.
@@ -113,7 +108,6 @@ Your job: draft ONLY the narrative fields. **Never invent, recompute or alter a 
 - review_summary: 1-2 sentences on what ProsperWise can see of the household's system today and how complete that picture is.
 - charter_alignment: 3-4 sentences on what a Sovereignty Charter would govern for THIS household: use their actual figures and the specific gaps in the statuses (for example reserves with no written purpose, estate documents not reviewed, accounts not tracked). Describe the value concretely; do not use generic marketing language and do not promise outcomes.
 - urgency_flag: ONE sentence naming the single most useful thing to settle first.
-- area_notes: for EACH area (charter, vineyard, liquidity, strategic, philanthropic, legacy, liabilities) write ONE sentence (max ~35 words) saying what a Charter would set for that area (there is no ratified Charter yet; if one exists but is unratified, whether the area meets its provisions). Use the "Charter targets" lines: cite the stated figure or the Charter's own words and the actual figure. If a target was checked, say whether it was met and by how much. If the Charter is silent on an area, say so plainly. Never contradict the computed status.
 - Action plan: 2-4 concrete items for EACH phase, grounded only in the facts and statuses:
   - Phase 1 (Immediate, Days 1-30): complete and verify the household's records and close any protective gaps.
   - Phase 2 (Structural Purification, Days 31-60): clarify the structure the Charter will rest on (reserves, estate documents, accounts).
@@ -511,11 +505,6 @@ serve(async (req) => {
           review_summary: clip(a.review_summary, 1200), charter_alignment: clip(a.charter_alignment, 1500), urgency_flag: clip(a.urgency_flag, 600),
           action_plan: { phase_1: p1, phase_2: p2, phase_3: p3 },
         };
-        // One sentence per area on whether it meets the Charter's provisions. Wording only: it never changes a status.
-        for (const c of cards) {
-          const note = a.area_notes?.[c.key];
-          if (typeof note === "string" && note.trim()) c.charter_note = clip(note.trim(), 300);
-        }
         aiNote = `Narrative drafted by ${GEMINI_GOVERNANCE_MODEL} from the computed facts.`;
       }
     } catch (e) {
