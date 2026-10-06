@@ -103,6 +103,7 @@ export function NotificationBell() {
       case "task_comment": return "🗨️";
       case "drive_watch": return "📄";
       case "vault_upload": return "📥";
+      case "vault_scan": return "🔍";
       case "retention_review": return "🗄️";
       case "quarterly_vfo_audit": return "⚖️";
       default: return "🔔";

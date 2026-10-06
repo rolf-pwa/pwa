@@ -286,7 +286,7 @@ Deno.serve(async (req) => {
 
     const admin = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { householdId } = await req.json();
+    const { householdId, skipReviewed } = await req.json();
     if (!householdId) throw new Error("Missing householdId");
 
     const { data: household } = await admin
@@ -418,10 +418,27 @@ Deno.serve(async (req) => {
       const invFiles = await filesToParse(investmentsFolder);
       const insFiles = await filesToParse(insuranceFolder);
       await logSystemHealth(admin, { function_name: "vault-statement-scan", severity: "INFO", error_code: "SCAN_START", household_id: householdId, error_message: `Reading ${invFiles.length} investment and ${insFiles.length} insurance file(s).` });
-      const jobs = [
+      let jobs = [
         ...invFiles.map((file: any) => ({ file, kind: "investment" as const })),
         ...insFiles.map((file: any) => ({ file, kind: "insurance" as const })),
       ];
+      // Automatic scans (started by a Sovereignty Review) pass skipReviewed: leave out any file that already has a
+      // pending or approved review item made after the file last changed, so re-running never duplicates Glass-Box.
+      if (skipReviewed === true) {
+        const { data: prior } = await admin.from("stage2_verification_audit")
+          .select("extracted_entities, created_at").eq("household_id", householdId).in("review_status", ["pending", "approved"]);
+        const latest = new Map<string, number>();
+        for (const p of prior ?? []) {
+          const id = (p as any).extracted_entities?.source?.drive_id;
+          if (id) latest.set(id, Math.max(latest.get(id) ?? 0, new Date((p as any).created_at).getTime()));
+        }
+        jobs = jobs.filter(({ file }) => {
+          const reviewedAt = latest.get(file.id);
+          if (reviewedAt === undefined) return true;
+          const changed = file.modifiedTime ? new Date(file.modifiedTime).getTime() : 0;
+          return changed > reviewedAt;
+        });
+      }
       let next = 0;
       const worker = async () => {
         while (next < jobs.length) {

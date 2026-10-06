@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useNavigate, useParams } from "react-router-dom";
 import { format } from "date-fns";
 import { ArrowLeft, Loader2, Plus, Printer, RefreshCw, Save, X } from "lucide-react";
@@ -30,6 +31,7 @@ type Diag = {
   insurance_coverage_total?: number;
   deltas?: { aum: number | null; netWorth: number | null; previousLabel: string | null };
   data_completeness?: { total: number; onFile: number; missing: string[] };
+  vault_scan?: string;
   charter_file?: { name: string; modifiedTime: string | null; ratified: boolean; viaSubfolder: boolean; textRead: boolean } | null;
   harvest?: { current: number | null; snapshot_growth?: number; accounts_read?: number };
   allocation?: { notes: string[]; income_funds_moved: number; income_funds_on_file: number; cash_value_added: number; real_estate_added?: number };
@@ -164,6 +166,15 @@ export default function QuarterlySystemReview() {
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
 
+  // Statements read by the Vault scan wait for approval in Glass-Box Review before they change any figure here.
+  const [pendingStatements, setPendingStatements] = useState(0);
+  useEffect(() => {
+    if (!review?.household_id) return;
+    supabase.from("stage2_verification_audit").select("id", { count: "exact", head: true })
+      .eq("household_id", review.household_id).eq("review_status", "pending")
+      .then(({ count }) => setPendingStatements(count ?? 0));
+  }, [review?.household_id, review?.generation_status]);
+
   const generating = review?.generation_status === "generating" || review?.generation_status === "pending";
   useEffect(() => {
     if (!generating) return;
@@ -264,6 +275,21 @@ export default function QuarterlySystemReview() {
         )}
         {generating && <div className="border-t border-amber-300 bg-amber-50 px-6 py-2 text-xs text-amber-800">Building this review from the household's live records. Refreshing every 3 seconds…</div>}
       </div>
+
+      {!isLegacy && (pendingStatements > 0 || review.diagnostics?.vault_scan === "started") && !editing && (
+        <div className="print:hidden border-b border-amber-300 bg-amber-50 px-6 py-2 text-xs text-amber-900">
+          <div className="mx-auto max-w-[1100px]">
+            {pendingStatements > 0 ? (
+              <>
+                {pendingStatements} statement{pendingStatements === 1 ? "" : "s"} read from the Vault {pendingStatements === 1 ? "is" : "are"} waiting for your approval in{" "}
+                <Link to="/glass-box-review" className="font-semibold underline">Glass-Box Review</Link>. Approve {pendingStatements === 1 ? "it" : "them"}, then Regenerate so this review uses the new figures.
+              </>
+            ) : (
+              <>A Vault scan was started for this household. You'll get a notification when its statements are ready in <Link to="/glass-box-review" className="font-semibold underline">Glass-Box Review</Link>.</>
+            )}
+          </div>
+        </div>
+      )}
 
       {isLegacy && !generating && (
         <div className="mx-auto max-w-[1100px] px-6 py-10 print:hidden">
