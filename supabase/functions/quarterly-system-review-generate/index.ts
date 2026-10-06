@@ -220,7 +220,7 @@ async function kickOffVaultScan(
       const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/vault-statement-scan`, {
         method: "POST", signal: ctrl.signal,
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}`, apikey: Deno.env.get("SUPABASE_ANON_KEY") ?? "" },
-        body: JSON.stringify({ householdId }),
+        body: JSON.stringify({ householdId, skipReviewed: true }),
       });
       clearTimeout(timer);
       const out = await res.json().catch(() => ({}));
