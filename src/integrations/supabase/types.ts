@@ -3007,6 +3007,7 @@ export type Database = {
             | null
           created_at: string
           created_by: string
+          credit_limit: number | null
           current_balance: number
           description: string
           due_date: string | null
@@ -3030,6 +3031,7 @@ export type Database = {
             | null
           created_at?: string
           created_by: string
+          credit_limit?: number | null
           current_balance?: number
           description: string
           due_date?: string | null
@@ -3053,6 +3055,7 @@ export type Database = {
             | null
           created_at?: string
           created_by?: string
+          credit_limit?: number | null
           current_balance?: number
           description?: string
           due_date?: string | null
@@ -6524,6 +6527,7 @@ export type Database = {
         | "intercompany_loan"
         | "shareholder_loan"
         | "other_debt"
+        | "heloc"
       manual_activity_direction: "inbound" | "outbound"
       manual_activity_kind: "call" | "sms"
       pipeline_category: "pws_consulting" | "new_aum" | "insurance"
@@ -6694,6 +6698,7 @@ export const Constants = {
         "intercompany_loan",
         "shareholder_loan",
         "other_debt",
+        "heloc",
       ],
       manual_activity_direction: ["inbound", "outbound"],
       manual_activity_kind: ["call", "sms"],

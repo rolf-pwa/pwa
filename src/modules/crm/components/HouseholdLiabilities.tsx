@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Landmark, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/shared/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { Input } from "@/shared/components/ui/input";
@@ -54,13 +55,15 @@ export function HouseholdLiabilities({ householdId, onChanged }: { householdId: 
     const people = (contacts ?? []).map((c) => ({ id: c.id, name: [c.first_name, c.last_name].filter(Boolean).join(" ") }));
     setMembers(people);
     if (!people.length) { setRows([]); setLoading(false); return; }
-    const { data, error } = await (supabase.from("liabilities" as never) as any)
+    const { data, error } = await supabase
+      .from("liabilities")
       .select("id, contact_id, liability_type, description, current_balance, credit_limit, original_amount, interest_rate_pct, due_date")
       .eq("holder_type", "contact").in("contact_id", people.map((p) => p.id)).order("created_at");
     if (error) { toast.error("Failed to load liabilities."); setLoading(false); return; }
-    setRows(((data ?? []) as any[]).map((r) => ({
-      ...r, current_balance: Number(r.current_balance) || 0, credit_limit: toNum(r.credit_limit),
-      original_amount: toNum(r.original_amount), interest_rate_pct: toNum(r.interest_rate_pct),
+    setRows((data ?? []).map((r) => ({
+      id: r.id, contact_id: r.contact_id, liability_type: r.liability_type as LiabilityType, description: r.description,
+      current_balance: Number(r.current_balance) || 0, credit_limit: toNum(r.credit_limit),
+      original_amount: toNum(r.original_amount), interest_rate_pct: toNum(r.interest_rate_pct), due_date: r.due_date,
     })));
     setLoading(false);
   }, [householdId]);
@@ -81,17 +84,20 @@ export function HouseholdLiabilities({ householdId, onChanged }: { householdId: 
     if (!form) return;
     setSaving(true);
     const revolving = isRevolving(form.type);
-    const payload: Record<string, unknown> = {
+    // The table requires created_by and its insert policy only allows created_by = the signed-in user.
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) { setSaving(false); toast.error("You're signed out. Sign in again to save."); return; }
+    const payload: Database["public"]["Tables"]["liabilities"]["Insert"] = {
+      created_by: auth.user.id,
       holder_type: "contact", contact_id: form.owner || null, corporation_id: null, liability_type: form.type,
       description: form.description.trim(), current_balance: toNum(form.balance) ?? 0,
       credit_limit: revolving ? toNum(form.limit) : null,
       original_amount: revolving ? null : toNum(form.limit),
       interest_rate_pct: toNum(form.rate), due_date: form.due || null,
     };
-    const q = form.id
-      ? (supabase.from("liabilities" as never) as any).update(payload).eq("id", form.id)
-      : (supabase.from("liabilities" as never) as any).insert(payload);
-    const { error } = await q;
+    const { error } = form.id
+      ? await supabase.from("liabilities").update({ ...payload, created_by: undefined }).eq("id", form.id)
+      : await supabase.from("liabilities").insert(payload);
     setSaving(false);
     if (error) { toast.error("Failed to save liability."); return; }
     toast.success(form.id ? "Liability updated." : "Liability added.");
@@ -101,7 +107,7 @@ export function HouseholdLiabilities({ householdId, onChanged }: { householdId: 
   };
 
   const remove = async (id: string) => {
-    const { error } = await (supabase.from("liabilities" as never) as any).delete().eq("id", id);
+    const { error } = await supabase.from("liabilities").delete().eq("id", id);
     if (error) { toast.error("Failed to delete liability."); return; }
     toast.success("Liability removed.");
     await load();

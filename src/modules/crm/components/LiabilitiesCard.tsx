@@ -135,7 +135,14 @@ export function LiabilitiesCard({ holderType, holderId, onChanged }: Props) {
   };
 
   const handleAdd = async () => {
+    // The table requires created_by, and its insert policy only allows created_by = the signed-in user.
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) {
+      toast.error("You're signed out. Sign in again to save.");
+      return;
+    }
     const payload: Record<string, unknown> = {
+      created_by: auth.user.id,
       holder_type: holderType,
       contact_id: holderType === "contact" ? holderId : null,
       corporation_id: holderType === "corporation" ? holderId : null,
