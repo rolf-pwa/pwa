@@ -16,7 +16,7 @@ import { logSystemHealth } from "../_shared/system-health.ts";
 import {
   buildAlignmentCards, computeDeltas, dataCompleteness, overallAlignment, quarterLabel, reviewMode, type ReviewCard, type ReviewFacts, type ReviewMode,
 } from "../_shared/quarterly-review-cards.ts";
-import { allocateCapital, type AllocAccount } from "../_shared/quarterly-review-allocation.ts";
+import { allocateForHousehold, applyAllocation } from "../_shared/review-allocation.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -31,8 +31,6 @@ const BodySchema = z.object({
   reviewId: z.string().uuid().optional(),
 }).refine((v) => v.householdId || v.contactId || v.reviewId, { message: "householdId, contactId or reviewId is required" });
 
-// Storehouse rows of this type are real estate; the shared diagnostics leave them out of the reserve totals.
-const REAL_ESTATE_ASSET_TYPE = "Primary Residence & Protected Legacy Accounts";
 const FRESH_DAYS = 120; // a harvest snapshot older than this counts as not updated this quarter
 
 function getCorsHeaders(req: Request) {
@@ -380,33 +378,10 @@ serve(async (req) => {
     const eh = diag.estate_hygiene;
     const loanFlags = (diag.intercompany_loan_flags ?? []).filter((f: any) => f.isOverdue);
 
-    // ---- Capital allocation: income funds -> Liquidity (when none is set up), insurance cash value -> Strategic,
-    // harvest incl. income-fund withdrawals. Computed here for the review only; the shared diagnostics are untouched.
-    const { data: tankRows } = financials.holdingTank.length
-      ? await supabase.from("holding_tank").select("id, account_number, current_value, income_funds_value, withdrawals_ytd").in("id", financials.holdingTank.map((h: any) => h.id))
-      : { data: [] };
-    const nn = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
-    const allocAccounts: AllocAccount[] = [
-      ...financials.vineyardAccounts.map((a: any) => ({ bucket: "vineyard" as const, current_value: nn(a.current_value), income_funds_value: nn(a.income_funds_value), withdrawals_ytd: nn(a.withdrawals_ytd), expects_statement: !!String(a.account_number ?? "").trim() })),
-      ...(tankRows ?? []).map((a: any) => ({ bucket: "holding_tank" as const, current_value: nn(a.current_value), income_funds_value: nn(a.income_funds_value), withdrawals_ytd: nn(a.withdrawals_ytd), expects_statement: !!String(a.account_number ?? "").trim() })),
-    ];
-    const liquidityRow = (financials.storehouses as any[]).find((x) => x.storehouse_number === 1 && x.asset_type !== REAL_ESTATE_ASSET_TYPE);
-    const realEstate = { liquidity: 0, strategic: 0, philanthropic: 0, legacy: 0 };
-    for (const s of financials.storehouses as any[]) {
-      const key = ({ 1: "liquidity", 2: "strategic", 3: "philanthropic", 4: "legacy" } as Record<number, keyof typeof realEstate>)[s.storehouse_number];
-      if (s.asset_type === REAL_ESTATE_ASSET_TYPE && key) realEstate[key] += nn(s.current_value) ?? 0;
-    }
-    const allocation = allocateCapital({
-      aum: diag.aum, netWorth: diag.net_worth, holdingTank: diag.holding_tank_total, vineyard: diag.vineyard_total,
-      reserves: diag.storehouse_reserves,
-      liquidityStorehouse: { exists: !!liquidityRow, target: nn(liquidityRow?.target_value) },
-      accounts: allocAccounts, realEstate,
-      policies: (financials.insurancePolicies as any[]).map((p) => ({ cash_value: nn(p.cash_value), cash_value_storehouse_id: p.cash_value_storehouse_id ?? null })),
-    });
-    const adjDiag = {
-      ...diag, aum: allocation.aum, net_worth: allocation.netWorth, holding_tank_total: allocation.holdingTank,
-      vineyard_total: allocation.vineyard, storehouse_reserves: allocation.reserves,
-    };
+    // ---- Capital allocation (shared with the Stabilization Map): income funds -> Liquidity when no Liquidity Reserve
+    // is set up, insurance cash value -> Strategic, real estate -> Legacy, Harvest = withdrawals read from statements.
+    const { allocation, allocAccounts } = await allocateForHousehold(supabase, financials, diag);
+    const adjDiag = applyAllocation(diag, allocation);
 
     const facts: ReviewFacts = {
       charter: { source: charterSource, ratified, hasVision: !!charterText.vision },

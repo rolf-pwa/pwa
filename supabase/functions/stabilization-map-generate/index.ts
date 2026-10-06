@@ -4,6 +4,7 @@ import {
   computeSovereigntyDiagnostics,
   type DiagnosticInputs,
 } from "../_shared/sovereignty-diagnostics.ts";
+import { allocateForHousehold, allocationSummary, applyAllocation } from "../_shared/review-allocation.ts";
 import { georgiaFactLines, type GeorgiaLeadFacts } from "../_shared/georgia-diagnostic-facts.ts";
 import { evaluateCausalDag, type OntologyAssessmentPayload, type RiskFlag } from "../_shared/causal-dag-evaluator.ts";
 import { GEMINI_GOVERNANCE_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
@@ -329,7 +330,7 @@ function factsBlock(
   }
   lines.push(`Track type: ${diagnostics.track_type}`);
   lines.push(
-    `Total investable assets (AUM): $${Math.round(diagnostics.aum).toLocaleString()}`,
+    `Total assets: $${Math.round(diagnostics.aum).toLocaleString()}; total liabilities: $${Math.round((diagnostics.personal_liabilities_total ?? 0) + (diagnostics.corp_liabilities_total ?? 0)).toLocaleString()}; net worth: $${Math.round(diagnostics.net_worth ?? diagnostics.aum).toLocaleString()}${diagnostics.allocation?.notes?.length ? ` (${diagnostics.allocation.notes.join(" ")})` : ""}`,
     `Document readiness: ${diagnostics.document_readiness.criticalSatisfied}/${diagnostics.document_readiness.criticalTotal} required documents filed (${diagnostics.document_readiness.percent}%)`,
     `Asset protection (total insurance coverage on file): $${Math.round(diagnostics.insurance_coverage_total ?? 0).toLocaleString()}`,
   );
@@ -491,11 +492,15 @@ async function handleHouseholdGeneration(
   }
 
   try {
-    const { track_type, diagnostics, financials } = await computeSovereigntyDiagnostics(
+    const { track_type, diagnostics: rawDiagnostics, financials } = await computeSovereigntyDiagnostics(
       supabase,
       householdId,
       existingInputs,
     );
+    // Same balance-sheet treatment as the Sovereignty Review: income funds -> Liquidity (when no Liquidity Reserve is
+    // set up), insurance cash value -> Strategic, real estate -> Legacy. The shared diagnostics themselves are unchanged.
+    const { allocation } = await allocateForHousehold(supabase, financials, rawDiagnostics);
+    const diagnostics = { ...applyAllocation(rawDiagnostics, allocation), allocation: allocationSummary(allocation) };
     const isLegacyClient = financials.isLegacyClient;
 
     const { data: latestOntology } = await supabase
