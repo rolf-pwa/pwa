@@ -22,6 +22,7 @@ import { validateProSession } from "../_shared/pro-portal-auth.ts";
 import { parseServiceAccountKey } from "../_shared/vertex-ai.ts";
 import { classifyShoeboxFile, buildProposedFilename, resolvePrimaryAdultName } from "../_shared/vault-shoebox-classify.ts";
 import { driveDownloadFile, matchVaultCategoryFolder } from "../_shared/vault-provisioning.ts";
+import { logActionEvent } from "../_shared/action-brain.ts";
 
 const APP_BASE_URL = "https://app.prosperwise.ca";
 
@@ -558,6 +559,28 @@ async function ensureAccess(
     return { ok: false, reason: "share_link_no_modify" };
   }
   return { ok: false, reason: "unknown_actor" };
+}
+
+// V2 Action Brain: record what the AI proposed for a Shoebox file vs what staff
+// decided. Runs only for households with the V2 flag on, after the decision
+// has already succeeded, and swallows every error -- it can never affect the
+// approve/reject response.
+async function logShoeboxDecision(admin: any, userId: string | null | undefined, proposalId: string, final: { name: string; category_slug: string | null } | null) {
+  try {
+    const { data: p } = await admin.from("vault_shoebox_proposals").select("household_id, document_type, other_label, proposed_name, proposed_category_slug").eq("id", proposalId).maybeSingle();
+    if (!p) return;
+    const { data: hh } = await admin.from("households").select("v2_ai_engine_enabled").eq("id", p.household_id).maybeSingle();
+    if (!hh?.v2_ai_engine_enabled) return;
+    await logActionEvent(admin, {
+      household_id: p.household_id, actor_id: userId ?? null, actor_role: "ADVISOR",
+      action_type: final ? "shoebox_approve" : "shoebox_reject", workflow_module: "vault_shoebox",
+      input_context_snapshot: { document_type: p.document_type, other_label: p.other_label },
+      system_proposed_payload: { name: p.proposed_name, category_slug: p.proposed_category_slug ?? null },
+      human_final_payload: final ?? { decision: "rejected" }, rejected: final === null, metadata: { proposal_id: proposalId },
+    });
+  } catch (e) {
+    console.error("[vault-service] action-brain log failed:", e instanceof Error ? e.message : String(e));
+  }
 }
 
 async function audit(
@@ -1855,6 +1878,7 @@ serve(async (req) => {
       await supabaseAdmin.from("vault_shoebox_proposals")
         .update({ status: "approved", reviewed_by: actor.userId, reviewed_at: new Date().toISOString() })
         .eq("id", proposalId);
+      await logShoeboxDecision(supabaseAdmin, actor.userId, proposalId, { name: finalName, category_slug: finalCategorySlug ?? null });
       await audit(actor, "shoebox_file_filed", proposal.contact_id, proposal.drive_id, finalName, req, { category_slug: finalCategorySlug ?? null, moved: moving });
       return new Response(JSON.stringify({ ok: true }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
@@ -1868,6 +1892,7 @@ serve(async (req) => {
       await supabaseAdmin.from("vault_shoebox_proposals")
         .update({ status: "rejected", reviewed_by: actor.userId, reviewed_at: new Date().toISOString() })
         .eq("id", proposalId);
+      await logShoeboxDecision(supabaseAdmin, actor.userId, proposalId, null);
       return new Response(JSON.stringify({ ok: true }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
 
