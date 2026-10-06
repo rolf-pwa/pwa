@@ -107,6 +107,17 @@ function StatRow({ label, value, tone }: { label: string; value: string; tone?: 
   );
 }
 
+const bsHead: React.CSSProperties = { fontSize: "6.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "1.5mm" };
+
+function BsRow({ label, value, strong, tone }: { label: string; value: string; strong?: boolean; tone?: string }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "0.8mm 0", fontSize: strong ? "8.5pt" : "8pt", fontWeight: strong ? 700 : 400, color: tone ?? (strong ? "#334155" : "#64748b") }}>
+      <span>{label}</span>
+      <span>{value}</span>
+    </div>
+  );
+}
+
 function PageHeader({ kicker, name, period, title }: { kicker: string; name: string; period: string; title: string }) {
   return (
     <div>
@@ -363,47 +374,44 @@ export default function QuarterlySystemReview() {
 
               <div>
                 <div style={colLabel}>Capital &amp; Asset Protection</div>
-                <div style={{ marginBottom: "3mm" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                    <span style={{ fontSize: "8.5pt", fontWeight: 600 }}>Total Assets (AUM)</span>
-                    <span style={{ fontSize: "8.5pt", fontWeight: 600 }}>{money(diag.aum)}</span>
-                  </div>
-                  {deltas && deltas.aum !== null && (
-                    <div style={{ fontSize: "7pt", color: "#94a3b8", textAlign: "right" }}>
-                      {signed(deltas.aum)} since {deltas.previousLabel ?? "last review"}
+                {/* Balance sheet: assets on the left; liabilities and net worth on the right (they add up to total assets). */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 10mm", marginBottom: "3mm" }}>
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    <div style={bsHead}>Assets</div>
+                    {(diag.holding_tank_total ?? 0) > 0 && <BsRow label="Holding Tank" value={money(diag.holding_tank_total)} />}
+                    <BsRow label="Vineyard" value={money(diag.vineyard_total)} />
+                    <BsRow label="Liquidity Reserve" value={money(diag.storehouse_reserves?.liquidity)} />
+                    <BsRow label="Strategic Reserve" value={money(diag.storehouse_reserves?.strategic)} />
+                    <BsRow label="Philanthropic Trust" value={money(diag.storehouse_reserves?.philanthropic)} />
+                    <BsRow label="Legacy Trust" value={money(diag.storehouse_reserves?.legacy)} />
+                    <div style={{ marginTop: "auto", paddingTop: "1.5mm" }}>
+                      <hr style={{ border: "none", borderTop: "1.5px solid #334155", margin: "0 0 1.5mm" }} />
+                      <BsRow label="Total Assets" value={money(diag.aum)} strong />
+                      {deltas && deltas.aum !== null && (
+                        <div style={{ fontSize: "7pt", color: "#94a3b8", textAlign: "right" }}>{signed(deltas.aum)} since {deltas.previousLabel ?? "last review"}</div>
+                      )}
                     </div>
-                  )}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1mm 6mm", marginTop: "1.5mm", paddingLeft: "3mm" }}>
-                    <StatRow label="Holding Tank" value={money(diag.holding_tank_total)} />
-                    <StatRow label="Vineyard" value={money(diag.vineyard_total)} />
                   </div>
-                  <hr style={{ border: "none", borderTop: "1px solid #e2e8f0", margin: "1.5mm 0 1.5mm 3mm" }} />
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1mm 6mm", paddingLeft: "3mm" }}>
-                    <StatRow label="Liquidity Reserve" value={money(diag.storehouse_reserves?.liquidity)} />
-                    <StatRow label="Strategic Reserve" value={money(diag.storehouse_reserves?.strategic)} />
-                    <StatRow label="Philanthropic Trust" value={money(diag.storehouse_reserves?.philanthropic)} />
-                    <StatRow label="Legacy Trust" value={money(diag.storehouse_reserves?.legacy)} />
-                  </div>
-                  {(diag.allocation?.notes ?? []).length > 0 && (
-                    <div style={{ paddingLeft: "3mm", marginTop: "1.5mm" }}>
-                      {diag.allocation!.notes.map((n, i) => (
-                        <div key={i} style={{ fontSize: "6.5pt", color: "#94a3b8", fontStyle: "italic", lineHeight: 1.4 }}>{n}</div>
-                      ))}
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    <div style={bsHead}>Liabilities &amp; Net Worth</div>
+                    <BsRow label="Liabilities" value={money(liabilities)} tone="#c0392b" />
+                    <BsRow label="Net Worth" value={money(diag.net_worth ?? diag.aum)} strong />
+                    {deltas && deltas.netWorth !== null && (
+                      <div style={{ fontSize: "7pt", color: "#94a3b8", textAlign: "right" }}>{signed(deltas.netWorth)} since {deltas.previousLabel ?? "last review"}</div>
+                    )}
+                    <div style={{ marginTop: "auto", paddingTop: "1.5mm" }}>
+                      <hr style={{ border: "none", borderTop: "1.5px solid #334155", margin: "0 0 1.5mm" }} />
+                      <BsRow label="Total Liabilities & Net Worth" value={money(liabilities + (diag.net_worth ?? diag.aum ?? 0))} strong />
                     </div>
-                  )}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: "2mm" }}>
-                    <span style={{ fontSize: "8.5pt", fontWeight: 600 }}>Total Liabilities</span>
-                    <span style={{ fontSize: "8.5pt", fontWeight: 600, color: "#c0392b" }}>-{money(liabilities)}</span>
                   </div>
-                  <hr style={{ border: "none", borderTop: "1.5px solid #334155", margin: "1.5mm 0" }} />
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                    <span style={{ fontSize: "9.5pt", fontWeight: 700 }}>Net Worth</span>
-                    <span style={{ fontSize: "9.5pt", fontWeight: 700 }}>{money(diag.net_worth ?? diag.aum)}</span>
-                  </div>
-                  {deltas && deltas.netWorth !== null && (
-                    <div style={{ fontSize: "7pt", color: "#94a3b8", textAlign: "right" }}>{signed(deltas.netWorth)} since {deltas.previousLabel ?? "last review"}</div>
-                  )}
                 </div>
+                {(diag.allocation?.notes ?? []).length > 0 && (
+                  <div style={{ marginBottom: "3mm" }}>
+                    {diag.allocation!.notes.map((n, i) => (
+                      <div key={i} style={{ fontSize: "6.5pt", color: "#94a3b8", fontStyle: "italic", lineHeight: 1.4 }}>{n}</div>
+                    ))}
+                  </div>
+                )}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4mm" }}>
                   <StatRow label="Asset Protection" value={money(diag.insurance_coverage_total)} tone="#334155" />
                   {diag.harvest && <StatRow label="Harvest to date" value={diag.harvest.current === null ? "—" : money(diag.harvest.current)} tone="#334155" />}
