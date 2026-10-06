@@ -2121,7 +2121,10 @@ serve(async (req) => {
       const rootChildren = await driveListChildren(plan.hit.vault_root_folder_id!, accessToken);
       const dest = matchVaultCategoryFolder(rootChildren, tmpl.display_name);
       if (!dest)
-        return new Response(JSON.stringify({ filed: false, status: "no_vault", reason: "Investments folder not found in the household Vault" }), { headers: { ...cors, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({
+          filed: false, status: "no_vault",
+          reason: `Investments folder not found in the household Vault. Top-level folders seen: ${rootChildren.filter((f: any) => f.mimeType === "application/vnd.google-apps.folder").map((f: any) => f.name).join(" | ") || "none"}`,
+        }), { headers: { ...cors, "Content-Type": "application/json" } });
 
       const boundary = "----bulk" + Math.random().toString(36).slice(2);
       const pre = new TextEncoder().encode(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name: plan.fileName, parents: [dest.id], mimeType: "application/pdf" })}\r\n--${boundary}\r\nContent-Type: application/pdf\r\n\r\n`);
