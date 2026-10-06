@@ -50,6 +50,7 @@ type Diagnostics = {
   aum?: number;
   storehouse_reserves?: { liquidity: number; strategic: number; philanthropic: number; legacy: number };
   insurance_coverage_total?: number;
+  allocation?: { notes: string[]; income_funds_moved: number; income_funds_on_file: number; cash_value_added: number; real_estate_added?: number };
   vineyard_total?: number;
   holding_tank_total?: number;
   net_worth?: number;
@@ -615,53 +616,38 @@ export default function StabilizationMap() {
                 <div>
                   <div style={colLabel}>Capital &amp; Asset Protection</div>
 
-                  <div style={{ marginBottom: "3mm" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                      <span style={{ fontSize: "8.5pt", fontWeight: 600, color: "#334155" }}>Total Assets (AUM)</span>
-                      <span style={{ fontSize: "8.5pt", fontWeight: 600, color: "#334155" }}>{fmtCurrency(diag.aum)}</span>
+                  {/* Balance sheet: assets on the left; liabilities and net worth on the right (they add up to total assets). */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 8mm", marginBottom: "3mm" }}>
+                    <div style={{ display: "flex", flexDirection: "column" }}>
+                      <div style={bsHead}>Assets</div>
+                      {(diag.holding_tank_total ?? 0) > 0 && <BsRow label="Holding Tank" value={fmtCurrency(diag.holding_tank_total)} />}
+                      <BsRow label="Vineyard" value={fmtCurrency(diag.vineyard_total)} />
+                      <BsRow label="Liquidity Reserve" value={fmtCurrency(diag.storehouse_reserves?.liquidity)} />
+                      <BsRow label="Strategic Reserve" value={fmtCurrency(diag.storehouse_reserves?.strategic)} />
+                      <BsRow label="Philanthropic Trust" value={fmtCurrency(diag.storehouse_reserves?.philanthropic)} />
+                      <BsRow label="Legacy Trust" value={fmtCurrency(diag.storehouse_reserves?.legacy)} />
+                      <div style={{ marginTop: "auto", paddingTop: "1.5mm" }}>
+                        <hr style={{ border: "none", borderTop: "1.5px solid #334155", margin: "0 0 1.5mm" }} />
+                        <BsRow label="Total Assets" value={fmtCurrency(diag.aum)} strong />
+                      </div>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1mm 6mm", marginTop: "1.5mm", paddingLeft: "3mm" }}>
-                      {(
-                        [
-                          ["Holding Tank", diag.holding_tank_total],
-                          ["Vineyard", diag.vineyard_total],
-                        ] as const
-                      ).map(([label, value]) => (
-                        <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: "7.5pt", color: "#64748b" }}>
-                          <span>{label}</span>
-                          <span>{fmtCurrency(value ?? 0)}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <hr style={{ border: "none", borderTop: "1px solid #e2e8f0", margin: "1.5mm 0 1.5mm 3mm" }} />
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1mm 6mm", paddingLeft: "3mm" }}>
-                      {(
-                        [
-                          ["Liquidity Reserve", diag.storehouse_reserves?.liquidity],
-                          ["Strategic Reserve", diag.storehouse_reserves?.strategic],
-                          ["Philanthropic Trust", diag.storehouse_reserves?.philanthropic],
-                          ["Legacy Trust", diag.storehouse_reserves?.legacy],
-                        ] as const
-                      ).map(([label, value]) => (
-                        <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: "7.5pt", color: "#64748b" }}>
-                          <span>{label}</span>
-                          <span>{fmtCurrency(value ?? 0)}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: "2mm" }}>
-                      <span style={{ fontSize: "8.5pt", fontWeight: 600, color: "#334155" }}>Total Liabilities</span>
-                      <span style={{ fontSize: "8.5pt", fontWeight: 600, color: "#c0392b" }}>
-                        -{fmtCurrency((diag.personal_liabilities_total ?? 0) + (diag.corp_liabilities_total ?? 0))}
-                      </span>
-                    </div>
-                    <hr style={{ border: "none", borderTop: "1.5px solid #334155", margin: "1.5mm 0" }} />
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                      <span style={{ fontSize: "9.5pt", fontWeight: 700, color: "#334155" }}>Net Worth</span>
-                      <span style={{ fontSize: "9.5pt", fontWeight: 700, color: "#334155" }}>{fmtCurrency(diag.net_worth ?? diag.aum)}</span>
+                    <div style={{ display: "flex", flexDirection: "column" }}>
+                      <div style={bsHead}>Liabilities &amp; Net Worth</div>
+                      <BsRow label="Liabilities" value={fmtCurrency((diag.personal_liabilities_total ?? 0) + (diag.corp_liabilities_total ?? 0))} tone="#c0392b" />
+                      <BsRow label="Net Worth" value={fmtCurrency(diag.net_worth ?? diag.aum)} strong />
+                      <div style={{ marginTop: "auto", paddingTop: "1.5mm" }}>
+                        <hr style={{ border: "none", borderTop: "1.5px solid #334155", margin: "0 0 1.5mm" }} />
+                        <BsRow label="Total Liabilities & Net Worth" value={fmtCurrency((diag.personal_liabilities_total ?? 0) + (diag.corp_liabilities_total ?? 0) + (diag.net_worth ?? diag.aum ?? 0))} strong />
+                      </div>
                     </div>
                   </div>
+                  {(diag.allocation?.notes ?? []).length > 0 && (
+                    <div style={{ marginBottom: "3mm" }}>
+                      {diag.allocation!.notes.map((n, i) => (
+                        <div key={i} style={{ fontSize: "6.5pt", color: "#94a3b8", fontStyle: "italic", lineHeight: 1.4 }}>{n}</div>
+                      ))}
+                    </div>
+                  )}
 
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4mm" }}>
                     {typeof diag.sbd_clawback === "number" && map.track_type === "corporate" && (
@@ -879,6 +865,17 @@ const colItem: React.CSSProperties = { display: "flex", alignItems: "flex-start"
 const colText: React.CSSProperties = { fontSize: "8.5pt", color: "#334155", lineHeight: 1.4 };
 const dot: React.CSSProperties = { width: "6px", height: "6px", borderRadius: "50%", background: "#a37c58", flexShrink: 0, marginTop: "2pt" };
 const sq: React.CSSProperties = { width: "6px", height: "6px", background: "#a37c58", flexShrink: 0, marginTop: "2pt" };
+
+const bsHead: React.CSSProperties = { fontSize: "6.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "1.5mm" };
+
+function BsRow({ label, value, strong, tone }: { label: string; value: string; strong?: boolean; tone?: string }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "0.8mm 0", fontSize: strong ? "8.5pt" : "8pt", fontWeight: strong ? 700 : 400, color: tone ?? (strong ? "#334155" : "#64748b") }}>
+      <span>{label}</span>
+      <span>{value}</span>
+    </div>
+  );
+}
 
 function StatusCard({ label, status, detail }: { label: string; status: string; detail: string }) {
   const kind = STATUS_KIND[status] || "amber";
