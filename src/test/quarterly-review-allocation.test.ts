@@ -73,6 +73,14 @@ describe("allocateCapital", () => {
     ];
     expect(allocateCapital(base({ accounts, policies: [] })).notes.join(" ")).toMatch(/1 of 2 accounts with statements/);
   });
+  it("adds real estate to the Legacy reserve, total assets and net worth", () => {
+    const r = allocateCapital(base({ accounts: [], policies: [], realEstate: { legacy: 1_537_500 } }));
+    expect(r.reserves.legacy).toBe(1_537_500);
+    expect(r.realEstateAdded).toBe(1_537_500);
+    expect(r.aum).toBe(920_598 + 1_537_500);
+    expect(r.netWorth).toBe(920_598 + 1_537_500);
+    expect(r.notes.join(" ")).toMatch(/Legacy Trust includes \$1,537,500 of real estate/);
+  });
   it("harvest is unknown (null), not zero, until withdrawals have been read", () => {
     const r = allocateCapital(base({ accounts: base().accounts.map((a) => ({ ...a, withdrawals_ytd: null })) }));
     expect(r.harvest).toBeNull();

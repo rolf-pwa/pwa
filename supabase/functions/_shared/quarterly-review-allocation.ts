@@ -5,6 +5,9 @@
 //    Vineyard / Holding Tank account they sit in; equity funds stay where they are, so AUM doesn't change.
 //  - Insurance cash value that isn't already booked against a storehouse counts as Strategic Reserve.
 //    This is an asset the AUM total did not include, so AUM and net worth rise by it.
+//  - Real estate held in a Storehouse (principal residence, investment property) counts in its reserve
+//    (normally Legacy Trust). The shared diagnostics leave it out of AUM, but a balance sheet needs it, so the
+//    review adds it to the reserve, Total Assets and Net Worth.
 //  - Harvest to date = the total of ALL withdrawals taken from ALL accounts (every fund), as read from the
 //    statements. Null when no account has had its withdrawals read yet (unknown, not zero).
 
@@ -26,6 +29,8 @@ export interface AllocInput {
   liquidityStorehouse: { exists: boolean; target: number | null };
   accounts: AllocAccount[];
   policies: { cash_value: number | null; cash_value_storehouse_id: string | null }[];
+  /** Real-estate Storehouse rows the shared diagnostics exclude, by the reserve they belong to. */
+  realEstate?: { liquidity?: number; strategic?: number; philanthropic?: number; legacy?: number };
 }
 
 export interface Allocation {
@@ -37,6 +42,7 @@ export interface Allocation {
   incomeFundsMoved: number;       // income funds counted as Liquidity (0 when a Liquidity Reserve is set up)
   incomeFundsOnFile: number;      // income funds known from statements, moved or not
   cashValueAdded: number;         // policy cash value counted as Strategic
+  realEstateAdded: number;        // real estate counted in the reserves (and in assets / net worth)
   totalWithdrawals: number;       // all withdrawals read from statements
   accountsWithWithdrawalData: number;
   harvest: number | null;         // = totalWithdrawals when any account has data, else null
@@ -83,6 +89,17 @@ export function allocateCapital(i: AllocInput): Allocation {
     notes.push(`Strategic Reserve includes ${money(cashValueAdded)} of insurance cash value.`);
   }
 
+  // Real estate rows the shared totals left out.
+  const re = i.realEstate ?? {};
+  const realEstateAdded = round2(num(re.liquidity) + num(re.strategic) + num(re.philanthropic) + num(re.legacy));
+  if (realEstateAdded > 0) {
+    reserves.liquidity += num(re.liquidity);
+    reserves.strategic += num(re.strategic);
+    reserves.philanthropic += num(re.philanthropic);
+    reserves.legacy += num(re.legacy);
+    notes.push(`Legacy Trust includes ${money(num(re.legacy))} of real estate (principal residence and investment property).`);
+  }
+
   // Only accounts that issue a statement can be "read"; the rest are left out of the counts and notes.
   const expecting = i.accounts.filter((a) => a.expects_statement !== false);
   const withData = expecting.filter((a) => isNum(a.withdrawals_ytd));
@@ -95,15 +112,15 @@ export function allocateCapital(i: AllocInput): Allocation {
   }
 
   return {
-    aum: round2(i.aum + cashValueAdded),
-    netWorth: round2(i.netWorth + cashValueAdded),
+    aum: round2(i.aum + cashValueAdded + realEstateAdded),
+    netWorth: round2(i.netWorth + cashValueAdded + realEstateAdded),
     holdingTank: round2(holdingTank),
     vineyard: round2(vineyard),
     reserves: {
       liquidity: round2(reserves.liquidity), strategic: round2(reserves.strategic),
       philanthropic: round2(reserves.philanthropic), legacy: round2(reserves.legacy),
     },
-    incomeFundsMoved, incomeFundsOnFile, cashValueAdded, totalWithdrawals,
+    incomeFundsMoved, incomeFundsOnFile, cashValueAdded, realEstateAdded, totalWithdrawals,
     accountsWithWithdrawalData: withData.length, harvest, notes,
   };
 }

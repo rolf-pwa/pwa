@@ -32,7 +32,7 @@ type Diag = {
   data_completeness?: { total: number; onFile: number; missing: string[] };
   charter_file?: { name: string; modifiedTime: string | null; ratified: boolean; viaSubfolder: boolean; textRead: boolean } | null;
   harvest?: { current: number | null; snapshot_growth?: number; accounts_read?: number };
-  allocation?: { notes: string[]; income_funds_moved: number; income_funds_on_file: number; cash_value_added: number };
+  allocation?: { notes: string[]; income_funds_moved: number; income_funds_on_file: number; cash_value_added: number; real_estate_added?: number };
   tracked_accounts?: number;
   accounts?: number;
 };
