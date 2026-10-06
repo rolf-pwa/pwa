@@ -73,6 +73,8 @@ export interface TargetResult extends CharterTarget {
   actualText: string;
   targetText: string;
   summary: string;                // one plain line for the card
+  /** Dollars above (+) or below (-) the target for a checked balance target; 0 when on target; null when not applicable. */
+  gapAmount: number | null;
 }
 
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
@@ -85,12 +87,12 @@ export function evaluateTarget(t: CharterTarget, b: BalanceFigures): TargetResul
   const areaValue = t.area === "other" ? null : b.areas[t.area];
   const wording = (verb: string) => `${verb} ${t.value === null ? "?" : fmt(t.metric, t.value)}${t.comparison === "between" && t.value_max !== null ? ` to ${fmt(t.metric, t.value_max)}` : ""}`;
   const targetText = t.comparison === "at_least" ? wording("at least") : t.comparison === "at_most" ? wording("no more than") : t.comparison === "between" ? wording("between") : wording("target");
-  const info = (text: string): TargetResult => ({ ...t, status: "info", actual: null, actualText: "", targetText, summary: `Charter: ${t.label}${text ? ` ${text}` : ""}.` });
+  const info = (text: string): TargetResult => ({ ...t, status: "info", actual: null, actualText: "", targetText, gapAmount: null, summary: `Charter: ${t.label}${text ? ` ${text}` : ""}.` });
 
   // Rules (an age, a waiting period, a distribution split, a trigger threshold) can't be checked against a balance.
   if (t.metric === "other" || t.area === "other") {
     const quote = t.quote.length > 140 ? `${t.quote.slice(0, 137)}...` : t.quote;
-    return { ...t, status: "info", actual: null, actualText: "", targetText, summary: `Charter rule: ${t.label}${quote ? ` — “${quote}”` : ""}.` };
+    return { ...t, status: "info", actual: null, actualText: "", targetText, gapAmount: null, summary: `Charter rule: ${t.label}${quote ? ` — “${quote}”` : ""}.` };
   }
 
   // Yearly or monthly flows (income, spending, a budget line): never compared with a balance. The yearly income the
@@ -103,7 +105,7 @@ export function evaluateTarget(t: CharterTarget, b: BalanceFigures): TargetResul
       const share = yearly > 0 ? Math.round((b.withdrawnYtd / yearly) * 100) : 0;
       const over = b.withdrawnYtd > yearly;
       return {
-        ...t, status: over ? "above" : "info", actual: b.withdrawnYtd, actualText: money(b.withdrawnYtd), targetText: yearlyText,
+        ...t, status: over ? "above" : "info", actual: b.withdrawnYtd, actualText: money(b.withdrawnYtd), targetText: yearlyText, gapAmount: null,
         summary: `Charter: ${t.label} (${yearlyText}); ${money(b.withdrawnYtd)} withdrawn so far this year (${share}% of it)${over ? ", already over the yearly figure" : ""}.`,
       };
     }
@@ -120,7 +122,7 @@ export function evaluateTarget(t: CharterTarget, b: BalanceFigures): TargetResul
   }
   if (actual === null || t.value === null) {
     const why = t.metric === "months_of_spending" && !b.monthlySpending ? "monthly spending isn't recorded" : "the figures aren't available";
-    return { ...t, status: "not_computable", actual: null, actualText: "", targetText, summary: `Charter: ${t.label} (${targetText}); not checked because ${why}.` };
+    return { ...t, status: "not_computable", actual: null, actualText: "", targetText, gapAmount: null, summary: `Charter: ${t.label} (${targetText}); not checked because ${why}.` };
   }
 
   const lo = t.value, hi = t.value_max ?? t.value;
@@ -139,7 +141,17 @@ export function evaluateTarget(t: CharterTarget, b: BalanceFigures): TargetResul
 
   const actualText = fmt(t.metric, actual);
   const verdict = status === "met" ? `met${extra}` : status === "below" ? "short of the target" : "over the limit";
-  return { ...t, status, actual, actualText, targetText, summary: `Charter: ${t.label} (${targetText}); actual ${actualText}, ${verdict}.` };
+
+  // Dollars to move to land on the target (above the goal = surplus, below = shortfall). Percent and month targets are
+  // converted back to dollars with the same base they were measured against.
+  const unitToDollars = t.metric === "amount" ? 1
+    : t.metric === "percent_of_total_assets" ? b.totalAssets / 100
+    : t.metric === "percent_of_investable_assets" ? b.investableAssets / 100
+    : t.metric === "percent_of_net_worth" ? b.netWorth / 100
+    : t.metric === "months_of_spending" ? (b.monthlySpending ?? 0) : 0;
+  const edge = t.comparison === "between" ? (actual < lo ? lo : actual > hi ? hi : actual) : lo;
+  const gapAmount = unitToDollars > 0 ? Math.round((actual - edge) * unitToDollars) : null;
+  return { ...t, status, actual, actualText, targetText, gapAmount, summary: `Charter: ${t.label} (${targetText}); actual ${actualText}, ${verdict}.` };
 }
 
 export const evaluateTargets = (targets: CharterTarget[], b: BalanceFigures): TargetResult[] => targets.map((t) => evaluateTarget(t, b));

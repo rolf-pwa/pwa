@@ -89,12 +89,13 @@ Your job: draft ONLY the narrative fields. **Never invent, recompute or alter a 
 - review_summary: 1-2 sentences on where the household's system stands this quarter overall.
 - charter_alignment: 2-4 sentences on whether the household's assets, reserves, protection and documents are serving what the Charter says the family is for. Quote or paraphrase the Charter's purpose/mission/vision where it is provided. If no Charter exists, say plainly that nothing written yet governs the system and treat drafting and ratifying it as the first priority. Do not claim alignment that the statuses do not support.
 - urgency_flag: ONE sentence naming the single most important thing to resolve this quarter.
-- area_notes: for EACH area (charter, vineyard, liquidity, strategic, philanthropic, legacy, liabilities) write ONE sentence (max ~35 words) saying whether that area meets the Charter's provisions. Use the "Charter targets" lines: cite the stated figure or the Charter's own words and the actual figure. If a target was checked, say whether it was met and by how much. If the Charter is silent on an area, say so plainly. Never contradict the computed status.
+- area_notes: for EACH area (charter, vineyard, liquidity, strategic, philanthropic, legacy, liabilities) write ONE sentence (max ~35 words) explaining WHY the computed action matters for the family given the Charter's purpose, or, if the action is 'No action required', why the area is in line. Use the Desired / Current / Action lines; do not restate every number and never change an amount or a status.
 - Action plan: 2-4 concrete items for EACH phase, grounded only in the facts and statuses provided; do not propose work for areas that are already Aligned except to maintain them:
   - Phase 1 (Immediate, Days 1-30): protective and administrative fixes (missing records, unfiled documents, unreviewed items).
   - Phase 2 (Structural Alignment, Days 31-60): the structural changes needed to bring a Partial/Needs Attention area into line with the Charter.
   - Phase 3 (Governance & Reporting, Days 61-90): ratification, reporting and cadence steps, including preparing the next quarterly review.
   - Each item: a short title (max ~50 characters) and one supporting sentence.
+- The plan must carry out the computed "Action" lines (they hold the dollar amounts, already worked out); put protective and record-keeping actions in Phase 1 and rebalancing moves in Phase 2. Never alter an amount.
 - Never quote internal field names or raw scores. Keep every field concise.
 
 ## Output
@@ -141,8 +142,13 @@ function factsBlock(o: {
       ? `Change since ${o.deltas.previousLabel ?? "the previous review"}: assets ${o.deltas.aum >= 0 ? "+" : "-"}${money(Math.abs(o.deltas.aum))}${o.deltas.netWorth !== null ? `, net worth ${o.deltas.netWorth >= 0 ? "+" : "-"}${money(Math.abs(o.deltas.netWorth))}` : ""}.`
       : "No previous review to compare against.",
     "",
-    "Alignment status by area (computed):",
-    ...o.cards.flatMap((c) => [`- ${c.label}: ${c.status} -- ${c.detail}`, ...(c.targets ?? []).map((t) => `    ${t.summary}`)]),
+    "Alignment by area (computed in code: desired state from the Charter, current state, and the action required with its dollar amount):",
+    ...o.cards.flatMap((c) => [
+      `- ${c.label}: ${c.status}`,
+      ...c.desired.map((l) => `    Desired (Charter): ${l}`),
+      ...c.current.map((l) => `    Current: ${l}`),
+      ...c.actions.map((l) => `    Action: ${l}`),
+    ]),
     "",
     "The family's Charter:",
     o.charter.source ? `(source: ${o.charter.source === "household" ? "household Charter" : "earlier-format Charter"}; ${o.charter.ratified ? "ratified" : "not yet ratified"})` : "No Charter is on file.",
@@ -436,6 +442,17 @@ serve(async (req) => {
       legacy: { realEstate: allocation.realEstateAdded, estate },
       liabilities: {
         total: diag.personal_liabilities_total, corporate: diag.corp_liabilities_total, overdueLoans: loanFlags.length,
+        // Yearly interest on liabilities with a rate recorded, and how many have none (can't be costed).
+        rated: (() => {
+          const rows = (financials.liabilities as any[]).filter((r) => r.holder_type === "contact" && Number(r.current_balance) > 0);
+          if (!rows.length) return null;
+          const withRate = rows.filter((r) => r.interest_rate_pct !== null && r.interest_rate_pct !== undefined && r.interest_rate_pct !== "");
+          const missing = rows.filter((r) => !withRate.includes(r));
+          return {
+            interest: Math.round(withRate.reduce((s, r) => s + Number(r.current_balance) * Number(r.interest_rate_pct) / 100, 0)),
+            unratedCount: missing.length, unratedBalance: missing.reduce((s, r) => s + Number(r.current_balance), 0),
+          };
+        })(),
         // Credit limit minus balance on HELOCs, credit cards and lines of credit that have a limit recorded.
         revolving: (() => {
           const rows = (financials.liabilities as any[]).filter((r) => ["heloc", "credit_card", "line_of_credit"].includes(r.liability_type) && Number(r.credit_limit) > 0);
