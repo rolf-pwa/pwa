@@ -19,7 +19,7 @@ import pwLogoWhite from "@/assets/prosperwise-logo-white.png";
 type ActionItem = { title: string; detail: string };
 type ActionPlan = { phase_1: ActionItem[]; phase_2: ActionItem[]; phase_3: ActionItem[] };
 type TargetCheck = { label: string; area?: string; status: "met" | "below" | "above" | "info" | "not_computable"; targetText: string; actualText: string; summary: string; quote: string };
-type Card = { key: string; label: string; status: string; detail: string; targets?: TargetCheck[]; charter_note?: string };
+type Card = { key: string; label: string; status: string; detail: string; desired?: string[]; current?: string[]; actions?: string[]; targets?: TargetCheck[]; charter_note?: string };
 
 type Diag = {
   aum?: number;
@@ -93,20 +93,37 @@ const colText: React.CSSProperties = { fontSize: "8.5pt", color: "#334155", line
 const TARGET_COLOR: Record<TargetCheck["status"], string> = { met: "#27ae60", below: "#c0392b", above: "#c0392b", info: "#64748b", not_computable: "#94a3b8" };
 const targetMark = (s: TargetCheck["status"]) => (s === "met" ? "✓ " : s === "below" || s === "above" ? "✗ " : "• ");
 
-function StatusCard({ label, status, detail, targets, note }: { label: string; status: string; detail: string; targets?: TargetCheck[]; note?: string }) {
+const PART_LABEL: React.CSSProperties = { fontSize: "5.8pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginTop: "1.6mm", marginBottom: "0.4mm" };
+const PART_LINE: React.CSSProperties = { fontSize: "7.2pt", color: "#334155", lineHeight: 1.45, margin: 0 };
+
+function Part({ title, lines, strong }: { title: string; lines: string[]; strong?: boolean }) {
   return (
-    <div style={{ background: "#fafafa", borderLeft: "3px solid #a37c58", padding: "3mm 4mm" }}>
-      <strong style={{ display: "block", fontSize: "8.5pt", fontWeight: 600, color: "#334155", marginBottom: "1mm" }}>
-        {label}&nbsp;
-        <span style={{ color: STATUS_COLOR[status] ?? "#e67e22", fontSize: "7pt", letterSpacing: ".08em", textTransform: "uppercase" }}>{status}</span>
+    <>
+      <div style={PART_LABEL}>{title}</div>
+      {lines.map((l, i) => <p key={i} style={{ ...PART_LINE, ...(strong ? { fontWeight: 600 } : {}) }}>{l}</p>)}
+    </>
+  );
+}
+
+/** Desired state (from the Charter), current state, and the action required, as worked out in code. Older reviews fall back to one line. */
+function StatusCard({ card }: { card: Card }) {
+  const threePart = !!(card.desired && card.current && card.actions);
+  return (
+    <div style={{ background: "#fafafa", borderLeft: "3px solid #a37c58", padding: "3mm 4mm", breakInside: "avoid" }}>
+      <strong style={{ display: "block", fontSize: "8.5pt", fontWeight: 600, color: "#334155" }}>
+        {card.label}&nbsp;
+        <span style={{ color: STATUS_COLOR[card.status] ?? "#e67e22", fontSize: "7pt", letterSpacing: ".08em", textTransform: "uppercase" }}>{card.status}</span>
       </strong>
-      <p style={{ fontSize: "7.5pt", color: "#334155", lineHeight: 1.5 }}>{detail || "—"}</p>
-      {(targets ?? []).map((t, i) => (
-        <p key={i} style={{ fontSize: "7pt", lineHeight: 1.45, marginTop: "1mm", color: TARGET_COLOR[t.status] }}>
-          {targetMark(t.status)}{t.summary.replace(/^Charter: /, "Charter target: ")}
-        </p>
-      ))}
-      {note && <p style={{ fontSize: "7pt", lineHeight: 1.45, marginTop: "1.2mm", color: "#64748b", fontStyle: "italic" }}>{note}</p>}
+      {threePart ? (
+        <>
+          <Part title="Desired state · Charter" lines={card.desired!} />
+          <Part title="Current state" lines={card.current!} />
+          <Part title="Action required" lines={card.actions!} strong />
+        </>
+      ) : (
+        <p style={{ ...PART_LINE, marginTop: "1mm" }}>{card.detail || "—"}</p>
+      )}
+      {card.charter_note && <p style={{ fontSize: "6.8pt", lineHeight: 1.45, marginTop: "1.6mm", color: "#64748b", fontStyle: "italic" }}>{card.charter_note}</p>}
     </div>
   );
 }
@@ -330,7 +347,15 @@ export default function QuarterlySystemReview() {
                   <SelectContent>{STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                 </Select>
                 <div className="space-y-1">
-                  <Textarea rows={2} value={c.detail} onChange={(e) => patchCard(i, { detail: e.target.value })} />
+                  {c.desired && c.current && c.actions ? (
+                    <>
+                      <Textarea rows={2} placeholder="Desired state (one line per row)" value={c.desired.join("\n")} onChange={(e) => patchCard(i, { desired: e.target.value.split("\n") })} />
+                      <Textarea rows={2} placeholder="Current state (one line per row)" value={c.current.join("\n")} onChange={(e) => patchCard(i, { current: e.target.value.split("\n") })} />
+                      <Textarea rows={2} placeholder="Action required (one line per row)" value={c.actions.join("\n")} onChange={(e) => patchCard(i, { actions: e.target.value.split("\n") })} />
+                    </>
+                  ) : (
+                    <Textarea rows={2} value={c.detail} onChange={(e) => patchCard(i, { detail: e.target.value })} />
+                  )}
                   <Textarea rows={2} placeholder="Charter note" value={c.charter_note ?? ""} onChange={(e) => patchCard(i, { charter_note: e.target.value })} />
                 </div>
               </div>
@@ -459,13 +484,18 @@ export default function QuarterlySystemReview() {
                 </div>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(60mm, 1fr))", gap: "3mm" }}>
-                {cards.map((c) => <StatusCard key={c.key} label={c.label} status={c.status} detail={c.detail} targets={c.targets} note={c.charter_note} />)}
-              </div>
             </main>
           </div>
 
-          {/* Page 2 — 90-Day Plan */}
+          {/* Page 2 — Desired state, current state and action required, by area */}
+          <div className="stab-doc-page2 bg-white shadow-lg print:shadow-none mt-6 print:mt-0" style={{ width: "210mm", minHeight: "297mm", padding: "12mm", display: "flex", flexDirection: "column", gap: "5mm", fontFamily: "'DM Sans', sans-serif", color: "#334155", pageBreakBefore: "always", breakBefore: "page" }}>
+            <PageHeader kicker={docName} name={name} period={period} title={isSurvey ? "What a Charter Would Govern" : "Where You Stand Against Your Charter"} />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3mm", alignItems: "start" }}>
+              {cards.map((c) => <StatusCard key={c.key} card={c} />)}
+            </div>
+          </div>
+
+          {/* Page 3 — 90-Day Plan */}
           <div className="stab-doc-page2 bg-white shadow-lg print:shadow-none mt-6 print:mt-0" style={{ width: "210mm", minHeight: "297mm", padding: "12mm", display: "flex", flexDirection: "column", gap: "5mm", fontFamily: "'DM Sans', sans-serif", color: "#334155", pageBreakBefore: "always", breakBefore: "page" }}>
             <PageHeader kicker={docName} name={name} period={period} title={isSurvey ? "90-Day Sovereignty Plan" : "90-Day Alignment Plan"} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8mm", flex: 1 }}>
