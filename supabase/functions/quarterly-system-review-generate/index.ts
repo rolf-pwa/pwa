@@ -30,6 +30,8 @@ const BodySchema = z.object({
   reviewId: z.string().uuid().optional(),
 }).refine((v) => v.householdId || v.contactId || v.reviewId, { message: "householdId, contactId or reviewId is required" });
 
+// Storehouse rows of this type are real estate; the shared diagnostics leave them out of the reserve totals.
+const REAL_ESTATE_ASSET_TYPE = "Primary Residence & Protected Legacy Accounts";
 const FRESH_DAYS = 120; // a harvest snapshot older than this counts as not updated this quarter
 
 function getCorsHeaders(req: Request) {
@@ -314,19 +316,24 @@ serve(async (req) => {
     // ---- Capital allocation: income funds -> Liquidity (when none is set up), insurance cash value -> Strategic,
     // harvest incl. income-fund withdrawals. Computed here for the review only; the shared diagnostics are untouched.
     const { data: tankRows } = financials.holdingTank.length
-      ? await supabase.from("holding_tank").select("id, current_value, income_funds_value, withdrawals_ytd").in("id", financials.holdingTank.map((h: any) => h.id))
+      ? await supabase.from("holding_tank").select("id, account_number, current_value, income_funds_value, withdrawals_ytd").in("id", financials.holdingTank.map((h: any) => h.id))
       : { data: [] };
     const nn = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
     const allocAccounts: AllocAccount[] = [
-      ...financials.vineyardAccounts.map((a: any) => ({ bucket: "vineyard" as const, current_value: nn(a.current_value), income_funds_value: nn(a.income_funds_value), withdrawals_ytd: nn(a.withdrawals_ytd) })),
-      ...(tankRows ?? []).map((a: any) => ({ bucket: "holding_tank" as const, current_value: nn(a.current_value), income_funds_value: nn(a.income_funds_value), withdrawals_ytd: nn(a.withdrawals_ytd) })),
+      ...financials.vineyardAccounts.map((a: any) => ({ bucket: "vineyard" as const, current_value: nn(a.current_value), income_funds_value: nn(a.income_funds_value), withdrawals_ytd: nn(a.withdrawals_ytd), expects_statement: !!String(a.account_number ?? "").trim() })),
+      ...(tankRows ?? []).map((a: any) => ({ bucket: "holding_tank" as const, current_value: nn(a.current_value), income_funds_value: nn(a.income_funds_value), withdrawals_ytd: nn(a.withdrawals_ytd), expects_statement: !!String(a.account_number ?? "").trim() })),
     ];
-    const liquidityRow = (financials.storehouses as any[]).find((x) => x.storehouse_number === 1);
+    const liquidityRow = (financials.storehouses as any[]).find((x) => x.storehouse_number === 1 && x.asset_type !== REAL_ESTATE_ASSET_TYPE);
+    const realEstate = { liquidity: 0, strategic: 0, philanthropic: 0, legacy: 0 };
+    for (const s of financials.storehouses as any[]) {
+      const key = ({ 1: "liquidity", 2: "strategic", 3: "philanthropic", 4: "legacy" } as Record<number, keyof typeof realEstate>)[s.storehouse_number];
+      if (s.asset_type === REAL_ESTATE_ASSET_TYPE && key) realEstate[key] += nn(s.current_value) ?? 0;
+    }
     const allocation = allocateCapital({
       aum: diag.aum, netWorth: diag.net_worth, holdingTank: diag.holding_tank_total, vineyard: diag.vineyard_total,
       reserves: diag.storehouse_reserves,
       liquidityStorehouse: { exists: !!liquidityRow, target: nn(liquidityRow?.target_value) },
-      accounts: allocAccounts,
+      accounts: allocAccounts, realEstate,
       policies: (financials.insurancePolicies as any[]).map((p) => ({ cash_value: nn(p.cash_value), cash_value_storehouse_id: p.cash_value_storehouse_id ?? null })),
     });
     const adjDiag = {
@@ -363,9 +370,10 @@ serve(async (req) => {
         total: diag.document_readiness.criticalTotal, missing: missingDocs.map((m) => m.replace(/\s*\(.*$/, "")),
       },
       statementData: {
-        accounts: allocAccounts.length,
-        withIncomeFunds: allocAccounts.filter((a) => a.income_funds_value !== null).length,
-        withWithdrawals: allocAccounts.filter((a) => a.withdrawals_ytd !== null).length,
+        // Only accounts that issue a statement (have an account number) can be read from one.
+        accounts: allocAccounts.filter((a) => a.expects_statement).length,
+        withIncomeFunds: allocAccounts.filter((a) => a.expects_statement && a.income_funds_value !== null).length,
+        withWithdrawals: allocAccounts.filter((a) => a.expects_statement && a.withdrawals_ytd !== null).length,
       },
       corporate: track_type === "corporate"
         ? {
@@ -417,7 +425,7 @@ serve(async (req) => {
     }
 
     const charterFile = vaultCharter ? { name: vaultCharter.name, modifiedTime: vaultCharter.modifiedTime, ratified: vaultCharter.ratified, viaSubfolder: vaultCharter.viaSubfolder, textRead: !!vaultExtract } : null;
-    const diagnostics = { ...adjDiag, charter_file: charterFile, track_type, deltas, harvest: { current: allocation.harvest, snapshot_growth: harvest.current, accounts_read: allocation.accountsWithWithdrawalData }, allocation: { notes: allocation.notes, income_funds_moved: allocation.incomeFundsMoved, income_funds_on_file: allocation.incomeFundsOnFile, cash_value_added: allocation.cashValueAdded }, tracked_accounts: tracked.length, accounts: accounts.length, data_completeness: completeness };
+    const diagnostics = { ...adjDiag, charter_file: charterFile, track_type, deltas, harvest: { current: allocation.harvest, snapshot_growth: harvest.current, accounts_read: allocation.accountsWithWithdrawalData }, allocation: { notes: allocation.notes, income_funds_moved: allocation.incomeFundsMoved, income_funds_on_file: allocation.incomeFundsOnFile, cash_value_added: allocation.cashValueAdded, real_estate_added: allocation.realEstateAdded }, tracked_accounts: tracked.length, accounts: accounts.length, data_completeness: completeness };
     const logic = [
       `Document type: ${mode === "survey" ? "Sovereignty Survey (no ratified Charter on file)" : "Quarterly Review (ratified Charter)"}. Records on file for ${completeness.onFile}/${completeness.total} areas${completeness.missing.length ? ` (not yet on file: ${completeness.missing.join(", ")})` : ""}.`,
       `Statuses are computed from live records: ${cards.map((c) => `${c.label} = ${c.status}`).join("; ")}.`,
