@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   accountSuffix,
+  autoFileBlocker,
   buildProposedFilename,
   normalizePersonName,
   resolvePrimaryAdultName,
@@ -185,5 +186,20 @@ describe("fetchWithVertexRetry maxRetries", () => {
     vi.stubGlobal("fetch", fetchMock);
     expect((await fetchWithVertexRetry("https://x", {}, { maxRetries: 0 })).status).toBe(503);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("autoFileBlocker", () => {
+  const ok = { documentType: "InvestmentStatement", documentDate: "2026-09-30", subjectFirstName: "Colleen", subjectLastName: "Jerczynski", accountNumber: "1819071078", categorySlug: "investments" };
+  it("allows a fully-read statement", () => expect(autoFileBlocker(ok)).toBeNull());
+  it("allows tax slips without an account number", () => expect(autoFileBlocker({ ...ok, documentType: "T4", accountNumber: null, categorySlug: "tax" })).toBeNull());
+  it("always sends identity, legal and other documents to staff", () => {
+    for (const t of ["DriversLicense", "Will", "TrustDeed", "CorrespondenceLetter", "Other"]) expect(autoFileBlocker({ ...ok, documentType: t })).not.toBeNull();
+  });
+  it("requires everything to be read off the document", () => {
+    expect(autoFileBlocker({ ...ok, documentDate: null })).toMatch(/date/);
+    expect(autoFileBlocker({ ...ok, subjectLastName: null })).toMatch(/name/);
+    expect(autoFileBlocker({ ...ok, categorySlug: null })).toMatch(/category/);
+    expect(autoFileBlocker({ ...ok, accountNumber: "12" })).toMatch(/account number/);
   });
 });

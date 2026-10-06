@@ -71,3 +71,40 @@ export function resolvePrimaryAdultName(
   const pick = adults[0] ?? contacts[0];
   return pick ? { firstName: pick.first_name, lastName: pick.last_name } : null;
 }
+
+/** Document types that may be filed without review, and whether they must carry an account/policy number. */
+const AUTO_FILE_TYPES: Record<string, { needsAccountNumber: boolean }> = {
+  InvestmentStatement: { needsAccountNumber: true },
+  AccountStatement: { needsAccountNumber: true },
+  BankStatement: { needsAccountNumber: true },
+  MortgageStatement: { needsAccountNumber: true },
+  InsuranceStatement: { needsAccountNumber: true },
+  InsurancePolicy: { needsAccountNumber: true },
+  T4: { needsAccountNumber: false },
+  T5: { needsAccountNumber: false },
+  TaxReturn: { needsAccountNumber: false },
+  NoticeOfAssessment: { needsAccountNumber: false },
+};
+
+/**
+ * Whether a classified Shoebox file is certain enough to be renamed and filed with no human
+ * review. Deliberately strict: every fact must have been read off the document (no fallback
+ * date or name), the category must be valid, and identity/legal/estate/correspondence/"Other"
+ * documents always go to a person. Returns null when eligible, otherwise the reason it isn't.
+ */
+export function autoFileBlocker(c: {
+  documentType: string;
+  documentDate: string | null;       // as read from the document
+  subjectFirstName: string | null;   // as read from the document (not a fallback)
+  subjectLastName: string | null;
+  accountNumber: string | null;
+  categorySlug: string | null;       // already validated against live templates
+}): string | null {
+  const rule = AUTO_FILE_TYPES[c.documentType];
+  if (!rule) return `${c.documentType} is always reviewed by staff`;
+  if (!c.categorySlug) return "no confident category";
+  if (!c.documentDate) return "no date printed on the document";
+  if (!c.subjectFirstName || !c.subjectLastName) return "name not printed on the document";
+  if (rule.needsAccountNumber && !accountSuffix(c.accountNumber)) return "no account number found";
+  return null;
+}
