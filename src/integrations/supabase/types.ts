@@ -2068,6 +2068,8 @@ export type Database = {
           id: string
           income_funds_as_of: string | null
           income_funds_value: number | null
+          income_withdrawals_as_of: string | null
+          income_withdrawals_ytd: number | null
           notes: string | null
           source_file: string | null
           status: string
@@ -2090,6 +2092,8 @@ export type Database = {
           id?: string
           income_funds_as_of?: string | null
           income_funds_value?: number | null
+          income_withdrawals_as_of?: string | null
+          income_withdrawals_ytd?: number | null
           notes?: string | null
           source_file?: string | null
           status?: string
@@ -2112,6 +2116,8 @@ export type Database = {
           id?: string
           income_funds_as_of?: string | null
           income_funds_value?: number | null
+          income_withdrawals_as_of?: string | null
+          income_withdrawals_ytd?: number | null
           notes?: string | null
           source_file?: string | null
           status?: string
@@ -6360,6 +6366,8 @@ export type Database = {
           id: string
           income_funds_as_of: string | null
           income_funds_value: number | null
+          income_withdrawals_as_of: string | null
+          income_withdrawals_ytd: number | null
           notes: string | null
           updated_at: string
           visibility_scope: Database["public"]["Enums"]["visibility_scope"]
@@ -6377,6 +6385,8 @@ export type Database = {
           id?: string
           income_funds_as_of?: string | null
           income_funds_value?: number | null
+          income_withdrawals_as_of?: string | null
+          income_withdrawals_ytd?: number | null
           notes?: string | null
           updated_at?: string
           visibility_scope?: Database["public"]["Enums"]["visibility_scope"]
@@ -6394,6 +6404,8 @@ export type Database = {
           id?: string
           income_funds_as_of?: string | null
           income_funds_value?: number | null
+          income_withdrawals_as_of?: string | null
+          income_withdrawals_ytd?: number | null
           notes?: string | null
           updated_at?: string
           visibility_scope?: Database["public"]["Enums"]["visibility_scope"]
