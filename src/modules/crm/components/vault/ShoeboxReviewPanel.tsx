@@ -6,7 +6,8 @@ import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Badge } from "@/shared/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
-import { Loader2, FileCheck, FileX, ScanLine, FileQuestion } from "lucide-react";
+import { Switch } from "@/shared/components/ui/switch";
+import { Loader2, FileCheck, FileX, ScanLine, FileQuestion, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
 const FUNCTIONS_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/vault-service`;
@@ -35,6 +36,14 @@ interface ShoeboxProposal {
   proposed_name: string;
   proposed_category_slug: string | null;
   contacts: { full_name: string | null; first_name: string; last_name: string } | null;
+}
+
+interface AutoFiledRow {
+  id: string;
+  original_name: string;
+  proposed_name: string;
+  proposed_category_slug: string | null;
+  auto_filed_at: string;
 }
 
 interface FolderTemplate {
@@ -153,6 +162,42 @@ export default function ShoeboxReviewPanel({ householdId }: { householdId: strin
     },
   });
 
+  const { data: autoFiled = [] } = useQuery({
+    queryKey: ["shoebox-auto-filed", householdId],
+    queryFn: async () => ((await callVault("listShoeboxAutoFiled", { householdId })).filed ?? []) as AutoFiledRow[],
+  });
+
+  const { data: autoEnabled = false } = useQuery({
+    queryKey: ["shoebox-auto-enabled", householdId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("households").select("shoebox_auto_file_enabled").eq("id", householdId).maybeSingle();
+      if (error) throw error;
+      return !!(data as { shoebox_auto_file_enabled?: boolean } | null)?.shoebox_auto_file_enabled;
+    },
+  });
+
+  const toggleAuto = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const { error } = await supabase.from("households").update({ shoebox_auto_file_enabled: enabled } as never).eq("id", householdId);
+      if (error) throw error;
+    },
+    onSuccess: (_d, enabled) => {
+      toast.success(enabled ? "Auto-file on for this household" : "Auto-file off for this household");
+      queryClient.invalidateQueries({ queryKey: ["shoebox-auto-enabled", householdId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const undo = useMutation({
+    mutationFn: (proposalId: string) => callVault("undoShoeboxAutoFile", { proposalId }),
+    onSuccess: () => {
+      toast.success("Put back in the Shoebox under its original name");
+      queryClient.invalidateQueries({ queryKey: ["shoebox-auto-filed", householdId] });
+      queryClient.invalidateQueries({ queryKey: ["vault"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const scanShoebox = async () => {
     setScanning(true);
     try {
@@ -173,6 +218,10 @@ export default function ShoeboxReviewPanel({ householdId }: { householdId: strin
           Shoebox review
           {proposals.length > 0 && <Badge>{proposals.length} pending</Badge>}
         </CardTitle>
+        <label className="ml-auto flex items-center gap-2 text-xs text-muted-foreground" title="Automatically rename and file statements and tax slips when every detail is read off the document. Everything else waits for your review.">
+          Auto-file
+          <Switch checked={autoEnabled} onCheckedChange={(v) => toggleAuto.mutate(v)} disabled={toggleAuto.isPending} />
+        </label>
         <Button size="sm" variant="outline" onClick={scanShoebox} disabled={scanning}>
           {scanning ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <ScanLine className="h-4 w-4 mr-1" />}
           Scan Shoebox
@@ -188,6 +237,22 @@ export default function ShoeboxReviewPanel({ householdId }: { householdId: strin
           </p>
         ) : (
           proposals.map((p) => <ProposalRow key={p.id} proposal={p} templates={templates} />)
+        )}
+        {autoFiled.length > 0 && (
+          <div className="space-y-2 border-t pt-3">
+            <p className="text-xs font-medium text-muted-foreground">Auto-filed in the last 14 days</p>
+            {autoFiled.map((f) => (
+              <div key={f.id} className="flex items-center justify-between gap-2 rounded border p-2 text-sm">
+                <div className="min-w-0">
+                  <div className="truncate">{f.proposed_name}</div>
+                  <div className="truncate text-xs text-muted-foreground">was {f.original_name} · {f.proposed_category_slug ?? "Shoebox"}</div>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => undo.mutate(f.id)} disabled={undo.isPending}>
+                  <Undo2 className="h-4 w-4 mr-1" /> Undo
+                </Button>
+              </div>
+            ))}
+          </div>
         )}
       </CardContent>
     </Card>

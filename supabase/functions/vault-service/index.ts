@@ -21,6 +21,7 @@ import { checkOutboundPii } from "../_shared/pii-shield.ts";
 import { validateProSession } from "../_shared/pro-portal-auth.ts";
 import { parseServiceAccountKey } from "../_shared/vertex-ai.ts";
 import { classifyShoeboxFile, buildProposedFilename, resolvePrimaryAdultName } from "../_shared/vault-shoebox-classify.ts";
+import { autoFileBlocker, isSignedCopy, uniqueFilename } from "../_shared/vault-shoebox-naming.ts";
 import { driveDownloadFile, matchVaultCategoryFolder } from "../_shared/vault-provisioning.ts";
 import { logActionEvent } from "../_shared/action-brain.ts";
 
@@ -694,13 +695,21 @@ async function classifyAndStoreShoeboxProposal(params: {
   householdId: string;
   contactId: string | null;
   uploadedAt: Date;
-}): Promise<boolean> {
+}): Promise<{ proposalId: string | null; autoBlocker: string | null; proposedName: string; categorySlug: string | null } | null> {
   const { driveId, fileName, mimeType, accessToken, householdId, contactId, uploadedAt } = params;
 
   const sa = await parseServiceAccountKey(Deno.env.get("GCP_SERVICE_ACCOUNT_KEY"));
   const fileBytes = await driveDownloadFile(driveId, accessToken);
   const classification = await classifyShoeboxFile(sa, fileBytes, mimeType, fileName);
-  if (!classification) return false; // unsupported mime/size -- leave for manual triage
+  if (!classification) return null; // unsupported mime/size -- leave for manual triage
+
+  // Facts read off the document itself, captured before any fallback fills a gap -- auto-filing
+  // may only rely on these.
+  const readFromDocument = {
+    date: classification.document_date,
+    first: classification.document_subject_first_name,
+    last: classification.document_subject_last_name,
+  };
 
   // Resolve a subject name: AI-extracted -> the uploader's own contact -> the household's primary adult.
   let firstName = classification.document_subject_first_name;
@@ -737,7 +746,7 @@ async function classifyAndStoreShoeboxProposal(params: {
     ? (classification.other_label || "Other")
     : classification.document_type;
 
-  const proposedName = buildProposedFilename({
+  const baseName = buildProposedFilename({
     documentDate: classification.document_date,
     uploadedAt,
     lastName: lastName || "Client",
@@ -745,9 +754,31 @@ async function classifyAndStoreShoeboxProposal(params: {
     documentTypeLabel,
     originalExt,
     accountNumber: classification.account_number,
+    signed: isSignedCopy(fileName),
   });
 
-  const { error } = await supabaseAdmin.from("vault_shoebox_proposals").insert({
+  // Never propose a name already in use in this household (pending/approved proposals or filed files):
+  // two same-day, same-type, same-account documents would otherwise get identical names.
+  const [{ data: takenProposals }, { data: takenFiles }] = await Promise.all([
+    supabaseAdmin.from("vault_shoebox_proposals").select("proposed_name").eq("household_id", householdId).in("status", ["pending", "approved"]),
+    supabaseAdmin.from("vault_files").select("name").eq("household_id", householdId).eq("is_folder", false).ilike("name", `${baseName.replace(/\.[^.]*$/, "").replace(/[\\%_]/g, "\\$&")}%`),
+  ]);
+  const proposedName = uniqueFilename(baseName, [
+    ...(takenProposals ?? []).map((r) => r.proposed_name as string),
+    ...(takenFiles ?? []).map((r) => r.name as string),
+  ]);
+  const renamedForUniqueness = proposedName !== baseName;
+
+  const autoBlocker = renamedForUniqueness ? "name already in use -- possible duplicate" : autoFileBlocker({
+    documentType: classification.document_type,
+    documentDate: readFromDocument.date,
+    subjectFirstName: readFromDocument.first,
+    subjectLastName: readFromDocument.last,
+    accountNumber: classification.account_number,
+    categorySlug,
+  });
+
+  const { data: inserted, error } = await supabaseAdmin.from("vault_shoebox_proposals").insert({
     drive_id: driveId,
     household_id: householdId,
     contact_id: contactId,
@@ -759,13 +790,193 @@ async function classifyAndStoreShoeboxProposal(params: {
     document_subject_last_name: classification.document_subject_last_name,
     proposed_name: proposedName,
     proposed_category_slug: categorySlug,
-  });
+  }).select("id").maybeSingle();
   // 23505 = unique violation on the pending-per-drive_id index -- the live
   // upload trigger and a manual scan racing on the same file is harmless; a
   // proposal exists either way, just not the one this call tried to insert.
   // deno-lint-ignore no-explicit-any
   if (error && (error as any).code !== "23505") throw error;
-  return true;
+  return { proposalId: inserted?.id ?? null, autoBlocker, proposedName, categorySlug };
+}
+
+// Renames + moves one Shoebox file per a proposal, and mirrors it into vault_files. Shared by the
+// staff approve action and the scheduled auto-file. Returns an error object instead of a Response.
+async function fileShoeboxProposal(
+  // deno-lint-ignore no-explicit-any
+  proposal: any, finalName: string, finalCategorySlug: string | null, accessToken: string, opts: { auto?: boolean } = {},
+): Promise<{ ok: true; moving: boolean } | { ok: false; status: number; error: string }> {
+  // Fetch live Drive state first -- never trust a cached parent id as removeParents.
+  const metaRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${proposal.drive_id}?fields=id,name,mimeType,size,modifiedTime,parents,trashed`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!metaRes.ok)
+    return { ok: false, status: 404, error: "drive_file_not_found" };
+  const meta = await metaRes.json();
+  if (meta.trashed)
+    return { ok: false, status: 409, error: "file_trashed" };
+  const currentParents: string[] = meta.parents ?? [];
+
+  let destFolderId: string | null = null;
+  if (finalCategorySlug) {
+    const { data: tmpl } = await supabaseAdmin
+      .from("vault_folder_templates").select("display_name").eq("slug", finalCategorySlug).eq("is_active", true).maybeSingle();
+    if (!tmpl)
+      return { ok: false, status: 400, error: "invalid_category_slug" };
+    const { data: hh } = await supabaseAdmin
+      .from("households").select("vault_root_folder_id").eq("id", proposal.household_id).maybeSingle();
+    if (!hh?.vault_root_folder_id)
+      return { ok: false, status: 400, error: "household_no_vault" };
+    const rootChildren = await driveListChildren(hh.vault_root_folder_id, accessToken);
+    const destFolder = matchVaultCategoryFolder(rootChildren, tmpl.display_name);
+    if (!destFolder)
+      return { ok: false, status: 404, error: "category_folder_not_found" };
+    destFolderId = destFolder.id;
+  }
+
+  const moving = !!destFolderId && !currentParents.includes(destFolderId);
+  const patchUrl = new URL(`https://www.googleapis.com/drive/v3/files/${proposal.drive_id}`);
+  if (moving) {
+    patchUrl.searchParams.set("addParents", destFolderId!);
+    patchUrl.searchParams.set("removeParents", currentParents.join(","));
+  }
+  const patchRes = await fetch(patchUrl.toString(), {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ name: finalName }),
+  });
+  if (!patchRes.ok) throw new Error(`shoebox_file_patch_failed: ${await patchRes.text()}`);
+
+  const finalParentId = moving ? destFolderId! : (currentParents[0] ?? proposal.drive_id);
+  const newAncestors = [finalParentId, ...(await getAncestors(finalParentId, accessToken))];
+  // vault_files.contact_id is NOT NULL -- a backlog file discovered via
+  // scanShoebox (no known uploader) needs a fallback, same primary-adult
+  // resolution used for the filename's subject-name fallback.
+  let cacheContactId = proposal.contact_id;
+  if (!cacheContactId) {
+    const { data: members } = await supabaseAdmin
+      .from("contacts").select("id, family_role").eq("household_id", proposal.household_id);
+    const PRIORITY: Record<string, number> = { head_of_family: 0, spouse: 1 };
+    const adults = (members ?? [])
+      .filter((m) => m.family_role && m.family_role in PRIORITY)
+      .sort((a, b) => PRIORITY[a.family_role!] - PRIORITY[b.family_role!]);
+    cacheContactId = (adults[0] ?? members?.[0])?.id ?? null;
+  }
+  if (!cacheContactId)
+    return { ok: false, status: 400, error: "household_has_no_contacts" };
+  // Auto-filed files keep any visibility staff already set and are NOT marked staff-reviewed.
+  let clientVisible = true;
+  if (opts.auto) {
+    const { data: existing } = await supabaseAdmin.from("vault_files").select("client_visible").eq("drive_id", proposal.drive_id).maybeSingle();
+    if (existing && existing.client_visible === false) clientVisible = false;
+  }
+  const { error: upsertErr } = await supabaseAdmin.from("vault_files").upsert({
+    drive_id: proposal.drive_id,
+    household_id: proposal.household_id,
+    contact_id: cacheContactId,
+    parent_folder_id: finalParentId,
+    ancestor_folder_ids: newAncestors,
+    name: finalName,
+    mime_type: meta.mimeType,
+    is_folder: false,
+    size_bytes: meta.size ? Number(meta.size) : null,
+    modified_at: meta.modifiedTime,
+    client_visible: clientVisible,
+    staff_reviewed: !opts.auto,
+  });
+  if (upsertErr) throw upsertErr;
+  return { ok: true, moving };
+}
+
+function timingSafeEqualStr(a: string, b: string): boolean {
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+const AUTO_FILE_MIN_AGE_MS = 3 * 60 * 1000; // leave files alone while they may still be uploading
+const AUTO_FILE_MAX_PER_HOUSEHOLD = 5;
+const AUTO_FILE_MAX_TOTAL = 20;
+
+// Scheduled Shoebox pass for households that opted in (shoebox_auto_file_enabled). Classifies each new
+// file; renames and files it only when autoFileBlocker says every fact was read off the document.
+// Anything else is left as a pending proposal for staff. Never throws for a single bad file.
+async function runShoeboxAutoFile(accessToken: string) {
+  const summary = { households: 0, scanned: 0, filed: 0, left_for_review: 0, errors: 0 };
+  const { data: households } = await supabaseAdmin
+    .from("households").select("id, label, vault_root_folder_id")
+    .eq("shoebox_auto_file_enabled", true).not("vault_root_folder_id", "is", null);
+  let budget = AUTO_FILE_MAX_TOTAL;
+  for (const hh of households ?? []) {
+    if (budget <= 0) break;
+    summary.households++;
+    try {
+      const shoeboxId = await getShoeboxFolderId(hh.id, hh.vault_root_folder_id!, accessToken);
+      if (!shoeboxId) continue;
+      const children = (await driveListChildren(shoeboxId, accessToken))
+        .filter((f: any) => f.mimeType !== "application/vnd.google-apps.folder");
+      if (!children.length) continue;
+      // Any proposal ever made for a file (pending, approved, rejected) means a human or earlier run has dealt with it.
+      const { data: seen } = await supabaseAdmin
+        .from("vault_shoebox_proposals").select("drive_id").eq("household_id", hh.id)
+        .in("drive_id", children.map((f: any) => f.id));
+      const seenIds = new Set((seen ?? []).map((r) => r.drive_id));
+      const now = Date.now();
+      const fresh = children
+        .filter((f: any) => !seenIds.has(f.id))
+        .filter((f: any) => !f.createdTime || now - new Date(f.createdTime).getTime() >= AUTO_FILE_MIN_AGE_MS)
+        .slice(0, Math.min(AUTO_FILE_MAX_PER_HOUSEHOLD, budget));
+      let filedHere = 0;
+      let heldHere = 0;
+      for (const f of fresh) {
+        budget--;
+        summary.scanned++;
+        try {
+          const stored = await classifyAndStoreShoeboxProposal({
+            driveId: f.id, fileName: f.name, mimeType: f.mimeType, accessToken,
+            householdId: hh.id, contactId: null,
+            uploadedAt: f.createdTime ? new Date(f.createdTime) : new Date(),
+          });
+          if (!stored?.proposalId) continue;
+          if (stored.autoBlocker) { summary.left_for_review++; heldHere++; continue; }
+          const { data: proposal } = await supabaseAdmin
+            .from("vault_shoebox_proposals").select("*").eq("id", stored.proposalId).maybeSingle();
+          if (!proposal || proposal.status !== "pending") continue;
+          const filed = await fileShoeboxProposal(proposal, proposal.proposed_name, proposal.proposed_category_slug, accessToken, { auto: true });
+          if (!filed.ok) { summary.left_for_review++; heldHere++; console.error(`vault-service: auto-file left ${f.id} for review: ${filed.error}`); continue; }
+          const nowIso = new Date().toISOString();
+          await supabaseAdmin.from("vault_shoebox_proposals")
+            .update({ status: "approved", auto_filed: true, auto_filed_at: nowIso, reviewed_at: nowIso })
+            .eq("id", proposal.id).eq("status", "pending");
+          await audit(null, "shoebox_auto_filed", proposal.contact_id, proposal.drive_id, proposal.proposed_name, new Request("https://cron.invalid"), {
+            household_id: hh.id, original_name: proposal.original_name, category_slug: proposal.proposed_category_slug, moved: filed.moving,
+          });
+          // System decision, not a human one: no proposal payload, so it is never treated as feedback or training data.
+          await logActionEvent(supabaseAdmin, {
+            household_id: hh.id, actor_role: "SYSTEM_AGENT", action_type: "shoebox_auto_file", workflow_module: "vault_shoebox",
+            input_context_snapshot: { document_type: proposal.document_type }, human_final_payload: { name: proposal.proposed_name, category_slug: proposal.proposed_category_slug },
+            metadata: { proposal_id: proposal.id },
+          });
+          summary.filed++; filedHere++;
+        } catch (e) {
+          summary.errors++;
+          console.error(`vault-service: auto-file failed for ${f.id}:`, e instanceof Error ? e.message : String(e));
+        }
+      }
+      if (filedHere || heldHere) {
+        await supabaseAdmin.from("staff_notifications").insert({
+          source_type: "vault_upload",
+          title: `${hh.label ?? "A household"}: ${filedHere} Shoebox file(s) auto-filed${heldHere ? `, ${heldHere} need your review` : ""}`,
+          body: "Auto-filed files can be undone from the Shoebox review panel.",
+          link: `/households/${hh.id}`,
+        });
+      }
+    } catch (e) {
+      summary.errors++;
+      console.error(`vault-service: auto-file pass failed for household ${hh.id}:`, e instanceof Error ? e.message : String(e));
+    }
+  }
+  return summary;
 }
 
 function genUnlockCode() {
@@ -882,6 +1093,24 @@ serve(async (req) => {
       link_type: link.link_type,
       client_name: clientName,
     }), { headers: { ...cors, "Content-Type": "application/json" } });
+  }
+
+  // Cron-only: scheduled Shoebox auto-file. Authenticated by a shared secret header (never a user).
+  if (action === "autoFileShoebox") {
+    const expected = Deno.env.get("SHOEBOX_AUTO_FILE_CRON_SECRET") ?? "";
+    const given = req.headers.get("x-shoebox-cron-secret") ?? "";
+    if (!expected || given.length !== expected.length || !timingSafeEqualStr(given, expected)) {
+      return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { ...cors, "Content-Type": "application/json" } });
+    }
+    const token = await getValidGoogleToken();
+    if (!token) return new Response(JSON.stringify({ error: "no_google_token" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+    try {
+      const summary = await runShoeboxAutoFile(token);
+      return new Response(JSON.stringify(summary), { headers: { ...cors, "Content-Type": "application/json" } });
+    } catch (e) {
+      console.error("vault-service: autoFileShoebox failed:", e);
+      return new Response(JSON.stringify({ error: "auto_file_failed" }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
+    }
   }
 
   const actor = await resolveActor(req);
@@ -1801,86 +2030,81 @@ serve(async (req) => {
       if (!proposal || proposal.status !== "pending")
         return new Response(JSON.stringify({ error: "proposal_not_found_or_not_pending" }), { status: 404, headers: { ...cors, "Content-Type": "application/json" } });
 
-      // Fetch live Drive state first -- never trust a cached parent id as removeParents.
-      const metaRes = await fetch(
-        `https://www.googleapis.com/drive/v3/files/${proposal.drive_id}?fields=id,name,mimeType,size,modifiedTime,parents,trashed`,
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      if (!metaRes.ok)
-        return new Response(JSON.stringify({ error: "drive_file_not_found" }), { status: 404, headers: { ...cors, "Content-Type": "application/json" } });
-      const meta = await metaRes.json();
-      if (meta.trashed)
-        return new Response(JSON.stringify({ error: "file_trashed" }), { status: 409, headers: { ...cors, "Content-Type": "application/json" } });
-      const currentParents: string[] = meta.parents ?? [];
-
-      let destFolderId: string | null = null;
-      if (finalCategorySlug) {
-        const { data: tmpl } = await supabaseAdmin
-          .from("vault_folder_templates").select("display_name").eq("slug", finalCategorySlug).eq("is_active", true).maybeSingle();
-        if (!tmpl)
-          return new Response(JSON.stringify({ error: "invalid_category_slug" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
-        const { data: hh } = await supabaseAdmin
-          .from("households").select("vault_root_folder_id").eq("id", proposal.household_id).maybeSingle();
-        if (!hh?.vault_root_folder_id)
-          return new Response(JSON.stringify({ error: "household_no_vault" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
-        const rootChildren = await driveListChildren(hh.vault_root_folder_id, accessToken);
-        const destFolder = matchVaultCategoryFolder(rootChildren, tmpl.display_name);
-        if (!destFolder)
-          return new Response(JSON.stringify({ error: "category_folder_not_found" }), { status: 404, headers: { ...cors, "Content-Type": "application/json" } });
-        destFolderId = destFolder.id;
-      }
-
-      const moving = !!destFolderId && !currentParents.includes(destFolderId);
-      const patchUrl = new URL(`https://www.googleapis.com/drive/v3/files/${proposal.drive_id}`);
-      if (moving) {
-        patchUrl.searchParams.set("addParents", destFolderId!);
-        patchUrl.searchParams.set("removeParents", currentParents.join(","));
-      }
-      const patchRes = await fetch(patchUrl.toString(), {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ name: finalName }),
-      });
-      if (!patchRes.ok) throw new Error(`shoebox_file_patch_failed: ${await patchRes.text()}`);
-
-      const finalParentId = moving ? destFolderId! : (currentParents[0] ?? proposal.drive_id);
-      const newAncestors = [finalParentId, ...(await getAncestors(finalParentId, accessToken))];
-      // vault_files.contact_id is NOT NULL -- a backlog file discovered via
-      // scanShoebox (no known uploader) needs a fallback, same primary-adult
-      // resolution used for the filename's subject-name fallback.
-      let cacheContactId = proposal.contact_id;
-      if (!cacheContactId) {
-        const { data: members } = await supabaseAdmin
-          .from("contacts").select("id, family_role").eq("household_id", proposal.household_id);
-        const PRIORITY: Record<string, number> = { head_of_family: 0, spouse: 1 };
-        const adults = (members ?? [])
-          .filter((m) => m.family_role && m.family_role in PRIORITY)
-          .sort((a, b) => PRIORITY[a.family_role!] - PRIORITY[b.family_role!]);
-        cacheContactId = (adults[0] ?? members?.[0])?.id ?? null;
-      }
-      if (!cacheContactId)
-        return new Response(JSON.stringify({ error: "household_has_no_contacts" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
-      const { error: upsertErr } = await supabaseAdmin.from("vault_files").upsert({
-        drive_id: proposal.drive_id,
-        household_id: proposal.household_id,
-        contact_id: cacheContactId,
-        parent_folder_id: finalParentId,
-        ancestor_folder_ids: newAncestors,
-        name: finalName,
-        mime_type: meta.mimeType,
-        is_folder: false,
-        size_bytes: meta.size ? Number(meta.size) : null,
-        modified_at: meta.modifiedTime,
-        client_visible: true,
-        staff_reviewed: true,
-      });
-      if (upsertErr) throw upsertErr;
+      const filed = await fileShoeboxProposal(proposal, finalName, finalCategorySlug ?? null, accessToken);
+      if (!filed.ok)
+        return new Response(JSON.stringify({ error: filed.error }), { status: filed.status, headers: { ...cors, "Content-Type": "application/json" } });
+      const moving = filed.moving;
 
       await supabaseAdmin.from("vault_shoebox_proposals")
         .update({ status: "approved", reviewed_by: actor.userId, reviewed_at: new Date().toISOString() })
         .eq("id", proposalId);
       await logShoeboxDecision(supabaseAdmin, actor.userId, proposalId, { name: finalName, category_slug: finalCategorySlug ?? null });
       await audit(actor, "shoebox_file_filed", proposal.contact_id, proposal.drive_id, finalName, req, { category_slug: finalCategorySlug ?? null, moved: moving });
+      return new Response(JSON.stringify({ ok: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    if (action === "listShoeboxAutoFiled") {
+      if (actor.kind !== "staff")
+        return new Response(JSON.stringify({ error: "staff_only" }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
+      const { householdId } = body;
+      if (!householdId)
+        return new Response(JSON.stringify({ error: "householdId required" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      const since = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString();
+      const { data: rows, error } = await supabaseAdmin
+        .from("vault_shoebox_proposals")
+        .select("id, original_name, proposed_name, proposed_category_slug, auto_filed_at")
+        .eq("household_id", householdId).eq("auto_filed", true).is("undone_at", null).gte("auto_filed_at", since)
+        .order("auto_filed_at", { ascending: false });
+      if (error) throw error;
+      return new Response(JSON.stringify({ filed: rows ?? [] }), { headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    // Puts an auto-filed file back in the Shoebox under its original name.
+    if (action === "undoShoeboxAutoFile") {
+      if (actor.kind !== "staff")
+        return new Response(JSON.stringify({ error: "staff_only" }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
+      const { proposalId } = body;
+      if (!proposalId)
+        return new Response(JSON.stringify({ error: "missing_fields" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      const { data: proposal } = await supabaseAdmin.from("vault_shoebox_proposals").select("*").eq("id", proposalId).maybeSingle();
+      if (!proposal || !proposal.auto_filed || proposal.undone_at)
+        return new Response(JSON.stringify({ error: "not_an_active_auto_filed_proposal" }), { status: 404, headers: { ...cors, "Content-Type": "application/json" } });
+      const { data: hh } = await supabaseAdmin.from("households").select("vault_root_folder_id").eq("id", proposal.household_id).maybeSingle();
+      if (!hh?.vault_root_folder_id)
+        return new Response(JSON.stringify({ error: "household_no_vault" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      const shoeboxId = await getShoeboxFolderId(proposal.household_id, hh.vault_root_folder_id, accessToken);
+      if (!shoeboxId)
+        return new Response(JSON.stringify({ error: "shoebox_not_found" }), { status: 404, headers: { ...cors, "Content-Type": "application/json" } });
+      const metaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${proposal.drive_id}?fields=id,name,mimeType,size,modifiedTime,parents,trashed`, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!metaRes.ok)
+        return new Response(JSON.stringify({ error: "drive_file_not_found" }), { status: 404, headers: { ...cors, "Content-Type": "application/json" } });
+      const meta = await metaRes.json();
+      if (meta.trashed)
+        return new Response(JSON.stringify({ error: "file_trashed" }), { status: 409, headers: { ...cors, "Content-Type": "application/json" } });
+      const parents: string[] = meta.parents ?? [];
+      const url = new URL(`https://www.googleapis.com/drive/v3/files/${proposal.drive_id}`);
+      if (!parents.includes(shoeboxId)) {
+        url.searchParams.set("addParents", shoeboxId);
+        if (parents.length) url.searchParams.set("removeParents", parents.join(","));
+      }
+      const res = await fetch(url.toString(), {
+        method: "PATCH", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ name: proposal.original_name }),
+      });
+      if (!res.ok) throw new Error(`shoebox_undo_failed: ${await res.text()}`);
+      await supabaseAdmin.from("vault_files").update({
+        name: proposal.original_name, parent_folder_id: shoeboxId,
+        ancestor_folder_ids: [shoeboxId, ...(await getAncestors(shoeboxId, accessToken))],
+      }).eq("drive_id", proposal.drive_id);
+      await supabaseAdmin.from("vault_shoebox_proposals").update({ undone_at: new Date().toISOString(), status: "rejected", reviewed_by: actor.userId }).eq("id", proposalId);
+      // A human reversing the system's decision IS feedback: proposed = what it did, final = the original state.
+      await logActionEvent(supabaseAdmin, {
+        household_id: proposal.household_id, actor_id: actor.userId, actor_role: "ADVISOR", action_type: "shoebox_undo_auto_file", workflow_module: "vault_shoebox",
+        input_context_snapshot: { document_type: proposal.document_type, other_label: proposal.other_label },
+        system_proposed_payload: { name: proposal.proposed_name, category_slug: proposal.proposed_category_slug ?? null },
+        human_final_payload: { decision: "undone" }, rejected: true, metadata: { proposal_id: proposalId },
+      });
+      await audit(actor, "shoebox_auto_file_undone", proposal.contact_id, proposal.drive_id, proposal.original_name, req, {});
       return new Response(JSON.stringify({ ok: true }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
 

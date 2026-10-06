@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   accountSuffix,
+  autoFileBlocker,
+  uniqueFilename,
+  isSignedCopy,
   buildProposedFilename,
   normalizePersonName,
   resolvePrimaryAdultName,
@@ -185,5 +188,44 @@ describe("fetchWithVertexRetry maxRetries", () => {
     vi.stubGlobal("fetch", fetchMock);
     expect((await fetchWithVertexRetry("https://x", {}, { maxRetries: 0 })).status).toBe(503);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("autoFileBlocker", () => {
+  const ok = { documentType: "InvestmentStatement", documentDate: "2026-09-30", subjectFirstName: "Colleen", subjectLastName: "Jerczynski", accountNumber: "1819071078", categorySlug: "investments" };
+  it("allows a fully-read statement", () => expect(autoFileBlocker(ok)).toBeNull());
+  it("allows tax slips without an account number", () => expect(autoFileBlocker({ ...ok, documentType: "T4", accountNumber: null, categorySlug: "tax" })).toBeNull());
+  it("always sends identity, legal and other documents to staff", () => {
+    for (const t of ["DriversLicense", "Will", "TrustDeed", "CorrespondenceLetter", "Other"]) expect(autoFileBlocker({ ...ok, documentType: t })).not.toBeNull();
+  });
+  it("requires everything to be read off the document", () => {
+    expect(autoFileBlocker({ ...ok, documentDate: null })).toMatch(/date/);
+    expect(autoFileBlocker({ ...ok, subjectLastName: null })).toMatch(/name/);
+    expect(autoFileBlocker({ ...ok, categorySlug: null })).toMatch(/category/);
+    expect(autoFileBlocker({ ...ok, accountNumber: "12" })).toMatch(/account number/);
+  });
+});
+
+describe("uniqueFilename", () => {
+  it("leaves a free name alone", () => expect(uniqueFilename("a.pdf", ["b.pdf"])).toBe("a.pdf"));
+  it("adds _2, _3 before the extension, ignoring case", () => {
+    expect(uniqueFilename("A.pdf", ["a.PDF"])).toBe("A_2.pdf");
+    expect(uniqueFilename("a.pdf", ["a.pdf", "a_2.pdf"])).toBe("a_3.pdf");
+  });
+  it("handles names with no extension", () => expect(uniqueFilename("note", ["note"])).toBe("note_2"));
+});
+
+describe("signed copies", () => {
+  it("detects signed but not unsigned", () => {
+    expect(isSignedCopy("Master VFO Client Engagement Agreement - signed.pdf")).toBe(true);
+    expect(isSignedCopy("Will Keith signed 2023 _0088_.pdf")).toBe(true);
+    expect(isSignedCopy("Agreement - unsigned.pdf")).toBe(false);
+    expect(isSignedCopy("Agreement.pdf")).toBe(false);
+  });
+  it("appends _Signed after the account suffix", () => {
+    const base = { documentDate: "2023-01-17", uploadedAt: new Date("2026-10-01T00:00:00Z"), lastName: "Jerczynski", firstInitial: "K", documentTypeLabel: "Will", originalExt: ".pdf" };
+    expect(buildProposedFilename({ ...base, signed: true })).toBe("23-01-17_Jerczynski_K-Will_Signed.pdf");
+    expect(buildProposedFilename({ ...base, accountNumber: "ABC-1234", signed: true })).toBe("23-01-17_Jerczynski_K-Will_1234_Signed.pdf");
+    expect(buildProposedFilename(base)).toBe("23-01-17_Jerczynski_K-Will.pdf");
   });
 });
