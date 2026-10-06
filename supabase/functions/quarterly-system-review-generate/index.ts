@@ -364,7 +364,16 @@ serve(async (req) => {
         documentsFiled: folderFiled(missingDocs, "estate", vaultBased),
       },
       tax: { documentsFiled: folderFiled(missingDocs, "tax", vaultBased) },
-      liabilities: { personal: diag.personal_liabilities_total, corporate: diag.corp_liabilities_total, overdueLoans: loanFlags.length },
+      liabilities: {
+        personal: diag.personal_liabilities_total, corporate: diag.corp_liabilities_total, overdueLoans: loanFlags.length,
+        // Credit limit minus balance on HELOCs, credit cards and lines of credit that have a limit recorded.
+        revolving: (() => {
+          const rows = (financials.liabilities as any[]).filter((r) => ["heloc", "credit_card", "line_of_credit"].includes(r.liability_type) && Number(r.credit_limit) > 0);
+          const limit = rows.reduce((s, r) => s + Number(r.credit_limit), 0);
+          const available = rows.reduce((s, r) => s + Math.max(0, Number(r.credit_limit) - (Number(r.current_balance) || 0)), 0);
+          return rows.length ? { limit, available } : null;
+        })(),
+      },
       documents: {
         percent: diag.document_readiness.percent, satisfied: diag.document_readiness.criticalSatisfied,
         total: diag.document_readiness.criticalTotal, missing: missingDocs.map((m) => m.replace(/\s*\(.*$/, "")),
