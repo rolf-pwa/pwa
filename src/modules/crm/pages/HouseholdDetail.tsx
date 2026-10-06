@@ -1075,9 +1075,9 @@ const HouseholdDetail = () => {
                         Q
                       </div>
                       <div className="flex-1 space-y-1.5">
-                        <p className="text-sm font-medium text-foreground">Quarterly Review</p>
+                        <p className="text-sm font-medium text-foreground">Sovereignty Review</p>
                         <p className="text-xs text-muted-foreground">
-                          Check investments, reserves, insurance, estate and tax against the Charter and plan the next 90 days.
+                          A Quarterly Review for chartered households, or a Sovereignty Survey from the records on file when there is no Charter yet.
                         </p>
                         <QuarterlySystemReviewButton householdId={id} />
                       </div>

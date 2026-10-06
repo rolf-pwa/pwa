@@ -10,7 +10,7 @@ import { z } from "https://esm.sh/zod@3.25.76";
 import { GEMINI_GOVERNANCE_MODEL, generateVertexContent, parseServiceAccountKey, withThinking } from "../_shared/vertex-ai.ts";
 import { computeSovereigntyDiagnostics } from "../_shared/sovereignty-diagnostics.ts";
 import {
-  buildAlignmentCards, computeDeltas, overallAlignment, quarterLabel, type ReviewCard, type ReviewFacts,
+  buildAlignmentCards, computeDeltas, dataCompleteness, overallAlignment, quarterLabel, reviewMode, type ReviewCard, type ReviewFacts, type ReviewMode,
 } from "../_shared/quarterly-review-cards.ts";
 
 const ALLOWED_ORIGINS = [
@@ -87,12 +87,36 @@ Your job: draft ONLY the narrative fields. **Never invent, recompute or alter a 
 ## Output
 Call populate_quarterly_review with all fields filled.`;
 
+const SURVEY_PROMPT = `You are drafting the narrative portions of a ProsperWise **Sovereignty Survey** for an EXISTING client household that does not yet have a ratified Sovereignty Charter. The Survey takes what ProsperWise already has on file about the household -- investments, reserves, insurance, estate and tax records, liabilities -- and shows, in the household's own numbers, what is and isn't governed today, and what a written Charter would add. Rolf Issler will walk the client through it.
+
+You will receive verified, already-computed facts: figures, a status and one-line detail for each area, and a list of areas with no records on file. These are final and correct.
+
+Your job: draft ONLY the narrative fields. **Never invent, recompute or alter a dollar figure, percentage or status.**
+
+## Rules
+- Sanctuary voice: calm, direct, respectful, never salesy, never alarmist, no exclamation marks. This is an invitation to see their situation clearly, not a pitch.
+- A missing record is NOT a finding. For any area listed as "not yet on file" say it has not been assessed or recorded yet -- never imply the client is exposed or unprotected there. Only areas with a "Needs Attention" or "Partial" status are real gaps.
+- review_summary: 1-2 sentences on what ProsperWise can see of the household's system today and how complete that picture is.
+- charter_alignment: 3-4 sentences on what a Sovereignty Charter would govern for THIS household: use their actual figures and the specific gaps in the statuses (for example reserves with no written purpose, estate documents not reviewed, accounts not tracked). Describe the value concretely; do not use generic marketing language and do not promise outcomes.
+- urgency_flag: ONE sentence naming the single most useful thing to settle first.
+- Action plan: 2-4 concrete items for EACH phase, grounded only in the facts and statuses:
+  - Phase 1 (Immediate, Days 1-30): complete and verify the household's records and close any protective gaps.
+  - Phase 2 (Structural Purification, Days 31-60): clarify the structure the Charter will rest on (reserves, estate documents, accounts).
+  - Phase 3 (Governance Ratification, Days 61-90): draft and ratify the Charter and set the quarterly review cadence.
+  - Each item: a short title (max ~50 characters) and one supporting sentence.
+- Never quote internal field names or raw scores. Keep every field concise.
+
+## Output
+Call populate_quarterly_review with all fields filled.`;
+
 function factsBlock(o: {
   household: string; family: string; period: string; track: string; today: string;
   diag: any; cards: ReviewCard[]; deltas: any; charter: any; harvest: { boy: number; current: number };
+  mode: ReviewMode; notOnFile: string[];
 }): string {
   const lines = [
-    `Household: ${o.household} (family: ${o.family}). Review period: ${o.period}. Date: ${o.today}. Track: ${o.track}.`,
+    `Household: ${o.household} (family: ${o.family}). Review period: ${o.period}. Date: ${o.today}. Track: ${o.track}. Document: ${o.mode === "survey" ? "Sovereignty Survey (no ratified Charter)" : "Quarterly Review (chartered household)"}.`,
+    o.notOnFile.length ? `Areas with no records on file yet (not findings): ${o.notOnFile.join("; ")}.` : "All reviewed areas have records on file.",
     `Total assets (AUM): ${money(o.diag.aum)}; Holding Tank ${money(o.diag.holding_tank_total)}; Vineyard ${money(o.diag.vineyard_total)}.`,
     `Storehouse reserves -- Liquidity ${money(o.diag.storehouse_reserves?.liquidity ?? 0)}, Strategic ${money(o.diag.storehouse_reserves?.strategic ?? 0)}, Philanthropic ${money(o.diag.storehouse_reserves?.philanthropic ?? 0)}, Legacy ${money(o.diag.storehouse_reserves?.legacy ?? 0)}.`,
     `Liabilities: ${money((o.diag.personal_liabilities_total ?? 0) + (o.diag.corp_liabilities_total ?? 0))}. Net worth: ${money(o.diag.net_worth ?? o.diag.aum)}. Insurance coverage: ${money(o.diag.insurance_coverage_total ?? 0)}.`,
@@ -121,7 +145,7 @@ const cleanItems = (arr: unknown) =>
     : [];
 
 /** Rule-based narrative used when the AI is unavailable. */
-function fallbackNarrative(cards: ReviewCard[], overall: ReturnType<typeof overallAlignment>) {
+function fallbackNarrative(cards: ReviewCard[], overall: ReturnType<typeof overallAlignment>, mode: ReviewMode) {
   const attention = cards.filter((c) => c.status === "Needs Attention");
   const partial = cards.filter((c) => c.status === "Partial" || c.status === "Not Assessed");
   const item = (c: ReviewCard) => ({ title: clip(`Resolve: ${c.label}`, 80), detail: clip(c.detail, 300) });
@@ -129,12 +153,16 @@ function fallbackNarrative(cards: ReviewCard[], overall: ReturnType<typeof overa
     review_summary: overall.status === "Aligned"
       ? "Every area reviewed this quarter is in line with the household's system."
       : `${overall.attention} area(s) need attention and ${overall.partial} are partially in place this quarter.`,
-    charter_alignment: "This narrative was generated from rules because the AI drafting step was unavailable. Review each area below against the Charter.",
+    charter_alignment: mode === "survey"
+      ? "This narrative was generated from rules because the AI drafting step was unavailable. The cards below show what ProsperWise has on file; a Charter would add written rules for each area."
+      : "This narrative was generated from rules because the AI drafting step was unavailable. Review each area below against the Charter.",
     urgency_flag: attention[0] ? `Most urgent: ${attention[0].label} -- ${attention[0].detail}` : "No area needs urgent attention this quarter.",
     action_plan: {
       phase_1: attention.slice(0, 3).map(item),
       phase_2: partial.slice(0, 3).map(item),
-      phase_3: [{ title: "Prepare the next quarterly review", detail: "Refresh account values and re-run this review at the start of next quarter." }],
+      phase_3: [mode === "survey"
+        ? { title: "Draft and ratify the Charter", detail: "Write the household's purpose, reserve rules and governance down so the system can be reviewed against it." }
+        : { title: "Prepare the next quarterly review", detail: "Refresh account values and re-run this review at the start of next quarter." }],
     },
   };
 }
@@ -296,18 +324,20 @@ serve(async (req) => {
     const deltas = computeDeltas({ aum: diag.aum, net_worth: diag.net_worth }, prev?.diagnostics ? { aum: prev.diagnostics.aum, net_worth: prev.diagnostics.net_worth, label: prev.period_label } : null);
 
     // ---- Narrative (AI, with a rule-based fallback) ----
-    let narrative = fallbackNarrative(cards, overall);
+    const mode = reviewMode({ source: charterSource, ratified });
+    const completeness = dataCompleteness(facts);
+    let narrative = fallbackNarrative(cards, overall, mode);
     let aiNote = "AI narrative unavailable; rule-based narrative used.";
     try {
       const sa = await parseServiceAccountKey(Deno.env.get("GCP_SERVICE_ACCOUNT_KEY"));
       const result = await generateVertexContent(
         sa, GEMINI_GOVERNANCE_MODEL,
         [
-          { role: "user", parts: [{ text: PROMPT }] },
+          { role: "user", parts: [{ text: mode === "survey" ? SURVEY_PROMPT : PROMPT }] },
           { role: "model", parts: [{ text: "Understood. Provide the household facts and I will draft the narrative." }] },
           { role: "user", parts: [{ text: factsBlock({
             household: diag.household_label, family: diag.family_name, period, track: track_type, today: today.toISOString().slice(0, 10),
-            diag, cards, deltas, charter: charterText, harvest,
+            diag, cards, deltas, charter: charterText, harvest, mode, notOnFile: completeness.missing,
           }) }] },
         ],
         withThinking(GEMINI_GOVERNANCE_MODEL, { temperature: 0.3, maxOutputTokens: 8192 }, "medium"),
@@ -327,8 +357,9 @@ serve(async (req) => {
       console.error("quarterly-system-review-generate: AI step failed:", e instanceof Error ? e.message : String(e));
     }
 
-    const diagnostics = { ...diag, track_type, deltas, harvest, tracked_accounts: tracked.length, accounts: accounts.length };
+    const diagnostics = { ...diag, track_type, deltas, harvest, tracked_accounts: tracked.length, accounts: accounts.length, data_completeness: completeness };
     const logic = [
+      `Document type: ${mode === "survey" ? "Sovereignty Survey (no ratified Charter on file)" : "Quarterly Review (ratified Charter)"}. Records on file for ${completeness.onFile}/${completeness.total} areas${completeness.missing.length ? ` (not yet on file: ${completeness.missing.join(", ")})` : ""}.`,
       `Statuses are computed from live records: ${cards.map((c) => `${c.label} = ${c.status}`).join("; ")}.`,
       `Overall: ${overall.status} (${overall.attention} need attention, ${overall.partial} partial).`,
       `Charter source: ${charterSource ?? "none"}${charterSource ? (ratified ? ", ratified" : ", not ratified") : ""}. Estate statuses come from the advisor-entered fields on the latest Stabilization Map.`,
@@ -340,7 +371,7 @@ serve(async (req) => {
       diagnostics, alignment_cards: cards, action_plan: narrative.action_plan, urgency_flag: narrative.urgency_flag,
       charter_alignment: narrative.charter_alignment, review_summary: narrative.review_summary,
       purpose_statement: charterText.purpose, primary_goal: charterText.mission, long_term_vision: charterText.vision,
-      cross_system_status: overall.status,
+      cross_system_status: overall.status, review_mode: mode,
       footer_note: "Quarterly review to ensure the Charter, assets, reserves, protection and documents remain aligned and governable over the next 90 days.",
       logic_trace: logic, generation_status: "ready", generation_error: null,
     }).eq("id", reviewId);

@@ -12,7 +12,7 @@ import { Textarea } from "@/shared/components/ui/textarea";
 import { useAutoSave, AutoSaveIndicator } from "@/shared/hooks/useAutoSave";
 import pwLogoWhite from "@/assets/prosperwise-logo-white.png";
 
-// Quarterly Review -- same A4 document format as the household Stabilization Map ("Sovereignty Survey"):
+// Quarterly Review / Sovereignty Survey -- same A4 document format as the household Stabilization Map ("Sovereignty Survey"):
 // brand sidebar, summary box, Capital & Asset Protection, status cards, then a 90-day plan on page two.
 
 type ActionItem = { title: string; detail: string };
@@ -29,6 +29,7 @@ type Diag = {
   net_worth?: number;
   insurance_coverage_total?: number;
   deltas?: { aum: number | null; netWorth: number | null; previousLabel: string | null };
+  data_completeness?: { total: number; onFile: number; missing: string[] };
   harvest?: { boy: number; current: number };
   tracked_accounts?: number;
   accounts?: number;
@@ -38,6 +39,7 @@ type Review = {
   id: string;
   household_id: string | null;
   layout_version: number;
+  review_mode: "quarterly" | "survey";
   period_label: string | null;
   client_first_name: string;
   client_last_name: string;
@@ -55,11 +57,18 @@ type Review = {
   logic_trace: string | null;
 };
 
-const PHASES: { key: keyof ActionPlan; label: string; window: string }[] = [
-  { key: "phase_1", label: "Immediate", window: "Days 1–30" },
-  { key: "phase_2", label: "Structural Alignment", window: "Days 31–60" },
-  { key: "phase_3", label: "Governance & Reporting", window: "Days 61–90" },
-];
+const PHASES_BY_MODE: Record<"quarterly" | "survey", { key: keyof ActionPlan; label: string; window: string }[]> = {
+  quarterly: [
+    { key: "phase_1", label: "Immediate", window: "Days 1–30" },
+    { key: "phase_2", label: "Structural Alignment", window: "Days 31–60" },
+    { key: "phase_3", label: "Governance & Reporting", window: "Days 61–90" },
+  ],
+  survey: [
+    { key: "phase_1", label: "Immediate", window: "Days 1–30" },
+    { key: "phase_2", label: "Structural Purification", window: "Days 31–60" },
+    { key: "phase_3", label: "Governance Ratification", window: "Days 61–90" },
+  ],
+};
 
 const STATUS_OPTIONS = ["Aligned", "Partial", "Needs Attention", "Not Assessed"];
 const STATUS_COLOR: Record<string, string> = {
@@ -96,11 +105,11 @@ function StatRow({ label, value, tone }: { label: string; value: string; tone?: 
   );
 }
 
-function PageHeader({ name, period, title }: { name: string; period: string; title: string }) {
+function PageHeader({ kicker, name, period, title }: { kicker: string; name: string; period: string; title: string }) {
   return (
     <div>
       <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "1.5mm" }}>
-        Quarterly Review &nbsp;·&nbsp; Prepared for <strong>{name}</strong>{period && <> &nbsp;·&nbsp; {period}</>}
+        {kicker} &nbsp;·&nbsp; Prepared for <strong>{name}</strong>{period && <> &nbsp;·&nbsp; {period}</>}
       </div>
       <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "18pt", fontWeight: 300, color: "#334155", lineHeight: 1.1 }}>{title}</div>
       <hr style={{ width: "18mm", height: "3px", background: "#a37c58", border: "none", marginTop: "2.5mm" }} />
@@ -196,6 +205,10 @@ export default function QuarterlySystemReview() {
   }
 
   const isLegacy = review.layout_version < 2;
+  const isSurvey = review.review_mode === "survey";
+  const docName = isSurvey ? "Sovereignty Survey" : "Quarterly Review";
+  const PHASES = PHASES_BY_MODE[isSurvey ? "survey" : "quarterly"];
+  const completeness = review.diagnostics?.data_completeness;
   const diag: Diag = review.diagnostics ?? {};
   const cards = review.alignment_cards ?? [];
   const name = `${review.client_first_name} ${review.client_last_name}`.trim();
@@ -211,7 +224,7 @@ export default function QuarterlySystemReview() {
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => navigate(-1)}><ArrowLeft className="mr-1 h-4 w-4" /> Back</Button>
             <div className="text-sm text-[#334155]">
-              <span className="font-semibold">Quarterly Review</span>
+              <span className="font-semibold">{docName}</span>
               {period && <span className="ml-2 text-[#64748b]">{period}</span>}
               <span className="ml-2 text-xs uppercase tracking-wider text-[#a37c58]">{review.generation_status.replace(/_/g, " ")}</span>
             </div>
@@ -254,7 +267,7 @@ export default function QuarterlySystemReview() {
           <div className="rounded-lg border border-[#e2e8f0] bg-white p-4 space-y-3">
             <div><Label>Summary</Label><Textarea rows={3} value={review.review_summary ?? ""} onChange={(e) => patch({ review_summary: e.target.value })} /></div>
             <div><Label>Focus this quarter</Label><Textarea rows={2} value={review.urgency_flag ?? ""} onChange={(e) => patch({ urgency_flag: e.target.value })} /></div>
-            <div><Label>Alignment with the Charter</Label><Textarea rows={4} value={review.charter_alignment ?? ""} onChange={(e) => patch({ charter_alignment: e.target.value })} /></div>
+            <div><Label>{isSurvey ? "What a Charter would govern" : "Alignment with the Charter"}</Label><Textarea rows={4} value={review.charter_alignment ?? ""} onChange={(e) => patch({ charter_alignment: e.target.value })} /></div>
             <div><Label>Footer</Label><Input value={review.footer_note ?? ""} onChange={(e) => patch({ footer_note: e.target.value })} /></div>
           </div>
           <div className="rounded-lg border border-[#e2e8f0] bg-white p-4 space-y-3">
@@ -325,10 +338,10 @@ export default function QuarterlySystemReview() {
             <main style={{ flex: 1, padding: "10mm 10mm 0 10mm", display: "flex", flexDirection: "column", gap: "5mm" }}>
               <div style={{ marginBottom: "3mm" }}>
                 <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "3mm" }}>
-                  Quarterly Review &nbsp;·&nbsp; Prepared for <strong>{name}</strong>{dateLabel && <> &nbsp;·&nbsp; {dateLabel}</>}
+                  {docName} &nbsp;·&nbsp; Prepared for <strong>{name}</strong>{dateLabel && <> &nbsp;·&nbsp; {dateLabel}</>}
                 </div>
                 <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "25pt", fontWeight: 300, color: "#334155", lineHeight: 1.3, letterSpacing: "-0.005em" }}>
-                  Sovereignty Quarterly Review™
+                  {isSurvey ? "Sovereignty Survey™" : "Sovereignty Quarterly Review™"}
                 </div>
                 <hr style={{ width: "18mm", height: "3px", background: "#a37c58", border: "none", marginTop: "4mm" }} />
               </div>
@@ -339,8 +352,8 @@ export default function QuarterlySystemReview() {
               </div>
 
               <div>
-                <div style={colLabel}>Alignment with Your Charter</div>
-                {review.purpose_statement && (
+                <div style={colLabel}>{isSurvey ? "What a Charter Would Govern" : "Alignment with Your Charter"}</div>
+                {!isSurvey && review.purpose_statement && (
                   <p style={{ ...colText, fontStyle: "italic", color: "#64748b", marginBottom: "2mm" }}>“{review.purpose_statement}”</p>
                 )}
                 <p style={colText}>{review.charter_alignment || "—"}</p>
@@ -397,7 +410,7 @@ export default function QuarterlySystemReview() {
 
           {/* Page 2 — 90-Day Plan */}
           <div className="stab-doc-page2 bg-white shadow-lg print:shadow-none mt-6 print:mt-0" style={{ width: "210mm", minHeight: "297mm", padding: "12mm", display: "flex", flexDirection: "column", gap: "5mm", fontFamily: "'DM Sans', sans-serif", color: "#334155", pageBreakBefore: "always", breakBefore: "page" }}>
-            <PageHeader name={name} period={period} title="90-Day Alignment Plan" />
+            <PageHeader kicker={docName} name={name} period={period} title={isSurvey ? "90-Day Sovereignty Plan" : "90-Day Alignment Plan"} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8mm", flex: 1 }}>
               {PHASES.map((ph) => (
                 <div key={ph.key}>
@@ -421,6 +434,13 @@ export default function QuarterlySystemReview() {
               <div style={{ fontSize: "8.5pt", fontWeight: 500 }}>{review.footer_note}</div>
             </div>
           </div>
+
+          {completeness && !editing && (
+            <div className="mt-6 rounded-lg border border-[#e2e8f0] bg-white p-4 text-xs text-[#64748b] print:hidden">
+              <div className="mb-1 font-semibold uppercase tracking-wider text-[#a37c58]">Data on file (staff only)</div>
+              <p>Records exist for {completeness.onFile} of {completeness.total} areas.{completeness.missing.length > 0 && <> Not yet on file: {completeness.missing.join(", ")}. These show as "Not Assessed" and are not findings; add the records and regenerate for a fuller picture.</>}</p>
+            </div>
+          )}
 
           {review.logic_trace && !editing && (
             <div className="mt-6 rounded-lg border border-[#e2e8f0] bg-white p-4 text-xs text-[#64748b] print:hidden">

@@ -8,7 +8,9 @@ ALTER TABLE public.quarterly_system_reviews
   ADD COLUMN IF NOT EXISTS alignment_cards jsonb,
   ADD COLUMN IF NOT EXISTS action_plan jsonb,
   ADD COLUMN IF NOT EXISTS urgency_flag text,
-  ADD COLUMN IF NOT EXISTS charter_alignment text;
+  ADD COLUMN IF NOT EXISTS charter_alignment text,
+  -- 'quarterly' = chartered household (alignment review); 'survey' = no ratified Charter (Sovereignty Survey).
+  ADD COLUMN IF NOT EXISTS review_mode text NOT NULL DEFAULT 'quarterly' CHECK (review_mode IN ('quarterly','survey'));
 
 -- One review per household per quarter: regenerating within a quarter updates it, a new quarter adds a new one.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_quarterly_system_reviews_household_period

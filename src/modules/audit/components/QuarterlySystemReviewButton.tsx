@@ -19,7 +19,7 @@ export function QuarterlySystemReviewButton({ contactId, householdId, className 
       onClick={() => navigate(householdId ? `/quarterly-system-review/household/${householdId}` : `/quarterly-system-review/contact/${contactId}`)}
     >
       <ClipboardCheck className="mr-2 h-4 w-4" />
-      Quarterly Review
+      Sovereignty Review
     </Button>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAlignmentCards, computeDeltas, overallAlignment, quarterLabel, type ReviewFacts } from "../../supabase/functions/_shared/quarterly-review-cards";
+import { buildAlignmentCards, computeDeltas, dataCompleteness, overallAlignment, quarterLabel, reviewMode, type ReviewFacts } from "../../supabase/functions/_shared/quarterly-review-cards";
 
 const good = (): ReviewFacts => ({
   charter: { source: "household", ratified: true, hasVision: true },
@@ -26,6 +26,7 @@ describe("buildAlignmentCards", () => {
   it("investments: no tracking = Needs Attention; stale or negative = Partial", () => {
     const f = good();
     expect(status({ ...f, investments: { ...f.investments, trackedCount: 0 } }, "investments")).toBe("Needs Attention");
+    expect(status({ ...f, investments: { ...f.investments, accountCount: 0, trackedCount: 0, total: 0 } }, "investments")).toBe("Not Assessed");
     expect(status({ ...f, investments: { ...f.investments, staleCount: 1 } }, "investments")).toBe("Partial");
     expect(status({ ...f, investments: { ...f.investments, negativeCount: 1 } }, "investments")).toBe("Partial");
     expect(status({ ...f, investments: { ...f.investments, statementsFiled: false } }, "investments")).toBe("Partial");
@@ -79,5 +80,30 @@ describe("quarterLabel / computeDeltas / overallAlignment", () => {
   it("rolls cards up", () => {
     const cards = buildAlignmentCards({ ...good(), charter: { source: null, ratified: false, hasVision: false } });
     expect(overallAlignment(cards)).toMatchObject({ status: "Needs Attention", attention: 1 });
+  });
+});
+
+describe("reviewMode / dataCompleteness", () => {
+  it("ratified Charter = quarterly review; anything else = survey", () => {
+    expect(reviewMode({ source: "household", ratified: true })).toBe("quarterly");
+    expect(reviewMode({ source: "contact", ratified: true })).toBe("quarterly");
+    expect(reviewMode({ source: "household", ratified: false })).toBe("survey");
+    expect(reviewMode({ source: null, ratified: false })).toBe("survey");
+  });
+  it("reports which areas have no records on file", () => {
+    expect(dataCompleteness(good())).toEqual({ total: 6, onFile: 6, missing: [] });
+    const thin: ReviewFacts = {
+      ...good(),
+      investments: { accountCount: 0, total: 0, trackedCount: 0, negativeCount: 0, staleCount: 0, statementsFiled: null },
+      storehouses: { count: 0, aligned: 0, pending: 0, misaligned: 0, underfunded: 0, missingLanes: [1, 2, 3, 4] },
+      insurance: { policyCount: 0, coverageTotal: 0, missingCoverageCount: 0, missingBeneficiaryCount: 0, renewalsDueSoon: 0, documentsFiled: null },
+      estate: { will: null, poa: null, beneficiaries: null, documentsFiled: null },
+      documents: { percent: 0, satisfied: 0, total: 0, missing: [] },
+      tax: { documentsFiled: null },
+    };
+    const c = dataCompleteness(thin);
+    expect(c.onFile).toBe(1); // harvest tracking is vacuously fine with no accounts
+    expect(c.missing).toContain("Investment accounts");
+    expect(c.missing).toContain("Storehouse reserves");
   });
 });

@@ -54,7 +54,7 @@ export function buildAlignmentCards(f: ReviewFacts): ReviewCard[] {
     const i = f.investments;
     let status: AlignStatus;
     let detail: string;
-    if (i.accountCount === 0) { status = "Needs Attention"; detail = "No investment accounts are on record."; }
+    if (i.accountCount === 0) { status = "Not Assessed"; detail = "No investment accounts are on record yet."; }
     else {
       const parts = [`${plural(i.accountCount, "account")} totalling ${money(i.total)}`];
       parts.push(`${i.trackedCount}/${i.accountCount} with harvest tracking`);
@@ -186,4 +186,28 @@ export function computeDeltas(
     netWorth: typeof previous.net_worth === "number" ? Math.round(current.net_worth - previous.net_worth) : null,
     previousLabel: previous.label,
   };
+}
+
+export type ReviewMode = "quarterly" | "survey";
+
+/** Chartered (ratified Charter) households get the Quarterly Review; everyone else gets the Sovereignty Survey. */
+export function reviewMode(charter: { source: "household" | "contact" | null; ratified: boolean }): ReviewMode {
+  return charter.source !== null && charter.ratified ? "quarterly" : "survey";
+}
+
+/**
+ * Which areas have no records on file at all. A missing record is not the same as a real gap, so the
+ * Survey shows this beside the cards ("not yet on file") instead of treating it as an exposure.
+ */
+export function dataCompleteness(f: ReviewFacts): { total: number; onFile: number; missing: string[] } {
+  const checks: [string, boolean][] = [
+    ["Investment accounts", f.investments.accountCount > 0],
+    ["Harvest tracking", f.investments.accountCount === 0 || f.investments.trackedCount > 0],
+    ["Storehouse reserves", f.storehouses.count > 0],
+    ["Insurance policies", f.insurance.policyCount > 0],
+    ["Estate review (Will, POA, beneficiaries)", [f.estate.will, f.estate.poa, f.estate.beneficiaries].some(Boolean)],
+    ["Vault documents", f.documents.total > 0 && f.tax.documentsFiled !== null],
+  ];
+  const missing = checks.filter(([, ok]) => !ok).map(([name]) => name);
+  return { total: checks.length, onFile: checks.length - missing.length, missing };
 }
