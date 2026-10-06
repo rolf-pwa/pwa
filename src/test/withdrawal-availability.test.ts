@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { availableForWithdrawal, computeAvailability, withdrawalsTotal, INCOME_CATEGORY, isIncomeFund } from "../../supabase/functions/_shared/withdrawal-availability";
+import { availableForWithdrawal, computeAvailability, netWithdrawals, INCOME_CATEGORY, isIncomeFund } from "../../supabase/functions/_shared/withdrawal-availability";
 
 // The Investment Funds table on page 2 of the real iA statement (Series 75/100).
 const page2 = [
@@ -121,29 +121,19 @@ describe("availableForWithdrawal (the rule the account cards use from three stor
   });
 });
 
-describe("withdrawalsTotal", () => {
-  const hisa = { fund: "High Interest Savings Account (HISA)", category: "Income Funds" };
-  it("sums withdrawals from every fund", () => {
-    expect(withdrawalsTotal([
-      { ...hisa, date: "2026-05-11", amount: 15283.87 },
-      { ...hisa, date: "2026-06-01", amount: 200 },
-      { fund: "Global Equity Fund", category: "U.S. & International Equity Funds", amount: 5000 },
-    ])).toBe(20483.87);
+describe("netWithdrawals", () => {
+  it("is the negative of a negative net transactions figure", () => {
+    expect(netWithdrawals(-43_826.96)).toBe(43_826.96);
+    expect(netWithdrawals(-52_335)).toBe(52_335);
   });
-  it("ignores transfers/switches and non-positive amounts", () => {
-    expect(withdrawalsTotal([
-      { fund: "Switch to equity", category: "Income Funds", amount: 3000 },
-      { ...hisa, amount: -50 },
-      { ...hisa, amount: 0 },
-    ])).toBe(0);
-  });
-  it("is null when nothing was read and 0 for an empty list", () => {
-    expect(withdrawalsTotal(null)).toBeNull();
-    expect(withdrawalsTotal(undefined)).toBeNull();
-    expect(withdrawalsTotal([])).toBe(0);
+  it("is 0 when deposits exceeded withdrawals, and null when nothing was printed", () => {
+    expect(netWithdrawals(1_200)).toBe(0);
+    expect(netWithdrawals(0)).toBe(0);
+    expect(netWithdrawals(null)).toBeNull();
+    expect(netWithdrawals(undefined)).toBeNull();
   });
   it("is carried on computeAvailability", () => {
-    expect(computeAvailability({ book_value: 100, current_value: 90, withdrawals: [{ ...hisa, amount: 10 }] }).withdrawals_ytd).toBe(10);
+    expect(computeAvailability({ book_value: 100, current_value: 90, net_transactions: -10 }).withdrawals_ytd).toBe(10);
     expect(computeAvailability({ book_value: 100, current_value: 90 }).withdrawals_ytd).toBeNull();
   });
 });
