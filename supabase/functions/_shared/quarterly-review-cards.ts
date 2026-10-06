@@ -22,7 +22,7 @@ export interface ReviewFacts {
   insurance: { policyCount: number; coverageTotal: number; missingCoverageCount: number; missingBeneficiaryCount: number; renewalsDueSoon: number; documentsFiled: boolean | null };
   estate: { will: string | null; poa: string | null; beneficiaries: string | null; documentsFiled: boolean | null };
   tax: { documentsFiled: boolean | null };
-  liabilities: { personal: number; corporate: number; overdueLoans: number };
+  liabilities: { personal: number; corporate: number; overdueLoans: number; revolving?: { limit: number; available: number } | null };
   documents: { percent: number; satisfied: number; total: number; missing: string[] };
   /** What the statements have given us so far (optional: omitted when not looked up). */
   statementData?: { accounts: number; withIncomeFunds: number; withWithdrawals: number } | null;
@@ -136,6 +136,7 @@ export function buildAlignmentCards(f: ReviewFacts): ReviewCard[] {
     const status: AlignStatus = l.overdueLoans > 0 ? "Needs Attention" : "Aligned";
     const detail = total === 0 ? "No liabilities are recorded."
       : `${money(total)} recorded${l.corporate ? ` (${money(l.personal)} personal, ${money(l.corporate)} corporate)` : ""}${
+        l.revolving && l.revolving.limit > 0 ? `; ${money(l.revolving.available)} of ${money(l.revolving.limit)} revolving credit available` : ""}${
         l.overdueLoans ? `; ${plural(l.overdueLoans, "intercompany loan")} overdue` : ""}.`;
     cards.push({ key: "liabilities", label: "Liabilities", status, detail });
   }

@@ -55,6 +55,32 @@ describe("allocateCapital", () => {
     expect(r.accountsWithWithdrawalData).toBe(2);
     expect(r.notes.join(" ")).toMatch(/2 of 3 accounts/);
   });
+  it("leaves accounts with no statement (e.g. a GIC) out of the 'still to read' note", () => {
+    const accounts = [
+      { bucket: "vineyard" as const, current_value: 100, income_funds_value: 10, withdrawals_ytd: 5, expects_statement: true },
+      { bucket: "vineyard" as const, current_value: 100, income_funds_value: 10, withdrawals_ytd: 7, expects_statement: true },
+      { bucket: "holding_tank" as const, current_value: 10_000, income_funds_value: null, withdrawals_ytd: null, expects_statement: false },
+    ];
+    const r = allocateCapital(base({ accounts, policies: [] }));
+    expect(r.harvest).toBe(12);
+    expect(r.notes.join(" ")).not.toMatch(/of 3|of 2|run a Vault scan/);
+  });
+  it("still asks for a scan when an account that has a statement hasn't been read", () => {
+    const accounts = [
+      { bucket: "vineyard" as const, current_value: 100, income_funds_value: 10, withdrawals_ytd: 5, expects_statement: true },
+      { bucket: "vineyard" as const, current_value: 100, income_funds_value: null, withdrawals_ytd: null, expects_statement: true },
+      { bucket: "holding_tank" as const, current_value: 10_000, income_funds_value: null, withdrawals_ytd: null, expects_statement: false },
+    ];
+    expect(allocateCapital(base({ accounts, policies: [] })).notes.join(" ")).toMatch(/1 of 2 accounts with statements/);
+  });
+  it("adds real estate to the Legacy reserve, total assets and net worth", () => {
+    const r = allocateCapital(base({ accounts: [], policies: [], realEstate: { legacy: 1_537_500 } }));
+    expect(r.reserves.legacy).toBe(1_537_500);
+    expect(r.realEstateAdded).toBe(1_537_500);
+    expect(r.aum).toBe(920_598 + 1_537_500);
+    expect(r.netWorth).toBe(920_598 + 1_537_500);
+    expect(r.notes.join(" ")).toMatch(/Legacy Trust includes \$1,537,500 of real estate/);
+  });
   it("harvest is unknown (null), not zero, until withdrawals have been read", () => {
     const r = allocateCapital(base({ accounts: base().accounts.map((a) => ({ ...a, withdrawals_ytd: null })) }));
     expect(r.harvest).toBeNull();

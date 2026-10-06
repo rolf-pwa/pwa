@@ -409,7 +409,48 @@ Deno.serve(async (req) => {
     const investmentFilesParsed: string[] = [];
     const investmentErrors: string[] = [];
 
-    for (const file of await filesToParse(investmentsFolder)) {
+    // V2: read every statement/policy at the same time (4 at a time). One after another, a household with several
+    // statements runs past the Edge Function time limit and is cut off before anything is saved. V1 is unchanged.
+    let insurancePoliciesExtractedV2 = 0;
+    const insuranceFilesParsedV2: string[] = [];
+    const insuranceErrorsV2: string[] = [];
+    if (v2) {
+      const invFiles = await filesToParse(investmentsFolder);
+      const insFiles = await filesToParse(insuranceFolder);
+      await logSystemHealth(admin, { function_name: "vault-statement-scan", severity: "INFO", error_code: "SCAN_START", household_id: householdId, error_message: `Reading ${invFiles.length} investment and ${insFiles.length} insurance file(s).` });
+      const jobs = [
+        ...invFiles.map((file: any) => ({ file, kind: "investment" as const })),
+        ...insFiles.map((file: any) => ({ file, kind: "insurance" as const })),
+      ];
+      let next = 0;
+      const worker = async () => {
+        while (next < jobs.length) {
+          const { file, kind } = jobs[next++];
+          const t0 = Date.now();
+          try {
+            const bytes = await driveDownloadFile(file.id, driveAccessToken);
+            const base64 = bytesToBase64(new Uint8Array(bytes));
+            const parsed = kind === "investment"
+              ? await callVertex(vertexAccessToken, sa.project_id, INVESTMENT_SYSTEM_PROMPT + V2_PROVENANCE_PROMPT_SUFFIX + V2_INVESTMENT_NETGAIN_SUFFIX,
+                `Parse this financial statement for the ${household.label} household. Extract all investment accounts.`, base64, file.mimeType, 16000)
+              : await callVertex(vertexAccessToken, sa.project_id, INSURANCE_SYSTEM_PROMPT + V2_PROVENANCE_PROMPT_SUFFIX,
+                `Parse this insurance document for the ${household.label} household. Extract all policies shown.`, base64, file.mimeType);
+            if (kind === "investment") { investmentFilesParsed.push(file.name); investmentAccountsExtracted += (parsed.accounts || []).length; }
+            else { insuranceFilesParsedV2.push(file.name); insurancePoliciesExtractedV2 += (parsed.policies || []).length; }
+            await holdForReview(kind, parsed, file);
+            await logSystemHealth(admin, { function_name: "vault-statement-scan", severity: "INFO", error_code: "SCAN_FILE_DONE", household_id: householdId, error_message: `${kind} file "${file.name}" read in ${Math.round((Date.now() - t0) / 1000)}s.` });
+          } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            console.error(`[vault-statement-scan] ${kind} file "${file.name}" failed:`, message);
+            (kind === "investment" ? investmentErrors : insuranceErrorsV2).push(`${file.name}: ${message}`);
+            await logSystemHealth(admin, { function_name: "vault-statement-scan", severity: "WARN", error_code: "STATEMENT_NOT_READ", household_id: householdId, error_message: `${kind} file "${file.name}": ${message}`.slice(0, 900) });
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(4, jobs.length) }, worker));
+    }
+
+    for (const file of v2 ? [] : await filesToParse(investmentsFolder)) {
       try {
         const bytes = await driveDownloadFile(file.id, driveAccessToken);
         const base64 = bytesToBase64(new Uint8Array(bytes));
@@ -524,7 +565,7 @@ Deno.serve(async (req) => {
     const insuranceFilesParsed: string[] = [];
     const insuranceErrors: string[] = [];
 
-    for (const file of await filesToParse(insuranceFolder)) {
+    for (const file of v2 ? [] : await filesToParse(insuranceFolder)) {
       try {
         const bytes = await driveDownloadFile(file.id, driveAccessToken);
         const base64 = bytesToBase64(new Uint8Array(bytes));
@@ -607,6 +648,11 @@ Deno.serve(async (req) => {
         if (v2) await logSystemHealth(admin, { function_name: "vault-statement-scan", severity: "WARN", error_code: "STATEMENT_NOT_READ", household_id: householdId, error_message: `insurance file "${file.name}": ${message}`.slice(0, 900) });
       }
     }
+
+    // Fold in what the concurrent V2 reader found (empty for V1).
+    insuranceFilesParsed.push(...insuranceFilesParsedV2);
+    insurancePoliciesExtracted += insurancePoliciesExtractedV2;
+    insuranceErrors.push(...insuranceErrorsV2);
 
     // ---------- Accountability log ----------
 

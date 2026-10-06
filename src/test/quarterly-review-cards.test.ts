@@ -54,6 +54,8 @@ describe("buildAlignmentCards", () => {
     expect(status({ ...f, tax: { documentsFiled: false } }, "tax")).toBe("Needs Attention");
     expect(status({ ...f, tax: { documentsFiled: null } }, "tax")).toBe("Not Assessed");
     expect(status({ ...f, liabilities: { personal: 1000, corporate: 0, overdueLoans: 1 } }, "liabilities")).toBe("Needs Attention");
+    const withCredit = buildAlignmentCards({ ...f, liabilities: { personal: 48_000, corporate: 0, overdueLoans: 0, revolving: { limit: 100_000, available: 52_000 } } }).find((c) => c.key === "liabilities")!;
+    expect(withCredit.detail).toMatch(/\$52,000 of \$100,000 revolving credit available/);
     expect(status({ ...f, documents: { percent: 40, satisfied: 2, total: 5, missing: ["Tax"] } }, "documents")).toBe("Partial");
     expect(status({ ...f, documents: { percent: 0, satisfied: 0, total: 5, missing: [] } }, "documents")).toBe("Needs Attention");
   });

@@ -2,7 +2,7 @@ import { AlertTriangle } from "lucide-react";
 import { Badge } from "@/shared/components/ui/badge";
 import { cn } from "@/shared/lib/utils";
 // Same pure function the backend uses (Stage 2 and stage2-review), so the figures here can't drift from what is stored.
-import { computeAvailability, type Availability, type FundLine, type WithdrawalLine } from "../../../../../supabase/functions/_shared/withdrawal-availability";
+import { computeAvailability, type Availability, type FundLine } from "../../../../../supabase/functions/_shared/withdrawal-availability";
 import { type ReviewItem } from "../../lib/stage2";
 
 const cad = (n: number | null) =>
@@ -38,7 +38,7 @@ export function AvailabilityPanel({ items }: { items: ReviewItem[] }) {
       book_value: item.book_value as number | null | undefined,
       current_value: item.current_value as number | null | undefined,
       funds: (item.funds as FundLine[] | null | undefined) ?? null,
-      withdrawals: (item.withdrawals as WithdrawalLine[] | null | undefined) ?? null,
+      net_transactions: item.net_transactions as number | null | undefined,
     }),
   }));
   if (rows.every((r) => r.av.surplus === null && r.av.funds.length === 0)) return null;
@@ -63,8 +63,8 @@ export function AvailabilityPanel({ items }: { items: ReviewItem[] }) {
             <Line label="Surplus" hint="Growth not yet withdrawn (current value − opening balance)" value={cad(av.surplus)} />
             <Line label="Income funds on hand" hint="Where withdrawals are drawn from" value={cad(av.income_funds)} />
             <Line
-              label="Total withdrawals (this period)"
-              hint="All funds; counted in Harvest to date on the Sovereignty Review"
+              label="Net withdrawals (year to date)"
+              hint="From the statement's net transactions; counted in Harvest to date on the Sovereignty Review"
               value={av.withdrawals_ytd === null ? "Not read from statement" : cad(av.withdrawals_ytd)}
             />
             <div className="pt-1">

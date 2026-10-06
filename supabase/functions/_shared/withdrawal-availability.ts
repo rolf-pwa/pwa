@@ -22,20 +22,12 @@ export interface FundLine {
   value?: number | null;
 }
 
-/** One withdrawal line from a statement's transaction details, extracted exactly as printed. */
-export interface WithdrawalLine {
-  fund?: string | null;
-  category?: string | null;
-  date?: string | null;
-  amount?: number | null;
-}
-
 export interface AvailabilityInput {
   book_value?: number | null; // opening / BOY value
   current_value?: number | null;
   funds?: FundLine[] | null;
-  /** Withdrawal lines from the transaction details; null/undefined = the statement shows none to read. */
-  withdrawals?: WithdrawalLine[] | null;
+  /** Net transactions (deposits - withdrawals) year to date, signed, as printed; negative = net withdrawals. */
+  net_transactions?: number | null;
 }
 
 /**
@@ -53,17 +45,13 @@ export function isIncomeFund(f: { name?: string | null; category?: string | null
 }
 
 /**
- * Total withdrawn from the account in the statement period: every withdrawal line from every fund, summed HERE
- * (never by the model). Switches and transfers between funds are excluded by name as well as by the extraction
- * prompt. Null when no transaction details were extracted (unknown), 0 when there were none.
+ * Withdrawals taken from the account year to date = the statement's net transactions (deposits - withdrawals)
+ * when it is negative. That printed figure is what Stage 2 reconciles (opening + net transactions + net gain =
+ * current value), so it is verified; an itemised list of withdrawal lines proved incomplete on real
+ * statements. Null when the statement prints no net transactions; 0 when deposits exceeded withdrawals.
  */
-export function withdrawalsTotal(lines: WithdrawalLine[] | null | undefined): number | null {
-  if (!Array.isArray(lines)) return null;
-  const total = lines
-    .filter((l) => isNum(l?.amount) && l.amount > 0)
-    .filter((l) => !/\b(transfer|switch|reallocat)/i.test(`${l.fund ?? ""} ${l.category ?? ""}`))
-    .reduce((sum, l) => sum + (l.amount as number), 0);
-  return round2(total);
+export function netWithdrawals(netTransactions: number | null | undefined): number | null {
+  return isNum(netTransactions) ? round2(Math.max(0, -netTransactions)) : null;
 }
 
 export type AvailabilityStatus =
@@ -84,7 +72,7 @@ export interface Availability {
   available: number | null;
   limited_by: "income_funds" | "surplus" | "none" | null;
   funds: Array<{ name: string; category: string; value: number; is_income: boolean }>;
-  /** Withdrawn from the account (all funds) in the statement period; null = not read from the statement. */
+  /** Net withdrawn from the account (all funds) year to date; null = the statement printed no net transactions figure. */
   withdrawals_ytd: number | null;
   notes: string[];
 }
@@ -118,7 +106,7 @@ export function availableForWithdrawal(a: { book_value?: number | null; current_
 
 export function computeAvailability(a: AvailabilityInput): Availability {
   const notes: string[] = [];
-  const withdrawals = withdrawalsTotal(a.withdrawals);
+  const withdrawals = netWithdrawals(a.net_transactions);
   const surplus = isNum(a.book_value) && isNum(a.current_value) ? round2(a.current_value - a.book_value) : null;
   if (surplus === null) notes.push("An opening balance and a current value are needed to work out the surplus.");
 
