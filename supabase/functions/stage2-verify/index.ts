@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
     householdId = body?.householdId;
     const { kind, extraction, documentId } = body ?? {};
     if (typeof householdId !== "string" || !UUID.test(householdId)) return json({ error: "householdId must be a uuid" }, 400);
-    if (kind !== "investment" && kind !== "insurance") return json({ error: 'kind must be "investment" or "insurance"' }, 400);
+    if (kind !== "investment" && kind !== "insurance" && kind !== "estate") return json({ error: 'kind must be "investment", "insurance" or "estate"' }, 400);
     if (!extraction || typeof extraction !== "object") return json({ error: "extraction is required" }, 400);
     if (documentId !== undefined && (typeof documentId !== "string" || !UUID.test(documentId))) return json({ error: "documentId must be a uuid" }, 400);
 

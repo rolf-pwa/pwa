@@ -15,7 +15,7 @@ import { CheckTimeline } from "../components/stage2/CheckTimeline";
 import { CausalRiskPanel } from "../components/stage2/CausalRiskPanel";
 import { EntityEditor } from "../components/stage2/EntityEditor";
 import { AvailabilityPanel } from "../components/stage2/AvailabilityPanel";
-import { applyUiCorrections, itemIndexForCheck, itemsOf, summarizeChecks, type Correction, type Stage2AuditRow } from "../lib/stage2";
+import { applyUiCorrections, ITEM_NOUN, itemIndexForCheck, itemsOf, summarizeChecks, type Correction, type Stage2AuditRow } from "../lib/stage2";
 
 const FUNCTION_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/stage2-review`;
 
@@ -80,7 +80,7 @@ function ReviewDetail({ row, onDone }: { row: Stage2AuditRow; onDone: () => void
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center justify-between text-base">
-              <span>{kind === "investment" ? "Extracted accounts" : "Extracted policies"}</span>
+              <span>Extracted {ITEM_NOUN[kind].many}</span>
               <Badge variant="outline" className={STATUS_TONE[row.overall_status]}>{row.overall_status}</Badge>
             </CardTitle>
           </CardHeader>
@@ -189,7 +189,7 @@ const Stage2Review = () => {
           <button key={r.id} type="button" onClick={() => setOpenId(r.id)} className="flex w-full items-center gap-4 rounded border px-3 py-2.5 text-left text-sm hover:bg-muted/50">
             <Badge variant="outline" className={cn("w-24 justify-center", STATUS_TONE[r.overall_status])}>{r.overall_status}</Badge>
             <span className="min-w-0 flex-1 truncate">
-              <strong>{r.households?.label ?? "Household"}</strong> · {r.extracted_entities.source?.file_name ?? "document"} · {itemsOf(r).length} {r.extracted_entities.kind === "investment" ? "account(s)" : "policy(ies)"}
+              <strong>{r.households?.label ?? "Household"}</strong> · {r.extracted_entities.source?.file_name ?? "document"} · {itemsOf(r).length} {itemsOf(r).length === 1 && r.extracted_entities.kind === "insurance" ? "policy" : ITEM_NOUN[r.extracted_entities.kind].many}
             </span>
             <span className="text-xs text-muted-foreground">{format(new Date(r.created_at), "PP")}</span>
           </button>

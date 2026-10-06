@@ -5,8 +5,8 @@
 // deno-lint-ignore-file no-explicit-any
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {
-  checkInsurance, checkInvestment, verdictFor,
-  type CheckResult, type InsuranceExtraction, type InvestmentExtraction, type Stage2Verdict,
+  checkEstate, checkInsurance, checkInvestment, verdictFor,
+  type CheckResult, type EstateExtraction, type InsuranceExtraction, type InvestmentExtraction, type Stage2Verdict,
 } from "./stage2-checks.ts";
 import { compareInterventions, evaluate } from "./causal-dag-engine.ts";
 import { CAUSAL_MODEL_V2, evidenceFromOntology, V2_INTERVENTIONS } from "./causal-model-v2.ts";
@@ -16,7 +16,7 @@ import { computeAvailability } from "./withdrawal-availability.ts";
 
 export interface Stage2Input {
   householdId: string;
-  kind: "investment" | "insurance";
+  kind: "investment" | "insurance" | "estate";
   extraction: Record<string, any>;
   /** vault_shoebox_proposals id, when the file came from the Shoebox. */
   documentId?: string | null;
@@ -61,12 +61,15 @@ export async function runStage2(admin: any, input: Stage2Input): Promise<Stage2O
   const { householdId, kind, extraction } = input;
 
   // Provenance is validated here so nothing downstream trusts raw model output.
-  const items = kind === "investment" ? "accounts" : "policies";
+  const items = kind === "investment" ? "accounts" : kind === "estate" ? "documents" : "policies";
   const cleaned = { ...extraction, [items]: withSanitizedSources(extraction[items]) };
 
-  const checks = kind === "investment"
-    ? checkInvestment(cleaned as InvestmentExtraction)
-    : checkInsurance(cleaned as InsuranceExtraction);
+  let checks: CheckResult[];
+  if (kind === "investment") checks = checkInvestment(cleaned as InvestmentExtraction);
+  else if (kind === "estate") {
+    const { data: members } = await admin.from("contacts").select("first_name, last_name").eq("household_id", householdId);
+    checks = checkEstate(cleaned as EstateExtraction, members ?? []);
+  } else checks = checkInsurance(cleaned as InsuranceExtraction);
   const modelMissing = Array.isArray(extraction.missing_fields)
     ? extraction.missing_fields.filter((f: unknown): f is string => typeof f === "string")
     : [];

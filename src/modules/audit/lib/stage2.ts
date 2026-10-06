@@ -33,9 +33,9 @@ export interface Stage2AuditRow {
   review_status: "pending" | "approved" | "rejected";
   advisor_override_required: boolean;
   extracted_entities: {
-    kind: "investment" | "insurance";
+    kind: "investment" | "insurance" | "estate";
     source: { drive_id?: string; file_name?: string } | null;
-    extraction: Record<string, unknown> & { accounts?: ReviewItem[]; policies?: ReviewItem[]; statement_date?: string | null };
+    extraction: Record<string, unknown> & { accounts?: ReviewItem[]; policies?: ReviewItem[]; documents?: ReviewItem[]; statement_date?: string | null };
   };
   arithmetic_checks: Stage2Check[];
   causal_dag_evaluations: CausalEvaluation;
@@ -44,11 +44,26 @@ export interface Stage2AuditRow {
   households?: { label: string | null } | null;
 }
 
-export const itemsOf = (row: Stage2AuditRow): ReviewItem[] =>
-  (row.extracted_entities.kind === "investment" ? row.extracted_entities.extraction.accounts : row.extracted_entities.extraction.policies) ?? [];
+export const itemsOf = (row: Stage2AuditRow): ReviewItem[] => {
+  const { kind, extraction } = row.extracted_entities;
+  return (kind === "investment" ? extraction.accounts : kind === "estate" ? extraction.documents : extraction.policies) ?? [];
+};
+
+export const ITEM_NOUN: Record<"investment" | "insurance" | "estate", { one: string; many: string }> = {
+  investment: { one: "Account", many: "accounts" },
+  insurance: { one: "Policy", many: "policies" },
+  estate: { one: "Document", many: "documents" },
+};
 
 /** Fields an advisor can correct, with labels; mirrors vault-apply.ts's allow-lists. */
-export const EDITABLE_FIELDS: Record<"investment" | "insurance", Array<{ key: string; label: string; numeric: boolean }>> = {
+export const EDITABLE_FIELDS: Record<"investment" | "insurance" | "estate", Array<{ key: string; label: string; numeric: boolean }>> = {
+  estate: [
+    { key: "document_type", label: "Type", numeric: false },
+    { key: "subject_name", label: "Whose", numeric: false },
+    { key: "document_date", label: "Signed on", numeric: false },
+    { key: "executor", label: "Executor / attorney", numeric: false },
+    { key: "beneficiaries", label: "Beneficiaries", numeric: false },
+  ],
   investment: [
     { key: "account_name", label: "Account", numeric: false },
     { key: "account_number", label: "Number", numeric: false },
@@ -83,8 +98,9 @@ export function riskLevel(score: number): { label: "Low" | "Moderate" | "High" |
 export function itemIndexForCheck(row: Stage2AuditRow, check: Stage2Check): number | null {
   if (!check.subject) return null;
   const items = itemsOf(row);
+  const subject = check.subject.replace(/ #\d+$/, ""); // estate checks number multiple documents in one file
   const idx = items.findIndex((i) =>
-    [i.account_number, i.policy_number, i.account_name, i.carrier].some((v) => typeof v === "string" && v === check.subject));
+    [i.account_number, i.policy_number, i.account_name, i.carrier, i.subject_name].some((v) => typeof v === "string" && v === subject));
   return idx === -1 ? null : idx;
 }
 

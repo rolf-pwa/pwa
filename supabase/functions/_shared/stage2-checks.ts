@@ -48,6 +48,19 @@ export interface InsuranceExtraction {
   missing_fields?: string[];
 }
 
+export interface ExtractedEstateDoc {
+  document_type?: string | null;
+  subject_name?: string | null;
+  document_date?: string | null;
+  signed?: boolean | null;
+  executor?: string | null;
+  beneficiaries?: string | null;
+}
+export interface EstateExtraction {
+  documents?: ExtractedEstateDoc[];
+  missing_fields?: string[];
+}
+
 const money = (n: number) => n.toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 2 });
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const label = (a: { account_name?: string | null; account_number?: string | null; policy_number?: string | null }) =>
@@ -168,6 +181,66 @@ export function checkInsurance(x: InsuranceExtraction): CheckResult[] {
       out.push({ id: "renewal_after_issue", status: "skipped", subject, reasoning: `Issue or renewal date missing for policy ${subject}.` });
     }
   }
+  return out;
+}
+
+export const ESTATE_TYPES = ["will", "power_of_attorney", "trust", "representation_agreement", "other"] as const;
+const TYPE_LABEL: Record<string, string> = { will: "Will", power_of_attorney: "Power of Attorney", trust: "Trust", representation_agreement: "Representation Agreement", other: "Other document" };
+const norm = (s: string | null | undefined) => (s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/**
+ * Estate documents: the date, whether it is signed, whose it is. A skipped check means "can't tell from the
+ * document", never a silent pass. Members are optional: without them the household-match check is skipped.
+ */
+export function checkEstate(
+  x: EstateExtraction,
+  members: Array<{ first_name: string | null; last_name: string | null }> = [],
+  now: Date = new Date(),
+): CheckResult[] {
+  const out: CheckResult[] = [];
+  const docs = x.documents ?? [];
+  if (docs.length === 0) out.push({ id: "documents_present", status: "fail", reasoning: "No estate document was recognised in this file." });
+
+  docs.forEach((d, i) => {
+    const type = d.document_type && (ESTATE_TYPES as readonly string[]).includes(d.document_type) ? d.document_type : "other";
+    const subject = `${d.subject_name?.trim() || TYPE_LABEL[type]}${docs.length > 1 ? ` #${i + 1}` : ""}`;
+
+    if (!d.document_type || !(ESTATE_TYPES as readonly string[]).includes(d.document_type) || type === "other") {
+      out.push({ id: "document_type_known", status: "skipped", subject, reasoning: "The document type wasn't recognised as a will, power of attorney or trust; confirm what it is." });
+    } else {
+      out.push({ id: "document_type_known", status: "pass", subject, reasoning: `Recognised as a ${TYPE_LABEL[type]}.` });
+    }
+
+    if (!d.document_date) {
+      out.push({ id: "date_plausible", status: "skipped", subject, reasoning: "No signing date was read, so its age can't be checked." });
+    } else {
+      const t = new Date(`${d.document_date}T00:00:00Z`).getTime();
+      const ageYears = (now.getTime() - t) / (365.25 * 86400000);
+      if (Number.isNaN(t)) out.push({ id: "date_plausible", status: "fail", subject, reasoning: `"${d.document_date}" is not a valid date.` });
+      else if (ageYears < -0.01) out.push({ id: "date_plausible", status: "fail", subject, reasoning: `Signing date ${d.document_date} is in the future.` });
+      else out.push({ id: "date_plausible", status: "pass", subject, reasoning: `Signed ${d.document_date}, ${ageYears < 1 ? "less than a year" : `${Math.floor(ageYears)} year${Math.floor(ageYears) === 1 ? "" : "s"}`} ago.` });
+    }
+
+    if (d.signed === true) out.push({ id: "signed", status: "pass", subject, reasoning: "Signatures are visible on the document." });
+    else if (d.signed === false) out.push({ id: "signed", status: "fail", subject, reasoning: "The signature lines look blank: an unsigned document isn't in force." });
+    else out.push({ id: "signed", status: "skipped", subject, reasoning: "Couldn't tell from the file whether it is signed (it may be an unsigned copy)." });
+
+    if (members.length === 0 || !d.subject_name) {
+      out.push({ id: "subject_in_household", status: "skipped", subject, reasoning: d.subject_name ? "No household members to compare the name with." : "No name was read, so it can't be matched to a household member." });
+    } else {
+      const named = norm(d.subject_name);
+      const match = members.find((m) => m.first_name && m.last_name && named.includes(norm(m.first_name)) && named.includes(norm(m.last_name)));
+      out.push(match
+        ? { id: "subject_in_household", status: "pass", subject, reasoning: `Belongs to ${match.first_name} ${match.last_name}, a member of this household.` }
+        : { id: "subject_in_household", status: "skipped", subject, reasoning: `"${d.subject_name}" doesn't match a household member; it may belong to someone outside the household.` });
+    }
+
+    if (type === "will" || type === "power_of_attorney") {
+      out.push(d.executor
+        ? { id: "executor_named", status: "pass", subject, reasoning: `${type === "will" ? "Executor" : "Attorney"} named: ${d.executor}.` }
+        : { id: "executor_named", status: "skipped", subject, reasoning: `No ${type === "will" ? "executor" : "attorney"} was read from the document.` });
+    }
+  });
   return out;
 }
 

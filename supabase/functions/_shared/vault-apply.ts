@@ -48,6 +48,7 @@ export function headOfHousehold(members: Member[]): Member | undefined {
 // ---- Corrections ---------------------------------------------------------
 
 export const INVESTMENT_FIELDS = ["account_name", "account_number", "account_type", "account_owner", "custodian", "book_value", "current_harvest", "current_value", "net_transactions"] as const;
+export const ESTATE_FIELDS = ["document_type", "subject_name", "document_date", "signed", "executor", "beneficiaries", "notes"] as const;
 export const INSURANCE_FIELDS = ["carrier", "policy_number", "policy_type", "insured_name", "coverage_amount", "cash_value", "premium_amount", "premium_frequency", "issue_date", "renewal_date"] as const;
 const NUMERIC = new Set(["book_value", "current_harvest", "current_value", "net_transactions", "coverage_amount", "cash_value", "premium_amount"]);
 
@@ -58,12 +59,12 @@ export interface AppliedOverride {
 
 /** Validates and applies corrections to a copy of the extraction; returns the override rows to record. */
 export function applyCorrections(
-  kind: "investment" | "insurance",
+  kind: "investment" | "insurance" | "estate",
   extraction: Record<string, any>,
   corrections: Correction[],
 ): { extraction: Record<string, any>; overrides: AppliedOverride[] } {
-  const listKey = kind === "investment" ? "accounts" : "policies";
-  const allowed: readonly string[] = kind === "investment" ? INVESTMENT_FIELDS : INSURANCE_FIELDS;
+  const listKey = kind === "investment" ? "accounts" : kind === "estate" ? "documents" : "policies";
+  const allowed: readonly string[] = kind === "investment" ? INVESTMENT_FIELDS : kind === "estate" ? ESTATE_FIELDS : INSURANCE_FIELDS;
   const items: Record<string, any>[] = (extraction[listKey] ?? []).map((i: Record<string, any>) => ({ ...i }));
   const overrides: AppliedOverride[] = [];
 
@@ -75,6 +76,8 @@ export function applyCorrections(
       if (value === null || value === "") value = null;
       else if (typeof value === "number" && Number.isFinite(value)) value = value;
       else throw new Error(`"${c.field}" must be a number`);
+    } else if (c.field === "signed") {
+      if (value !== null && typeof value !== "boolean") throw new Error('"signed" must be true, false or empty');
     } else if (value !== null && typeof value !== "string") {
       throw new Error(`"${c.field}" must be text`);
     }
@@ -93,7 +96,8 @@ export function applyCorrections(
 
 export type PlannedWrite =
   | { op: "update"; table: "vineyard_accounts" | "storehouses" | "holding_tank" | "insurance_policies"; id: string; values: Record<string, unknown>; label: string }
-  | { op: "insert"; table: "holding_tank" | "insurance_policies"; values: Record<string, unknown>; label: string };
+  | { op: "insert"; table: "holding_tank" | "insurance_policies"; values: Record<string, unknown>; label: string }
+  | { op: "upsert"; table: "estate_documents"; onConflict: string; values: Record<string, unknown>; label: string };
 
 export interface InvestmentContext {
   householdId: string;
@@ -213,6 +217,44 @@ export function planInsuranceApply(policies: Record<string, any>[], ctx: Insuran
   return writes;
 }
 
+export interface EstateContext {
+  householdId: string;
+  members: Member[];
+  driveId: string | null;
+  fileName: string | null;
+  auditId: string | null;
+  approvedBy: string | null;
+}
+
+const ESTATE_TYPE_SET = new Set(["will", "power_of_attorney", "trust", "representation_agreement", "other"]);
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Approved estate documents become (or refresh) one row per file and type, owned by the matching member. */
+export function planEstateApply(documents: Record<string, any>[], ctx: EstateContext): PlannedWrite[] {
+  if (!ctx.driveId) return []; // nothing to key the record on (not a Vault file)
+  const writes: PlannedWrite[] = [];
+  const seen = new Set<string>();
+  for (const d of documents) {
+    const type = ESTATE_TYPE_SET.has(String(d.document_type)) ? String(d.document_type) : "other";
+    if (seen.has(type)) continue; // one row per file and type (the unique key); the first wins
+    seen.add(type);
+    const member = findMemberByLooseName(ctx.members, d.subject_name);
+    writes.push({
+      op: "upsert", table: "estate_documents", onConflict: "drive_id,document_type",
+      label: `${type}${d.subject_name ? ` (${d.subject_name})` : ""}`,
+      values: {
+        household_id: ctx.householdId, contact_id: member?.id ?? null, document_type: type,
+        subject_name: d.subject_name ?? null, document_date: ISO_DATE.test(String(d.document_date ?? "")) ? d.document_date : null,
+        signed: typeof d.signed === "boolean" ? d.signed : null, executor: d.executor ?? null,
+        beneficiaries: d.beneficiaries ?? null, notes: d.notes ?? null,
+        drive_id: ctx.driveId, file_name: ctx.fileName, source_audit_id: ctx.auditId, approved_by: ctx.approvedBy,
+        updated_at: new Date().toISOString(),
+      },
+    });
+  }
+  return writes;
+}
+
 // ---- Execution -----------------------------------------------------------
 
 export interface ApplyResult { updated: number; inserted: number; writes: Array<{ op: string; table: string; label: string }> }
@@ -220,10 +262,12 @@ export interface ApplyResult { updated: number; inserted: number; writes: Array<
 export async function applyPlan(admin: any, plan: PlannedWrite[]): Promise<ApplyResult> {
   const result: ApplyResult = { updated: 0, inserted: 0, writes: [] };
   for (const w of plan) {
-    const q = w.op === "update" ? admin.from(w.table).update(w.values).eq("id", w.id) : admin.from(w.table).insert(w.values);
+    const q = w.op === "update" ? admin.from(w.table).update(w.values).eq("id", w.id)
+      : w.op === "upsert" ? admin.from(w.table).upsert(w.values, { onConflict: w.onConflict })
+      : admin.from(w.table).insert(w.values);
     const { error } = await q;
     if (error) throw new Error(`${w.op} ${w.table} (${w.label}) failed: ${error.message}`);
-    if (w.op === "update") result.updated += 1; else result.inserted += 1;
+    if (w.op === "update") result.updated += 1; else result.inserted += 1; // an upsert counts as added
     result.writes.push({ op: w.op, table: w.table, label: w.label });
   }
   return result;

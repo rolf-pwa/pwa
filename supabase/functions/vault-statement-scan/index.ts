@@ -22,7 +22,7 @@ import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { driveListChildren, driveDownloadFile, matchVaultCategoryFolder } from "../_shared/vault-provisioning.ts";
 import { GEMINI_EXTRACT_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
 import { V2_PROVENANCE_PROMPT_SUFFIX } from "../_shared/provenance.ts";
-import { V2_INVESTMENT_NETGAIN_SUFFIX } from "../_shared/stage1-v2-prompts.ts";
+import { ESTATE_SYSTEM_PROMPT, V2_ESTATE_PROVENANCE_SUFFIX, V2_INVESTMENT_NETGAIN_SUFFIX } from "../_shared/stage1-v2-prompts.ts";
 import { runStage2 } from "../_shared/stage2-run.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
 
@@ -310,7 +310,7 @@ Deno.serve(async (req) => {
     const v2 = flagRow?.v2_ai_engine_enabled === true;
     let heldForReview = 0;
     // Stage 2 hold: verify + audit-log one file's extraction, never touching live rows.
-    const holdForReview = async (kind: "investment" | "insurance", parsed: Record<string, unknown>, file: { id: string; name: string }) => {
+    const holdForReview = async (kind: "investment" | "insurance" | "estate", parsed: Record<string, unknown>, file: { id: string; name: string }) => {
       try {
         await runStage2(admin, { householdId, kind, extraction: parsed, source: { drive_id: file.id, file_name: file.name } });
         heldForReview += 1;
@@ -354,12 +354,15 @@ Deno.serve(async (req) => {
       .from("vault_folder_templates")
       .select("display_name, slug")
       .eq("is_active", true)
-      .in("slug", ["investments", "insurance"]);
+      .in("slug", ["investments", "insurance", "estate"]);
     const investmentsTemplate = (templates ?? []).find((t: any) => t.slug === "investments");
     const insuranceTemplate = (templates ?? []).find((t: any) => t.slug === "insurance");
+    const estateTemplate = (templates ?? []).find((t: any) => t.slug === "estate");
 
     const investmentsFolder = investmentsTemplate ? matchVaultCategoryFolder(rootChildren, investmentsTemplate.display_name) : null;
     const insuranceFolder = insuranceTemplate ? matchVaultCategoryFolder(rootChildren, insuranceTemplate.display_name) : null;
+    // Estate documents (Will, POA, trust) are read for V2 households only: held for approval like everything else.
+    const estateFolder = estateTemplate ? matchVaultCategoryFolder(rootChildren, estateTemplate.display_name) : null;
 
     // ---------- Vertex AI auth ----------
 
@@ -412,15 +415,18 @@ Deno.serve(async (req) => {
     // V2: read every statement/policy at the same time (4 at a time). One after another, a household with several
     // statements runs past the Edge Function time limit and is cut off before anything is saved. V1 is unchanged.
     let insurancePoliciesExtractedV2 = 0;
+    const estateFilesParsed: string[] = [];
     const insuranceFilesParsedV2: string[] = [];
     const insuranceErrorsV2: string[] = [];
     if (v2) {
       const invFiles = await filesToParse(investmentsFolder);
       const insFiles = await filesToParse(insuranceFolder);
-      await logSystemHealth(admin, { function_name: "vault-statement-scan", severity: "INFO", error_code: "SCAN_START", household_id: householdId, error_message: `Reading ${invFiles.length} investment and ${insFiles.length} insurance file(s).` });
+      const estFiles = await filesToParse(estateFolder);
+      await logSystemHealth(admin, { function_name: "vault-statement-scan", severity: "INFO", error_code: "SCAN_START", household_id: householdId, error_message: `Reading ${invFiles.length} investment, ${insFiles.length} insurance and ${estFiles.length} estate file(s).` });
       let jobs = [
         ...invFiles.map((file: any) => ({ file, kind: "investment" as const })),
         ...insFiles.map((file: any) => ({ file, kind: "insurance" as const })),
+        ...estFiles.map((file: any) => ({ file, kind: "estate" as const })),
       ];
       // Automatic scans (started by a Sovereignty Review) pass skipReviewed: leave out any file that already has a
       // pending or approved review item made after the file last changed, so re-running never duplicates Glass-Box.
@@ -450,16 +456,20 @@ Deno.serve(async (req) => {
             const parsed = kind === "investment"
               ? await callVertex(vertexAccessToken, sa.project_id, INVESTMENT_SYSTEM_PROMPT + V2_PROVENANCE_PROMPT_SUFFIX + V2_INVESTMENT_NETGAIN_SUFFIX,
                 `Parse this financial statement for the ${household.label} household. Extract all investment accounts.`, base64, file.mimeType, 16000)
-              : await callVertex(vertexAccessToken, sa.project_id, INSURANCE_SYSTEM_PROMPT + V2_PROVENANCE_PROMPT_SUFFIX,
-                `Parse this insurance document for the ${household.label} household. Extract all policies shown.`, base64, file.mimeType);
+              : kind === "estate"
+                ? await callVertex(vertexAccessToken, sa.project_id, ESTATE_SYSTEM_PROMPT + V2_ESTATE_PROVENANCE_SUFFIX,
+                  `Read this estate document for the ${household.label} household.`, base64, file.mimeType)
+                : await callVertex(vertexAccessToken, sa.project_id, INSURANCE_SYSTEM_PROMPT + V2_PROVENANCE_PROMPT_SUFFIX,
+                  `Parse this insurance document for the ${household.label} household. Extract all policies shown.`, base64, file.mimeType);
             if (kind === "investment") { investmentFilesParsed.push(file.name); investmentAccountsExtracted += (parsed.accounts || []).length; }
+            else if (kind === "estate") { estateFilesParsed.push(file.name); }
             else { insuranceFilesParsedV2.push(file.name); insurancePoliciesExtractedV2 += (parsed.policies || []).length; }
             await holdForReview(kind, parsed, file);
             await logSystemHealth(admin, { function_name: "vault-statement-scan", severity: "INFO", error_code: "SCAN_FILE_DONE", household_id: householdId, error_message: `${kind} file "${file.name}" read in ${Math.round((Date.now() - t0) / 1000)}s.` });
           } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
             console.error(`[vault-statement-scan] ${kind} file "${file.name}" failed:`, message);
-            (kind === "investment" ? investmentErrors : insuranceErrorsV2).push(`${file.name}: ${message}`);
+            (kind === "investment" ? investmentErrors : insuranceErrorsV2).push(`${file.name}: ${message}`); // estate errors are listed with the insurance ones
             await logSystemHealth(admin, { function_name: "vault-statement-scan", severity: "WARN", error_code: "STATEMENT_NOT_READ", household_id: householdId, error_message: `${kind} file "${file.name}": ${message}`.slice(0, 900) });
           }
         }
@@ -707,7 +717,7 @@ Deno.serve(async (req) => {
         insurancePoliciesMatched,
         insurancePoliciesCreated,
         errors: [...investmentErrors, ...insuranceErrors],
-        ...(v2 ? { v2HeldForReview: heldForReview } : {}),
+        ...(v2 ? { v2HeldForReview: heldForReview, estateFilesParsed: estateFilesParsed.length } : {}),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
