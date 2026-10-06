@@ -77,6 +77,10 @@ const SHOEBOX_TOOL_SCHEMA = {
             type: "STRING",
             description: "The last name of the person this document is ABOUT. Omit if not determinable.",
           },
+          account_number: {
+            type: "STRING",
+            description: "For statements, insurance policies, mortgages and similar account-based documents: the account, policy or contract number exactly as printed. Omit for documents that have none, and never guess or combine numbers.",
+          },
           proposed_category_slug: {
             type: "STRING",
             enum: CATEGORY_SLUGS as unknown as string[],
@@ -100,6 +104,9 @@ short other_label in that case.
 signed, an issue date). Never infer or guess a date that isn't actually printed on the document.
 - Only set document_subject_first_name/last_name if a person's name is clearly printed on the document as \
 its subject (the account holder, the testator, the license holder, etc.).
+- Only set account_number if an account, policy or contract number is clearly printed on the document \
+as belonging to it (statements, policies, mortgages). If several accounts appear, use the one the document is \
+mainly about, and omit it if unclear.
 - Only set proposed_category_slug if you're confident; omitting it is the safe choice and just leaves the \
 file in the Shoebox for a staff member to file manually.`;
 
@@ -119,6 +126,7 @@ export interface ShoeboxClassification {
   document_date: string | null;
   document_subject_first_name: string | null;
   document_subject_last_name: string | null;
+  account_number: string | null;
   proposed_category_slug: string | null;
 }
 
@@ -159,6 +167,7 @@ export async function classifyShoeboxFile(
     document_date: args.document_date ?? null,
     document_subject_first_name: normalizePersonName(args.document_subject_first_name),
     document_subject_last_name: normalizePersonName(args.document_subject_last_name),
+    account_number: typeof args.account_number === "string" && args.account_number.trim() ? args.account_number.trim() : null,
     proposed_category_slug: args.proposed_category_slug ?? null,
   };
 }

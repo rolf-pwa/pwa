@@ -744,6 +744,7 @@ async function classifyAndStoreShoeboxProposal(params: {
     firstInitial: firstName || "X",
     documentTypeLabel,
     originalExt,
+    accountNumber: classification.account_number,
   });
 
   const { error } = await supabaseAdmin.from("vault_shoebox_proposals").insert({

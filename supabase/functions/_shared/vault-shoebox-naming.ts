@@ -19,7 +19,17 @@ export function normalizePersonName(name: string | null | undefined): string | n
 }
 
 /**
- * Builds the YY-MM-DD_LastName_FirstInitial-DocumentType filename string in
+ * Account/policy number as printed -> the last 4 letters/digits, for the filename
+ * (enough to tell two accounts apart without putting a full number in a file name).
+ * Returns null when there are fewer than 4 usable characters.
+ */
+export function accountSuffix(accountNumber: string | null | undefined): string | null {
+  const cleaned = (accountNumber ?? "").replace(/[^a-zA-Z0-9]/g, "");
+  return cleaned.length >= 4 ? cleaned.slice(-4).toUpperCase() : null;
+}
+
+/**
+ * Builds the YY-MM-DD_LastName_FirstInitial-DocumentType[_Last4].ext filename string in
  * code -- the model only ever supplies facts (date/type/name), never
  * formats the filename itself.
  */
@@ -30,6 +40,7 @@ export function buildProposedFilename(opts: {
   firstInitial: string;
   documentTypeLabel: string;   // already resolved: other_label when document_type === "Other", else document_type
   originalExt: string;         // including the leading dot, e.g. ".pdf"
+  accountNumber?: string | null; // account/policy number as printed; only its last 4 go in the name
 }): string {
   const d = opts.documentDate ? new Date(`${opts.documentDate}T00:00:00Z`) : opts.uploadedAt;
   const yy = String(d.getUTCFullYear()).slice(-2);
@@ -39,7 +50,8 @@ export function buildProposedFilename(opts: {
   const lastName = sanitize(opts.lastName) || "Client";
   const firstInitial = sanitize(opts.firstInitial).slice(0, 1).toUpperCase() || "X";
   const docType = sanitize(opts.documentTypeLabel) || "Document";
-  return `${yy}-${mm}-${dd}_${lastName}_${firstInitial}-${docType}${opts.originalExt}`;
+  const acct = accountSuffix(opts.accountNumber);
+  return `${yy}-${mm}-${dd}_${lastName}_${firstInitial}-${docType}${acct ? `_${acct}` : ""}${opts.originalExt}`;
 }
 
 /**
