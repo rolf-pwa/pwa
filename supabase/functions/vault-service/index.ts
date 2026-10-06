@@ -2091,10 +2091,25 @@ serve(async (req) => {
         return new Response(JSON.stringify({ error: "staff_only" }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
       const items = Array.isArray(body.statements) ? body.statements.slice(0, 500) : [];
       const rows = [];
+      // Does each household's Vault root actually contain the Investments folder? (one Drive listing per household)
+      const { data: invTmpl } = await supabaseAdmin.from("vault_folder_templates").select("display_name").eq("slug", "investments").eq("is_active", true).maybeSingle();
+      const folderCache = new Map<string, boolean>();
+      const hasInvestmentsFolder = async (rootId: string) => {
+        if (!invTmpl) return false;
+        if (!folderCache.has(rootId)) {
+          try { folderCache.set(rootId, !!matchVaultCategoryFolder(await driveListChildren(rootId, accessToken), invTmpl.display_name)); }
+          catch { folderCache.set(rootId, false); }
+        }
+        return folderCache.get(rootId)!;
+      };
       for (const it of items) {
         const contract = String(it?.contract ?? "");
         const date = String(it?.statementDate ?? "");
         const plan = await planBulkFor(contract, date);
+        if (plan.status === "ready" && plan.hit?.vault_root_folder_id && !(await hasInvestmentsFolder(plan.hit.vault_root_folder_id))) {
+          plan.status = "no_folder";
+          plan.reason = "the household's Vault has no Investment Statements folder";
+        }
         rows.push({
           contract, statementDate: date, status: plan.status, reason: plan.reason ?? null,
           household_id: plan.hit?.household_id ?? null, household: plan.hit?.household_label ?? null,
