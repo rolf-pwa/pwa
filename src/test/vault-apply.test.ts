@@ -137,3 +137,19 @@ describe("applyPlan", () => {
     await expect(applyPlan(bad, [{ op: "insert", table: "holding_tank", values: {}, label: "b" }])).rejects.toThrow(/holding_tank \(b\) failed: nope/);
   });
 });
+
+describe("planInvestmentApply: withdrawals (all funds)", () => {
+  const hisa = { fund: "High Interest Savings Account (HISA)", category: "Income Funds" };
+  const a = (extra = {}) => ({ account_name: "iA Financial", account_number: "TF-9", book_value: 100, current_value: 90, ...extra });
+  const tctx = { ...ctx, statementDate: "2026-06-30" };
+
+  it("stores the total of all withdrawals with the statement date", () => {
+    const [w] = planInvestmentApply([a({ withdrawals: [{ ...hisa, amount: 40 }, { ...hisa, amount: 2.5 }, { fund: "Equity", category: "Canadian Equity funds", amount: 99 }] })], tctx) as any[];
+    expect(w.values).toMatchObject({ withdrawals_ytd: 141.5, withdrawals_as_of: "2026-06-30" });
+  });
+  it("stores 0 when the statement lists none, and nothing when it wasn't read or has no date", () => {
+    expect((planInvestmentApply([a({ withdrawals: [] })], tctx)[0] as any).values).toMatchObject({ withdrawals_ytd: 0 });
+    expect((planInvestmentApply([a()], tctx)[0] as any).values).not.toHaveProperty("withdrawals_ytd");
+    expect((planInvestmentApply([a({ withdrawals: [{ ...hisa, amount: 5 }] })], { ...ctx, statementDate: null })[0] as any).values).not.toHaveProperty("withdrawals_ytd");
+  });
+});

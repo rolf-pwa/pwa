@@ -96,6 +96,9 @@ describe("reviewMode / dataCompleteness", () => {
   });
   it("reports which areas have no records on file", () => {
     expect(dataCompleteness(good())).toEqual({ total: 6, onFile: 6, missing: [] });
+    const withStatements = dataCompleteness({ ...good(), statementData: { accounts: 3, withIncomeFunds: 0, withWithdrawals: 0 } });
+    expect(withStatements.total).toBe(8);
+    expect(withStatements.missing).toEqual(["Income funds read from statements", "Income-fund withdrawals read from statements"]);
     const thin: ReviewFacts = {
       ...good(),
       investments: { accountCount: 0, total: 0, trackedCount: 0, negativeCount: 0, staleCount: 0, statementsFiled: null },

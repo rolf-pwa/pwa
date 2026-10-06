@@ -2073,6 +2073,8 @@ export type Database = {
           status: string
           updated_at: string
           visibility_scope: Database["public"]["Enums"]["visibility_scope"]
+          withdrawals_as_of: string | null
+          withdrawals_ytd: number | null
         }
         Insert: {
           account_name: string
@@ -2095,6 +2097,8 @@ export type Database = {
           status?: string
           updated_at?: string
           visibility_scope?: Database["public"]["Enums"]["visibility_scope"]
+          withdrawals_as_of?: string | null
+          withdrawals_ytd?: number | null
         }
         Update: {
           account_name?: string
@@ -2117,6 +2121,8 @@ export type Database = {
           status?: string
           updated_at?: string
           visibility_scope?: Database["public"]["Enums"]["visibility_scope"]
+          withdrawals_as_of?: string | null
+          withdrawals_ytd?: number | null
         }
         Relationships: [
           {
@@ -6363,6 +6369,8 @@ export type Database = {
           notes: string | null
           updated_at: string
           visibility_scope: Database["public"]["Enums"]["visibility_scope"]
+          withdrawals_as_of: string | null
+          withdrawals_ytd: number | null
         }
         Insert: {
           account_name: string
@@ -6380,6 +6388,8 @@ export type Database = {
           notes?: string | null
           updated_at?: string
           visibility_scope?: Database["public"]["Enums"]["visibility_scope"]
+          withdrawals_as_of?: string | null
+          withdrawals_ytd?: number | null
         }
         Update: {
           account_name?: string
@@ -6397,6 +6407,8 @@ export type Database = {
           notes?: string | null
           updated_at?: string
           visibility_scope?: Database["public"]["Enums"]["visibility_scope"]
+          withdrawals_as_of?: string | null
+          withdrawals_ytd?: number | null
         }
         Relationships: [
           {
