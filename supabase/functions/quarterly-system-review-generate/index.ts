@@ -1,6 +1,7 @@
 // quarterly-system-review-generate (v2) -- builds a household's Quarterly Review in the Stabilization Map
 // document format. Figures and statuses are computed in code (sovereignty-diagnostics + quarterly-review-cards);
-// Gemini only writes the narrative (summary, Charter-alignment commentary, 90-day plan). If the AI is
+// Gemini only writes the narrative (summary, Charter-alignment commentary, focus line); the 90-day plan is derived from
+// the cards' action lines (review-plan.ts). If the AI is
 // unavailable the review is still produced, with a rule-based narrative.
 
 // deno-lint-ignore-file no-explicit-any
@@ -19,6 +20,7 @@ import {
 } from "../_shared/quarterly-review-cards.ts";
 import { allocateForHousehold, applyAllocation, REAL_ESTATE_ASSET_TYPE } from "../_shared/review-allocation.ts";
 import { evaluateTargets, type BalanceFigures } from "../_shared/charter-targets.ts";
+import { planFromCards } from "../_shared/review-plan.ts";
 import { hasLiquidityReserve } from "../_shared/quarterly-review-allocation.ts";
 
 const ALLOWED_ORIGINS = [
@@ -65,11 +67,8 @@ const TOOL_SCHEMA = {
         review_summary: { type: "STRING" },
         charter_alignment: { type: "STRING" },
         urgency_flag: { type: "STRING" },
-        action_plan_phase_1: { type: "ARRAY", items: { type: "OBJECT", properties: { title: { type: "STRING" }, detail: { type: "STRING" } }, required: ["title", "detail"] } },
-        action_plan_phase_2: { type: "ARRAY", items: { type: "OBJECT", properties: { title: { type: "STRING" }, detail: { type: "STRING" } }, required: ["title", "detail"] } },
-        action_plan_phase_3: { type: "ARRAY", items: { type: "OBJECT", properties: { title: { type: "STRING" }, detail: { type: "STRING" } }, required: ["title", "detail"] } },
       },
-      required: ["review_summary", "charter_alignment", "urgency_flag", "action_plan_phase_1", "action_plan_phase_2", "action_plan_phase_3"],
+      required: ["review_summary", "charter_alignment", "urgency_flag"],
     },
   }],
 };
@@ -85,12 +84,6 @@ Your job: draft ONLY the narrative fields. **Never invent, recompute or alter a 
 - review_summary: 1-2 sentences on where the household's system stands this quarter overall.
 - charter_alignment: 2-4 sentences on whether the household's assets, reserves, protection and documents are serving what the Charter says the family is for. Quote or paraphrase the Charter's purpose/mission/vision where it is provided. If no Charter exists, say plainly that nothing written yet governs the system and treat drafting and ratifying it as the first priority. Do not claim alignment that the statuses do not support.
 - urgency_flag: ONE sentence naming the single most important thing to resolve this quarter.
-- Action plan: 2-4 concrete items for EACH phase, grounded only in the facts and statuses provided; do not propose work for areas that are already Aligned except to maintain them:
-  - Phase 1 (Immediate, Days 1-30): protective and administrative fixes (missing records, unfiled documents, unreviewed items).
-  - Phase 2 (Structural Alignment, Days 31-60): the structural changes needed to bring a Partial/Needs Attention area into line with the Charter.
-  - Phase 3 (Governance & Reporting, Days 61-90): ratification, reporting and cadence steps, including preparing the next quarterly review.
-  - Each item: a short title (max ~50 characters) and one supporting sentence.
-- The plan must carry out the computed "Action" lines (they hold the dollar amounts, already worked out); put protective and record-keeping actions in Phase 1 and rebalancing moves in Phase 2. Never alter an amount.
 - Never quote internal field names or raw scores. Keep every field concise.
 
 ## Output
@@ -108,11 +101,6 @@ Your job: draft ONLY the narrative fields. **Never invent, recompute or alter a 
 - review_summary: 1-2 sentences on what ProsperWise can see of the household's system today and how complete that picture is.
 - charter_alignment: 3-4 sentences on what a Sovereignty Charter would govern for THIS household: use their actual figures and the specific gaps in the statuses (for example reserves with no written purpose, estate documents not reviewed, accounts not tracked). Describe the value concretely; do not use generic marketing language and do not promise outcomes.
 - urgency_flag: ONE sentence naming the single most useful thing to settle first.
-- Action plan: 2-4 concrete items for EACH phase, grounded only in the facts and statuses:
-  - Phase 1 (Immediate, Days 1-30): complete and verify the household's records and close any protective gaps.
-  - Phase 2 (Structural Purification, Days 31-60): clarify the structure the Charter will rest on (reserves, estate documents, accounts).
-  - Phase 3 (Governance Ratification, Days 61-90): draft and ratify the Charter and set the quarterly review cadence.
-  - Each item: a short title (max ~50 characters) and one supporting sentence.
 - Never quote internal field names or raw scores. Keep every field concise.
 
 ## Output
@@ -161,16 +149,10 @@ function factsBlock(o: {
 }
 
 const clip = (v: unknown, n: number) => String(v ?? "").slice(0, n);
-const cleanItems = (arr: unknown) =>
-  Array.isArray(arr)
-    ? arr.filter((b: any) => b && typeof b === "object").map((b: any) => ({ title: clip(b.title, 80), detail: clip(b.detail, 300) })).filter((b) => b.title).slice(0, 5)
-    : [];
 
 /** Rule-based narrative used when the AI is unavailable. */
 function fallbackNarrative(cards: ReviewCard[], overall: ReturnType<typeof overallAlignment>, mode: ReviewMode) {
   const attention = cards.filter((c) => c.status === "Needs Attention");
-  const partial = cards.filter((c) => c.status === "Partial" || c.status === "Not Assessed");
-  const item = (c: ReviewCard) => ({ title: clip(`Resolve: ${c.label}`, 80), detail: clip(c.detail, 300) });
   return {
     review_summary: overall.status === "Aligned"
       ? "Every area reviewed this quarter is in line with the household's system."
@@ -178,14 +160,7 @@ function fallbackNarrative(cards: ReviewCard[], overall: ReturnType<typeof overa
     charter_alignment: mode === "survey"
       ? "This narrative was generated from rules because the AI drafting step was unavailable. The cards below show what ProsperWise has on file; a Charter would add written rules for each area."
       : "This narrative was generated from rules because the AI drafting step was unavailable. Review each area below against the Charter.",
-    urgency_flag: attention[0] ? `Most urgent: ${attention[0].label} -- ${attention[0].detail}` : "No area needs urgent attention this quarter.",
-    action_plan: {
-      phase_1: attention.slice(0, 3).map(item),
-      phase_2: partial.slice(0, 3).map(item),
-      phase_3: [mode === "survey"
-        ? { title: "Draft and ratify the Charter", detail: "Write the household's purpose, reserve rules and governance down so the system can be reviewed against it." }
-        : { title: "Prepare the next quarterly review", detail: "Refresh account values and re-run this review at the start of next quarter." }],
-    },
+    urgency_flag: attention[0] ? `Most urgent: ${attention[0].label} -- ${attention[0].detail}` : "No area needs urgent attention this quarter."
   };
 }
 
@@ -499,11 +474,9 @@ serve(async (req) => {
       );
       const call = (result?.candidates?.[0]?.content?.parts ?? []).find((p: any) => p.functionCall)?.functionCall;
       const a = call?.args;
-      const p1 = cleanItems(a?.action_plan_phase_1), p2 = cleanItems(a?.action_plan_phase_2), p3 = cleanItems(a?.action_plan_phase_3);
-      if (a && a.review_summary && p1.length + p2.length + p3.length > 0) {
+      if (a && a.review_summary) {
         narrative = {
           review_summary: clip(a.review_summary, 1200), charter_alignment: clip(a.charter_alignment, 1500), urgency_flag: clip(a.urgency_flag, 600),
-          action_plan: { phase_1: p1, phase_2: p2, phase_3: p3 },
         };
         aiNote = `Narrative drafted by ${GEMINI_GOVERNANCE_MODEL} from the computed facts.`;
       }
@@ -534,7 +507,7 @@ serve(async (req) => {
     ].join(" ");
 
     const { error: updErr } = await supabase.from("quarterly_system_reviews").update({
-      diagnostics, alignment_cards: cards, action_plan: narrative.action_plan, urgency_flag: narrative.urgency_flag,
+      diagnostics, alignment_cards: cards, action_plan: { ...planFromCards(cards, mode), auto: true }, urgency_flag: narrative.urgency_flag,
       charter_alignment: narrative.charter_alignment, review_summary: narrative.review_summary,
       purpose_statement: charterText.purpose, primary_goal: charterText.mission, long_term_vision: charterText.vision,
       cross_system_status: overall.status, review_mode: mode,
