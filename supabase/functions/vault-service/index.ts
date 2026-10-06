@@ -21,6 +21,7 @@ import { checkOutboundPii } from "../_shared/pii-shield.ts";
 import { validateProSession } from "../_shared/pro-portal-auth.ts";
 import { parseServiceAccountKey } from "../_shared/vertex-ai.ts";
 import { classifyShoeboxFile, buildProposedFilename, resolvePrimaryAdultName } from "../_shared/vault-shoebox-classify.ts";
+import { planBulkStatement, normalizeContract, isIsoDate, type AccountHit, type BulkPlan } from "../_shared/bulk-statement-plan.ts";
 import { autoFileBlocker, isSignedCopy, uniqueFilename } from "../_shared/vault-shoebox-naming.ts";
 import { driveDownloadFile, matchVaultCategoryFolder } from "../_shared/vault-provisioning.ts";
 import { logActionEvent } from "../_shared/action-brain.ts";
@@ -977,6 +978,45 @@ async function runShoeboxAutoFile(accessToken: string) {
     }
   }
   return summary;
+}
+
+// Bulk statement import: work out where one statement belongs. The database is the source of truth --
+// nothing the browser sends (other than the contract number and statement date) is trusted.
+async function planBulkFor(contractRaw: string, statementDate: string): Promise<BulkPlan> {
+  const contract = normalizeContract(contractRaw);
+  const [{ data: ht }, { data: vy }, { data: sh }] = await Promise.all([
+    supabaseAdmin.from("holding_tank").select("household_id, contact_id").eq("account_number", contract),
+    supabaseAdmin.from("vineyard_accounts").select("contact_id").eq("account_number", contract),
+    supabaseAdmin.from("storehouses").select("contact_id").eq("account_number", contract),
+  ]);
+  const rows = [
+    ...(ht ?? []).map((r) => ({ household_id: r.household_id as string | null, contact_id: r.contact_id as string | null })),
+    ...(vy ?? []).map((r) => ({ household_id: null as string | null, contact_id: r.contact_id as string | null })),
+    ...(sh ?? []).map((r) => ({ household_id: null as string | null, contact_id: r.contact_id as string | null })),
+  ];
+  const contactIds = [...new Set(rows.map((r) => r.contact_id).filter(Boolean))] as string[];
+  const { data: contacts } = contactIds.length
+    ? await supabaseAdmin.from("contacts").select("id, first_name, last_name, household_id").in("id", contactIds)
+    : { data: [] as { id: string; first_name: string; last_name: string; household_id: string | null }[] };
+  const byContact = new Map((contacts ?? []).map((c) => [c.id, c]));
+  const householdIds = [...new Set(rows.map((r) => r.household_id ?? byContact.get(r.contact_id ?? "")?.household_id).filter(Boolean))] as string[];
+  const { data: hhs } = householdIds.length
+    ? await supabaseAdmin.from("households").select("id, label, vault_root_folder_id").in("id", householdIds)
+    : { data: [] as { id: string; label: string | null; vault_root_folder_id: string | null }[] };
+  const hhById = new Map((hhs ?? []).map((h) => [h.id, h]));
+  const hits: AccountHit[] = rows.map((r) => {
+    const c = r.contact_id ? byContact.get(r.contact_id) : undefined;
+    const hid = r.household_id ?? c?.household_id ?? null;
+    const h = hid ? hhById.get(hid) : undefined;
+    return { household_id: hid, household_label: h?.label ?? null, vault_root_folder_id: h?.vault_root_folder_id ?? null, contact_id: r.contact_id, first_name: c?.first_name ?? null, last_name: c?.last_name ?? null };
+  });
+  const [{ data: prior }, { data: names }] = await Promise.all([
+    supabaseAdmin.from("vault_bulk_import_items").select("id").eq("contract_number", contract).eq("statement_date", statementDate).maybeSingle(),
+    householdIds.length
+      ? supabaseAdmin.from("vault_files").select("name").in("household_id", householdIds).eq("is_folder", false).ilike("name", `%${contract.slice(-4)}%`)
+      : Promise.resolve({ data: [] as { name: string }[] }),
+  ]);
+  return planBulkStatement({ contract, statementDate, hits, existingNames: (names ?? []).map((n) => n.name), alreadyFiled: !!prior });
 }
 
 function genUnlockCode() {
@@ -2041,6 +2081,98 @@ serve(async (req) => {
       await logShoeboxDecision(supabaseAdmin, actor.userId, proposalId, { name: finalName, category_slug: finalCategorySlug ?? null });
       await audit(actor, "shoebox_file_filed", proposal.contact_id, proposal.drive_id, finalName, req, { category_slug: finalCategorySlug ?? null, moved: moving });
       return new Response(JSON.stringify({ ok: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  BULK STATEMENT IMPORT (staff): preview -> file one at a time (hidden from clients) -> reveal
+    // ═════════════════════════════════════════════════════════
+    if (action === "bulkStatementsPreview") {
+      if (actor.kind !== "staff")
+        return new Response(JSON.stringify({ error: "staff_only" }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
+      const items = Array.isArray(body.statements) ? body.statements.slice(0, 500) : [];
+      const rows = [];
+      for (const it of items) {
+        const contract = String(it?.contract ?? "");
+        const date = String(it?.statementDate ?? "");
+        const plan = await planBulkFor(contract, date);
+        rows.push({
+          contract, statementDate: date, status: plan.status, reason: plan.reason ?? null,
+          household_id: plan.hit?.household_id ?? null, household: plan.hit?.household_label ?? null,
+          owner: plan.hit ? `${plan.hit.first_name ?? ""} ${plan.hit.last_name ?? ""}`.trim() : null, fileName: plan.fileName ?? null,
+        });
+      }
+      return new Response(JSON.stringify({ rows }), { headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    if (action === "bulkStatementFile") {
+      if (actor.kind !== "staff")
+        return new Response(JSON.stringify({ error: "staff_only" }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
+      const { contract, statementDate, base64, batchId } = body;
+      if (!contract || !isIsoDate(statementDate) || typeof base64 !== "string" || !batchId)
+        return new Response(JSON.stringify({ error: "missing_fields" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+      if (bytes.length < 200 || bytes.length > 8 * 1024 * 1024 || String.fromCharCode(...bytes.subarray(0, 5)) !== "%PDF-")
+        return new Response(JSON.stringify({ error: "not_a_pdf_or_too_large" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      const plan = await planBulkFor(String(contract), statementDate);
+      if (plan.status !== "ready" || !plan.hit || !plan.fileName)
+        return new Response(JSON.stringify({ filed: false, status: plan.status, reason: plan.reason ?? null }), { headers: { ...cors, "Content-Type": "application/json" } });
+      const { data: tmpl } = await supabaseAdmin.from("vault_folder_templates").select("display_name").eq("slug", "investments").eq("is_active", true).maybeSingle();
+      if (!tmpl) throw new Error("investments_template_missing");
+      const rootChildren = await driveListChildren(plan.hit.vault_root_folder_id!, accessToken);
+      const dest = matchVaultCategoryFolder(rootChildren, tmpl.display_name);
+      if (!dest)
+        return new Response(JSON.stringify({ filed: false, status: "no_vault", reason: "Investments folder not found in the household Vault" }), { headers: { ...cors, "Content-Type": "application/json" } });
+
+      const boundary = "----bulk" + Math.random().toString(36).slice(2);
+      const pre = new TextEncoder().encode(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name: plan.fileName, parents: [dest.id], mimeType: "application/pdf" })}\r\n--${boundary}\r\nContent-Type: application/pdf\r\n\r\n`);
+      const post = new TextEncoder().encode(`\r\n--${boundary}--`);
+      const bodyBytes = new Uint8Array(pre.length + bytes.length + post.length);
+      bodyBytes.set(pre, 0); bodyBytes.set(bytes, pre.length); bodyBytes.set(post, pre.length + bytes.length);
+      const up = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+        method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": `multipart/related; boundary=${boundary}` }, body: bodyBytes,
+      });
+      if (!up.ok) throw new Error(`bulk_upload_failed: ${await up.text()}`);
+      const created = await up.json();
+      await supabaseAdmin.from("vault_files").insert({
+        drive_id: created.id, contact_id: plan.hit.contact_id, household_id: plan.hit.household_id, parent_folder_id: dest.id,
+        ancestor_folder_ids: [dest.id, ...(await getAncestors(dest.id, accessToken))],
+        name: plan.fileName, mime_type: "application/pdf", is_folder: false, size_bytes: bytes.length,
+        client_visible: false, staff_reviewed: false,
+      });
+      const { error: itemErr } = await supabaseAdmin.from("vault_bulk_import_items").insert({
+        batch_id: batchId, household_id: plan.hit.household_id, contact_id: plan.hit.contact_id, contract_number: normalizeContract(String(contract)),
+        statement_date: statementDate, drive_id: created.id, file_name: plan.fileName, filed_by: actor.userId,
+      });
+      if (itemErr) throw itemErr;
+      await audit(actor, "bulk_statement_filed", plan.hit.contact_id, created.id, plan.fileName, req, { household_id: plan.hit.household_id, batch_id: batchId, hidden_from_client: true });
+      return new Response(JSON.stringify({ filed: true, fileName: plan.fileName, household: plan.hit.household_label }), { headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    if (action === "bulkStatementsList") {
+      if (actor.kind !== "staff")
+        return new Response(JSON.stringify({ error: "staff_only" }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
+      const { data: rows, error } = await supabaseAdmin
+        .from("vault_bulk_import_items").select("batch_id, created_at, household_id, file_name, revealed_at, households(label)")
+        .order("created_at", { ascending: false }).limit(1000);
+      if (error) throw error;
+      return new Response(JSON.stringify({ items: rows ?? [] }), { headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    // Makes a batch's files visible to clients (one-way for this action; hide again per file in the Vault).
+    if (action === "bulkStatementsReveal") {
+      if (actor.kind !== "staff")
+        return new Response(JSON.stringify({ error: "staff_only" }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
+      const { batchId } = body;
+      if (!batchId)
+        return new Response(JSON.stringify({ error: "missing_fields" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      const { data: items } = await supabaseAdmin.from("vault_bulk_import_items").select("id, drive_id").eq("batch_id", batchId).is("revealed_at", null);
+      const ids = (items ?? []).map((i) => i.drive_id);
+      if (ids.length) {
+        await supabaseAdmin.from("vault_files").update({ client_visible: true, staff_reviewed: true }).in("drive_id", ids);
+        await supabaseAdmin.from("vault_bulk_import_items").update({ revealed_at: new Date().toISOString(), revealed_by: actor.userId }).eq("batch_id", batchId).is("revealed_at", null);
+      }
+      await audit(actor, "bulk_statements_revealed", null, null, null, req, { batch_id: batchId, count: ids.length });
+      return new Response(JSON.stringify({ revealed: ids.length }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
 
     if (action === "listShoeboxAutoFiled") {

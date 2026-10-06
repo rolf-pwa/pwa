@@ -37,6 +37,7 @@ const ProPortalContact = lazy(() => import("@/modules/pro/pages/ProPortalContact
 const Leads = lazy(() => import("@/modules/crm/pages/Leads"));
 const ReviewQueue = lazy(() => import("@/modules/audit/pages/ReviewQueue"));
 const Stage2Review = lazy(() => import("@/modules/audit/pages/Stage2Review"));
+const BulkStatementImport = lazy(() => import("@/modules/crm/pages/BulkStatementImport"));
 const Requests = lazy(() => import("@/modules/crm/pages/Requests"));
 const Households = lazy(() => import("@/modules/crm/pages/Households"));
 const HouseholdDetail = lazy(() => import("@/modules/crm/pages/HouseholdDetail"));
@@ -138,6 +139,7 @@ const App = () => (
               <Route path="/requests" element={<ProtectedRoute><Requests /></ProtectedRoute>} />
               <Route path="/review-queue" element={<ProtectedRoute><ReviewQueue /></ProtectedRoute>} />
               <Route path="/glass-box-review" element={<ProtectedRoute><Stage2Review /></ProtectedRoute>} />
+              <Route path="/bulk-statement-import" element={<ProtectedRoute><BulkStatementImport /></ProtectedRoute>} />
               <Route path="/workbench" element={<ProtectedRoute><Workbench /></ProtectedRoute>} />
               <Route path="/pipeline" element={<ProtectedRoute><Pipeline /></ProtectedRoute>} />
               <Route path="/services" element={<ProtectedRoute><BillingServices /></ProtectedRoute>} />
