@@ -1,6 +1,11 @@
-// Pure logic for the Quarterly Review: turns already-gathered facts into alignment cards (status +
-// plain detail), a quarter label and quarter-over-quarter changes. No I/O, so it is unit-tested.
-// Statuses and figures are decided here, never by the AI; the AI only writes the narrative.
+// Pure logic for the Sovereignty Review's status cards. The cards follow the family's Vineyard and Storehouse
+// framework, the same lines as the balance sheet: Charter, Vineyard, Liquidity Reserve, Strategic Reserve,
+// Philanthropic Trust, Legacy Trust, Liabilities. Each reads the SAME allocated figures the balance sheet shows,
+// so the two can never disagree, and each is tested against the Charter's numeric targets in code.
+// Statuses and figures are decided here, never by the AI; the AI only writes the Charter notes and the plan.
+// Tax is deliberately not a card (a separate projection will cover it).
+
+import type { TargetArea, TargetResult } from "./charter-targets.ts";
 
 export type AlignStatus = "Aligned" | "Partial" | "Needs Attention" | "Not Assessed";
 
@@ -9,21 +14,46 @@ export interface ReviewCard {
   label: string;
   status: AlignStatus;
   detail: string;
+  /** Charter targets for this area, already checked against the balance sheet. */
+  targets?: TargetResult[];
+  /** One sentence from the AI saying whether the area meets the Charter's provisions (never changes the status). */
+  charter_note?: string;
+}
+
+export interface EstateAdult {
+  name: string;
+  will: "signed" | "unsigned" | "missing";
+  willDate: string | null;
+  poa: "on_file" | "missing";
+}
+
+export interface EstateFacts {
+  /** documents = read from the Vault and approved in Glass-Box; manual = typed on the Stabilization Map; none = nothing. */
+  source: "documents" | "manual" | "none";
+  adults: EstateAdult[];
+  trusts: number;
+  manual?: { will: string | null; poa: string | null; beneficiaries: string | null };
 }
 
 export interface ReviewFacts {
   charter: { source: "vault" | "household" | "contact" | null; ratified: boolean; hasVision: boolean };
-  investments: {
-    accountCount: number; total: number; trackedCount: number; negativeCount: number;
-    staleCount: number;           // tracked, but last snapshot older than the freshness window
-    statementsFiled: boolean | null; // Vault "Investment Statements" folder has documents (null = unknown)
+  balance: {
+    vineyard: number; holdingTank: number; liquidity: number; strategic: number; philanthropic: number; legacy: number;
+    totalAssets: number; liabilities: number; netWorth: number;
+    realEstate: number; cashValue: number; incomeFundsInLiquidity: number;
   };
-  storehouses: { count: number; aligned: number; pending: number; misaligned: number; underfunded: number; missingLanes: number[] };
-  insurance: { policyCount: number; coverageTotal: number; missingCoverageCount: number; missingBeneficiaryCount: number; renewalsDueSoon: number; documentsFiled: boolean | null };
-  estate: { will: string | null; poa: string | null; beneficiaries: string | null; documentsFiled: boolean | null };
-  tax: { documentsFiled: boolean | null };
-  liabilities: { personal: number; corporate: number; overdueLoans: number; revolving?: { limit: number; available: number } | null };
-  documents: { percent: number; satisfied: number; total: number; missing: string[] };
+  vineyard: {
+    accountCount: number;          // accounts that issue a statement
+    statementsRead: number;        // of those, read from a statement this quarter
+    staleCount: number;            // read, but not updated within the freshness window
+    statementsFiled: boolean | null;
+    withdrawalsYtd: number | null;
+  };
+  liquidity: { setUp: boolean; target: number | null };
+  strategic: { policyCount: number; coverageTotal: number; missingCoverageCount: number; missingBeneficiaryCount: number; renewalsDueSoon: number; documentsFiled: boolean | null };
+  legacy: { realEstate: number; estate: EstateFacts };
+  liabilities: { total: number; corporate: number; overdueLoans: number; revolving?: { limit: number; available: number } | null };
+  targets: TargetResult[];
   /** What the statements have given us so far (optional: omitted when not looked up). */
   statementData?: { accounts: number; withIncomeFunds: number; withWithdrawals: number } | null;
   corporate?: { activeAssetRatio: number | null; usaOnFile: boolean | null; usaStale: boolean | null; sbdClawback: number | null } | null;
@@ -37,8 +67,39 @@ export function quarterLabel(d: Date): string {
   return `${d.getUTCFullYear()} Q${Math.floor(d.getUTCMonth() / 3) + 1}`;
 }
 
+/** A target that is short of, or over, the Charter's limit makes the area Needs Attention. */
+function withTargets(status: AlignStatus, targets: TargetResult[]): AlignStatus {
+  return targets.some((t) => t.status === "below" || t.status === "above") ? "Needs Attention" : status;
+}
+
+const forArea = (f: ReviewFacts, area: TargetArea) => f.targets.filter((t) => t.area === area);
+
+/** Estate status and a plain line, from approved documents when there are any, else from the typed-in statuses. */
+export function estateSummary(e: EstateFacts): { status: AlignStatus; detail: string } {
+  if (e.source === "documents") {
+    const lines = e.adults.map((a) => {
+      const will = a.will === "signed" ? `Will signed${a.willDate ? ` ${a.willDate}` : ""}` : a.will === "unsigned" ? "Will on file but not signed" : "no Will on file";
+      return `${a.name}: ${will}; ${a.poa === "on_file" ? "Power of Attorney on file" : "no Power of Attorney on file"}`;
+    });
+    const trust = e.trusts > 0 ? ` ${plural(e.trusts, "trust document")} on file.` : "";
+    const missingWill = e.adults.some((a) => a.will !== "signed");
+    const missingPoa = e.adults.some((a) => a.poa !== "on_file");
+    const status: AlignStatus = missingWill ? "Needs Attention" : missingPoa ? "Partial" : "Aligned";
+    return { status, detail: `${lines.join(". ")}.${trust}` };
+  }
+  if (e.source === "manual" && e.manual) {
+    const m = e.manual;
+    const label = (v: string | null, noun: string) => (v ? `${noun} ${v}` : `${noun} not reviewed`);
+    const will = m.will === "current", poa = m.poa === "current", ben = m.beneficiaries === "coordinated";
+    const status: AlignStatus = will && poa && ben ? "Aligned" : m.will === "missing" || m.poa === "missing" ? "Needs Attention" : "Partial";
+    return { status, detail: `${[label(m.will, "Will"), label(m.poa, "Power of Attorney"), label(m.beneficiaries, "Beneficiaries")].join("; ")} (entered by hand).` };
+  }
+  return { status: "Not Assessed", detail: "No estate documents have been read from the Vault yet." };
+}
+
 export function buildAlignmentCards(f: ReviewFacts): ReviewCard[] {
   const cards: ReviewCard[] = [];
+  const b = f.balance;
 
   // Charter
   {
@@ -46,108 +107,98 @@ export function buildAlignmentCards(f: ReviewFacts): ReviewCard[] {
     const detail = f.charter.source === null
       ? "No Charter is on file, so nothing written governs the system yet."
       : f.charter.ratified
-        ? `Charter is ratified${f.charter.source === "contact" ? " (earlier-format Charter)" : f.charter.source === "vault" ? " (signed copy on file in the Vault)" : ""}.`
+        ? `Charter is ratified${f.charter.source === "contact" ? " (earlier-format Charter)" : f.charter.source === "vault" ? " (signed copy on file in the Vault)" : ""}${f.targets.length ? `; ${plural(f.targets.length, "numeric target")} read from it` : ""}.`
         : "A Charter exists but is not yet ratified.";
-    cards.push({ key: "charter", label: "Sovereignty Charter", status, detail });
+    // Charter rules that belong to no one area (waiting periods, review triggers) are listed here for reference.
+    cards.push({ key: "charter", label: "Sovereignty Charter", status, detail, targets: forArea(f, "other") });
   }
 
-  // Investments
+  // Vineyard
   {
-    const i = f.investments;
+    const v = f.vineyard;
+    const targets = forArea(f, "vineyard");
     let status: AlignStatus;
     let detail: string;
-    if (i.accountCount === 0) { status = "Not Assessed"; detail = "No investment accounts are on record yet."; }
+    if (v.accountCount === 0 && b.vineyard <= 0) { status = "Not Assessed"; detail = "No investment accounts are on record yet."; }
     else {
-      const parts = [`${plural(i.accountCount, "account")} totalling ${money(i.total)}`];
-      parts.push(`${i.trackedCount}/${i.accountCount} with harvest tracking`);
-      if (i.staleCount > 0) parts.push(`${plural(i.staleCount, "account")} not updated this quarter`);
-      if (i.negativeCount > 0) parts.push(`${plural(i.negativeCount, "account")} with a negative harvest to review`);
-      if (i.statementsFiled === false) parts.push("no statements filed in the Vault");
+      const parts = [`${money(b.vineyard)} in the Vineyard${v.accountCount ? ` across ${plural(v.accountCount, "account")} with statements` : ""}`];
+      if (b.holdingTank > 0) parts.push(`${money(b.holdingTank)} more in the Holding Tank`);
+      if (v.accountCount > 0) parts.push(`${v.statementsRead}/${v.accountCount} read from statements this quarter`);
+      if (v.staleCount > 0) parts.push(`${plural(v.staleCount, "account")} not updated recently`);
+      if (v.withdrawalsYtd !== null) parts.push(`${money(v.withdrawalsYtd)} withdrawn this year`);
+      if (v.statementsFiled === false) parts.push("no statements filed in the Vault");
       detail = `${parts.join("; ")}.`;
-      status = i.trackedCount < i.accountCount || i.staleCount > 0 || i.negativeCount > 0 || i.statementsFiled === false
-        ? (i.trackedCount === 0 ? "Needs Attention" : "Partial") : "Aligned";
+      status = v.accountCount > 0 && (v.statementsRead < v.accountCount || v.staleCount > 0 || v.statementsFiled === false) ? "Partial" : "Aligned";
     }
-    cards.push({ key: "investments", label: "Investments", status, detail });
+    cards.push({ key: "vineyard", label: "Vineyard", status: withTargets(status, targets), detail, targets });
   }
 
-  // Storehouse reserves
+  // Liquidity Reserve
   {
-    const s = f.storehouses;
+    const targets = forArea(f, "liquidity");
+    const parts = [`${money(b.liquidity)} in the Liquidity Reserve`];
+    if (b.incomeFundsInLiquidity > 0) parts.push(`includes ${money(b.incomeFundsInLiquidity)} of income funds from the statements`);
     let status: AlignStatus;
-    let detail: string;
-    if (s.count === 0) { status = "Needs Attention"; detail = "No Storehouse reserves are set up."; }
+    if (f.liquidity.setUp && f.liquidity.target !== null) {
+      parts.push(`its target is ${money(f.liquidity.target)}`);
+      status = b.liquidity >= f.liquidity.target ? "Aligned" : "Needs Attention";
+    } else if (targets.length > 0) status = "Aligned"; // judged by the Charter targets below
+    else if (b.liquidity > 0) { parts.push("no target is recorded to measure it against"); status = "Partial"; }
+    else { parts.push("nothing is set aside and no target is recorded"); status = "Needs Attention"; }
+    cards.push({ key: "liquidity", label: "Liquidity Reserve", status: withTargets(status, targets), detail: `${parts.join("; ")}.`, targets });
+  }
+
+  // Strategic Reserve
+  {
+    const s = f.strategic;
+    const targets = forArea(f, "strategic");
+    const parts = [`${money(b.strategic)} in the Strategic Reserve`];
+    if (b.cashValue > 0) parts.push(`includes ${money(b.cashValue)} of insurance cash value`);
+    let status: AlignStatus;
+    if (s.policyCount === 0 && b.strategic <= 0) { status = "Not Assessed"; parts.push("no insurance policies are on record"); }
     else {
-      const parts = [`${plural(s.count, "reserve")}: ${s.aligned} aligned`];
-      if (s.pending) parts.push(`${s.pending} pending review`);
-      if (s.misaligned) parts.push(`${s.misaligned} misaligned`);
-      if (s.underfunded) parts.push(`${s.underfunded} below target`);
-      if (s.missingLanes.length) parts.push(`missing lane${s.missingLanes.length > 1 ? "s" : ""} ${s.missingLanes.map((n) => `#${n}`).join(", ")}`);
-      detail = `${parts.join("; ")}.`;
-      status = s.misaligned > 0 || s.underfunded > 0 ? "Needs Attention" : s.pending > 0 || s.missingLanes.length > 0 ? "Partial" : "Aligned";
+      if (s.policyCount > 0) parts.push(`${plural(s.policyCount, "policy", "policies")} with ${money(s.coverageTotal)} of coverage`);
+      if (s.missingCoverageCount) parts.push(`${plural(s.missingCoverageCount, "policy", "policies")} missing a coverage amount`);
+      if (s.missingBeneficiaryCount) parts.push(`${plural(s.missingBeneficiaryCount, "policy", "policies")} with no beneficiary recorded`);
+      if (s.renewalsDueSoon) parts.push(`${s.renewalsDueSoon} renewing within 90 days`);
+      if (s.documentsFiled === false) parts.push("no insurance documents in the Vault");
+      status = s.missingCoverageCount || s.missingBeneficiaryCount || s.documentsFiled === false ? "Partial" : "Aligned";
     }
-    cards.push({ key: "storehouse", label: "Storehouse Reserves", status, detail });
+    cards.push({ key: "strategic", label: "Strategic Reserve", status: withTargets(status, targets), detail: `${parts.join("; ")}.`, targets });
   }
 
-  // Insurance
+  // Philanthropic Trust
   {
-    const n = f.insurance;
-    let status: AlignStatus;
-    let detail: string;
-    if (n.policyCount === 0) { status = "Not Assessed"; detail = "No insurance policies are on record."; }
-    else {
-      const parts = [`${plural(n.policyCount, "policy", "policies")}, ${money(n.coverageTotal)} of coverage`];
-      if (n.missingCoverageCount) parts.push(`${plural(n.missingCoverageCount, "policy", "policies")} missing a coverage amount`);
-      if (n.missingBeneficiaryCount) parts.push(`${plural(n.missingBeneficiaryCount, "policy", "policies")} with no beneficiary recorded`);
-      if (n.renewalsDueSoon) parts.push(`${n.renewalsDueSoon} renewing within 90 days`);
-      if (n.documentsFiled === false) parts.push("no insurance documents in the Vault");
-      detail = `${parts.join("; ")}.`;
-      status = n.missingCoverageCount || n.missingBeneficiaryCount || n.documentsFiled === false ? "Partial" : "Aligned";
-    }
-    cards.push({ key: "insurance", label: "Insurance", status, detail });
+    const targets = forArea(f, "philanthropic");
+    const status: AlignStatus = b.philanthropic > 0 ? "Aligned" : targets.length > 0 ? "Aligned" : "Not Assessed";
+    const detail = b.philanthropic > 0 ? `${money(b.philanthropic)} in the Philanthropic Trust.`
+      : targets.length > 0 ? "Nothing is held in the Philanthropic Trust yet."
+        : "Nothing is held in the Philanthropic Trust and the Charter sets no target for it.";
+    cards.push({ key: "philanthropic", label: "Philanthropic Trust", status: withTargets(status, targets), detail, targets });
   }
 
-  // Estate
+  // Legacy Trust (real estate + estate documents)
   {
-    const e = f.estate;
-    const known = [e.will, e.poa, e.beneficiaries].filter(Boolean).length;
-    const will = e.will === "current", poa = e.poa === "current", ben = e.beneficiaries === "coordinated";
-    let status: AlignStatus;
-    if (known === 0) status = e.documentsFiled ? "Partial" : "Not Assessed";
-    else status = will && poa && ben ? "Aligned" : e.will === "missing" || e.poa === "missing" ? "Needs Attention" : "Partial";
-    const label = (v: string | null, noun: string) => (v ? `${noun} ${v}` : `${noun} not reviewed`);
-    const detail = `${[label(e.will, "Will"), label(e.poa, "Power of Attorney"), label(e.beneficiaries, "Beneficiaries")].join("; ")}${
-      e.documentsFiled === false ? "; no estate documents in the Vault" : ""}.`;
-    cards.push({ key: "estate", label: "Estate", status, detail });
-  }
-
-  // Tax
-  {
-    const t = f.tax;
-    const status: AlignStatus = t.documentsFiled === null ? "Not Assessed" : t.documentsFiled ? "Aligned" : "Needs Attention";
-    const detail = t.documentsFiled === null ? "Tax documents could not be checked this quarter."
-      : t.documentsFiled ? "Tax documents are filed in the Vault." : "No tax documents are filed in the Vault.";
-    cards.push({ key: "tax", label: "Tax", status, detail });
+    const targets = forArea(f, "legacy");
+    const estate = estateSummary(f.legacy.estate);
+    const parts = [`${money(b.legacy)} in the Legacy Trust`];
+    if (f.legacy.realEstate > 0) parts.push(`includes ${money(f.legacy.realEstate)} of real estate`);
+    cards.push({
+      key: "legacy", label: "Legacy Trust", status: withTargets(estate.status, targets),
+      detail: `${parts.join("; ")}. Estate documents: ${estate.detail}`, targets,
+    });
   }
 
   // Liabilities
   {
     const l = f.liabilities;
-    const total = l.personal + l.corporate;
+    const targets = forArea(f, "liabilities");
     const status: AlignStatus = l.overdueLoans > 0 ? "Needs Attention" : "Aligned";
-    const detail = total === 0 ? "No liabilities are recorded."
-      : `${money(total)} recorded${l.corporate ? ` (${money(l.personal)} personal, ${money(l.corporate)} corporate)` : ""}${
+    const detail = l.total + l.corporate === 0 ? "No liabilities are recorded."
+      : `${money(l.total + l.corporate)} recorded${l.corporate ? ` (${money(l.total)} personal, ${money(l.corporate)} corporate)` : ""}${
         l.revolving && l.revolving.limit > 0 ? `; ${money(l.revolving.available)} of ${money(l.revolving.limit)} revolving credit available` : ""}${
         l.overdueLoans ? `; ${plural(l.overdueLoans, "intercompany loan")} overdue` : ""}.`;
-    cards.push({ key: "liabilities", label: "Liabilities", status, detail });
-  }
-
-  // Document readiness
-  {
-    const d = f.documents;
-    const status: AlignStatus = d.total === 0 ? "Not Assessed" : d.percent >= 100 ? "Aligned" : d.percent > 0 ? "Partial" : "Needs Attention";
-    const detail = d.total === 0 ? "Document readiness has not been assessed."
-      : `${d.satisfied}/${d.total} required document categories filed${d.missing.length ? `; missing: ${d.missing.slice(0, 3).join(", ")}` : ""}.`;
-    cards.push({ key: "documents", label: "Document Readiness", status, detail });
+    cards.push({ key: "liabilities", label: "Liabilities", status: withTargets(status, targets), detail, targets });
   }
 
   // Corporate governance (corporate-track households only)
@@ -204,16 +255,14 @@ export function reviewMode(charter: { source: "vault" | "household" | "contact" 
  */
 export function dataCompleteness(f: ReviewFacts): { total: number; onFile: number; missing: string[] } {
   const checks: [string, boolean][] = [
-    ["Investment accounts", f.investments.accountCount > 0],
-    ["Harvest tracking", f.investments.accountCount === 0 || f.investments.trackedCount > 0],
-    ["Storehouse reserves", f.storehouses.count > 0],
-    ["Insurance policies", f.insurance.policyCount > 0],
-    ["Estate review (Will, POA, beneficiaries)", [f.estate.will, f.estate.poa, f.estate.beneficiaries].some(Boolean)],
-    ["Vault documents", f.documents.total > 0 && f.tax.documentsFiled !== null],
+    ["Investment accounts", f.vineyard.accountCount > 0 || f.balance.vineyard > 0],
+    ["Insurance policies", f.strategic.policyCount > 0],
+    ["Estate documents", f.legacy.estate.source !== "none"],
+    ["Charter targets", f.targets.length > 0],
   ];
   if (f.statementData && f.statementData.accounts > 0) {
     checks.push(["Income funds read from statements", f.statementData.withIncomeFunds > 0]);
-    checks.push(["Income-fund withdrawals read from statements", f.statementData.withWithdrawals > 0]);
+    checks.push(["Withdrawals read from statements", f.statementData.withWithdrawals > 0]);
   }
   const missing = checks.filter(([, ok]) => !ok).map(([name]) => name);
   return { total: checks.length, onFile: checks.length - missing.length, missing };

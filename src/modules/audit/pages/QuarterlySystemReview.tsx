@@ -18,7 +18,8 @@ import pwLogoWhite from "@/assets/prosperwise-logo-white.png";
 
 type ActionItem = { title: string; detail: string };
 type ActionPlan = { phase_1: ActionItem[]; phase_2: ActionItem[]; phase_3: ActionItem[] };
-type Card = { key: string; label: string; status: string; detail: string };
+type TargetCheck = { label: string; area?: string; status: "met" | "below" | "above" | "info" | "not_computable"; targetText: string; actualText: string; summary: string; quote: string };
+type Card = { key: string; label: string; status: string; detail: string; targets?: TargetCheck[]; charter_note?: string };
 
 type Diag = {
   aum?: number;
@@ -32,6 +33,7 @@ type Diag = {
   deltas?: { aum: number | null; netWorth: number | null; previousLabel: string | null };
   data_completeness?: { total: number; onFile: number; missing: string[] };
   vault_scan?: string;
+  charter_extract?: { purpose: string; mission: string; vision: string; values: string[]; reserve_rules: string; governance: string; monthly_spending: number | null; targets: TargetCheck[] } | null;
   charter_file?: { name: string; modifiedTime: string | null; ratified: boolean; viaSubfolder: boolean; textRead: boolean } | null;
   harvest?: { current: number | null; snapshot_growth?: number; accounts_read?: number };
   allocation?: { notes: string[]; income_funds_moved: number; income_funds_on_file: number; cash_value_added: number; real_estate_added?: number };
@@ -88,7 +90,10 @@ const signed = (n: number) => `${n >= 0 ? "+" : "-"}${money(Math.abs(n))}`;
 const colLabel: React.CSSProperties = { fontSize: "6.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "2mm", paddingBottom: "1.5mm", borderBottom: "1px solid #e2e8f0" };
 const colText: React.CSSProperties = { fontSize: "8.5pt", color: "#334155", lineHeight: 1.4 };
 
-function StatusCard({ label, status, detail }: { label: string; status: string; detail: string }) {
+const TARGET_COLOR: Record<TargetCheck["status"], string> = { met: "#27ae60", below: "#c0392b", above: "#c0392b", info: "#64748b", not_computable: "#94a3b8" };
+const targetMark = (s: TargetCheck["status"]) => (s === "met" ? "✓ " : s === "below" || s === "above" ? "✗ " : "• ");
+
+function StatusCard({ label, status, detail, targets, note }: { label: string; status: string; detail: string; targets?: TargetCheck[]; note?: string }) {
   return (
     <div style={{ background: "#fafafa", borderLeft: "3px solid #a37c58", padding: "3mm 4mm" }}>
       <strong style={{ display: "block", fontSize: "8.5pt", fontWeight: 600, color: "#334155", marginBottom: "1mm" }}>
@@ -96,6 +101,12 @@ function StatusCard({ label, status, detail }: { label: string; status: string; 
         <span style={{ color: STATUS_COLOR[status] ?? "#e67e22", fontSize: "7pt", letterSpacing: ".08em", textTransform: "uppercase" }}>{status}</span>
       </strong>
       <p style={{ fontSize: "7.5pt", color: "#334155", lineHeight: 1.5 }}>{detail || "—"}</p>
+      {(targets ?? []).map((t, i) => (
+        <p key={i} style={{ fontSize: "7pt", lineHeight: 1.45, marginTop: "1mm", color: TARGET_COLOR[t.status] }}>
+          {targetMark(t.status)}{t.summary.replace(/^Charter: /, "Charter target: ")}
+        </p>
+      ))}
+      {note && <p style={{ fontSize: "7pt", lineHeight: 1.45, marginTop: "1.2mm", color: "#64748b", fontStyle: "italic" }}>{note}</p>}
     </div>
   );
 }
@@ -318,7 +329,10 @@ export default function QuarterlySystemReview() {
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>{STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                 </Select>
-                <Textarea rows={2} value={c.detail} onChange={(e) => patchCard(i, { detail: e.target.value })} />
+                <div className="space-y-1">
+                  <Textarea rows={2} value={c.detail} onChange={(e) => patchCard(i, { detail: e.target.value })} />
+                  <Textarea rows={2} placeholder="Charter note" value={c.charter_note ?? ""} onChange={(e) => patchCard(i, { charter_note: e.target.value })} />
+                </div>
               </div>
             ))}
           </div>
@@ -441,12 +455,12 @@ export default function QuarterlySystemReview() {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4mm" }}>
                   <StatRow label="Asset Protection" value={money(diag.insurance_coverage_total)} tone="#334155" />
                   {diag.harvest && <StatRow label="Harvest to date" value={diag.harvest.current === null ? "—" : money(diag.harvest.current)} tone="#334155" />}
-                  {typeof diag.accounts === "number" && <StatRow label="Accounts tracked" value={`${diag.tracked_accounts ?? 0}/${diag.accounts}`} tone="#334155" />}
+                  {typeof diag.accounts === "number" && <StatRow label="Statements read" value={`${diag.tracked_accounts ?? 0}/${diag.accounts}`} tone="#334155" />}
                 </div>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(60mm, 1fr))", gap: "3mm" }}>
-                {cards.map((c) => <StatusCard key={c.key} label={c.label} status={c.status} detail={c.detail} />)}
+                {cards.map((c) => <StatusCard key={c.key} label={c.label} status={c.status} detail={c.detail} targets={c.targets} note={c.charter_note} />)}
               </div>
             </main>
           </div>
@@ -482,6 +496,31 @@ export default function QuarterlySystemReview() {
             <div className="mt-6 rounded-lg border border-[#e2e8f0] bg-white p-4 text-xs text-[#64748b] print:hidden">
               <div className="mb-1 font-semibold uppercase tracking-wider text-[#a37c58]">Charter used (staff only)</div>
               <p>{review.diagnostics.charter_file.name}{review.diagnostics.charter_file.modifiedTime ? ` · updated ${format(new Date(review.diagnostics.charter_file.modifiedTime), "MMM d, yyyy")}` : ""} · {review.diagnostics.charter_file.viaSubfolder ? "Charter subfolder" : "Correspondence folder"} · {review.diagnostics.charter_file.ratified ? "treated as ratified" : "looks like a draft"} · {review.diagnostics.charter_file.textRead ? "text read for the commentary" : "text could not be read"}</p>
+            </div>
+          )}
+
+          {review.diagnostics?.charter_extract && !editing && (
+            <div className="mt-6 rounded-lg border border-[#e2e8f0] bg-white p-4 text-xs text-[#64748b] print:hidden">
+              <div className="mb-1 font-semibold uppercase tracking-wider text-[#a37c58]">Read from the Charter (staff only)</div>
+              <ul className="space-y-1">
+                {review.diagnostics.charter_extract.purpose && <li><strong>Purpose:</strong> {review.diagnostics.charter_extract.purpose}</li>}
+                {review.diagnostics.charter_extract.mission && <li><strong>Mission of capital:</strong> {review.diagnostics.charter_extract.mission}</li>}
+                {review.diagnostics.charter_extract.reserve_rules && <li><strong>Reserve rules:</strong> {review.diagnostics.charter_extract.reserve_rules}</li>}
+                {review.diagnostics.charter_extract.monthly_spending !== null && <li><strong>Monthly spending:</strong> {money(review.diagnostics.charter_extract.monthly_spending)}</li>}
+              </ul>
+              <div className="mt-2 font-semibold">Numeric targets ({review.diagnostics.charter_extract.targets.length})</div>
+              {review.diagnostics.charter_extract.targets.length === 0 ? (
+                <p>None were read from the Charter.</p>
+              ) : (
+                <ul className="space-y-1">
+                  {review.diagnostics.charter_extract.targets.map((t, i) => (
+                    <li key={i}>
+                      <span style={{ color: TARGET_COLOR[t.status] }}>{targetMark(t.status).trim()}</span> {t.summary.replace(/^Charter: /, "")}
+                      {t.quote && <span className="italic"> — “{t.quote}”</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 
