@@ -84,6 +84,10 @@ describe("quarterLabel / computeDeltas / overallAlignment", () => {
 });
 
 describe("reviewMode / dataCompleteness", () => {
+  it("a Charter found in the Vault counts as on file", () => {
+    expect(reviewMode({ source: "vault", ratified: true })).toBe("quarterly");
+    expect(buildAlignmentCards({ ...good(), charter: { source: "vault", ratified: true, hasVision: true } })[0].detail).toMatch(/Vault/);
+  });
   it("ratified Charter = quarterly review; anything else = survey", () => {
     expect(reviewMode({ source: "household", ratified: true })).toBe("quarterly");
     expect(reviewMode({ source: "contact", ratified: true })).toBe("quarterly");

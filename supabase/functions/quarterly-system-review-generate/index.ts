@@ -9,6 +9,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://esm.sh/zod@3.25.76";
 import { GEMINI_GOVERNANCE_MODEL, generateVertexContent, parseServiceAccountKey, withThinking } from "../_shared/vertex-ai.ts";
 import { computeSovereigntyDiagnostics } from "../_shared/sovereignty-diagnostics.ts";
+import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
+import { extractCharter, locateVaultCharter, type CharterExtract } from "../_shared/charter-vault.ts";
+import type { CharterFile } from "../_shared/charter-vault-pick.ts";
 import {
   buildAlignmentCards, computeDeltas, dataCompleteness, overallAlignment, quarterLabel, reviewMode, type ReviewCard, type ReviewFacts, type ReviewMode,
 } from "../_shared/quarterly-review-cards.ts";
@@ -134,6 +137,9 @@ function factsBlock(o: {
     o.charter.mission ? `Mission of capital: ${o.charter.mission}` : "",
     o.charter.vision ? `Vision: ${o.charter.vision}` : "",
     o.charter.values?.length ? `Core values: ${o.charter.values.join(", ")}` : "",
+    o.charter.reserveRules ? `Reserve and liquidity rules in the Charter: ${o.charter.reserveRules}` : "",
+    o.charter.governance ? `Governance in the Charter: ${o.charter.governance}` : "",
+    o.charter.unreadable ? "A Charter document is on file in the Vault, but its text could not be read this time; do not claim to know its contents." : "",
   ];
   return lines.filter((l) => l !== "").join("\n");
 }
@@ -240,15 +246,37 @@ serve(async (req) => {
       supabase.from("account_harvest_snapshots").select("vineyard_account_id, holding_tank_id, storehouse_id, snapshot_date, boy_value, current_harvest").in("contact_id", contactIds).order("snapshot_date", { ascending: false }),
     ]);
     const cc = (cCharters ?? [])[0] ?? null;
-    const charterSource: "household" | "contact" | null = hCharter ? "household" : (cc || (contacts ?? []).some((c: any) => c.charter_url)) ? "contact" : null;
+
+    // The Charter now lives in the Vault (10 Correspondence, ideally a "Charter" subfolder). Look there first.
+    let vaultCharter: CharterFile | null = null;
+    let vaultExtract: CharterExtract | null = null;
+    let driveToken: string | null = null;
+    let saKey: Awaited<ReturnType<typeof parseServiceAccountKey>> | null = null;
+    try { saKey = await parseServiceAccountKey(Deno.env.get("GCP_SERVICE_ACCOUNT_KEY")); } catch { /* AI steps fall back */ }
+    if (financials.vaultRootFolderId) {
+      try {
+        const { data: corrTmpl } = await supabase.from("vault_folder_templates").select("display_name").eq("slug", "correspondence").eq("is_active", true).maybeSingle();
+        if (corrTmpl) {
+          driveToken = await getServiceGoogleAccessToken(supabase);
+          vaultCharter = await locateVaultCharter(financials.vaultRootFolderId, corrTmpl.display_name, driveToken);
+          if (vaultCharter && saKey) vaultExtract = await extractCharter(saKey, vaultCharter, driveToken);
+        }
+      } catch (e) {
+        console.error("quarterly-system-review-generate: Vault Charter lookup failed:", e instanceof Error ? e.message : String(e));
+      }
+    }
+    const charterSource: "vault" | "household" | "contact" | null = vaultCharter ? "vault" : hCharter ? "household" : (cc || (contacts ?? []).some((c: any) => c.charter_url)) ? "contact" : null;
     // Household Charter: "complete" status or a completed_at stamp. Earlier-format Charter: a linked charter document counts as on file and ratified.
-    const ratified = hCharter ? (/complete/i.test(String(hCharter.status ?? "")) || !!hCharter.completed_at) : (contacts ?? []).some((c: any) => !!c.charter_url);
+    const ratified = vaultCharter ? vaultCharter.ratified : hCharter ? (/complete/i.test(String(hCharter.status ?? "")) || !!hCharter.completed_at) : (contacts ?? []).some((c: any) => !!c.charter_url);
     const charterText = {
       source: charterSource, ratified,
-      purpose: clip(cc?.intro_callout || cc?.intro_note, 600),
-      mission: clip(cc?.mission_of_capital, 600),
-      vision: clip(hCharter?.vision_text || cc?.vision_20_year, 800),
-      values: Array.isArray(hCharter?.core_values) ? hCharter.core_values.slice(0, 8).map((v: any) => clip(typeof v === "string" ? v : v?.name ?? v?.label ?? "", 60)).filter(Boolean) : [],
+      purpose: clip(vaultExtract?.purpose || cc?.intro_callout || cc?.intro_note, 700),
+      mission: clip(vaultExtract?.mission || cc?.mission_of_capital, 700),
+      vision: clip(vaultExtract?.vision || hCharter?.vision_text || cc?.vision_20_year, 900),
+      values: vaultExtract?.values?.length ? vaultExtract.values : Array.isArray(hCharter?.core_values) ? hCharter.core_values.slice(0, 8).map((v: any) => clip(typeof v === "string" ? v : v?.name ?? v?.label ?? "", 60)).filter(Boolean) : [],
+      reserveRules: vaultExtract?.reserve_rules ?? "",
+      governance: vaultExtract?.governance ?? "",
+      unreadable: !!vaultCharter && !vaultExtract,
     };
 
     // Latest snapshot per account.
@@ -357,11 +385,13 @@ serve(async (req) => {
       console.error("quarterly-system-review-generate: AI step failed:", e instanceof Error ? e.message : String(e));
     }
 
-    const diagnostics = { ...diag, track_type, deltas, harvest, tracked_accounts: tracked.length, accounts: accounts.length, data_completeness: completeness };
+    const charterFile = vaultCharter ? { name: vaultCharter.name, modifiedTime: vaultCharter.modifiedTime, ratified: vaultCharter.ratified, viaSubfolder: vaultCharter.viaSubfolder, textRead: !!vaultExtract } : null;
+    const diagnostics = { ...diag, charter_file: charterFile, track_type, deltas, harvest, tracked_accounts: tracked.length, accounts: accounts.length, data_completeness: completeness };
     const logic = [
       `Document type: ${mode === "survey" ? "Sovereignty Survey (no ratified Charter on file)" : "Quarterly Review (ratified Charter)"}. Records on file for ${completeness.onFile}/${completeness.total} areas${completeness.missing.length ? ` (not yet on file: ${completeness.missing.join(", ")})` : ""}.`,
       `Statuses are computed from live records: ${cards.map((c) => `${c.label} = ${c.status}`).join("; ")}.`,
       `Overall: ${overall.status} (${overall.attention} need attention, ${overall.partial} partial).`,
+      vaultCharter ? `Charter found in the Vault: "${vaultCharter.name}"${vaultCharter.viaSubfolder ? " (Charter subfolder)" : " (Correspondence folder)"}; ${vaultExtract ? "its text was read for the narrative" : "its text could not be read"}.` : "No Charter file found in the Vault Correspondence folder.",
       `Charter source: ${charterSource ?? "none"}${charterSource ? (ratified ? ", ratified" : ", not ratified") : ""}. Estate statuses come from the advisor-entered fields on the latest Stabilization Map.`,
       `Harvest snapshots older than ${FRESH_DAYS} days count as not updated. Vault document checks apply to legacy-Vault households only (otherwise "not assessed").`,
       aiNote,

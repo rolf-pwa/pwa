@@ -30,6 +30,7 @@ type Diag = {
   insurance_coverage_total?: number;
   deltas?: { aum: number | null; netWorth: number | null; previousLabel: string | null };
   data_completeness?: { total: number; onFile: number; missing: string[] };
+  charter_file?: { name: string; modifiedTime: string | null; ratified: boolean; viaSubfolder: boolean; textRead: boolean } | null;
   harvest?: { boy: number; current: number };
   tracked_accounts?: number;
   accounts?: number;
@@ -434,6 +435,13 @@ export default function QuarterlySystemReview() {
               <div style={{ fontSize: "8.5pt", fontWeight: 500 }}>{review.footer_note}</div>
             </div>
           </div>
+
+          {review.diagnostics?.charter_file && !editing && (
+            <div className="mt-6 rounded-lg border border-[#e2e8f0] bg-white p-4 text-xs text-[#64748b] print:hidden">
+              <div className="mb-1 font-semibold uppercase tracking-wider text-[#a37c58]">Charter used (staff only)</div>
+              <p>{review.diagnostics.charter_file.name}{review.diagnostics.charter_file.modifiedTime ? ` · updated ${format(new Date(review.diagnostics.charter_file.modifiedTime), "MMM d, yyyy")}` : ""} · {review.diagnostics.charter_file.viaSubfolder ? "Charter subfolder" : "Correspondence folder"} · {review.diagnostics.charter_file.ratified ? "treated as ratified" : "looks like a draft"} · {review.diagnostics.charter_file.textRead ? "text read for the commentary" : "text could not be read"}</p>
+            </div>
+          )}
 
           {completeness && !editing && (
             <div className="mt-6 rounded-lg border border-[#e2e8f0] bg-white p-4 text-xs text-[#64748b] print:hidden">

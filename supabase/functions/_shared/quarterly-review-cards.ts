@@ -12,7 +12,7 @@ export interface ReviewCard {
 }
 
 export interface ReviewFacts {
-  charter: { source: "household" | "contact" | null; ratified: boolean; hasVision: boolean };
+  charter: { source: "vault" | "household" | "contact" | null; ratified: boolean; hasVision: boolean };
   investments: {
     accountCount: number; total: number; trackedCount: number; negativeCount: number;
     staleCount: number;           // tracked, but last snapshot older than the freshness window
@@ -44,7 +44,7 @@ export function buildAlignmentCards(f: ReviewFacts): ReviewCard[] {
     const detail = f.charter.source === null
       ? "No Charter is on file, so nothing written governs the system yet."
       : f.charter.ratified
-        ? `Charter is ratified${f.charter.source === "contact" ? " (earlier-format Charter)" : ""}.`
+        ? `Charter is ratified${f.charter.source === "contact" ? " (earlier-format Charter)" : f.charter.source === "vault" ? " (signed copy on file in the Vault)" : ""}.`
         : "A Charter exists but is not yet ratified.";
     cards.push({ key: "charter", label: "Sovereignty Charter", status, detail });
   }
@@ -191,7 +191,7 @@ export function computeDeltas(
 export type ReviewMode = "quarterly" | "survey";
 
 /** Chartered (ratified Charter) households get the Quarterly Review; everyone else gets the Sovereignty Survey. */
-export function reviewMode(charter: { source: "household" | "contact" | null; ratified: boolean }): ReviewMode {
+export function reviewMode(charter: { source: "vault" | "household" | "contact" | null; ratified: boolean }): ReviewMode {
   return charter.source !== null && charter.ratified ? "quarterly" : "survey";
 }
 
