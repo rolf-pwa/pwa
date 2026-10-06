@@ -12,7 +12,9 @@ export interface AllocAccount {
   bucket: "vineyard" | "holding_tank";
   current_value: number | null;
   income_funds_value: number | null;
-  withdrawals_ytd: number | null; // all withdrawals from the account this period, read from the statement
+  withdrawals_ytd: number | null; // net withdrawals this year, read from the statement
+  /** False for accounts that don't issue a statement (e.g. a GIC with no account number): never counted as 'still to read'. */
+  expects_statement?: boolean;
 }
 
 export interface AllocInput {
@@ -81,13 +83,15 @@ export function allocateCapital(i: AllocInput): Allocation {
     notes.push(`Strategic Reserve includes ${money(cashValueAdded)} of insurance cash value.`);
   }
 
-  const withData = i.accounts.filter((a) => isNum(a.withdrawals_ytd));
+  // Only accounts that issue a statement can be "read"; the rest are left out of the counts and notes.
+  const expecting = i.accounts.filter((a) => a.expects_statement !== false);
+  const withData = expecting.filter((a) => isNum(a.withdrawals_ytd));
   const totalWithdrawals = round2(withData.reduce((s, a) => s + (a.withdrawals_ytd as number), 0));
   const harvest = withData.length > 0 ? totalWithdrawals : null;
-  if (i.accounts.length > 0 && withData.length === 0) {
+  if (expecting.length > 0 && withData.length === 0) {
     notes.push("Harvest to date needs the statements' withdrawals: run a Vault scan to read them.");
-  } else if (i.accounts.length > 0 && withData.length < i.accounts.length) {
-    notes.push(`Harvest counts withdrawals from ${withData.length} of ${i.accounts.length} accounts; run a Vault scan to read the rest.`);
+  } else if (expecting.length > 0 && withData.length < expecting.length) {
+    notes.push(`Harvest counts withdrawals from ${withData.length} of ${expecting.length} accounts with statements; run a Vault scan to read the rest.`);
   }
 
   return {

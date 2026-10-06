@@ -314,12 +314,12 @@ serve(async (req) => {
     // ---- Capital allocation: income funds -> Liquidity (when none is set up), insurance cash value -> Strategic,
     // harvest incl. income-fund withdrawals. Computed here for the review only; the shared diagnostics are untouched.
     const { data: tankRows } = financials.holdingTank.length
-      ? await supabase.from("holding_tank").select("id, current_value, income_funds_value, withdrawals_ytd").in("id", financials.holdingTank.map((h: any) => h.id))
+      ? await supabase.from("holding_tank").select("id, account_number, current_value, income_funds_value, withdrawals_ytd").in("id", financials.holdingTank.map((h: any) => h.id))
       : { data: [] };
     const nn = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
     const allocAccounts: AllocAccount[] = [
-      ...financials.vineyardAccounts.map((a: any) => ({ bucket: "vineyard" as const, current_value: nn(a.current_value), income_funds_value: nn(a.income_funds_value), withdrawals_ytd: nn(a.withdrawals_ytd) })),
-      ...(tankRows ?? []).map((a: any) => ({ bucket: "holding_tank" as const, current_value: nn(a.current_value), income_funds_value: nn(a.income_funds_value), withdrawals_ytd: nn(a.withdrawals_ytd) })),
+      ...financials.vineyardAccounts.map((a: any) => ({ bucket: "vineyard" as const, current_value: nn(a.current_value), income_funds_value: nn(a.income_funds_value), withdrawals_ytd: nn(a.withdrawals_ytd), expects_statement: !!String(a.account_number ?? "").trim() })),
+      ...(tankRows ?? []).map((a: any) => ({ bucket: "holding_tank" as const, current_value: nn(a.current_value), income_funds_value: nn(a.income_funds_value), withdrawals_ytd: nn(a.withdrawals_ytd), expects_statement: !!String(a.account_number ?? "").trim() })),
     ];
     const liquidityRow = (financials.storehouses as any[]).find((x) => x.storehouse_number === 1);
     const allocation = allocateCapital({
@@ -363,9 +363,10 @@ serve(async (req) => {
         total: diag.document_readiness.criticalTotal, missing: missingDocs.map((m) => m.replace(/\s*\(.*$/, "")),
       },
       statementData: {
-        accounts: allocAccounts.length,
-        withIncomeFunds: allocAccounts.filter((a) => a.income_funds_value !== null).length,
-        withWithdrawals: allocAccounts.filter((a) => a.withdrawals_ytd !== null).length,
+        // Only accounts that issue a statement (have an account number) can be read from one.
+        accounts: allocAccounts.filter((a) => a.expects_statement).length,
+        withIncomeFunds: allocAccounts.filter((a) => a.expects_statement && a.income_funds_value !== null).length,
+        withWithdrawals: allocAccounts.filter((a) => a.expects_statement && a.withdrawals_ytd !== null).length,
       },
       corporate: track_type === "corporate"
         ? {
