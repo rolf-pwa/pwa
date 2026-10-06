@@ -11,13 +11,17 @@ import { Label } from "@/shared/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import { Textarea } from "@/shared/components/ui/textarea";
 import { useAutoSave, AutoSaveIndicator } from "@/shared/hooks/useAutoSave";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/shared/components/ui/alert-dialog";
+import { planFromCards } from "../../../../supabase/functions/_shared/review-plan";
 import pwLogoWhite from "@/assets/prosperwise-logo-white.png";
 
 // Quarterly Review / Sovereignty Survey -- same A4 document format as the household Stabilization Map ("Sovereignty Survey"):
 // brand sidebar, summary box, Capital & Asset Protection, status cards, then a 90-day plan on page two.
 
 type ActionItem = { title: string; detail: string };
-type ActionPlan = { phase_1: ActionItem[]; phase_2: ActionItem[]; phase_3: ActionItem[] };
+type PhaseKey = "phase_1" | "phase_2" | "phase_3";
+/** auto: the plan follows the cards' action lines (rebuilt as they change); false once an item is edited by hand. */
+type ActionPlan = { phase_1: ActionItem[]; phase_2: ActionItem[]; phase_3: ActionItem[]; auto?: boolean };
 type TargetCheck = { label: string; area?: string; status: "met" | "below" | "above" | "info" | "not_computable"; targetText: string; actualText: string; summary: string; quote: string };
 type Card = { key: string; label: string; status: string; detail: string; desired?: string[]; current?: string[]; actions?: string[]; targets?: TargetCheck[]; charter_note?: string };
 
@@ -63,7 +67,7 @@ type Review = {
   logic_trace: string | null;
 };
 
-const PHASES_BY_MODE: Record<"quarterly" | "survey", { key: keyof ActionPlan; label: string; window: string }[]> = {
+const PHASES_BY_MODE: Record<"quarterly" | "survey", { key: PhaseKey; label: string; window: string }[]> = {
   quarterly: [
     { key: "phase_1", label: "Immediate", window: "Days 1–30" },
     { key: "phase_2", label: "Structural Alignment", window: "Days 31–60" },
@@ -166,6 +170,7 @@ export default function QuarterlySystemReview() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [confirmRegen, setConfirmRegen] = useState(false);
 
   const autoSave = useAutoSave<Review>({
     data: review,
@@ -238,14 +243,21 @@ export default function QuarterlySystemReview() {
   };
 
   const patch = (p: Partial<Review>) => setReview((r) => (r ? { ...r, ...p } : r));
-  const patchCard = (i: number, p: Partial<Card>) =>
-    patch({ alignment_cards: (review?.alignment_cards ?? []).map((c, j) => (j === i ? { ...c, ...p } : c)) });
-  const patchItem = (phase: keyof ActionPlan, i: number, p: Partial<ActionItem>) =>
-    patch({ action_plan: { ...(review!.action_plan as ActionPlan), [phase]: (review!.action_plan?.[phase] ?? []).map((it, j) => (j === i ? { ...it, ...p } : it)) } });
-  const addItem = (phase: keyof ActionPlan) =>
-    patch({ action_plan: { phase_1: [], phase_2: [], phase_3: [], ...(review!.action_plan ?? {}), [phase]: [...(review!.action_plan?.[phase] ?? []), { title: "", detail: "" }] } });
-  const removeItem = (phase: keyof ActionPlan, i: number) =>
-    patch({ action_plan: { ...(review!.action_plan as ActionPlan), [phase]: (review!.action_plan?.[phase] ?? []).filter((_, j) => j !== i) } });
+  const patchCard = (i: number, p: Partial<Card>) => {
+    const nextCards = (review?.alignment_cards ?? []).map((c, j) => (j === i ? { ...c, ...p } : c));
+    const next: Partial<Review> = { alignment_cards: nextCards };
+    // The 90-day plan follows the action lines until someone edits a plan item by hand.
+    if (p.actions !== undefined && review?.action_plan?.auto === true) next.action_plan = { ...planFromCards(nextCards, review?.review_mode ?? "quarterly"), auto: true };
+    patch(next);
+  };
+  const rebuildPlan = () => patch({ action_plan: { ...planFromCards(review?.alignment_cards ?? [], review?.review_mode ?? "quarterly"), auto: true } });
+  // Editing a plan item takes manual control: later changes to the card actions no longer overwrite it.
+  const patchItem = (phase: PhaseKey, i: number, p: Partial<ActionItem>) =>
+    patch({ action_plan: { ...(review!.action_plan as ActionPlan), auto: false, [phase]: (review!.action_plan?.[phase] ?? []).map((it, j) => (j === i ? { ...it, ...p } : it)) } });
+  const addItem = (phase: PhaseKey) =>
+    patch({ action_plan: { phase_1: [], phase_2: [], phase_3: [], ...(review!.action_plan ?? {}), auto: false, [phase]: [...((review!.action_plan?.[phase] as ActionItem[] | undefined) ?? []), { title: "", detail: "" }] } });
+  const removeItem = (phase: PhaseKey, i: number) =>
+    patch({ action_plan: { ...(review!.action_plan as ActionPlan), auto: false, [phase]: (review!.action_plan?.[phase] ?? []).filter((_, j) => j !== i) } });
 
   if (loading) return <div className="flex h-screen items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   if (!review) {
@@ -290,7 +302,7 @@ export default function QuarterlySystemReview() {
               </Button>
             ) : (
               <>
-                <Button size="sm" variant="outline" onClick={regenerate} disabled={regenerating || generating}>
+                <Button size="sm" variant="outline" onClick={() => (review.generation_status === "manually_edited" ? setConfirmRegen(true) : regenerate())} disabled={regenerating || generating}>
                   {regenerating || generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />} {isLegacy ? "Upgrade to new format" : "Regenerate"}
                 </Button>
                 {!isLegacy && <Button size="sm" variant="outline" onClick={() => setEditing(true)} disabled={generating}>Edit</Button>}
@@ -319,6 +331,22 @@ export default function QuarterlySystemReview() {
           </div>
         </div>
       )}
+
+      <AlertDialog open={confirmRegen} onOpenChange={setConfirmRegen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Regenerate and replace your edits?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This rebuilds the review from the household's live records and the Charter. Everything you edited in this review, including the card
+              wording and the plan, will be replaced. This can't be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep my edits</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setConfirmRegen(false); regenerate(); }}>Regenerate</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {isLegacy && !generating && (
         <div className="mx-auto max-w-[1100px] px-6 py-10 print:hidden">
@@ -360,6 +388,14 @@ export default function QuarterlySystemReview() {
                 </div>
               </div>
             ))}
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#e2e8f0] bg-white p-3 text-xs text-[#64748b]">
+            <span>
+              {review.action_plan?.auto !== true
+                ? "This plan isn't following the card actions (it was edited by hand or built before this feature)."
+                : "The 90-day plan follows the card actions: edit an action above and the plan updates. Edit a plan item below to take control of it."}
+            </span>
+            {review.action_plan?.auto !== true && <Button size="sm" variant="outline" onClick={rebuildPlan}>Rebuild the plan from the actions</Button>}
           </div>
           {PHASES.map((ph) => (
             <div key={ph.key} className="rounded-lg border border-[#e2e8f0] bg-white p-4 space-y-3">
