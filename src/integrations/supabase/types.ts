@@ -140,6 +140,59 @@ export type Database = {
           },
         ]
       }
+      action_brain_events: {
+        Row: {
+          action_type: string
+          actor_id: string | null
+          actor_role: string
+          created_at: string
+          delta_score: number | null
+          household_id: string | null
+          human_final_payload: Json
+          id: string
+          input_context_snapshot: Json
+          metadata: Json | null
+          system_proposed_payload: Json | null
+          workflow_module: string
+        }
+        Insert: {
+          action_type: string
+          actor_id?: string | null
+          actor_role: string
+          created_at?: string
+          delta_score?: number | null
+          household_id?: string | null
+          human_final_payload: Json
+          id?: string
+          input_context_snapshot: Json
+          metadata?: Json | null
+          system_proposed_payload?: Json | null
+          workflow_module: string
+        }
+        Update: {
+          action_type?: string
+          actor_id?: string | null
+          actor_role?: string
+          created_at?: string
+          delta_score?: number | null
+          household_id?: string | null
+          human_final_payload?: Json
+          id?: string
+          input_context_snapshot?: Json
+          metadata?: Json | null
+          system_proposed_payload?: Json | null
+          workflow_module?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_brain_events_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       adobe_webforms: {
         Row: {
           created_at: string
@@ -175,6 +228,50 @@ export type Database = {
           widget_url?: string
         }
         Relationships: []
+      }
+      ai_training_trajectories: {
+        Row: {
+          created_at: string
+          feedback_signal: string
+          id: string
+          is_exported_for_training: boolean
+          scrubbed_ai_response: string
+          scrubbed_human_response: string
+          scrubbed_input_prompt: string
+          source_event_id: string | null
+          workflow_type: string
+        }
+        Insert: {
+          created_at?: string
+          feedback_signal: string
+          id?: string
+          is_exported_for_training?: boolean
+          scrubbed_ai_response: string
+          scrubbed_human_response: string
+          scrubbed_input_prompt: string
+          source_event_id?: string | null
+          workflow_type: string
+        }
+        Update: {
+          created_at?: string
+          feedback_signal?: string
+          id?: string
+          is_exported_for_training?: boolean
+          scrubbed_ai_response?: string
+          scrubbed_human_response?: string
+          scrubbed_input_prompt?: string
+          source_event_id?: string | null
+          workflow_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_training_trajectories_source_event_id_fkey"
+            columns: ["source_event_id"]
+            isOneToOne: false
+            referencedRelation: "action_brain_events"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       asana_sync_events: {
         Row: {
@@ -2306,6 +2403,7 @@ export type Database = {
           relationship_end_reason: string | null
           relationship_ended_at: string | null
           retention_flagged_at: string | null
+          shoebox_auto_file_enabled: boolean
           spousal_alignment_note: string | null
           spousal_alignment_score: number | null
           updated_at: string
@@ -2353,6 +2451,7 @@ export type Database = {
           relationship_end_reason?: string | null
           relationship_ended_at?: string | null
           retention_flagged_at?: string | null
+          shoebox_auto_file_enabled?: boolean
           spousal_alignment_note?: string | null
           spousal_alignment_score?: number | null
           updated_at?: string
@@ -2400,6 +2499,7 @@ export type Database = {
           relationship_end_reason?: string | null
           relationship_ended_at?: string | null
           retention_flagged_at?: string | null
+          shoebox_auto_file_enabled?: boolean
           spousal_alignment_note?: string | null
           spousal_alignment_score?: number | null
           updated_at?: string
@@ -4081,7 +4181,10 @@ export type Database = {
       }
       quarterly_system_reviews: {
         Row: {
+          action_plan: Json | null
+          alignment_cards: Json | null
           alignment_overview: string
+          charter_alignment: string | null
           charter_detail: string
           charter_status: string
           client_first_name: string
@@ -4091,6 +4194,7 @@ export type Database = {
           created_by: string | null
           cross_system_detail: string
           cross_system_status: string
+          diagnostics: Json | null
           footer_note: string
           gap_1: string
           gap_2: string
@@ -4099,9 +4203,12 @@ export type Database = {
           gap_5: string
           generation_error: string | null
           generation_status: string
+          household_id: string | null
           id: string
+          layout_version: number
           logic_trace: string | null
           long_term_vision: string
+          period_label: string | null
           primary_goal: string
           priority_1: string
           priority_2: string
@@ -4110,15 +4217,20 @@ export type Database = {
           priority_5: string
           purpose_statement: string
           review_date: string | null
+          review_mode: string
           review_summary: string
           storehouse_detail: string
           storehouse_status: string
           updated_at: string
+          urgency_flag: string | null
           vineyard_detail: string
           vineyard_status: string
         }
         Insert: {
+          action_plan?: Json | null
+          alignment_cards?: Json | null
           alignment_overview?: string
+          charter_alignment?: string | null
           charter_detail?: string
           charter_status?: string
           client_first_name?: string
@@ -4128,6 +4240,7 @@ export type Database = {
           created_by?: string | null
           cross_system_detail?: string
           cross_system_status?: string
+          diagnostics?: Json | null
           footer_note?: string
           gap_1?: string
           gap_2?: string
@@ -4136,9 +4249,12 @@ export type Database = {
           gap_5?: string
           generation_error?: string | null
           generation_status?: string
+          household_id?: string | null
           id?: string
+          layout_version?: number
           logic_trace?: string | null
           long_term_vision?: string
+          period_label?: string | null
           primary_goal?: string
           priority_1?: string
           priority_2?: string
@@ -4147,15 +4263,20 @@ export type Database = {
           priority_5?: string
           purpose_statement?: string
           review_date?: string | null
+          review_mode?: string
           review_summary?: string
           storehouse_detail?: string
           storehouse_status?: string
           updated_at?: string
+          urgency_flag?: string | null
           vineyard_detail?: string
           vineyard_status?: string
         }
         Update: {
+          action_plan?: Json | null
+          alignment_cards?: Json | null
           alignment_overview?: string
+          charter_alignment?: string | null
           charter_detail?: string
           charter_status?: string
           client_first_name?: string
@@ -4165,6 +4286,7 @@ export type Database = {
           created_by?: string | null
           cross_system_detail?: string
           cross_system_status?: string
+          diagnostics?: Json | null
           footer_note?: string
           gap_1?: string
           gap_2?: string
@@ -4173,9 +4295,12 @@ export type Database = {
           gap_5?: string
           generation_error?: string | null
           generation_status?: string
+          household_id?: string | null
           id?: string
+          layout_version?: number
           logic_trace?: string | null
           long_term_vision?: string
+          period_label?: string | null
           primary_goal?: string
           priority_1?: string
           priority_2?: string
@@ -4184,14 +4309,24 @@ export type Database = {
           priority_5?: string
           purpose_statement?: string
           review_date?: string | null
+          review_mode?: string
           review_summary?: string
           storehouse_detail?: string
           storehouse_status?: string
           updated_at?: string
+          urgency_flag?: string | null
           vineyard_detail?: string
           vineyard_status?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "quarterly_system_reviews_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       quo_activity_links: {
         Row: {
@@ -5707,6 +5842,66 @@ export type Database = {
         }
         Relationships: []
       }
+      vault_bulk_import_items: {
+        Row: {
+          batch_id: string
+          contact_id: string | null
+          contract_number: string
+          created_at: string
+          drive_id: string
+          file_name: string
+          filed_by: string | null
+          household_id: string
+          id: string
+          revealed_at: string | null
+          revealed_by: string | null
+          statement_date: string
+        }
+        Insert: {
+          batch_id: string
+          contact_id?: string | null
+          contract_number: string
+          created_at?: string
+          drive_id: string
+          file_name: string
+          filed_by?: string | null
+          household_id: string
+          id?: string
+          revealed_at?: string | null
+          revealed_by?: string | null
+          statement_date: string
+        }
+        Update: {
+          batch_id?: string
+          contact_id?: string | null
+          contract_number?: string
+          created_at?: string
+          drive_id?: string
+          file_name?: string
+          filed_by?: string | null
+          household_id?: string
+          id?: string
+          revealed_at?: string | null
+          revealed_by?: string | null
+          statement_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vault_bulk_import_items_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vault_bulk_import_items_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vault_collaborator_grants: {
         Row: {
           collaborator_id: string
@@ -6072,6 +6267,8 @@ export type Database = {
       }
       vault_shoebox_proposals: {
         Row: {
+          auto_filed: boolean
+          auto_filed_at: string | null
           contact_id: string | null
           created_at: string
           document_date: string | null
@@ -6088,8 +6285,11 @@ export type Database = {
           reviewed_at: string | null
           reviewed_by: string | null
           status: string
+          undone_at: string | null
         }
         Insert: {
+          auto_filed?: boolean
+          auto_filed_at?: string | null
           contact_id?: string | null
           created_at?: string
           document_date?: string | null
@@ -6106,8 +6306,11 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: string
+          undone_at?: string | null
         }
         Update: {
+          auto_filed?: boolean
+          auto_filed_at?: string | null
           contact_id?: string | null
           created_at?: string
           document_date?: string | null
@@ -6124,6 +6327,7 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: string
+          undone_at?: string | null
         }
         Relationships: [
           {
