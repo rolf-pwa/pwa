@@ -21,7 +21,7 @@ import { checkOutboundPii } from "../_shared/pii-shield.ts";
 import { validateProSession } from "../_shared/pro-portal-auth.ts";
 import { parseServiceAccountKey } from "../_shared/vertex-ai.ts";
 import { classifyShoeboxFile, buildProposedFilename, resolvePrimaryAdultName } from "../_shared/vault-shoebox-classify.ts";
-import { autoFileBlocker, uniqueFilename } from "../_shared/vault-shoebox-naming.ts";
+import { autoFileBlocker, isSignedCopy, uniqueFilename } from "../_shared/vault-shoebox-naming.ts";
 import { driveDownloadFile, matchVaultCategoryFolder } from "../_shared/vault-provisioning.ts";
 import { logActionEvent } from "../_shared/action-brain.ts";
 
@@ -754,6 +754,7 @@ async function classifyAndStoreShoeboxProposal(params: {
     documentTypeLabel,
     originalExt,
     accountNumber: classification.account_number,
+    signed: isSignedCopy(fileName),
   });
 
   // Never propose a name already in use in this household (pending/approved proposals or filed files):

@@ -29,7 +29,15 @@ export function accountSuffix(accountNumber: string | null | undefined): string 
 }
 
 /**
- * Builds the YY-MM-DD_LastName_FirstInitial-DocumentType[_Last4].ext filename string in
+ * True when the ORIGINAL filename marks a signed copy ("... - signed.pdf", "Will signed 2023").
+ * "unsigned" does not count. Only the uploader's own filename is trusted for this, never the model.
+ */
+export function isSignedCopy(originalName: string | null | undefined): boolean {
+  return /(^|[^a-z])signed($|[^a-z])/i.test(originalName ?? "");
+}
+
+/**
+ * Builds the YY-MM-DD_LastName_FirstInitial-DocumentType[_Last4][_Signed].ext filename string in
  * code -- the model only ever supplies facts (date/type/name), never
  * formats the filename itself.
  */
@@ -41,6 +49,7 @@ export function buildProposedFilename(opts: {
   documentTypeLabel: string;   // already resolved: other_label when document_type === "Other", else document_type
   originalExt: string;         // including the leading dot, e.g. ".pdf"
   accountNumber?: string | null; // account/policy number as printed; only its last 4 go in the name
+  signed?: boolean;            // original filename marked it as the signed copy
 }): string {
   const d = opts.documentDate ? new Date(`${opts.documentDate}T00:00:00Z`) : opts.uploadedAt;
   const yy = String(d.getUTCFullYear()).slice(-2);
@@ -51,7 +60,7 @@ export function buildProposedFilename(opts: {
   const firstInitial = sanitize(opts.firstInitial).slice(0, 1).toUpperCase() || "X";
   const docType = sanitize(opts.documentTypeLabel) || "Document";
   const acct = accountSuffix(opts.accountNumber);
-  return `${yy}-${mm}-${dd}_${lastName}_${firstInitial}-${docType}${acct ? `_${acct}` : ""}${opts.originalExt}`;
+  return `${yy}-${mm}-${dd}_${lastName}_${firstInitial}-${docType}${acct ? `_${acct}` : ""}${opts.signed ? "_Signed" : ""}${opts.originalExt}`;
 }
 
 /**
