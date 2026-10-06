@@ -108,3 +108,20 @@ export function autoFileBlocker(c: {
   if (rule.needsAccountNumber && !accountSuffix(c.accountNumber)) return "no account number found";
   return null;
 }
+
+/**
+ * Makes `name` unique against `taken` (case-insensitive) by adding _2, _3... before the extension.
+ * Returns the name unchanged when it is free.
+ */
+export function uniqueFilename(name: string, taken: Iterable<string>): string {
+  const used = new Set([...taken].map((n) => n.toLowerCase()));
+  if (!used.has(name.toLowerCase())) return name;
+  const dot = name.lastIndexOf(".");
+  const base = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot) : "";
+  for (let i = 2; i < 1000; i++) {
+    const candidate = `${base}_${i}${ext}`;
+    if (!used.has(candidate.toLowerCase())) return candidate;
+  }
+  return `${base}_${Date.now()}${ext}`;
+}

@@ -21,7 +21,7 @@ import { checkOutboundPii } from "../_shared/pii-shield.ts";
 import { validateProSession } from "../_shared/pro-portal-auth.ts";
 import { parseServiceAccountKey } from "../_shared/vertex-ai.ts";
 import { classifyShoeboxFile, buildProposedFilename, resolvePrimaryAdultName } from "../_shared/vault-shoebox-classify.ts";
-import { autoFileBlocker } from "../_shared/vault-shoebox-naming.ts";
+import { autoFileBlocker, uniqueFilename } from "../_shared/vault-shoebox-naming.ts";
 import { driveDownloadFile, matchVaultCategoryFolder } from "../_shared/vault-provisioning.ts";
 import { logActionEvent } from "../_shared/action-brain.ts";
 
@@ -746,7 +746,7 @@ async function classifyAndStoreShoeboxProposal(params: {
     ? (classification.other_label || "Other")
     : classification.document_type;
 
-  const proposedName = buildProposedFilename({
+  const baseName = buildProposedFilename({
     documentDate: classification.document_date,
     uploadedAt,
     lastName: lastName || "Client",
@@ -756,7 +756,19 @@ async function classifyAndStoreShoeboxProposal(params: {
     accountNumber: classification.account_number,
   });
 
-  const autoBlocker = autoFileBlocker({
+  // Never propose a name already in use in this household (pending/approved proposals or filed files):
+  // two same-day, same-type, same-account documents would otherwise get identical names.
+  const [{ data: takenProposals }, { data: takenFiles }] = await Promise.all([
+    supabaseAdmin.from("vault_shoebox_proposals").select("proposed_name").eq("household_id", householdId).in("status", ["pending", "approved"]),
+    supabaseAdmin.from("vault_files").select("name").eq("household_id", householdId).eq("is_folder", false).ilike("name", `${baseName.replace(/\.[^.]*$/, "").replace(/[\\%_]/g, "\\$&")}%`),
+  ]);
+  const proposedName = uniqueFilename(baseName, [
+    ...(takenProposals ?? []).map((r) => r.proposed_name as string),
+    ...(takenFiles ?? []).map((r) => r.name as string),
+  ]);
+  const renamedForUniqueness = proposedName !== baseName;
+
+  const autoBlocker = renamedForUniqueness ? "name already in use -- possible duplicate" : autoFileBlocker({
     documentType: classification.document_type,
     documentDate: readFromDocument.date,
     subjectFirstName: readFromDocument.first,

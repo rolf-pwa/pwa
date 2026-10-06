@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   accountSuffix,
   autoFileBlocker,
+  uniqueFilename,
   buildProposedFilename,
   normalizePersonName,
   resolvePrimaryAdultName,
@@ -202,4 +203,13 @@ describe("autoFileBlocker", () => {
     expect(autoFileBlocker({ ...ok, categorySlug: null })).toMatch(/category/);
     expect(autoFileBlocker({ ...ok, accountNumber: "12" })).toMatch(/account number/);
   });
+});
+
+describe("uniqueFilename", () => {
+  it("leaves a free name alone", () => expect(uniqueFilename("a.pdf", ["b.pdf"])).toBe("a.pdf"));
+  it("adds _2, _3 before the extension, ignoring case", () => {
+    expect(uniqueFilename("A.pdf", ["a.PDF"])).toBe("A_2.pdf");
+    expect(uniqueFilename("a.pdf", ["a.pdf", "a_2.pdf"])).toBe("a_3.pdf");
+  });
+  it("handles names with no extension", () => expect(uniqueFilename("note", ["note"])).toBe("note_2"));
 });
