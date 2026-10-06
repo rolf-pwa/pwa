@@ -46,7 +46,7 @@ import { HouseholdRequestsRollup } from "@/modules/crm/components/HouseholdReque
 import { HouseholdStatementIngestion } from "@/modules/crm/components/HouseholdStatementIngestion";
 import { HoldingTank } from "@/modules/crm/components/HoldingTank";
 import { VaultView } from "@/modules/crm/pages/Vault";
-import { CharterRatificationTile, StabilizationMapButton, GovernanceAuditButton, HouseholdAuditTrailRollup, StartCharterIntakeButton, CausalAIWorkbenchButton } from "@/modules/audit";
+import { CharterRatificationTile, StabilizationMapButton, GovernanceAuditButton, QuarterlySystemReviewButton, HouseholdAuditTrailRollup, StartCharterIntakeButton, CausalAIWorkbenchButton } from "@/modules/audit";
 import { ProsPanel } from "@/modules/crm/components/ProsPanel";
 import { AddCompanyDialog } from "@/modules/crm/components/AddCompanyDialog";
 import {
@@ -1066,6 +1066,20 @@ const HouseholdDetail = () => {
                           Generate or review the household's full Sovereignty Governance Audit.
                         </p>
                         <GovernanceAuditButton householdId={id} />
+                      </div>
+                    </div>
+
+                    {/* Quarterly Review — alignment of the whole system with the Charter, in the Stabilization Map format */}
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-semibold text-muted-foreground">
+                        Q
+                      </div>
+                      <div className="flex-1 space-y-1.5">
+                        <p className="text-sm font-medium text-foreground">Quarterly Review</p>
+                        <p className="text-xs text-muted-foreground">
+                          Check investments, reserves, insurance, estate and tax against the Charter and plan the next 90 days.
+                        </p>
+                        <QuarterlySystemReviewButton householdId={id} />
                       </div>
                     </div>
 

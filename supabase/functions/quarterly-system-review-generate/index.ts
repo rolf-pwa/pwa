@@ -1,6 +1,17 @@
+// quarterly-system-review-generate (v2) -- builds a household's Quarterly Review in the Stabilization Map
+// document format. Figures and statuses are computed in code (sovereignty-diagnostics + quarterly-review-cards);
+// Gemini only writes the narrative (summary, Charter-alignment commentary, 90-day plan). If the AI is
+// unavailable the review is still produced, with a rule-based narrative.
+
+// deno-lint-ignore-file no-explicit-any
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://esm.sh/zod@3.25.76";
+import { GEMINI_GOVERNANCE_MODEL, generateVertexContent, parseServiceAccountKey, withThinking } from "../_shared/vertex-ai.ts";
+import { computeSovereigntyDiagnostics } from "../_shared/sovereignty-diagnostics.ts";
+import {
+  buildAlignmentCards, computeDeltas, overallAlignment, quarterLabel, type ReviewCard, type ReviewFacts,
+} from "../_shared/quarterly-review-cards.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -10,440 +21,339 @@ const ALLOWED_ORIGINS = [
 ];
 
 const BodySchema = z.object({
+  householdId: z.string().uuid().optional(),
   contactId: z.string().uuid().optional(),
   reviewId: z.string().uuid().optional(),
-}).refine((value) => value.contactId || value.reviewId, {
-  message: "contactId or reviewId is required",
-});
+}).refine((v) => v.householdId || v.contactId || v.reviewId, { message: "householdId, contactId or reviewId is required" });
 
-type Storehouse = {
-  id: string;
-  label: string;
-  asset_type: string | null;
-  current_value: number | null;
-  target_value: number | null;
-  charter_alignment: "aligned" | "misaligned" | "pending_review";
-  storehouse_number: number;
-};
-
-type VineyardAccount = {
-  id: string;
-  account_name: string;
-  account_type: string;
-  current_value: number | null;
-};
-
-type HarvestSnapshot = {
-  id: string;
-  vineyard_account_id: string | null;
-  storehouse_id: string | null;
-  snapshot_date: string;
-  boy_value: number | null;
-  current_harvest: number | null;
-  current_value: number | null;
-};
+const FRESH_DAYS = 120; // a harvest snapshot older than this counts as not updated this quarter
 
 function getCorsHeaders(req: Request) {
   const origin = req.headers.get("Origin") || "";
-  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
-    "Access-Control-Allow-Origin": allowed,
+    "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0],
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
   };
 }
 
-function formatMoney(value: number) {
-  return new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(value);
+const money = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
+
+/** true = the Vault folder has documents, false = it doesn't, null = couldn't tell. */
+function folderFiled(missing: string[], keyword: string, vaultBased: boolean): boolean | null {
+  if (!vaultBased) return null;
+  if (missing.some((m) => /vault not yet provisioned/i.test(m))) return null;
+  const hit = missing.find((m) => m.toLowerCase().includes(keyword.toLowerCase()));
+  if (!hit) return true;
+  return /advisor to confirm/i.test(hit) ? null : false;
 }
 
-function sumValues(rows: Array<{ current_value: number | null }>) {
-  return rows.reduce((total, row) => total + (Number(row.current_value) || 0), 0);
+const TOOL_SCHEMA = {
+  functionDeclarations: [{
+    name: "populate_quarterly_review",
+    description: "Populate the narrative fields of a household Quarterly Review.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        review_summary: { type: "STRING" },
+        charter_alignment: { type: "STRING" },
+        urgency_flag: { type: "STRING" },
+        action_plan_phase_1: { type: "ARRAY", items: { type: "OBJECT", properties: { title: { type: "STRING" }, detail: { type: "STRING" } }, required: ["title", "detail"] } },
+        action_plan_phase_2: { type: "ARRAY", items: { type: "OBJECT", properties: { title: { type: "STRING" }, detail: { type: "STRING" } }, required: ["title", "detail"] } },
+        action_plan_phase_3: { type: "ARRAY", items: { type: "OBJECT", properties: { title: { type: "STRING" }, detail: { type: "STRING" } }, required: ["title", "detail"] } },
+      },
+      required: ["review_summary", "charter_alignment", "urgency_flag", "action_plan_phase_1", "action_plan_phase_2", "action_plan_phase_3"],
+    },
+  }],
+};
+
+const PROMPT = `You are drafting the narrative portions of a ProsperWise **Quarterly Review** for a Virtual Family Office (VFO) client household. The review checks that the household's whole financial system -- investments, reserves, insurance, estate documents, tax and liabilities -- is still aligned with the family's written Sovereignty Charter. Rolf Issler will review it with the client.
+
+You will receive verified, already-computed facts: figures, an alignment status and a one-line detail for each area, and the Charter's own words where they exist. These are final and correct.
+
+Your job: draft ONLY the narrative fields. **Never invent, recompute or alter a dollar figure, percentage or status** -- describe their significance instead.
+
+## Rules
+- Sanctuary voice: calm, direct, non-alarmist, professional. No jargon, no exclamation marks.
+- review_summary: 1-2 sentences on where the household's system stands this quarter overall.
+- charter_alignment: 2-4 sentences on whether the household's assets, reserves, protection and documents are serving what the Charter says the family is for. Quote or paraphrase the Charter's purpose/mission/vision where it is provided. If no Charter exists, say plainly that nothing written yet governs the system and treat drafting and ratifying it as the first priority. Do not claim alignment that the statuses do not support.
+- urgency_flag: ONE sentence naming the single most important thing to resolve this quarter.
+- Action plan: 2-4 concrete items for EACH phase, grounded only in the facts and statuses provided; do not propose work for areas that are already Aligned except to maintain them:
+  - Phase 1 (Immediate, Days 1-30): protective and administrative fixes (missing records, unfiled documents, unreviewed items).
+  - Phase 2 (Structural Alignment, Days 31-60): the structural changes needed to bring a Partial/Needs Attention area into line with the Charter.
+  - Phase 3 (Governance & Reporting, Days 61-90): ratification, reporting and cadence steps, including preparing the next quarterly review.
+  - Each item: a short title (max ~50 characters) and one supporting sentence.
+- Never quote internal field names or raw scores. Keep every field concise.
+
+## Output
+Call populate_quarterly_review with all fields filled.`;
+
+function factsBlock(o: {
+  household: string; family: string; period: string; track: string; today: string;
+  diag: any; cards: ReviewCard[]; deltas: any; charter: any; harvest: { boy: number; current: number };
+}): string {
+  const lines = [
+    `Household: ${o.household} (family: ${o.family}). Review period: ${o.period}. Date: ${o.today}. Track: ${o.track}.`,
+    `Total assets (AUM): ${money(o.diag.aum)}; Holding Tank ${money(o.diag.holding_tank_total)}; Vineyard ${money(o.diag.vineyard_total)}.`,
+    `Storehouse reserves -- Liquidity ${money(o.diag.storehouse_reserves?.liquidity ?? 0)}, Strategic ${money(o.diag.storehouse_reserves?.strategic ?? 0)}, Philanthropic ${money(o.diag.storehouse_reserves?.philanthropic ?? 0)}, Legacy ${money(o.diag.storehouse_reserves?.legacy ?? 0)}.`,
+    `Liabilities: ${money((o.diag.personal_liabilities_total ?? 0) + (o.diag.corp_liabilities_total ?? 0))}. Net worth: ${money(o.diag.net_worth ?? o.diag.aum)}. Insurance coverage: ${money(o.diag.insurance_coverage_total ?? 0)}.`,
+    `Year-to-date harvest across tracked accounts: beginning of year ${money(o.harvest.boy)}, current ${money(o.harvest.current)}.`,
+    o.deltas.aum !== null
+      ? `Change since ${o.deltas.previousLabel ?? "the previous review"}: assets ${o.deltas.aum >= 0 ? "+" : "-"}${money(Math.abs(o.deltas.aum))}${o.deltas.netWorth !== null ? `, net worth ${o.deltas.netWorth >= 0 ? "+" : "-"}${money(Math.abs(o.deltas.netWorth))}` : ""}.`
+      : "No previous review to compare against.",
+    "",
+    "Alignment status by area (computed):",
+    ...o.cards.map((c) => `- ${c.label}: ${c.status} -- ${c.detail}`),
+    "",
+    "The family's Charter:",
+    o.charter.source ? `(source: ${o.charter.source === "household" ? "household Charter" : "earlier-format Charter"}; ${o.charter.ratified ? "ratified" : "not yet ratified"})` : "No Charter is on file.",
+    o.charter.purpose ? `Purpose: ${o.charter.purpose}` : "",
+    o.charter.mission ? `Mission of capital: ${o.charter.mission}` : "",
+    o.charter.vision ? `Vision: ${o.charter.vision}` : "",
+    o.charter.values?.length ? `Core values: ${o.charter.values.join(", ")}` : "",
+  ];
+  return lines.filter((l) => l !== "").join("\n");
 }
 
-function uniqueDefined(values: Array<string | undefined>) {
-  return Array.from(new Set(values.filter(Boolean) as string[]));
-}
+const clip = (v: unknown, n: number) => String(v ?? "").slice(0, n);
+const cleanItems = (arr: unknown) =>
+  Array.isArray(arr)
+    ? arr.filter((b: any) => b && typeof b === "object").map((b: any) => ({ title: clip(b.title, 80), detail: clip(b.detail, 300) })).filter((b) => b.title).slice(0, 5)
+    : [];
 
-function latestSnapshotsByKey(snapshots: HarvestSnapshot[]) {
-  return snapshots.reduce<Record<string, HarvestSnapshot>>((acc, snapshot) => {
-    const key = snapshot.vineyard_account_id
-      ? `vineyard:${snapshot.vineyard_account_id}`
-      : snapshot.storehouse_id
-        ? `storehouse:${snapshot.storehouse_id}`
-        : null;
-
-    if (!key) return acc;
-
-    const existing = acc[key];
-    if (!existing || new Date(snapshot.snapshot_date).getTime() > new Date(existing.snapshot_date).getTime()) {
-      acc[key] = snapshot;
-    }
-
-    return acc;
-  }, {});
+/** Rule-based narrative used when the AI is unavailable. */
+function fallbackNarrative(cards: ReviewCard[], overall: ReturnType<typeof overallAlignment>) {
+  const attention = cards.filter((c) => c.status === "Needs Attention");
+  const partial = cards.filter((c) => c.status === "Partial" || c.status === "Not Assessed");
+  const item = (c: ReviewCard) => ({ title: clip(`Resolve: ${c.label}`, 80), detail: clip(c.detail, 300) });
+  return {
+    review_summary: overall.status === "Aligned"
+      ? "Every area reviewed this quarter is in line with the household's system."
+      : `${overall.attention} area(s) need attention and ${overall.partial} are partially in place this quarter.`,
+    charter_alignment: "This narrative was generated from rules because the AI drafting step was unavailable. Review each area below against the Charter.",
+    urgency_flag: attention[0] ? `Most urgent: ${attention[0].label} -- ${attention[0].detail}` : "No area needs urgent attention this quarter.",
+    action_plan: {
+      phase_1: attention.slice(0, 3).map(item),
+      phase_2: partial.slice(0, 3).map(item),
+      phase_3: [{ title: "Prepare the next quarterly review", detail: "Refresh account values and re-run this review at the start of next quarter." }],
+    },
+  };
 }
 
 serve(async (req) => {
-  const corsHeaders = getCorsHeaders(req);
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  const cors = getCorsHeaders(req);
+  const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+
+  let reviewId: string | undefined;
+  const supabase: any = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
   try {
     const parsed = BodySchema.safeParse(await req.json());
-    if (!parsed.success) {
-      return new Response(JSON.stringify({ error: parsed.error.flatten().formErrors[0] || "Invalid request" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    if (!parsed.success) return json({ error: parsed.error.flatten().formErrors[0] || "Invalid request" }, 400);
 
-    const authHeader = req.headers.get("Authorization") || "";
-    const jwt = authHeader.replace(/^Bearer\s+/i, "");
-    if (!jwt) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const authClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: `Bearer ${jwt}` } } },
-    );
+    const jwt = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+    if (!jwt) return json({ error: "Unauthorized" }, 401);
+    const authClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: `Bearer ${jwt}` } } });
     const { data: authData, error: authError } = await authClient.auth.getUser();
-    if (authError || !authData?.user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
+    if (authError || !authData?.user) return json({ error: "Unauthorized" }, 401);
+    if (!authData.user.email?.toLowerCase().endsWith("@prosperwise.ca")) return json({ error: "Access denied: unauthorized domain" }, 403);
     const userId = authData.user.id;
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
 
-    let contactId = parsed.data.contactId;
-    let reviewId = parsed.data.reviewId;
-
-    if (reviewId && !contactId) {
-      const { data: existingReview, error: reviewError } = await supabase
-        .from("quarterly_system_reviews")
-        .select("id, contact_id")
-        .eq("id", reviewId)
-        .single();
-      if (reviewError || !existingReview) {
-        return new Response(JSON.stringify({ error: "Quarterly review not found" }), {
-          status: 404,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      contactId = existingReview.contact_id;
+    // ---- Resolve household ----
+    let householdId = parsed.data.householdId;
+    reviewId = parsed.data.reviewId;
+    let seedContactId = parsed.data.contactId;
+    if (reviewId) {
+      const { data: r } = await supabase.from("quarterly_system_reviews").select("id, household_id, contact_id").eq("id", reviewId).maybeSingle();
+      if (!r) return json({ error: "Quarterly review not found" }, 404);
+      householdId = householdId ?? r.household_id ?? undefined;
+      seedContactId = seedContactId ?? r.contact_id ?? undefined;
     }
-
-    if (!contactId) {
-      return new Response(JSON.stringify({ error: "Contact not found" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (!householdId && seedContactId) {
+      const { data: c } = await supabase.from("contacts").select("household_id").eq("id", seedContactId).maybeSingle();
+      householdId = c?.household_id ?? undefined;
     }
+    if (!householdId) return json({ error: "This contact has no household, so a quarterly review can't be built." }, 400);
 
-    const { data: contact, error: contactError } = await supabase
-      .from("contacts")
-      .select("id, first_name, last_name, charter_url, households(governance_status)")
-      .eq("id", contactId)
-      .single();
+    const { data: contacts } = await supabase.from("contacts").select("id, first_name, last_name, family_role, charter_url").eq("household_id", householdId);
+    const roleRank = (r: string | null) => (r === "head_of_family" ? 0 : r === "spouse" ? 1 : 2);
+    const primary = [...(contacts ?? [])].sort((a: any, b: any) => roleRank(a.family_role) - roleRank(b.family_role))[0];
+    if (!primary) return json({ error: "Household has no contacts" }, 400);
+    const contactIds = (contacts ?? []).map((c: any) => c.id);
 
-    if (contactError || !contact) {
-      return new Response(JSON.stringify({ error: "Contact not found" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
+    // ---- Find or create this quarter's review row ----
+    const today = new Date();
+    const period = quarterLabel(today);
     if (!reviewId) {
-      const { data: existing } = await supabase
-        .from("quarterly_system_reviews")
-        .select("id")
-        .eq("contact_id", contactId)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const { data: existing } = await supabase.from("quarterly_system_reviews").select("id").eq("household_id", householdId).eq("period_label", period).maybeSingle();
       reviewId = existing?.id;
     }
-
-    if (!reviewId) {
-      const { data: inserted, error: insertError } = await supabase
-        .from("quarterly_system_reviews")
-        .insert({
-          contact_id: contactId,
-          created_by: userId,
-          client_first_name: contact.first_name || "",
-          client_last_name: contact.last_name || "",
-          review_date: new Date().toISOString().slice(0, 10),
-          generation_status: "generating",
-        })
-        .select("id")
-        .single();
-      if (insertError || !inserted) throw new Error(insertError?.message || "Failed to create review record");
-      reviewId = inserted.id;
+    const base = {
+      household_id: householdId, contact_id: primary.id, period_label: period, layout_version: 2,
+      client_first_name: primary.first_name || "", client_last_name: primary.last_name || "",
+      review_date: today.toISOString().slice(0, 10), generation_status: "generating", generation_error: null,
+    };
+    if (reviewId) {
+      const { error } = await supabase.from("quarterly_system_reviews").update(base).eq("id", reviewId);
+      if (error) throw error;
     } else {
-      const { error: reviewUpdateError } = await supabase
-        .from("quarterly_system_reviews")
-        .update({
-          generation_status: "generating",
-          generation_error: null,
-          client_first_name: contact.first_name || "",
-          client_last_name: contact.last_name || "",
-          review_date: new Date().toISOString().slice(0, 10),
-        })
-        .eq("id", reviewId);
-      if (reviewUpdateError) throw reviewUpdateError;
+      const { data: inserted, error } = await supabase.from("quarterly_system_reviews").insert({ ...base, created_by: userId }).select("id").single();
+      if (error || !inserted) throw new Error(error?.message || "Failed to create review record");
+      reviewId = inserted.id;
     }
 
-    const [vineyardRes, storehouseRes, harvestRes, charterRes] = await Promise.all([
-      supabase
-        .from("vineyard_accounts")
-        .select("id, account_name, account_type, current_value")
-        .eq("contact_id", contactId)
-        .order("created_at"),
-      supabase
-        .from("storehouses")
-        .select("id, label, asset_type, current_value, target_value, charter_alignment, storehouse_number")
-        .eq("contact_id", contactId)
-        .order("storehouse_number"),
-      supabase
-        .from("account_harvest_snapshots")
-        .select("id, vineyard_account_id, storehouse_id, snapshot_date, boy_value, current_harvest, current_value")
-        .eq("contact_id", contactId)
-        .order("snapshot_date", { ascending: false }),
-      supabase
-        .from("sovereignty_charters")
-        .select("intro_note, intro_callout, intro_heading, mission_of_capital, vision_20_year")
-        .eq("contact_id", contactId)
-        .maybeSingle(),
+    // ---- Gather facts ----
+    const { data: lastMap } = await supabase.from("stabilization_maps").select("diagnostic_inputs").eq("household_id", householdId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const { track_type, diagnostics: diag, financials } = await computeSovereigntyDiagnostics(supabase, householdId, lastMap?.diagnostic_inputs ?? {});
+
+    const [{ data: hCharter }, { data: cCharters }, { data: snaps }] = await Promise.all([
+      supabase.from("household_charters").select("status, completed_at, vision_text, core_values").eq("household_id", householdId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("sovereignty_charters").select("intro_callout, intro_note, mission_of_capital, vision_20_year").in("contact_id", contactIds).limit(1),
+      supabase.from("account_harvest_snapshots").select("vineyard_account_id, holding_tank_id, storehouse_id, snapshot_date, boy_value, current_harvest").in("contact_id", contactIds).order("snapshot_date", { ascending: false }),
     ]);
-
-    if (vineyardRes.error) throw vineyardRes.error;
-    if (storehouseRes.error) throw storehouseRes.error;
-    if (harvestRes.error) throw harvestRes.error;
-
-    const charter = charterRes.data || null;
-    // Prefer intro_callout (the actual Charter Purpose Statement) over intro_note (which is the meta-format description).
-    const purposeStatement = (charter?.intro_callout || charter?.intro_note || "").toString().trim();
-    const primaryGoal = (charter?.mission_of_capital || "").toString().trim();
-    const longTermVision = (charter?.vision_20_year || "").toString().trim();
-
-    const vineyardAccounts = (vineyardRes.data || []) as VineyardAccount[];
-    const storehouses = (storehouseRes.data || []) as Storehouse[];
-    const harvestSnapshots = (harvestRes.data || []) as HarvestSnapshot[];
-    const latestSnapshots = latestSnapshotsByKey(harvestSnapshots);
-    const vineyardTotal = sumValues(vineyardAccounts);
-    const storehouseTotal = sumValues(storehouses);
-
-    const vineyardHarvestSnapshots = vineyardAccounts
-      .map((account) => latestSnapshots[`vineyard:${account.id}`])
-      .filter(Boolean) as HarvestSnapshot[];
-
-    const storehouseHarvestSnapshots = storehouses
-      .map((storehouse) => latestSnapshots[`storehouse:${storehouse.id}`])
-      .filter(Boolean) as HarvestSnapshot[];
-
-    const totalVineyardBOY = vineyardHarvestSnapshots.reduce((sum, item) => sum + (Number(item.boy_value) || 0), 0);
-    const totalVineyardHarvest = vineyardHarvestSnapshots.reduce((sum, item) => sum + (Number(item.current_harvest) || 0), 0);
-    const totalStorehouseBOY = storehouseHarvestSnapshots.reduce((sum, item) => sum + (Number(item.boy_value) || 0), 0);
-    const totalStorehouseHarvest = storehouseHarvestSnapshots.reduce((sum, item) => sum + (Number(item.current_harvest) || 0), 0);
-    const missingVineyardHarvestCount = vineyardAccounts.length - vineyardHarvestSnapshots.length;
-    const missingStorehouseHarvestCount = storehouses.length - storehouseHarvestSnapshots.length;
-    const negativeHarvestCount = [...vineyardHarvestSnapshots, ...storehouseHarvestSnapshots].filter((item) => (Number(item.current_harvest) || 0) < 0).length;
-
-    const alignedStorehouses = storehouses.filter((item) => item.charter_alignment === "aligned");
-    const pendingStorehouses = storehouses.filter((item) => item.charter_alignment === "pending_review");
-    const misalignedStorehouses = storehouses.filter((item) => item.charter_alignment === "misaligned");
-    const fundedStorehouses = storehouses.filter((item) => (Number(item.target_value) || 0) > 0 && (Number(item.current_value) || 0) >= (Number(item.target_value) || 0));
-    const underfundedStorehouses = storehouses.filter((item) => (Number(item.target_value) || 0) > 0 && (Number(item.current_value) || 0) < (Number(item.target_value) || 0));
-    const missingStorehouseNumbers = [1, 2, 3, 4].filter((number) => !storehouses.some((item) => item.storehouse_number === number));
-
-    const charterStatus = !contact.charter_url
-      ? "Missing"
-      : misalignedStorehouses.length > 0
-        ? "Needs Attention"
-        : pendingStorehouses.length > 0 || missingStorehouseNumbers.length > 0
-          ? "Partial"
-          : "Aligned";
-
-    const vineyardStatus = vineyardAccounts.length === 0
-      ? "Missing"
-      : vineyardTotal <= 0
-        ? "Needs Review"
-        : missingVineyardHarvestCount > 0
-          ? "Partial"
-        : contact.charter_url
-          ? "Aligned"
-          : "Partial";
-
-    const storehouseStatus = storehouses.length === 0
-      ? "Missing"
-      : misalignedStorehouses.length > 0 || underfundedStorehouses.length > 0
-        ? "Needs Attention"
-        : missingStorehouseHarvestCount > 0
-          ? "Partial"
-        : missingStorehouseNumbers.length > 0 || pendingStorehouses.length > 0
-          ? "Partial"
-          : "Aligned";
-
-    const preliminaryGaps = uniqueDefined([
-      !contact.charter_url ? "No Charter is linked, so written intent cannot govern the current system." : undefined,
-      vineyardAccounts.length === 0 ? "No Vineyard accounts are on record for this contact." : undefined,
-      storehouses.length === 0 ? "No Storehouse structure is configured for liquidity and reserve governance." : undefined,
-      missingStorehouseNumbers.length > 0 ? `Missing Storehouse lanes: ${missingStorehouseNumbers.map((number) => `#${number}`).join(", ")}.` : undefined,
-      misalignedStorehouses.length > 0 ? `${misalignedStorehouses.length} Storehouse item(s) are marked misaligned with the Charter.` : undefined,
-      pendingStorehouses.length > 0 ? `${pendingStorehouses.length} Storehouse item(s) still need Charter review.` : undefined,
-      underfundedStorehouses.length > 0 ? `${underfundedStorehouses.length} Storehouse target(s) are below required funding levels.` : undefined,
-      missingVineyardHarvestCount > 0 ? `${missingVineyardHarvestCount} Vineyard account(s) are missing BOY/current harvest tracking.` : undefined,
-      missingStorehouseHarvestCount > 0 ? `${missingStorehouseHarvestCount} Storehouse item(s) are missing BOY/current harvest tracking.` : undefined,
-      negativeHarvestCount > 0 ? `${negativeHarvestCount} tracked account(s) show a negative current harvest and need review.` : undefined,
-      vineyardAccounts.length > 0 && storehouses.length === 0 ? "Vineyard assets exist without a matching Storehouse reserve framework." : undefined,
-      contact.households?.governance_status === "stabilization" ? "Contact is still in Stabilization Phase, so full sovereign governance is not yet complete." : undefined,
-    ]);
-
-    const preliminaryPriorities = uniqueDefined([
-      !contact.charter_url ? "Link the current Charter so quarterly reviews can measure against written intent." : undefined,
-      vineyardAccounts.length === 0 ? "Load or verify Vineyard accounts so the review reflects actual core assets." : undefined,
-      storehouses.length === 0 ? "Stand up the four Storehouses and define each lane before the next review." : undefined,
-      missingStorehouseNumbers.length > 0 ? `Create the missing Storehouse lanes (${missingStorehouseNumbers.map((number) => `#${number}`).join(", ")}) and assign their purpose.` : undefined,
-      misalignedStorehouses.length > 0 ? "Resolve Storehouse items marked misaligned and ratify their intended role." : undefined,
-      pendingStorehouses.length > 0 ? "Approve Storehouse items still sitting in pending review." : undefined,
-      underfundedStorehouses.length > 0 ? "Fund the under-target Storehouses according to their target floors." : undefined,
-      missingVineyardHarvestCount > 0 || missingStorehouseHarvestCount > 0 ? "Complete BOY and current harvest tracking for every matched account before the next quarterly review." : undefined,
-      negativeHarvestCount > 0 ? "Review accounts with negative current harvest and confirm whether losses or cash flows explain the variance." : undefined,
-      vineyardAccounts.length > 0 && storehouseTotal === 0 ? "Pair core Vineyard assets with reserve and protection lanes before the next 90-day cycle." : undefined,
-      contact.households?.governance_status === "stabilization" ? "Complete the move from Stabilization into ratified governance so the system can be enforced." : undefined,
-      contact.charter_url && storehouses.length > 0 && vineyardAccounts.length > 0 ? "Reconfirm the next 90-day allocation plan with the Charter, Vineyard, and Storehouse structure side by side." : undefined,
-    ]);
-
-    while (preliminaryGaps.length < 5) {
-      preliminaryGaps.push("No additional material gap flagged in this quarter's system check.");
-    }
-    while (preliminaryPriorities.length < 5) {
-      preliminaryPriorities.push("No additional priority was required beyond the current governance plan.");
-    }
-
-    const gapCount = preliminaryGaps.filter((item) => !item.startsWith("No additional material gap")).length;
-    const crossSystemStatus = gapCount === 0 ? "Aligned" : gapCount <= 2 ? "Partial" : "Needs Attention";
-
-    const reviewSummary = `${contact.first_name || "Client"}'s quarterly review compares ${vineyardAccounts.length} Vineyard account(s) totaling ${formatMoney(vineyardTotal)} against ${storehouses.length} Storehouse item(s) totaling ${formatMoney(storehouseTotal)}${contact.charter_url ? " with a Charter on file" : " without a Charter on file"}, alongside current annual harvest tracking of ${formatMoney(totalVineyardHarvest + totalStorehouseHarvest)}.`;
-    const alignmentOverview = crossSystemStatus === "Aligned"
-      ? "The Charter, Vineyard, and Storehouse structure are currently operating in step with each other."
-      : crossSystemStatus === "Partial"
-        ? "Core governance pieces exist, but one or more system layers still need completion before the next quarter."
-        : "Meaningful gaps remain between written intent, asset placement, and reserve structure that should be resolved in the next 90 days.";
-
-    const charterDetail = !contact.charter_url
-      ? "No Charter link is on file, so the review cannot verify that current assets still match written intent."
-      : misalignedStorehouses.length > 0
-        ? `A Charter is on file, but ${misalignedStorehouses.length} Storehouse item(s) are marked misaligned against it.`
-        : pendingStorehouses.length > 0
-          ? `A Charter is on file, but ${pendingStorehouses.length} Storehouse item(s) still need review before the system is fully ratified.`
-          : "A Charter is on file and there are no flagged Storehouse conflicts against it.";
-
-    const vineyardDetail = vineyardAccounts.length === 0
-      ? "No Vineyard accounts are recorded, so the core asset layer cannot be reviewed this quarter."
-      : `${vineyardAccounts.length} Vineyard account(s) are recorded with an aggregate value of ${formatMoney(vineyardTotal)} across ${uniqueDefined(vineyardAccounts.map((item) => item.account_type)).join(", ") || "the current account mix"}. Harvest tracking covers ${vineyardHarvestSnapshots.length}/${vineyardAccounts.length} account(s): BOY ${formatMoney(totalVineyardBOY)}, current harvest ${formatMoney(totalVineyardHarvest)}.`;
-
-    const storehouseDetail = storehouses.length === 0
-      ? "No Storehouse structure exists yet, so reserves, protection pools, and liquidity lanes are not currently mapped."
-      : `${storehouses.length} Storehouse item(s) are present; ${alignedStorehouses.length} aligned, ${pendingStorehouses.length} pending review, ${misalignedStorehouses.length} misaligned, and ${fundedStorehouses.length} fully funded to target. Harvest tracking covers ${storehouseHarvestSnapshots.length}/${storehouses.length} item(s): BOY ${formatMoney(totalStorehouseBOY)}, current harvest ${formatMoney(totalStorehouseHarvest)}.`;
-
-    const crossSystemDetail = crossSystemStatus === "Aligned"
-      ? "The Charter, core assets, and reserve lanes are all present and show no material conflicts in this review cycle."
-      : crossSystemStatus === "Partial"
-        ? "The system is mostly in place, but at least one lane still needs review, funding, or formal Charter linkage."
-        : "Written intent, invested assets, reserve structure, and annual harvest tracking are not yet moving together tightly enough for sovereign operation.";
-
-    const logicTrace = [
-      `Charter status was set to ${charterStatus} because Charter on file = ${contact.charter_url ? "yes" : "no"}.`,
-      `Vineyard review counted ${vineyardAccounts.length} account(s) totaling ${formatMoney(vineyardTotal)}.`,
-      `Storehouse review counted ${storehouses.length} item(s), with ${misalignedStorehouses.length} misaligned, ${pendingStorehouses.length} pending, and ${underfundedStorehouses.length} under target.`,
-      `Harvest tracking covered ${vineyardHarvestSnapshots.length}/${vineyardAccounts.length} Vineyard account(s) and ${storehouseHarvestSnapshots.length}/${storehouses.length} Storehouse item(s), with total current harvest ${formatMoney(totalVineyardHarvest + totalStorehouseHarvest)}.`,
-      `Cross-system status was set to ${crossSystemStatus} based on ${gapCount} material gap(s) across Charter, Vineyard, Storehouse, and harvest tracking layers.`,
-    ].join(" ");
-
-    const update = {
-      client_first_name: contact.first_name || "",
-      client_last_name: contact.last_name || "",
-      review_date: new Date().toISOString().slice(0, 10),
-      review_summary: reviewSummary,
-      alignment_overview: alignmentOverview,
-      purpose_statement: purposeStatement,
-      primary_goal: primaryGoal,
-      long_term_vision: longTermVision,
-      charter_status: charterStatus,
-      charter_detail: charterDetail,
-      vineyard_status: vineyardStatus,
-      vineyard_detail: vineyardDetail,
-      storehouse_status: storehouseStatus,
-      storehouse_detail: storehouseDetail,
-      cross_system_status: crossSystemStatus,
-      cross_system_detail: crossSystemDetail,
-      gap_1: preliminaryGaps[0],
-      gap_2: preliminaryGaps[1],
-      gap_3: preliminaryGaps[2],
-      gap_4: preliminaryGaps[3],
-      gap_5: preliminaryGaps[4],
-      priority_1: preliminaryPriorities[0],
-      priority_2: preliminaryPriorities[1],
-      priority_3: preliminaryPriorities[2],
-      priority_4: preliminaryPriorities[3],
-      priority_5: preliminaryPriorities[4],
-      footer_note: "Quarterly review to ensure the Charter, Vineyard, and Storehouse remain aligned and governable over the next 90 days.",
-      logic_trace: logicTrace,
-      generation_status: "ready",
-      generation_error: null,
+    const cc = (cCharters ?? [])[0] ?? null;
+    const charterSource: "household" | "contact" | null = hCharter ? "household" : (cc || (contacts ?? []).some((c: any) => c.charter_url)) ? "contact" : null;
+    // Household Charter: "complete" status or a completed_at stamp. Earlier-format Charter: a linked charter document counts as on file and ratified.
+    const ratified = hCharter ? (/complete/i.test(String(hCharter.status ?? "")) || !!hCharter.completed_at) : (contacts ?? []).some((c: any) => !!c.charter_url);
+    const charterText = {
+      source: charterSource, ratified,
+      purpose: clip(cc?.intro_callout || cc?.intro_note, 600),
+      mission: clip(cc?.mission_of_capital, 600),
+      vision: clip(hCharter?.vision_text || cc?.vision_20_year, 800),
+      values: Array.isArray(hCharter?.core_values) ? hCharter.core_values.slice(0, 8).map((v: any) => clip(typeof v === "string" ? v : v?.name ?? v?.label ?? "", 60)).filter(Boolean) : [],
     };
 
-    const { error: updateError } = await supabase
-      .from("quarterly_system_reviews")
-      .update(update)
-      .eq("id", reviewId);
+    // Latest snapshot per account.
+    const latest = new Map<string, any>();
+    for (const s of snaps ?? []) {
+      const key = s.vineyard_account_id ? `v:${s.vineyard_account_id}` : s.holding_tank_id ? `h:${s.holding_tank_id}` : null;
+      if (key && !latest.has(key)) latest.set(key, s);
+    }
+    const accounts = [
+      ...financials.vineyardAccounts.map((a: any) => ({ key: `v:${a.id}` })),
+      ...financials.holdingTank.map((a: any) => ({ key: `h:${a.id}` })),
+    ];
+    const tracked = accounts.filter((a) => latest.has(a.key));
+    const cutoff = Date.now() - FRESH_DAYS * 86400000;
+    const stale = tracked.filter((a) => new Date(latest.get(a.key).snapshot_date).getTime() < cutoff);
+    const negative = tracked.filter((a) => (Number(latest.get(a.key).current_harvest) || 0) < 0);
+    const harvest = tracked.reduce((acc, a) => {
+      const s = latest.get(a.key);
+      return { boy: acc.boy + (Number(s.boy_value) || 0), current: acc.current + (Number(s.current_harvest) || 0) };
+    }, { boy: 0, current: 0 });
 
-    if (updateError) throw updateError;
+    const sh = financials.storehouses as any[];
+    const underfunded = sh.filter((x) => (Number(x.target_value) || 0) > 0 && (Number(x.current_value) || 0) < (Number(x.target_value) || 0));
+    const missingLanes = [1, 2, 3, 4].filter((n) => !sh.some((x) => x.storehouse_number === n));
+    const vaultBased = financials.isLegacyClient;
+    const missingDocs: string[] = diag.document_readiness.missingCritical ?? [];
+    const policies = financials.insurancePolicies as any[];
+    const soon = Date.now() + 90 * 86400000;
+    const eh = diag.estate_hygiene;
+    const loanFlags = (diag.intercompany_loan_flags ?? []).filter((f: any) => f.isOverdue);
 
-    return new Response(JSON.stringify({ success: true, reviewId }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  } catch (error) {
-    console.error("quarterly-system-review-generate error:", error);
+    const facts: ReviewFacts = {
+      charter: { source: charterSource, ratified, hasVision: !!charterText.vision },
+      investments: {
+        accountCount: accounts.length, total: diag.vineyard_total + diag.holding_tank_total, trackedCount: tracked.length,
+        negativeCount: negative.length, staleCount: stale.length, statementsFiled: folderFiled(missingDocs, "investment", vaultBased),
+      },
+      storehouses: {
+        count: sh.length, aligned: sh.filter((x) => x.charter_alignment === "aligned").length,
+        pending: sh.filter((x) => x.charter_alignment === "pending_review").length,
+        misaligned: sh.filter((x) => x.charter_alignment === "misaligned").length, underfunded: underfunded.length, missingLanes,
+      },
+      insurance: {
+        policyCount: policies.length, coverageTotal: diag.insurance_coverage_total,
+        missingCoverageCount: policies.filter((p) => !(Number(p.coverage_amount) > 0)).length,
+        missingBeneficiaryCount: policies.filter((p) => !p.primary_beneficiary).length,
+        renewalsDueSoon: policies.filter((p) => p.renewal_date && new Date(p.renewal_date).getTime() <= soon && new Date(p.renewal_date).getTime() >= Date.now()).length,
+        documentsFiled: folderFiled(missingDocs, "insurance", vaultBased),
+      },
+      estate: {
+        will: eh?.will_status ?? null, poa: eh?.poa_status ?? null, beneficiaries: eh?.beneficiary_coordination_status ?? null,
+        documentsFiled: folderFiled(missingDocs, "estate", vaultBased),
+      },
+      tax: { documentsFiled: folderFiled(missingDocs, "tax", vaultBased) },
+      liabilities: { personal: diag.personal_liabilities_total, corporate: diag.corp_liabilities_total, overdueLoans: loanFlags.length },
+      documents: {
+        percent: diag.document_readiness.percent, satisfied: diag.document_readiness.criticalSatisfied,
+        total: diag.document_readiness.criticalTotal, missing: missingDocs.map((m) => m.replace(/\s*\(.*$/, "")),
+      },
+      corporate: track_type === "corporate"
+        ? {
+          activeAssetRatio: diag.active_asset_ratio?.ratio ?? null, usaOnFile: diag.usa_staleness?.onFile ?? null,
+          usaStale: diag.usa_staleness?.isStale ?? null, sbdClawback: diag.sbd_clawback ?? null,
+        }
+        : null,
+    };
+    const cards = buildAlignmentCards(facts);
+    const overall = overallAlignment(cards);
 
-    const parsed = await req.clone().json().catch(() => null) as { reviewId?: string } | null;
-    const reviewId = parsed?.reviewId;
+    const { data: prev } = await supabase.from("quarterly_system_reviews").select("period_label, diagnostics")
+      .eq("household_id", householdId).neq("id", reviewId).eq("layout_version", 2).not("diagnostics", "is", null)
+      .order("review_date", { ascending: false }).limit(1).maybeSingle();
+    const deltas = computeDeltas({ aum: diag.aum, net_worth: diag.net_worth }, prev?.diagnostics ? { aum: prev.diagnostics.aum, net_worth: prev.diagnostics.net_worth, label: prev.period_label } : null);
 
-    if (reviewId) {
-      try {
-        const supabase = createClient(
-          Deno.env.get("SUPABASE_URL")!,
-          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-        );
-
-        await supabase
-          .from("quarterly_system_reviews")
-          .update({
-            generation_status: "failed",
-            generation_error: error instanceof Error ? error.message : "Unknown error",
-          })
-          .eq("id", reviewId);
-      } catch (persistError) {
-        console.error("quarterly-system-review-generate failed to persist error:", persistError);
+    // ---- Narrative (AI, with a rule-based fallback) ----
+    let narrative = fallbackNarrative(cards, overall);
+    let aiNote = "AI narrative unavailable; rule-based narrative used.";
+    try {
+      const sa = await parseServiceAccountKey(Deno.env.get("GCP_SERVICE_ACCOUNT_KEY"));
+      const result = await generateVertexContent(
+        sa, GEMINI_GOVERNANCE_MODEL,
+        [
+          { role: "user", parts: [{ text: PROMPT }] },
+          { role: "model", parts: [{ text: "Understood. Provide the household facts and I will draft the narrative." }] },
+          { role: "user", parts: [{ text: factsBlock({
+            household: diag.household_label, family: diag.family_name, period, track: track_type, today: today.toISOString().slice(0, 10),
+            diag, cards, deltas, charter: charterText, harvest,
+          }) }] },
+        ],
+        withThinking(GEMINI_GOVERNANCE_MODEL, { temperature: 0.3, maxOutputTokens: 8192 }, "medium"),
+        { tools: [TOOL_SCHEMA as any], toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["populate_quarterly_review"] } } },
+      );
+      const call = (result?.candidates?.[0]?.content?.parts ?? []).find((p: any) => p.functionCall)?.functionCall;
+      const a = call?.args;
+      const p1 = cleanItems(a?.action_plan_phase_1), p2 = cleanItems(a?.action_plan_phase_2), p3 = cleanItems(a?.action_plan_phase_3);
+      if (a && a.review_summary && p1.length + p2.length + p3.length > 0) {
+        narrative = {
+          review_summary: clip(a.review_summary, 1200), charter_alignment: clip(a.charter_alignment, 1500), urgency_flag: clip(a.urgency_flag, 600),
+          action_plan: { phase_1: p1, phase_2: p2, phase_3: p3 },
+        };
+        aiNote = `Narrative drafted by ${GEMINI_GOVERNANCE_MODEL} from the computed facts.`;
       }
+    } catch (e) {
+      console.error("quarterly-system-review-generate: AI step failed:", e instanceof Error ? e.message : String(e));
     }
 
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    const diagnostics = { ...diag, track_type, deltas, harvest, tracked_accounts: tracked.length, accounts: accounts.length };
+    const logic = [
+      `Statuses are computed from live records: ${cards.map((c) => `${c.label} = ${c.status}`).join("; ")}.`,
+      `Overall: ${overall.status} (${overall.attention} need attention, ${overall.partial} partial).`,
+      `Charter source: ${charterSource ?? "none"}${charterSource ? (ratified ? ", ratified" : ", not ratified") : ""}. Estate statuses come from the advisor-entered fields on the latest Stabilization Map.`,
+      `Harvest snapshots older than ${FRESH_DAYS} days count as not updated. Vault document checks apply to legacy-Vault households only (otherwise "not assessed").`,
+      aiNote,
+    ].join(" ");
+
+    const { error: updErr } = await supabase.from("quarterly_system_reviews").update({
+      diagnostics, alignment_cards: cards, action_plan: narrative.action_plan, urgency_flag: narrative.urgency_flag,
+      charter_alignment: narrative.charter_alignment, review_summary: narrative.review_summary,
+      purpose_statement: charterText.purpose, primary_goal: charterText.mission, long_term_vision: charterText.vision,
+      cross_system_status: overall.status,
+      footer_note: "Quarterly review to ensure the Charter, assets, reserves, protection and documents remain aligned and governable over the next 90 days.",
+      logic_trace: logic, generation_status: "ready", generation_error: null,
+    }).eq("id", reviewId);
+    if (updErr) throw updErr;
+
+    return json({ success: true, reviewId, period });
+  } catch (error) {
+    console.error("quarterly-system-review-generate error:", error);
+    if (reviewId) {
+      await supabase.from("quarterly_system_reviews").update({
+        generation_status: "failed", generation_error: error instanceof Error ? error.message : "Unknown error",
+      }).eq("id", reviewId).then(() => {}, () => {});
+    }
+    return json({ error: error instanceof Error ? error.message : "Unknown error" }, 500);
   }
 });
