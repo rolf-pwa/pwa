@@ -12,6 +12,7 @@ import { computeSovereigntyDiagnostics } from "../_shared/sovereignty-diagnostic
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { extractCharter, locateVaultCharter, type CharterExtract } from "../_shared/charter-vault.ts";
 import type { CharterFile } from "../_shared/charter-vault-pick.ts";
+import { logSystemHealth } from "../_shared/system-health.ts";
 import {
   buildAlignmentCards, computeDeltas, dataCompleteness, overallAlignment, quarterLabel, reviewMode, type ReviewCard, type ReviewFacts, type ReviewMode,
 } from "../_shared/quarterly-review-cards.ts";
@@ -174,6 +175,72 @@ function fallbackNarrative(cards: ReviewCard[], overall: ReturnType<typeof overa
         : { title: "Prepare the next quarterly review", detail: "Refresh account values and re-run this review at the start of next quarter." }],
     },
   };
+}
+
+
+const SCAN_DEBOUNCE_HOURS = 6;
+const SCAN_TIMEOUT_MS = 140_000;
+
+type ScanOutcome = "started" | "skipped_recent" | "skipped_pending" | "skipped_not_v2" | "skipped_no_vault";
+
+/**
+ * Starting a review also scans the household's Vault so the statements are read without anyone having to
+ * remember. The V2 scan only HOLDS what it reads for advisor approval in Glass-Box Review (no live record
+ * changes), so this is safe to run on its own; V1 households are never auto-scanned because the V1 scan writes
+ * directly. Runs in the background, then posts a staff notification saying what to review (or what failed).
+ * Skipped when the household was scanned within SCAN_DEBOUNCE_HOURS or already has items waiting.
+ */
+async function kickOffVaultScan(
+  supabase: any, opts: { householdId: string; label: string; jwt: string },
+): Promise<ScanOutcome> {
+  const { householdId, label, jwt } = opts;
+  const { data: hh } = await supabase.from("households").select("v2_ai_engine_enabled, vault_root_folder_id").eq("id", householdId).maybeSingle();
+  if (!hh?.v2_ai_engine_enabled) return "skipped_not_v2";
+  if (!hh.vault_root_folder_id) return "skipped_no_vault";
+
+  const since = new Date(Date.now() - SCAN_DEBOUNCE_HOURS * 3600_000).toISOString();
+  const [{ count: pending }, { count: recent }] = await Promise.all([
+    supabase.from("stage2_verification_audit").select("id", { count: "exact", head: true }).eq("household_id", householdId).eq("review_status", "pending"),
+    supabase.from("system_health_logs").select("id", { count: "exact", head: true }).eq("household_id", householdId).eq("error_code", "REVIEW_VAULT_SCAN").gte("created_at", since),
+  ]);
+  if ((pending ?? 0) > 0) return "skipped_pending";
+  if ((recent ?? 0) > 0) return "skipped_recent";
+
+  await logSystemHealth(supabase, { function_name: "quarterly-system-review-generate", severity: "INFO", error_code: "REVIEW_VAULT_SCAN", household_id: householdId, error_message: "Vault scan started by a Sovereignty Review." });
+
+  const notify = (title: string, body: string) =>
+    supabase.from("staff_notifications").insert({ source_type: "vault_scan", title, body, link: "/glass-box-review" }).then(() => {}, () => {});
+
+  const run = async () => {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), SCAN_TIMEOUT_MS);
+      const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/vault-statement-scan`, {
+        method: "POST", signal: ctrl.signal,
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}`, apikey: Deno.env.get("SUPABASE_ANON_KEY") ?? "" },
+        body: JSON.stringify({ householdId }),
+      });
+      clearTimeout(timer);
+      const out = await res.json().catch(() => ({}));
+      if (!res.ok) { await notify(`${label}: Vault scan failed`, String(out?.error ?? `HTTP ${res.status}`).slice(0, 300)); return; }
+      const held = Number(out.v2HeldForReview ?? 0);
+      const errors: string[] = Array.isArray(out.errors) ? out.errors : [];
+      if (held > 0) {
+        await notify(`${label}: ${held} statement${held === 1 ? "" : "s"} ready in Glass-Box Review`, `Approve them, then regenerate the Sovereignty Review so it uses the new figures.${errors.length ? ` ${errors.length} file(s) could not be read.` : ""}`);
+      } else if (errors.length) {
+        await notify(`${label}: Vault scan couldn't read ${errors.length} file${errors.length === 1 ? "" : "s"}`, errors[0].slice(0, 300));
+      } else if (!out.investmentsFolderFound) {
+        await notify(`${label}: no Investment Statements folder found in the Vault`, "The Vault scan had nothing to read. Check the Vault's folders.");
+      }
+    } catch (e) {
+      const aborted = e instanceof Error && e.name === "AbortError";
+      await notify(`${label}: Vault scan ${aborted ? "is taking longer than expected" : "failed"}`, aborted ? "Check Glass-Box Review in a few minutes for the results." : (e instanceof Error ? e.message : String(e)).slice(0, 300));
+    }
+  };
+  // deno-lint-ignore no-explicit-any
+  const rt = (globalThis as any).EdgeRuntime;
+  if (rt?.waitUntil) rt.waitUntil(run()); else void run();
+  return "started";
 }
 
 serve(async (req) => {
@@ -438,7 +505,13 @@ serve(async (req) => {
     }).eq("id", reviewId);
     if (updErr) throw updErr;
 
-    return json({ success: true, reviewId, period });
+    // Read this household's statements in the background and tell staff when they're ready (non-blocking, never fails the review).
+    let scan: ScanOutcome | "error" = "skipped_not_v2";
+    try { scan = await kickOffVaultScan(supabase, { householdId, label: diag.household_label || `${primary.first_name} ${primary.last_name}`.trim(), jwt }); }
+    catch (e) { scan = "error"; console.error("quarterly-system-review-generate: vault scan kickoff failed:", e instanceof Error ? e.message : String(e)); }
+    await supabase.from("quarterly_system_reviews").update({ diagnostics: { ...diagnostics, vault_scan: scan } }).eq("id", reviewId);
+
+    return json({ success: true, reviewId, period, vaultScan: scan });
   } catch (error) {
     console.error("quarterly-system-review-generate error:", error);
     if (reviewId) {
