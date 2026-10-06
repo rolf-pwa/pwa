@@ -12,7 +12,7 @@ export interface AccountHit {
   last_name: string | null;
 }
 
-export type BulkStatus = "ready" | "already_filed" | "unmatched" | "ambiguous" | "no_vault" | "bad_input";
+export type BulkStatus = "ready" | "already_filed" | "unmatched" | "ambiguous" | "no_vault" | "no_folder" | "bad_input";
 
 export interface BulkPlan {
   status: BulkStatus;

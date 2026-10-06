@@ -24,7 +24,7 @@ async function callVault(action: string, payload: Record<string, unknown> = {}) 
   return json;
 }
 
-type Status = "ready" | "already_filed" | "unmatched" | "ambiguous" | "no_vault" | "bad_input" | "problem";
+type Status = "ready" | "already_filed" | "unmatched" | "ambiguous" | "no_vault" | "no_folder" | "bad_input" | "problem";
 
 interface Row {
   segment: StatementSegment;
@@ -43,6 +43,7 @@ const STATUS_LABEL: Record<Status, string> = {
   unmatched: "No matching account",
   ambiguous: "Ambiguous",
   no_vault: "No Vault",
+  no_folder: "No Investments folder",
   bad_input: "Unreadable",
   problem: "Needs a look",
 };
@@ -53,6 +54,7 @@ const STATUS_TONE: Record<Status, string> = {
   unmatched: "bg-amber-100 text-amber-800 border-amber-200",
   ambiguous: "bg-amber-100 text-amber-800 border-amber-200",
   no_vault: "bg-amber-100 text-amber-800 border-amber-200",
+  no_folder: "bg-amber-100 text-amber-800 border-amber-200",
   bad_input: "bg-red-100 text-red-800 border-red-200",
   problem: "bg-red-100 text-red-800 border-red-200",
 };
