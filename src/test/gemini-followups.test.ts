@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  accountSuffix,
   buildProposedFilename,
   normalizePersonName,
   resolvePrimaryAdultName,
@@ -51,6 +52,13 @@ describe("buildProposedFilename", () => {
     expect(
       buildProposedFilename({ ...base, lastName: "Lively-Lambert", documentTypeLabel: "Test Memo!" }),
     ).toBe("24-03-15_LivelyLambert_C-TestMemo.pdf");
+  });
+
+  it("appends the last 4 of the account number, and nothing when absent or too short", () => {
+    expect(buildProposedFilename({ ...base, documentTypeLabel: "InvestmentStatement", accountNumber: "1819479981" })).toBe("24-03-15_Santos_C-InvestmentStatement_9981.pdf");
+    expect(buildProposedFilename({ ...base, accountNumber: null })).toBe("24-03-15_Santos_C-DriversLicense.pdf");
+    expect(buildProposedFilename({ ...base, accountNumber: "12" })).toBe("24-03-15_Santos_C-DriversLicense.pdf");
+    expect(accountSuffix("RRSP-ab 12-34")).toBe("1234");
   });
 
   it("uses safe placeholders when names are empty", () => {
