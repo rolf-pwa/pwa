@@ -130,8 +130,8 @@ export function planInvestmentApply(accounts: Record<string, any>[], ctx: Invest
       : {};
     // Withdrawals from income funds (from the statement's transaction details): kept whenever they were read,
     // since the advisor approves the statement; null (not read) never overwrites a stored figure.
-    const withdrawals = av.income_withdrawals_ytd !== null && /^\d{4}-\d{2}-\d{2}$/.test(ctx.statementDate ?? "")
-      ? { income_withdrawals_ytd: av.income_withdrawals_ytd, income_withdrawals_as_of: ctx.statementDate as string }
+    const withdrawals = av.withdrawals_ytd !== null && /^\d{4}-\d{2}-\d{2}$/.test(ctx.statementDate ?? "")
+      ? { withdrawals_ytd: av.withdrawals_ytd, withdrawals_as_of: ctx.statementDate as string }
       : {};
 
     const live = (num && vByNum.get(num)) || vByName.get(name) || sByName.get(name);

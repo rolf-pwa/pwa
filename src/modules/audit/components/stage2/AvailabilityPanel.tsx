@@ -38,7 +38,7 @@ export function AvailabilityPanel({ items }: { items: ReviewItem[] }) {
       book_value: item.book_value as number | null | undefined,
       current_value: item.current_value as number | null | undefined,
       funds: (item.funds as FundLine[] | null | undefined) ?? null,
-      income_withdrawals: (item.income_withdrawals as WithdrawalLine[] | null | undefined) ?? null,
+      withdrawals: (item.withdrawals as WithdrawalLine[] | null | undefined) ?? null,
     }),
   }));
   if (rows.every((r) => r.av.surplus === null && r.av.funds.length === 0)) return null;
@@ -63,9 +63,9 @@ export function AvailabilityPanel({ items }: { items: ReviewItem[] }) {
             <Line label="Surplus" hint="Growth not yet withdrawn (current value − opening balance)" value={cad(av.surplus)} />
             <Line label="Income funds on hand" hint="Where withdrawals are drawn from" value={cad(av.income_funds)} />
             <Line
-              label="Withdrawn from income funds (this period)"
-              hint="Counted in Harvest to date on the Sovereignty Review"
-              value={av.income_withdrawals_ytd === null ? "Not read from statement" : cad(av.income_withdrawals_ytd)}
+              label="Total withdrawals (this period)"
+              hint="All funds; counted in Harvest to date on the Sovereignty Review"
+              value={av.withdrawals_ytd === null ? "Not read from statement" : cad(av.withdrawals_ytd)}
             />
             <div className="pt-1">
               <Line label="Available for withdrawal this year" strong value={cad(av.available)} />

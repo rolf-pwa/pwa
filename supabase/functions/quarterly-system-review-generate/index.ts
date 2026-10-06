@@ -115,7 +115,7 @@ Call populate_quarterly_review with all fields filled.`;
 
 function factsBlock(o: {
   household: string; family: string; period: string; track: string; today: string;
-  diag: any; cards: ReviewCard[]; deltas: any; charter: any; harvest: { boy: number; current: number };
+  diag: any; cards: ReviewCard[]; deltas: any; charter: any; harvest: { current: number | null };
   mode: ReviewMode; notOnFile: string[];
 }): string {
   const lines = [
@@ -124,7 +124,9 @@ function factsBlock(o: {
     `Total assets (AUM): ${money(o.diag.aum)}; Holding Tank ${money(o.diag.holding_tank_total)}; Vineyard ${money(o.diag.vineyard_total)}.`,
     `Storehouse reserves -- Liquidity ${money(o.diag.storehouse_reserves?.liquidity ?? 0)}, Strategic ${money(o.diag.storehouse_reserves?.strategic ?? 0)}, Philanthropic ${money(o.diag.storehouse_reserves?.philanthropic ?? 0)}, Legacy ${money(o.diag.storehouse_reserves?.legacy ?? 0)}.`,
     `Liabilities: ${money((o.diag.personal_liabilities_total ?? 0) + (o.diag.corp_liabilities_total ?? 0))}. Net worth: ${money(o.diag.net_worth ?? o.diag.aum)}. Insurance coverage: ${money(o.diag.insurance_coverage_total ?? 0)}.`,
-    `Year-to-date harvest across tracked accounts: beginning of year ${money(o.harvest.boy)}, current ${money(o.harvest.current)}.`,
+    o.harvest.current === null
+      ? "Withdrawals taken from accounts this year (harvest to date): not yet read from the statements; do not state a figure."
+      : `Withdrawals taken from the household's accounts this year (harvest to date): ${money(o.harvest.current)}.`,
     o.deltas.aum !== null
       ? `Change since ${o.deltas.previousLabel ?? "the previous review"}: assets ${o.deltas.aum >= 0 ? "+" : "-"}${money(Math.abs(o.deltas.aum))}${o.deltas.netWorth !== null ? `, net worth ${o.deltas.netWorth >= 0 ? "+" : "-"}${money(Math.abs(o.deltas.netWorth))}` : ""}.`
       : "No previous review to compare against.",
@@ -312,12 +314,12 @@ serve(async (req) => {
     // ---- Capital allocation: income funds -> Liquidity (when none is set up), insurance cash value -> Strategic,
     // harvest incl. income-fund withdrawals. Computed here for the review only; the shared diagnostics are untouched.
     const { data: tankRows } = financials.holdingTank.length
-      ? await supabase.from("holding_tank").select("id, current_value, income_funds_value, income_withdrawals_ytd").in("id", financials.holdingTank.map((h: any) => h.id))
+      ? await supabase.from("holding_tank").select("id, current_value, income_funds_value, withdrawals_ytd").in("id", financials.holdingTank.map((h: any) => h.id))
       : { data: [] };
     const nn = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
     const allocAccounts: AllocAccount[] = [
-      ...financials.vineyardAccounts.map((a: any) => ({ bucket: "vineyard" as const, current_value: nn(a.current_value), income_funds_value: nn(a.income_funds_value), income_withdrawals_ytd: nn(a.income_withdrawals_ytd) })),
-      ...(tankRows ?? []).map((a: any) => ({ bucket: "holding_tank" as const, current_value: nn(a.current_value), income_funds_value: nn(a.income_funds_value), income_withdrawals_ytd: nn(a.income_withdrawals_ytd) })),
+      ...financials.vineyardAccounts.map((a: any) => ({ bucket: "vineyard" as const, current_value: nn(a.current_value), income_funds_value: nn(a.income_funds_value), withdrawals_ytd: nn(a.withdrawals_ytd) })),
+      ...(tankRows ?? []).map((a: any) => ({ bucket: "holding_tank" as const, current_value: nn(a.current_value), income_funds_value: nn(a.income_funds_value), withdrawals_ytd: nn(a.withdrawals_ytd) })),
     ];
     const liquidityRow = (financials.storehouses as any[]).find((x) => x.storehouse_number === 1);
     const allocation = allocateCapital({
@@ -326,7 +328,6 @@ serve(async (req) => {
       liquidityStorehouse: { exists: !!liquidityRow, target: nn(liquidityRow?.target_value) },
       accounts: allocAccounts,
       policies: (financials.insurancePolicies as any[]).map((p) => ({ cash_value: nn(p.cash_value), cash_value_storehouse_id: p.cash_value_storehouse_id ?? null })),
-      snapshotHarvest: harvest.current,
     });
     const adjDiag = {
       ...diag, aum: allocation.aum, net_worth: allocation.netWorth, holding_tank_total: allocation.holdingTank,
@@ -364,7 +365,7 @@ serve(async (req) => {
       statementData: {
         accounts: allocAccounts.length,
         withIncomeFunds: allocAccounts.filter((a) => a.income_funds_value !== null).length,
-        withWithdrawals: allocAccounts.filter((a) => a.income_withdrawals_ytd !== null).length,
+        withWithdrawals: allocAccounts.filter((a) => a.withdrawals_ytd !== null).length,
       },
       corporate: track_type === "corporate"
         ? {
@@ -395,7 +396,7 @@ serve(async (req) => {
           { role: "model", parts: [{ text: "Understood. Provide the household facts and I will draft the narrative." }] },
           { role: "user", parts: [{ text: factsBlock({
             household: diag.household_label, family: diag.family_name, period, track: track_type, today: today.toISOString().slice(0, 10),
-            diag: adjDiag, cards, deltas, charter: charterText, harvest: { boy: harvest.boy, current: allocation.harvest }, mode, notOnFile: completeness.missing,
+            diag: adjDiag, cards, deltas, charter: charterText, harvest: { current: allocation.harvest }, mode, notOnFile: completeness.missing,
           }) }] },
         ],
         withThinking(GEMINI_GOVERNANCE_MODEL, { temperature: 0.3, maxOutputTokens: 8192 }, "medium"),
@@ -416,7 +417,7 @@ serve(async (req) => {
     }
 
     const charterFile = vaultCharter ? { name: vaultCharter.name, modifiedTime: vaultCharter.modifiedTime, ratified: vaultCharter.ratified, viaSubfolder: vaultCharter.viaSubfolder, textRead: !!vaultExtract } : null;
-    const diagnostics = { ...adjDiag, charter_file: charterFile, track_type, deltas, harvest: { boy: harvest.boy, current: allocation.harvest, snapshot: harvest.current, income_withdrawals: allocation.incomeWithdrawals }, allocation: { notes: allocation.notes, income_funds_moved: allocation.incomeFundsMoved, income_funds_on_file: allocation.incomeFundsOnFile, cash_value_added: allocation.cashValueAdded }, tracked_accounts: tracked.length, accounts: accounts.length, data_completeness: completeness };
+    const diagnostics = { ...adjDiag, charter_file: charterFile, track_type, deltas, harvest: { current: allocation.harvest, snapshot_growth: harvest.current, accounts_read: allocation.accountsWithWithdrawalData }, allocation: { notes: allocation.notes, income_funds_moved: allocation.incomeFundsMoved, income_funds_on_file: allocation.incomeFundsOnFile, cash_value_added: allocation.cashValueAdded }, tracked_accounts: tracked.length, accounts: accounts.length, data_completeness: completeness };
     const logic = [
       `Document type: ${mode === "survey" ? "Sovereignty Survey (no ratified Charter on file)" : "Quarterly Review (ratified Charter)"}. Records on file for ${completeness.onFile}/${completeness.total} areas${completeness.missing.length ? ` (not yet on file: ${completeness.missing.join(", ")})` : ""}.`,
       `Statuses are computed from live records: ${cards.map((c) => `${c.label} = ${c.status}`).join("; ")}.`,

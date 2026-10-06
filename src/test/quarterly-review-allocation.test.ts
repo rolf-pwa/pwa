@@ -6,12 +6,12 @@ const base = (o: Partial<AllocInput> = {}): AllocInput => ({
   reserves: { liquidity: 334, strategic: 0, philanthropic: 0, legacy: 0 },
   liquidityStorehouse: { exists: true, target: null },
   accounts: [
-    { bucket: "vineyard", current_value: 415_348.78, income_funds_value: 20_000, income_withdrawals_ytd: 15_283.87 },
-    { bucket: "vineyard", current_value: 494_915.17, income_funds_value: 5_000, income_withdrawals_ytd: 0 },
-    { bucket: "holding_tank", current_value: 10_000, income_funds_value: null, income_withdrawals_ytd: null },
+    { bucket: "vineyard", current_value: 415_348.78, income_funds_value: 20_000, withdrawals_ytd: 15_283.87 },
+    { bucket: "vineyard", current_value: 494_915.17, income_funds_value: 5_000, withdrawals_ytd: 0 },
+    { bucket: "holding_tank", current_value: 10_000, income_funds_value: null, withdrawals_ytd: null },
   ],
   policies: [{ cash_value: 59_467, cash_value_storehouse_id: null }],
-  snapshotHarvest: -26_995, ...o,
+  ...o,
 });
 
 describe("allocateCapital", () => {
@@ -48,20 +48,25 @@ describe("allocateCapital", () => {
     expect(r.cashValueAdded).toBe(0);
     expect(r.reserves.strategic).toBe(0);
   });
-  it("harvest = snapshot growth + income-fund withdrawals, and says how many accounts have data", () => {
+  it("harvest = total of all withdrawals across all accounts, and says how many accounts have data", () => {
     const r = allocateCapital(base());
-    expect(r.incomeWithdrawals).toBe(15_283.87);
-    expect(r.harvest).toBe(-11_711.13);
+    expect(r.totalWithdrawals).toBe(15_283.87);
+    expect(r.harvest).toBe(15_283.87);
     expect(r.accountsWithWithdrawalData).toBe(2);
     expect(r.notes.join(" ")).toMatch(/2 of 3 accounts/);
   });
+  it("harvest is unknown (null), not zero, until withdrawals have been read", () => {
+    const r = allocateCapital(base({ accounts: base().accounts.map((a) => ({ ...a, withdrawals_ytd: null })) }));
+    expect(r.harvest).toBeNull();
+    expect(r.notes.join(" ")).toMatch(/run a Vault scan/);
+  });
   it("caps income funds at the account value and never goes negative", () => {
-    const r = allocateCapital(base({ accounts: [{ bucket: "holding_tank", current_value: 100, income_funds_value: 5_000, income_withdrawals_ytd: null }], holdingTank: 100, vineyard: 0, policies: [] }));
+    const r = allocateCapital(base({ accounts: [{ bucket: "holding_tank", current_value: 100, income_funds_value: 5_000, withdrawals_ytd: null }], holdingTank: 100, vineyard: 0, policies: [] }));
     expect(r.holdingTank).toBe(0);
     expect(r.reserves.liquidity).toBe(434);
   });
   it("is a no-op for a household with nothing to allocate", () => {
     const r = allocateCapital(base({ accounts: [], policies: [] }));
-    expect(r).toMatchObject({ aum: 920_598, vineyard: 910_264, holdingTank: 10_000, harvest: -26_995, notes: [] });
+    expect(r).toMatchObject({ aum: 920_598, vineyard: 910_264, holdingTank: 10_000, harvest: null, notes: [] });
   });
 });

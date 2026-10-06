@@ -31,7 +31,7 @@ type Diag = {
   deltas?: { aum: number | null; netWorth: number | null; previousLabel: string | null };
   data_completeness?: { total: number; onFile: number; missing: string[] };
   charter_file?: { name: string; modifiedTime: string | null; ratified: boolean; viaSubfolder: boolean; textRead: boolean } | null;
-  harvest?: { boy: number; current: number; snapshot?: number; income_withdrawals?: number };
+  harvest?: { current: number | null; snapshot_growth?: number; accounts_read?: number };
   allocation?: { notes: string[]; income_funds_moved: number; income_funds_on_file: number; cash_value_added: number };
   tracked_accounts?: number;
   accounts?: number;
@@ -406,7 +406,7 @@ export default function QuarterlySystemReview() {
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4mm" }}>
                   <StatRow label="Asset Protection" value={money(diag.insurance_coverage_total)} tone="#334155" />
-                  {diag.harvest && <StatRow label="Harvest to date" value={money(diag.harvest.current)} tone="#334155" />}
+                  {diag.harvest && <StatRow label="Harvest to date" value={diag.harvest.current === null ? "—" : money(diag.harvest.current)} tone="#334155" />}
                   {typeof diag.accounts === "number" && <StatRow label="Accounts tracked" value={`${diag.tracked_accounts ?? 0}/${diag.accounts}`} tone="#334155" />}
                 </div>
               </div>

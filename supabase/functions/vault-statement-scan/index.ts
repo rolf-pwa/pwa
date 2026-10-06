@@ -493,6 +493,8 @@ Deno.serve(async (req) => {
         const message = e instanceof Error ? e.message : String(e);
         console.error(`[vault-statement-scan] investment file "${file.name}" failed:`, message);
         investmentErrors.push(`${file.name}: ${message}`);
+        // V2 only (keeps the V1 write set identical): record why a statement wasn't read so it can be diagnosed.
+        if (v2) await logSystemHealth(admin, { function_name: "vault-statement-scan", severity: "WARN", error_code: "STATEMENT_NOT_READ", household_id: householdId, error_message: `investment file "${file.name}": ${message}`.slice(0, 900) });
       }
     }
 
@@ -602,6 +604,7 @@ Deno.serve(async (req) => {
         const message = e instanceof Error ? e.message : String(e);
         console.error(`[vault-statement-scan] insurance file "${file.name}" failed:`, message);
         insuranceErrors.push(`${file.name}: ${message}`);
+        if (v2) await logSystemHealth(admin, { function_name: "vault-statement-scan", severity: "WARN", error_code: "STATEMENT_NOT_READ", household_id: householdId, error_message: `insurance file "${file.name}": ${message}`.slice(0, 900) });
       }
     }
 

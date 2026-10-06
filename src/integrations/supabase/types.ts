@@ -2068,13 +2068,13 @@ export type Database = {
           id: string
           income_funds_as_of: string | null
           income_funds_value: number | null
-          income_withdrawals_as_of: string | null
-          income_withdrawals_ytd: number | null
           notes: string | null
           source_file: string | null
           status: string
           updated_at: string
           visibility_scope: Database["public"]["Enums"]["visibility_scope"]
+          withdrawals_as_of: string | null
+          withdrawals_ytd: number | null
         }
         Insert: {
           account_name: string
@@ -2092,13 +2092,13 @@ export type Database = {
           id?: string
           income_funds_as_of?: string | null
           income_funds_value?: number | null
-          income_withdrawals_as_of?: string | null
-          income_withdrawals_ytd?: number | null
           notes?: string | null
           source_file?: string | null
           status?: string
           updated_at?: string
           visibility_scope?: Database["public"]["Enums"]["visibility_scope"]
+          withdrawals_as_of?: string | null
+          withdrawals_ytd?: number | null
         }
         Update: {
           account_name?: string
@@ -2116,13 +2116,13 @@ export type Database = {
           id?: string
           income_funds_as_of?: string | null
           income_funds_value?: number | null
-          income_withdrawals_as_of?: string | null
-          income_withdrawals_ytd?: number | null
           notes?: string | null
           source_file?: string | null
           status?: string
           updated_at?: string
           visibility_scope?: Database["public"]["Enums"]["visibility_scope"]
+          withdrawals_as_of?: string | null
+          withdrawals_ytd?: number | null
         }
         Relationships: [
           {
@@ -6366,11 +6366,11 @@ export type Database = {
           id: string
           income_funds_as_of: string | null
           income_funds_value: number | null
-          income_withdrawals_as_of: string | null
-          income_withdrawals_ytd: number | null
           notes: string | null
           updated_at: string
           visibility_scope: Database["public"]["Enums"]["visibility_scope"]
+          withdrawals_as_of: string | null
+          withdrawals_ytd: number | null
         }
         Insert: {
           account_name: string
@@ -6385,11 +6385,11 @@ export type Database = {
           id?: string
           income_funds_as_of?: string | null
           income_funds_value?: number | null
-          income_withdrawals_as_of?: string | null
-          income_withdrawals_ytd?: number | null
           notes?: string | null
           updated_at?: string
           visibility_scope?: Database["public"]["Enums"]["visibility_scope"]
+          withdrawals_as_of?: string | null
+          withdrawals_ytd?: number | null
         }
         Update: {
           account_name?: string
@@ -6404,11 +6404,11 @@ export type Database = {
           id?: string
           income_funds_as_of?: string | null
           income_funds_value?: number | null
-          income_withdrawals_as_of?: string | null
-          income_withdrawals_ytd?: number | null
           notes?: string | null
           updated_at?: string
           visibility_scope?: Database["public"]["Enums"]["visibility_scope"]
+          withdrawals_as_of?: string | null
+          withdrawals_ytd?: number | null
         }
         Relationships: [
           {

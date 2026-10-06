@@ -5,15 +5,14 @@
 //    Vineyard / Holding Tank account they sit in; equity funds stay where they are, so AUM doesn't change.
 //  - Insurance cash value that isn't already booked against a storehouse counts as Strategic Reserve.
 //    This is an asset the AUM total did not include, so AUM and net worth rise by it.
-//  - Harvest to date = growth since the beginning of the year (current value - opening value, from the
-//    harvest snapshots) + withdrawals taken from income funds, because those withdrawals reduced the
-//    balance but were still harvested.
+//  - Harvest to date = the total of ALL withdrawals taken from ALL accounts (every fund), as read from the
+//    statements. Null when no account has had its withdrawals read yet (unknown, not zero).
 
 export interface AllocAccount {
   bucket: "vineyard" | "holding_tank";
   current_value: number | null;
   income_funds_value: number | null;
-  income_withdrawals_ytd: number | null;
+  withdrawals_ytd: number | null; // all withdrawals from the account this period, read from the statement
 }
 
 export interface AllocInput {
@@ -25,8 +24,6 @@ export interface AllocInput {
   liquidityStorehouse: { exists: boolean; target: number | null };
   accounts: AllocAccount[];
   policies: { cash_value: number | null; cash_value_storehouse_id: string | null }[];
-  /** Sum of year-to-date harvest (net growth) across tracked accounts, from the harvest snapshots. */
-  snapshotHarvest: number;
 }
 
 export interface Allocation {
@@ -38,9 +35,9 @@ export interface Allocation {
   incomeFundsMoved: number;       // income funds counted as Liquidity (0 when a Liquidity Reserve is set up)
   incomeFundsOnFile: number;      // income funds known from statements, moved or not
   cashValueAdded: number;         // policy cash value counted as Strategic
-  incomeWithdrawals: number;      // withdrawals from income funds read from statements
+  totalWithdrawals: number;       // all withdrawals read from statements
   accountsWithWithdrawalData: number;
-  harvest: number;                // snapshot harvest + income withdrawals
+  harvest: number | null;         // = totalWithdrawals when any account has data, else null
   notes: string[];
 }
 
@@ -84,12 +81,13 @@ export function allocateCapital(i: AllocInput): Allocation {
     notes.push(`Strategic Reserve includes ${money(cashValueAdded)} of insurance cash value.`);
   }
 
-  const withData = i.accounts.filter((a) => isNum(a.income_withdrawals_ytd));
-  const incomeWithdrawals = round2(withData.reduce((s, a) => s + (a.income_withdrawals_ytd as number), 0));
-  const harvest = round2(i.snapshotHarvest + incomeWithdrawals);
-  if (incomeWithdrawals > 0) notes.push(`Harvest includes ${money(incomeWithdrawals)} withdrawn from income funds.`);
-  if (i.accounts.length > 0 && withData.length < i.accounts.length) {
-    notes.push(`Income-fund withdrawals are known for ${withData.length} of ${i.accounts.length} accounts; run a Vault scan to read the rest.`);
+  const withData = i.accounts.filter((a) => isNum(a.withdrawals_ytd));
+  const totalWithdrawals = round2(withData.reduce((s, a) => s + (a.withdrawals_ytd as number), 0));
+  const harvest = withData.length > 0 ? totalWithdrawals : null;
+  if (i.accounts.length > 0 && withData.length === 0) {
+    notes.push("Harvest to date needs the statements' withdrawals: run a Vault scan to read them.");
+  } else if (i.accounts.length > 0 && withData.length < i.accounts.length) {
+    notes.push(`Harvest counts withdrawals from ${withData.length} of ${i.accounts.length} accounts; run a Vault scan to read the rest.`);
   }
 
   return {
@@ -101,7 +99,7 @@ export function allocateCapital(i: AllocInput): Allocation {
       liquidity: round2(reserves.liquidity), strategic: round2(reserves.strategic),
       philanthropic: round2(reserves.philanthropic), legacy: round2(reserves.legacy),
     },
-    incomeFundsMoved, incomeFundsOnFile, cashValueAdded, incomeWithdrawals,
+    incomeFundsMoved, incomeFundsOnFile, cashValueAdded, totalWithdrawals,
     accountsWithWithdrawalData: withData.length, harvest, notes,
   };
 }
