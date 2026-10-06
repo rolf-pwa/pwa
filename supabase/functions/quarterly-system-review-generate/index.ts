@@ -380,7 +380,7 @@ serve(async (req) => {
     const figures: BalanceFigures = {
       areas: { vineyard: allocation.vineyard, liquidity: allocation.reserves.liquidity, strategic: allocation.reserves.strategic, philanthropic: allocation.reserves.philanthropic, legacy: allocation.reserves.legacy, liabilities: liabilitiesTotal },
       totalAssets: allocation.aum, investableAssets: allocation.aum - allocation.realEstateAdded, netWorth: allocation.netWorth,
-      monthlySpending: vaultExtract?.monthly_spending ?? null,
+      monthlySpending: vaultExtract?.monthly_spending ?? null, withdrawnYtd: allocation.harvest,
     };
     const targetResults = evaluateTargets(vaultExtract?.targets ?? [], figures);
 

@@ -23,19 +23,41 @@ describe("evaluateTarget", () => {
     expect(Math.round(r.actual!)).toBe(75);
     expect(r.status).toBe("above");
   });
-  it("between and plain targets (10% tolerance)", () => {
+  it("a stated goal for a balance is a floor: more is fine, noticeably less is short", () => {
     expect(evaluateTarget(t({ comparison: "between", value: 100_000, value_max: 200_000 }), b).status).toBe("met");
     expect(evaluateTarget(t({ comparison: "target", value: 170_000 }), b).status).toBe("met");
-    expect(evaluateTarget(t({ comparison: "target", value: 100_000 }), b).status).toBe("above");
+    const more = evaluateTarget(t({ comparison: "target", value: 100_000 }), b);
+    expect(more.status).toBe("met");
+    expect(more.summary).toMatch(/met, \$71,024 above the target/);
+    expect(evaluateTarget(t({ comparison: "target", value: 250_000 }), b).status).toBe("below");
+  });
+  it("a stated share of assets is two-sided (within 10%)", () => {
+    const share = (v: number) => evaluateTarget(t({ area: "vineyard", metric: "percent_of_investable_assets", comparison: "target", value: v }), b);
+    expect(share(75).status).toBe("met");
+    expect(share(50).status).toBe("above");
+    expect(share(95).status).toBe("below");
+  });
+  it("yearly figures are never compared with a balance", () => {
+    const income = evaluateTarget(t({ area: "vineyard", label: "Target Annual Income", metric: "annual_amount", value: 123_200 }), { ...b, withdrawnYtd: 96_162 });
+    expect(income.status).toBe("info");
+    expect(income.summary).toMatch(/\$96,162 withdrawn so far this year \(78% of it\)/);
+    expect(evaluateTarget(t({ area: "vineyard", metric: "annual_amount", value: 90_000 }), { ...b, withdrawnYtd: 96_162 }).status).toBe("above");
+    expect(evaluateTarget(t({ area: "liabilities", metric: "annual_amount", value: 41_000 }), b).status).toBe("info");
+    expect(evaluateTarget(t({ area: "vineyard", metric: "monthly_amount", value: 10_000 }), { ...b, withdrawnYtd: 96_162 }).targetText).toBe("$120,000 a year");
+  });
+  it("rules (ages, waiting periods, thresholds) are shown for reference, not checked", () => {
+    const r = evaluateTarget(t({ area: "legacy", label: "Trust distribution at 25", metric: "other", value: 25, quote: "25% at age 25" }), b);
+    expect(r.status).toBe("info");
+    expect(r.summary).toBe("Charter rule: Trust distribution at 25 — “25% at age 25”.");
   });
   it("months of spending needs a spending figure; otherwise it isn't computed", () => {
     expect(evaluateTarget(t({ metric: "months_of_spending", value: 12 }), b).status).toBe("not_computable");
     const withSpend = evaluateTarget(t({ metric: "months_of_spending", value: 12 }), { ...b, monthlySpending: 10_000 });
     expect(withSpend.status).toBe("met"); // 171,024 / 10,000 = 17.1 months
   });
-  it("other / missing values are not computed, never guessed", () => {
-    expect(evaluateTarget(t({ area: "other" }), b).status).toBe("not_computable");
+  it("missing values are not computed, never guessed", () => {
     expect(evaluateTarget(t({ value: null }), b).status).toBe("not_computable");
+    expect(evaluateTarget(t({ area: "other" }), b).status).toBe("info");
   });
 });
 

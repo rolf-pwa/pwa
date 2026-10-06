@@ -18,7 +18,7 @@ import pwLogoWhite from "@/assets/prosperwise-logo-white.png";
 
 type ActionItem = { title: string; detail: string };
 type ActionPlan = { phase_1: ActionItem[]; phase_2: ActionItem[]; phase_3: ActionItem[] };
-type TargetCheck = { label: string; status: "met" | "below" | "above" | "not_computable"; targetText: string; actualText: string; summary: string; quote: string };
+type TargetCheck = { label: string; area?: string; status: "met" | "below" | "above" | "info" | "not_computable"; targetText: string; actualText: string; summary: string; quote: string };
 type Card = { key: string; label: string; status: string; detail: string; targets?: TargetCheck[]; charter_note?: string };
 
 type Diag = {
@@ -90,7 +90,8 @@ const signed = (n: number) => `${n >= 0 ? "+" : "-"}${money(Math.abs(n))}`;
 const colLabel: React.CSSProperties = { fontSize: "6.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "2mm", paddingBottom: "1.5mm", borderBottom: "1px solid #e2e8f0" };
 const colText: React.CSSProperties = { fontSize: "8.5pt", color: "#334155", lineHeight: 1.4 };
 
-const TARGET_COLOR: Record<TargetCheck["status"], string> = { met: "#27ae60", below: "#c0392b", above: "#c0392b", not_computable: "#94a3b8" };
+const TARGET_COLOR: Record<TargetCheck["status"], string> = { met: "#27ae60", below: "#c0392b", above: "#c0392b", info: "#64748b", not_computable: "#94a3b8" };
+const targetMark = (s: TargetCheck["status"]) => (s === "met" ? "✓ " : s === "below" || s === "above" ? "✗ " : "• ");
 
 function StatusCard({ label, status, detail, targets, note }: { label: string; status: string; detail: string; targets?: TargetCheck[]; note?: string }) {
   return (
@@ -102,7 +103,7 @@ function StatusCard({ label, status, detail, targets, note }: { label: string; s
       <p style={{ fontSize: "7.5pt", color: "#334155", lineHeight: 1.5 }}>{detail || "—"}</p>
       {(targets ?? []).map((t, i) => (
         <p key={i} style={{ fontSize: "7pt", lineHeight: 1.45, marginTop: "1mm", color: TARGET_COLOR[t.status] }}>
-          {t.status === "met" ? "✓ " : t.status === "not_computable" ? "• " : "✗ "}{t.summary.replace(/^Charter: /, "Charter target: ")}
+          {targetMark(t.status)}{t.summary.replace(/^Charter: /, "Charter target: ")}
         </p>
       ))}
       {note && <p style={{ fontSize: "7pt", lineHeight: 1.45, marginTop: "1.2mm", color: "#64748b", fontStyle: "italic" }}>{note}</p>}
@@ -514,7 +515,7 @@ export default function QuarterlySystemReview() {
                 <ul className="space-y-1">
                   {review.diagnostics.charter_extract.targets.map((t, i) => (
                     <li key={i}>
-                      <span style={{ color: TARGET_COLOR[t.status] }}>{t.status === "met" ? "✓" : t.status === "not_computable" ? "•" : "✗"}</span> {t.summary.replace(/^Charter: /, "")}
+                      <span style={{ color: TARGET_COLOR[t.status] }}>{targetMark(t.status).trim()}</span> {t.summary.replace(/^Charter: /, "")}
                       {t.quote && <span className="italic"> — “{t.quote}”</span>}
                     </li>
                   ))}

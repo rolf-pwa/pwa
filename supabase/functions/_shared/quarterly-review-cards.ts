@@ -109,7 +109,8 @@ export function buildAlignmentCards(f: ReviewFacts): ReviewCard[] {
       : f.charter.ratified
         ? `Charter is ratified${f.charter.source === "contact" ? " (earlier-format Charter)" : f.charter.source === "vault" ? " (signed copy on file in the Vault)" : ""}${f.targets.length ? `; ${plural(f.targets.length, "numeric target")} read from it` : ""}.`
         : "A Charter exists but is not yet ratified.";
-    cards.push({ key: "charter", label: "Sovereignty Charter", status, detail });
+    // Charter rules that belong to no one area (waiting periods, review triggers) are listed here for reference.
+    cards.push({ key: "charter", label: "Sovereignty Charter", status, detail, targets: forArea(f, "other") });
   }
 
   // Vineyard
