@@ -53,6 +53,7 @@ export const ESTATE_SYSTEM_PROMPT = `You are a legal-document reader for a Canad
 }
 Rules:
 - Return one object per distinct legal document in the file (a will and its codicil are two).
+- Read EVERY page. One file often bundles several documents: a will followed by a Power of Attorney for property and/or a Power of Attorney for personal care (look for headings such as "Continuing Power of Attorney", "Enduring Power of Attorney", "Power of Attorney for Personal Care", "Representation Agreement"). Return each as its own object with its own type, date, signed flag and attorney(s). Do not stop after the will.
 - "document_date" is the date of signing/execution, not a date of printing or filing. Use null if no signing date is stated.
 - "signed" is true only if signatures or an execution/attestation block with signatures is visible, false if the signature lines are visibly blank, and null if you cannot tell.
 - Copy names exactly as printed. Never guess, infer or fill in a missing fact; use null.

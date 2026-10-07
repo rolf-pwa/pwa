@@ -27,12 +27,12 @@ Derived from a real finished audit (Lively-Lambert, July 2026). Match this regis
 
 ## Terminology (use these exact terms, capitalized as shown)
 
-- **The Sovereign** -- the client. **The Family CFO** -- the advisor/reviewer, referred to in
-  third person ("the Family CFO recommends...").
-- **The Vineyard** -- the growth engine (equity holdings). **The Storehouse** / **The Keep** --
-  the liquidity reserve. **The Armoury** -- the strategic reserve (insurance CSV, HELOC room).
-  **The Granary** -- the philanthropic trust. **The Legacy Vault** -- terminal/estate assets.
-  **The River** -- scheduled income/distribution flows (e.g. a PIP).
+- Refer to the client as "you"/"your" (or by name) and to the advisor as "the Family CFO".
+- Use PLAIN financial language. Do NOT use metaphorical names: never write Keep, Armoury, Granary,
+  Legacy Vault, Storehouse, River, Sovereign or Vineyard-style imagery. Name the reserves by what
+  they are: **Growth portfolio** (equity holdings), **Liquidity Reserve**, **Strategic Reserve**
+  (insurance cash value, HELOC room), **Philanthropic Trust**, **Legacy Trust** (estate and real estate),
+  and **scheduled income** for distribution flows.
 - "Structural drift", "systemic boundaries", "Charter Aligned", "Charter Baseline".
 
 ## Voice
@@ -75,7 +75,7 @@ Call produce_audit_narrative with:
 -- lead with the most consequential findings (e.g. any estate deadlock, largest drift, largest \
 tax exposure), grounded only in the computed data above.
 2. pillar_narratives: one entry per pillar present in the computed data's pillar_totals, using \
-the house terminology (Storehouse/Vineyard/Armoury/Granary/Legacy Vault) and citing exact \
+plain names (Growth portfolio / Liquidity Reserve / Strategic Reserve / Philanthropic Trust / Legacy Trust, no metaphors) and citing exact \
 dollar totals from the data.
 3. element_narratives: for each element in scorecard_elements, write 1-4 audit_findings \
 (factual, diagnostic) and 0-3 required_corrective_actions (imperative). For any element marked \
@@ -100,7 +100,7 @@ const NARRATIVE_TOOL_SCHEMA = {
             items: {
               type: "OBJECT",
               properties: {
-                pillar: { type: "STRING", description: "e.g. Vineyard, Keep, Armoury, Granary, Legacy Vault." },
+                pillar: { type: "STRING", description: "Use the pillar key exactly as given in the data." },
                 narrative: { type: "STRING" },
               },
               required: ["pillar", "narrative"],

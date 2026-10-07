@@ -120,15 +120,13 @@ function ScoreBadge({ row }: { row: { currentScore?: number; current_score?: num
 
 /** The audit's house pillar names, with the CRM's own name for the same line so the two documents read alike. */
 const PILLAR_LABEL: Record<string, string> = {
-  "Vineyard": "The Vineyard",
-  "Keep": "The Keep · Liquidity Reserve",
-  "Armoury": "The Armoury · Strategic Reserve",
-  "Granary": "The Granary · Philanthropic Trust",
-  "Legacy Vault": "The Legacy Vault · Legacy Trust",
+  "Vineyard": "Vineyard",
+  "Keep": "Liquidity Reserve",
+  "Armoury": "Strategic Reserve",
+  "Granary": "Philanthropic Trust",
+  "Legacy Vault": "Legacy Trust",
 };
 
-const TARGET_COLOR: Record<TargetCheck["status"], string> = { met: "#27ae60", below: "#c0392b", above: "#c0392b", info: "#64748b", not_computable: "#94a3b8" };
-const targetMark = (s: TargetCheck["status"]) => (s === "met" ? "✓" : s === "below" || s === "above" ? "✗" : "•");
 
 function BsRow({ label, value, strong, tone }: { label: string; value: string; strong?: boolean; tone?: string }) {
   return (
@@ -349,6 +347,18 @@ export default function GovernanceAudit() {
                 </div>
               </div>
 
+              {doc.charter_summary && (
+                <div>
+                  <div style={colLabel}>The Charter</div>
+                  <p style={colText}>
+                    {doc.charter_summary.source === null
+                      ? "No Charter is on file for this household."
+                      : `Sovereignty Charter ${doc.charter_summary.ratified ? "ratified" : "not yet ratified"}${doc.charter_summary.file_name ? ` · ${doc.charter_summary.file_name}` : ""}.`}
+                  </p>
+                  {doc.charter_summary.purpose && <p style={{ ...colText, fontStyle: "italic", color: "#64748b", marginTop: "1.5mm" }}>“{doc.charter_summary.purpose}”</p>}
+                </div>
+              )}
+
               <div>
                 <div style={colLabel}>I. Executive Governance Summary</div>
                 <div style={{ background: "#fafafa", borderLeft: `3px solid ${DOC_TAN}`, padding: "3mm 5mm", display: "flex", flexDirection: "column", gap: "1.5mm" }}>
@@ -376,17 +386,6 @@ export default function GovernanceAudit() {
                 </div>
               </div>
 
-              {doc.charter_summary && (
-                <div>
-                  <div style={colLabel}>The Charter</div>
-                  <p style={colText}>
-                    {doc.charter_summary.source === null
-                      ? "No Charter is on file for this household."
-                      : `Sovereignty Charter ${doc.charter_summary.ratified ? "ratified" : "not yet ratified"}${doc.charter_summary.file_name ? ` · ${doc.charter_summary.file_name}` : ""}.`}
-                  </p>
-                  {doc.charter_summary.purpose && <p style={{ ...colText, fontStyle: "italic", color: "#64748b", marginTop: "1.5mm" }}>“{doc.charter_summary.purpose}”</p>}
-                </div>
-              )}
             </main>
           </div>
 
@@ -424,7 +423,7 @@ export default function GovernanceAudit() {
               );
             })()}
             <p style={{ fontSize: "6.5pt", color: "#94a3b8", fontStyle: "italic", margin: 0 }}>
-              Pillar totals come from the household's own Vineyard, Storehouse and Holding Tank records, with income funds from the investment statements counted in the Keep and insurance cash value in the Armoury, exactly as in the Sovereignty Review.
+              Pillar totals come from the household's own Vineyard, Storehouse and Holding Tank records, with income funds from the investment statements counted in the Liquidity Reserve and insurance cash value in the Strategic Reserve, exactly as in the Sovereignty Review.
             </p>
 
             {doc.pillar_analyses.length > 0 && (
@@ -454,17 +453,6 @@ export default function GovernanceAudit() {
                 </p>
               </div>
             </div>
-
-            {doc.charter_targets && doc.charter_targets.length > 0 && (
-              <div>
-                <div style={colLabel}>What the Charter Asks For</div>
-                {doc.charter_targets.map((t, i) => (
-                  <p key={i} style={{ ...colText, fontSize: "7.5pt", color: TARGET_COLOR[t.status], marginBottom: "1mm" }}>
-                    {targetMark(t.status)} {t.summary.replace(/^Charter: /, "")}
-                  </p>
-                ))}
-              </div>
-            )}
 
             {doc.estate_documents && (
               <div>
