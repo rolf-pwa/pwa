@@ -25,6 +25,7 @@ export interface ResolvedCharter {
     purpose: string; mission: string; vision: string; values: string[];
     reserveRules: string; governance: string; unreadable: boolean;
     targets: CharterExtract["targets"];
+    incomeSources: CharterExtract["income_sources"];
   };
 }
 
@@ -81,6 +82,7 @@ export async function resolveCharter(
     governance: vaultExtract?.governance ?? "",
     unreadable: !!vaultCharter && !vaultExtract,
     targets: vaultExtract?.targets ?? [],
+    incomeSources: vaultExtract?.income_sources ?? [],
   };
   return { source, ratified, vaultCharter, vaultExtract, text };
 }

@@ -78,6 +78,7 @@ interface GovernanceAuditDoc {
   charter_summary?: { source: string | null; ratified: boolean; file_name: string | null; purpose: string | null };
   charter_targets?: TargetCheck[];
   estate_documents?: { source: string; adults: EstateAdultRow[]; trusts: number; status: string; detail: string; actions: string[]; files?: { type: string; file_name: string }[] };
+  income_structure?: { totalIncome: number; external: { label: string; annual_amount: number }[]; externalTotal: number; capitalRequired: number; withdrawnYtd: number | null; capitalRemaining: number | null } | null;
   balance_sheet?: { total_assets: number; net_worth: number; liabilities: number };
 }
 interface GovernanceAuditRow {
@@ -458,6 +459,18 @@ export default function GovernanceAudit() {
                 </p>
               </div>
             </div>
+
+            {doc.income_structure && (
+              <div>
+                <div style={colLabel}>Income Structure</div>
+                <BsRow label="Total annual income (Charter)" value={fmtCurrency(doc.income_structure.totalIncome)} strong />
+                <BsRow label="Drawn from capital (portfolio withdrawals and liquidity draws)" value={fmtCurrency(doc.income_structure.capitalRequired)} />
+                {doc.income_structure.external.map((s, i) => <BsRow key={i} label={s.label} value={fmtCurrency(s.annual_amount)} />)}
+                {doc.income_structure.withdrawnYtd !== null && (
+                  <BsRow label="Withdrawn from capital so far this year" value={fmtCurrency(doc.income_structure.withdrawnYtd)} tone={doc.income_structure.withdrawnYtd > doc.income_structure.capitalRequired ? "#c0392b" : undefined} />
+                )}
+              </div>
+            )}
 
             {doc.estate_documents && (
               <div>

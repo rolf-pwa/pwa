@@ -48,7 +48,7 @@ import { gatherHouseholdFinancials, inferTrackType } from "../_shared/sovereignt
 import { pillarWarnings, type PillarTotals } from "../_shared/governance-audit-pillars.ts";
 import { resolveCharter } from "../_shared/charter-resolve.ts";
 import { allocateForHousehold } from "../_shared/review-allocation.ts";
-import { evaluateTargets, type BalanceFigures } from "../_shared/charter-targets.ts";
+import { evaluateTargets, incomeStructure, type BalanceFigures } from "../_shared/charter-targets.ts";
 import { estateFactsFrom, estateSummary } from "../_shared/quarterly-review-cards.ts";
 import {
   analyzeEstateLiquidity,
@@ -586,7 +586,8 @@ async function runFullAudit(db: Db, householdId: string, userId: string, options
       totalAssets: allocation.aum, investableAssets: allocation.aum - allocation.realEstateAdded, netWorth: allocation.netWorth,
       monthlySpending: resolved.vaultExtract?.monthly_spending ?? null, withdrawnYtd: allocation.harvest,
     };
-    const charterTargets = evaluateTargets(resolved.text.targets, figures);
+    const charterTargets = evaluateTargets(resolved.text.targets, figures, resolved.text.incomeSources);
+    const incomeStruct = incomeStructure(resolved.text.incomeSources, allocation.harvest);
 
     // Estate documents approved in Glass-Box (Will / Power of Attorney per adult), same reading as the Review.
     const { data: estateRows } = await db.from("estate_documents").select("contact_id, document_type, signed, document_date, file_name").eq("household_id", householdId);
@@ -743,6 +744,7 @@ async function runFullAudit(db: Db, householdId: string, userId: string, options
       compliance_notes: complianceNotes,
       charter_summary: { source: resolved.source, ratified: resolved.ratified, file_name: resolved.vaultCharter?.name ?? null, purpose: resolved.text.purpose || null },
       charter_targets: charterTargets,
+      income_structure: incomeStruct,
       estate_documents: { source: estateFacts.source, adults: estateFacts.adults, trusts: estateFacts.trusts, status: estateDocs.status, detail: estateDocs.detail, actions: estateDocs.actions, files: ((estateRows ?? []) as any[]).filter((r) => r.file_name).map((r) => ({ type: r.document_type, file_name: r.file_name })) },
       balance_sheet: { total_assets: allocation.aum, net_worth: allocation.netWorth, liabilities: liabilitiesTotal },
     };
