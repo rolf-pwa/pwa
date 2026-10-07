@@ -40,7 +40,6 @@
 // Staff-triggered only for now, no cron.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { driveDownloadFile, driveListChildren, matchVaultCategoryFolder } from "../_shared/vault-provisioning.ts";
 import { generateVertexContent, parseServiceAccountKey, type ServiceAccountKey, type VertexContent, GEMINI_EXTRACT_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 import { deriveChoiceMatchesProfile } from "../_shared/investor-profile.ts";
@@ -48,6 +47,8 @@ import { gatherHouseholdFinancials, inferTrackType } from "../_shared/sovereignt
 import { pillarWarnings, type PillarTotals } from "../_shared/governance-audit-pillars.ts";
 import { resolveCharter } from "../_shared/charter-resolve.ts";
 import { allocateForHousehold } from "../_shared/review-allocation.ts";
+import { readTaxSlipMix } from "../_shared/tax-slips-vault.ts";
+import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { projectIncomeTax } from "../_shared/income-tax-projection.ts";
 import { evaluateTargets, incomeStructure, type BalanceFigures } from "../_shared/charter-targets.ts";
 import { estateFactsFrom, estateSummary } from "../_shared/quarterly-review-cards.ts";
@@ -597,7 +598,16 @@ async function runFullAudit(db: Db, householdId: string, userId: string, options
     const drawSources: any[] = [...(financials.holdingTank ?? []), ...financials.vineyardAccounts].filter((a) => (Number(a.withdrawals_ytd) || 0) > 0);
     const drawnYtd = drawSources.reduce((sum, a) => sum + Number(a.withdrawals_ytd), 0);
     const drawScale = incomeStruct && drawnYtd > 0 ? incomeStruct.capitalRequired / drawnYtd : 1;
+    // Last year's T3 / T5 slips in the Vault's Tax folder tell how the income from non-registered accounts was made up.
+    const taxYear = new Date().getFullYear() - 1;
+    let slipMix: Awaited<ReturnType<typeof readTaxSlipMix>> = { mix: null, files: [], filesRead: 0 };
+    try {
+      slipMix = await readTaxSlipMix(db, sa, { householdId, vaultRootFolderId: financials.vaultRootFolderId, accessToken: await getServiceGoogleAccessToken(db), taxYear });
+    } catch (e) {
+      console.error("governance-audit: tax slips unavailable:", e instanceof Error ? e.message : String(e));
+    }
     const incomeTax = projectIncomeTax({
+      mix: slipMix.mix,
       province: provinceCode,
       accounts: drawSources.map((a) => ({
         owner: a.contact_id ? nameOf.get(a.contact_id) ?? null : null,
@@ -763,7 +773,7 @@ async function runFullAudit(db: Db, householdId: string, userId: string, options
       charter_summary: { source: resolved.source, ratified: resolved.ratified, file_name: resolved.vaultCharter?.name ?? null, purpose: resolved.text.purpose || null },
       charter_targets: charterTargets,
       income_structure: incomeStruct,
-      income_tax: incomeTax,
+      income_tax: incomeTax ? { ...incomeTax, slip_files: slipMix.files, slip_year: taxYear } : null,
       estate_documents: { source: estateFacts.source, adults: estateFacts.adults, trusts: estateFacts.trusts, status: estateDocs.status, detail: estateDocs.detail, actions: estateDocs.actions, files: ((estateRows ?? []) as any[]).filter((r) => r.file_name).map((r) => ({ type: r.document_type, file_name: r.file_name })) },
       balance_sheet: { total_assets: allocation.aum, net_worth: allocation.netWorth, liabilities: liabilitiesTotal },
     };

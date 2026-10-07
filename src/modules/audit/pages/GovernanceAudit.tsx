@@ -79,7 +79,7 @@ interface GovernanceAuditDoc {
   charter_targets?: TargetCheck[];
   estate_documents?: { source: string; adults: EstateAdultRow[]; trusts: number; status: string; detail: string; actions: string[]; files?: { type: string; file_name: string }[] };
   income_structure?: { totalIncome: number; external: { label: string; annual_amount: number }[]; externalTotal: number; capitalRequired: number; withdrawnYtd: number | null; capitalRemaining: number | null } | null;
-  income_tax?: { province: string; taxYearTables: number; taxpayers: { name: string; taxableIncome: number; federalTax: number; provincialTax: number; totalTax: number; effectiveRate: number; marginalRate: number }[]; totalDraws: number; totalBenefits: number; grossIncome: number; totalTax: number; afterTaxIncome: number; effectiveRate: number; notes: string[] } | null;
+  income_tax?: { basis?: "tax_slips" | "unrealised_gain"; slip_files?: string[]; slip_year?: number; mix?: { taxYear: number; shares: { interest: number; eligibleDividends: number; otherDividends: number; capitalGains: number; returnOfCapital: number } } | null; province: string; taxYearTables: number; taxpayers: { name: string; taxableIncome: number; federalTax: number; provincialTax: number; totalTax: number; effectiveRate: number; marginalRate: number }[]; totalDraws: number; totalBenefits: number; grossIncome: number; totalTax: number; afterTaxIncome: number; effectiveRate: number; notes: string[] } | null;
   balance_sheet?: { total_assets: number; net_worth: number; liabilities: number };
 }
 interface GovernanceAuditRow {
@@ -338,6 +338,7 @@ export default function GovernanceAudit() {
           <div className="stab-doc bg-white shadow-lg print:shadow-none" style={{ width: "210mm", minHeight: "297mm", display: "flex", fontFamily: DOC_FONT, color: "#334155" }}>
             <DocSidebar references={[
               ...(doc.charter_summary?.file_name ? [{ label: "Charter", value: doc.charter_summary.file_name }] : []),
+              ...(doc.income_tax?.slip_files ?? []).map((f) => ({ label: `${doc.income_tax?.slip_year ?? ""} tax slip`.trim(), value: f })),
               ...(doc.estate_documents?.files ?? []).map((f) => ({ label: ESTATE_REF_LABEL[f.type] ?? "Estate document", value: f.file_name })),
             ]} />
             <main style={{ flex: 1, padding: "10mm 10mm 0 10mm", display: "flex", flexDirection: "column", gap: "5mm" }}>
@@ -457,8 +458,16 @@ export default function GovernanceAudit() {
                 ))}
                 <BsRow label={`Estimated income tax (${(doc.income_tax.effectiveRate * 100).toFixed(1)}% of gross income)`} value={fmtCurrency(doc.income_tax.totalTax)} strong tone="#c0392b" />
                 <BsRow label="Income after tax" value={fmtCurrency(doc.income_tax.afterTaxIncome)} strong />
+                {doc.income_tax.basis === "tax_slips" && doc.income_tax.mix && (() => {
+                  const sh = doc.income_tax!.mix!.shares, pct = (n: number) => `${Math.round(n * 100)}%`;
+                  return (
+                    <p style={{ ...colText, fontSize: "7.5pt", margin: "1.5mm 0 0" }}>
+                      Withdrawals from non-registered accounts are split as the {doc.income_tax!.mix!.taxYear} tax slips split their income: {pct(sh.interest)} interest and other income, {pct(sh.eligibleDividends)} eligible dividends, {pct(sh.otherDividends)} other dividends, {pct(sh.capitalGains)} capital gains and {pct(sh.returnOfCapital)} return of capital.
+                    </p>
+                  );
+                })()}
                 <p style={{ fontSize: "6.5pt", color: "#94a3b8", fontStyle: "italic", margin: "1.5mm 0 0" }}>
-                  Estimate for this year using {doc.income_tax.taxYearTables} federal and {doc.income_tax.province} tax tables and the basic personal amount only. Registered withdrawals are taxed in full, non-registered withdrawals on their share of gain, and TFSA withdrawals not at all. Age and pension credits, OAS recovery tax and income splitting are not included. Not tax advice; confirm with the family's tax professional.
+                  Estimate for this year using {doc.income_tax.taxYearTables} federal and {doc.income_tax.province} tax tables and the basic personal amount only. Registered withdrawals are taxed in full and TFSA withdrawals not at all. {doc.income_tax.basis === "tax_slips" ? "Dividends are grossed up and the dividend tax credit applied; capital gains are taxed at the inclusion rate." : "No prior-year T3 or T5 slips were found in the Tax folder, so non-registered withdrawals are taxed only on the share that is unrealised gain."} Age and pension credits, OAS recovery tax and income splitting are not included. Not tax advice; confirm with the family's tax professional.
                   {doc.income_tax.notes.map((n) => ` ${n}`).join("")}
                 </p>
               </div>
