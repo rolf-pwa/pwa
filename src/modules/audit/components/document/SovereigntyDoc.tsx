@@ -25,7 +25,7 @@ export function DocPrintStyles() {
 }
 
 /** The dark brand column down the left of a document's first page. */
-export function DocSidebar() {
+export function DocSidebar({ references }: { references?: { label: string; value: string }[] }) {
   return (
     <aside style={{ width: "60mm", backgroundColor: "#1e293b", color: "#fff", padding: "10mm 6mm", display: "flex", flexDirection: "column", gap: "6mm", flexShrink: 0 }}>
       <div>
@@ -51,6 +51,16 @@ export function DocSidebar() {
         <strong style={{ display: "block", fontSize: "8.5pt", fontWeight: 600 }}>Prepared By:<br />Rolf Issler, BMgt, CLU</strong>
         <p style={{ fontSize: "7.5pt", color: "rgba(255,255,255,.5)", marginTop: "1pt" }}>Sudden Wealth Specialist, Family CFO</p>
       </div>
+      {references && references.length > 0 && (
+        <div>
+          <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "rgba(255,255,255,.4)", marginBottom: "2mm" }}>References</div>
+          {references.map((r, i) => (
+            <p key={i} style={{ fontSize: "7pt", color: "rgba(255,255,255,.55)", lineHeight: 1.4, marginBottom: "1.5mm", wordBreak: "break-word" }}>
+              <span style={{ color: "rgba(255,255,255,.8)" }}>{r.label}:</span> {r.value}
+            </p>
+          ))}
+        </div>
+      )}
       <div style={{ marginTop: "auto", paddingTop: "4mm" }}>
         <div style={{ fontSize: "6.5pt", color: "rgba(255,255,255,.4)", lineHeight: 1.5 }}>
           © {new Date().getFullYear()} ProsperWise Advisors · www.prosperwise.ca<br />

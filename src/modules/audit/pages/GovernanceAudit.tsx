@@ -77,7 +77,8 @@ interface GovernanceAuditDoc {
   compliance_notes: string[];
   charter_summary?: { source: string | null; ratified: boolean; file_name: string | null; purpose: string | null };
   charter_targets?: TargetCheck[];
-  estate_documents?: { source: string; adults: EstateAdultRow[]; trusts: number; status: string; detail: string; actions: string[] };
+  estate_documents?: { source: string; adults: EstateAdultRow[]; trusts: number; status: string; detail: string; actions: string[]; files?: { type: string; file_name: string }[] };
+  income_structure?: { totalIncome: number; external: { label: string; annual_amount: number }[]; externalTotal: number; capitalRequired: number; withdrawnYtd: number | null; capitalRemaining: number | null } | null;
   balance_sheet?: { total_assets: number; net_worth: number; liabilities: number };
 }
 interface GovernanceAuditRow {
@@ -119,6 +120,8 @@ function ScoreBadge({ row }: { row: { currentScore?: number; current_score?: num
 }
 
 /** The audit's house pillar names, with the CRM's own name for the same line so the two documents read alike. */
+const ESTATE_REF_LABEL: Record<string, string> = { will: "Will", power_of_attorney: "Power of Attorney", trust: "Trust", representation_agreement: "Representation Agreement" };
+
 const PILLAR_LABEL: Record<string, string> = {
   "Vineyard": "Vineyard",
   "Keep": "Liquidity Reserve",
@@ -332,7 +335,10 @@ export default function GovernanceAudit() {
 
           {/* Page 1 — summary and scorecard */}
           <div className="stab-doc bg-white shadow-lg print:shadow-none" style={{ width: "210mm", minHeight: "297mm", display: "flex", fontFamily: DOC_FONT, color: "#334155" }}>
-            <DocSidebar />
+            <DocSidebar references={[
+              ...(doc.charter_summary?.file_name ? [{ label: "Charter", value: doc.charter_summary.file_name }] : []),
+              ...(doc.estate_documents?.files ?? []).map((f) => ({ label: ESTATE_REF_LABEL[f.type] ?? "Estate document", value: f.file_name })),
+            ]} />
             <main style={{ flex: 1, padding: "10mm 10mm 0 10mm", display: "flex", flexDirection: "column", gap: "5mm" }}>
               <div style={{ marginBottom: "3mm" }}>
                 <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "3mm" }}>
@@ -353,7 +359,7 @@ export default function GovernanceAudit() {
                   <p style={colText}>
                     {doc.charter_summary.source === null
                       ? "No Charter is on file for this household."
-                      : `Sovereignty Charter ${doc.charter_summary.ratified ? "ratified" : "not yet ratified"}${doc.charter_summary.file_name ? ` · ${doc.charter_summary.file_name}` : ""}.`}
+                      : `Sovereignty Charter ${doc.charter_summary.ratified ? "ratified" : "not yet ratified"}.`}
                   </p>
                   {doc.charter_summary.purpose && <p style={{ ...colText, fontStyle: "italic", color: "#64748b", marginTop: "1.5mm" }}>“{doc.charter_summary.purpose}”</p>}
                 </div>
@@ -453,6 +459,18 @@ export default function GovernanceAudit() {
                 </p>
               </div>
             </div>
+
+            {doc.income_structure && (
+              <div>
+                <div style={colLabel}>Income Structure</div>
+                <BsRow label="Total annual income (Charter)" value={fmtCurrency(doc.income_structure.totalIncome)} strong />
+                <BsRow label="Drawn from capital (portfolio withdrawals and liquidity draws)" value={fmtCurrency(doc.income_structure.capitalRequired)} />
+                {doc.income_structure.external.map((s, i) => <BsRow key={i} label={s.label} value={fmtCurrency(s.annual_amount)} />)}
+                {doc.income_structure.withdrawnYtd !== null && (
+                  <BsRow label="Withdrawn from capital so far this year" value={fmtCurrency(doc.income_structure.withdrawnYtd)} tone={doc.income_structure.withdrawnYtd > doc.income_structure.capitalRequired ? "#c0392b" : undefined} />
+                )}
+              </div>
+            )}
 
             {doc.estate_documents && (
               <div>

@@ -154,4 +154,82 @@ export function evaluateTarget(t: CharterTarget, b: BalanceFigures): TargetResul
   return { ...t, status, actual, actualText, targetText, gapAmount, summary: `Charter: ${t.label} (${targetText}); actual ${actualText}, ${verdict}.` };
 }
 
-export const evaluateTargets = (targets: CharterTarget[], b: BalanceFigures): TargetResult[] => targets.map((t) => evaluateTarget(t, b));
+/**
+ * How the Charter says the family's yearly income is made up: money that comes from outside the family's capital
+ * (government benefits, a pension, employment) and money drawn from it (portfolio withdrawals, liquidity draws).
+ * Read once from the Charter; the sums and comparisons are done here, never by the model.
+ */
+export type IncomeSourceKind = "government_benefits" | "pension" | "employment" | "other_income" | "capital_withdrawals";
+export const INCOME_SOURCE_KINDS: readonly IncomeSourceKind[] = ["government_benefits", "pension", "employment", "other_income", "capital_withdrawals"];
+export interface IncomeSource { label: string; kind: IncomeSourceKind; annual_amount: number; quote: string }
+
+export function sanitizeIncomeSources(raw: unknown): IncomeSource[] {
+  if (!Array.isArray(raw)) return [];
+  const out: IncomeSource[] = [];
+  for (const r of raw) {
+    if (!r || typeof r !== "object") continue;
+    const o = r as Record<string, unknown>;
+    const label = clip(o.label, 100);
+    if (!label || !isNum(o.annual_amount) || o.annual_amount <= 0) continue;
+    const kind = INCOME_SOURCE_KINDS.includes(o.kind as IncomeSourceKind) ? (o.kind as IncomeSourceKind) : "other_income";
+    out.push({ label, kind, annual_amount: o.annual_amount, quote: clip(o.quote, 240) });
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
+export interface IncomeStructure {
+  totalIncome: number;
+  /** Income that arrives from outside the family's capital. */
+  external: IncomeSource[];
+  externalTotal: number;
+  /** What has to come out of capital each year (portfolio withdrawals and liquidity draws). */
+  capitalRequired: number;
+  withdrawnYtd: number | null;
+  /** Capital still to be drawn this year to meet the requirement; null when withdrawals aren't known. */
+  capitalRemaining: number | null;
+}
+
+/** null unless the Charter states both a capital-funded part and at least one outside source. */
+export function incomeStructure(sources: IncomeSource[], withdrawnYtd: number | null | undefined): IncomeStructure | null {
+  const capital = sources.filter((s) => s.kind === "capital_withdrawals");
+  const external = sources.filter((s) => s.kind !== "capital_withdrawals");
+  if (capital.length === 0 || external.length === 0) return null;
+  const capitalRequired = capital.reduce((a, s) => a + s.annual_amount, 0);
+  const externalTotal = external.reduce((a, s) => a + s.annual_amount, 0);
+  const w = withdrawnYtd ?? null;
+  return { totalIncome: capitalRequired + externalTotal, external, externalTotal, capitalRequired, withdrawnYtd: w, capitalRemaining: w === null ? null : Math.max(0, capitalRequired - w) };
+}
+
+const incomeLine = (t: Partial<TargetResult> & { label: string; value: number; quote: string }, status: TargetStatus, summary: string, actual: number | null): TargetResult => ({
+  area: "vineyard", metric: "annual_amount", comparison: "target", value_max: null,
+  status, actual, actualText: actual === null ? "" : money(actual), targetText: `${money(t.value)} a year`, gapAmount: null, summary, ...t,
+});
+
+/**
+ * With a stated income structure, the Charter's own yearly income lines (the total, the lifestyle figure) are replaced by
+ * the structure itself, so the capital requirement is compared with withdrawals and outside income is shown as outside
+ * income, never as something the portfolio must fund.
+ */
+function applyIncomeStructure(results: TargetResult[], st: IncomeStructure): TargetResult[] {
+  const amounts = new Set([st.totalIncome, st.capitalRequired, ...st.external.map((s) => s.annual_amount)]);
+  const kept = results.filter((r) => !((r.metric === "annual_amount" || r.metric === "monthly_amount") && r.value !== null && (r.area === "vineyard" || r.area === "other") && amounts.has(r.metric === "monthly_amount" ? r.value * 12 : r.value)));
+  const w = st.withdrawnYtd;
+  const over = w !== null && w > st.capitalRequired;
+  const share = w !== null && st.capitalRequired > 0 ? Math.round((w / st.capitalRequired) * 100) : null;
+  const lines: TargetResult[] = [
+    incomeLine({ label: "Total annual income", value: st.totalIncome, quote: "" }, "info",
+      `Charter: Total annual income (${money(st.totalIncome)} a year), made up of ${money(st.capitalRequired)} drawn from capital and ${money(st.externalTotal)} from ${st.external.map((s) => s.label.toLowerCase()).join(" and ")}.`, null),
+    incomeLine({ label: "Drawn from capital (portfolio withdrawals and liquidity draws)", value: st.capitalRequired, quote: "" }, over ? "above" : "info",
+      `Charter: ${money(st.capitalRequired)} a year is drawn from capital${w !== null ? `; ${money(w)} withdrawn so far this year (${share}% of it)${over ? ", already over the yearly figure" : ""}` : ""}.`, w),
+    ...st.external.map((s) => incomeLine({ label: s.label, value: s.annual_amount, quote: s.quote }, "info",
+      `Charter: ${s.label} (${money(s.annual_amount)} a year); income from outside the family's capital, not drawn from it.`, null)),
+  ];
+  return [...lines, ...kept];
+}
+
+export function evaluateTargets(targets: CharterTarget[], b: BalanceFigures, incomeSources: IncomeSource[] = []): TargetResult[] {
+  const results = targets.map((t) => evaluateTarget(t, b));
+  const st = incomeStructure(incomeSources, b.withdrawnYtd);
+  return st ? applyIncomeStructure(results, st) : results;
+}

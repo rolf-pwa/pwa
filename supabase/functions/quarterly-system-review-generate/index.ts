@@ -325,7 +325,7 @@ serve(async (req) => {
       totalAssets: allocation.aum, investableAssets: allocation.aum - allocation.realEstateAdded, netWorth: allocation.netWorth,
       monthlySpending: vaultExtract?.monthly_spending ?? null, withdrawnYtd: allocation.harvest,
     };
-    const targetResults = evaluateTargets(vaultExtract?.targets ?? [], figures);
+    const targetResults = evaluateTargets(vaultExtract?.targets ?? [], figures, vaultExtract?.income_sources ?? []);
 
     // ---- Estate: documents approved in Glass-Box when there are any, else the hand-entered statuses.
     const estate: EstateFacts = estateFactsFrom(
