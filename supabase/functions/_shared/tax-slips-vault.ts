@@ -133,3 +133,23 @@ export async function readTaxSlipMix(
     return none;
   }
 }
+
+/** The mix from slips already read (and saved) for this household; reads nothing from Drive and calls no model. Never throws. */
+// deno-lint-ignore no-explicit-any
+export async function cachedTaxSlipMix(admin: any, householdId: string, taxYear: number): Promise<{ mix: IncomeMix | null; files: string[] }> {
+  try {
+    const { data } = await admin.from("tax_slip_extracts").select("file_name, extraction").eq("household_id", householdId);
+    const slips: SlipExtract[] = [];
+    const files: string[] = [];
+    // deno-lint-ignore no-explicit-any
+    for (const r of (data ?? []) as any[]) {
+      const ex = sanitizeSlips(r.extraction);
+      if (ex.some((s) => s.slip_type !== "other" && s.tax_year === taxYear) && r.file_name) files.push(r.file_name);
+      slips.push(...ex);
+    }
+    return { mix: mixFromSlips(slips, taxYear), files };
+  } catch (e) {
+    console.error("tax-slips-vault: cached read failed:", e instanceof Error ? e.message : String(e));
+    return { mix: null, files: [] };
+  }
+}

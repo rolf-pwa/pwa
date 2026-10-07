@@ -47,7 +47,7 @@ import { gatherHouseholdFinancials, inferTrackType } from "../_shared/sovereignt
 import { pillarWarnings, type PillarTotals } from "../_shared/governance-audit-pillars.ts";
 import { resolveCharter } from "../_shared/charter-resolve.ts";
 import { allocateForHousehold } from "../_shared/review-allocation.ts";
-import { readTaxSlipMix } from "../_shared/tax-slips-vault.ts";
+import { cachedTaxSlipMix } from "../_shared/tax-slips-vault.ts";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { projectIncomeTax, projectionFromSaved } from "../_shared/income-tax-projection.ts";
 import { evaluateTargets, incomeStructure, type BalanceFigures } from "../_shared/charter-targets.ts";
@@ -601,17 +601,12 @@ async function runFullAudit(db: Db, householdId: string, userId: string, options
     const drawSources: any[] = [...(financials.holdingTank ?? []), ...financials.vineyardAccounts].filter((a) => (Number(a.withdrawals_ytd) || 0) > 0);
     const drawnYtd = drawSources.reduce((sum, a) => sum + Number(a.withdrawals_ytd), 0);
     const drawScale = incomeStruct && drawnYtd > 0 ? incomeStruct.capitalRequired / drawnYtd : 1;
-    // Last year's T3 / T5 slips in the Vault's Tax folder tell how the income from non-registered accounts was made up.
     const taxYear = new Date().getFullYear() - 1;
-    let slipMix: Awaited<ReturnType<typeof readTaxSlipMix>> = { mix: null, files: [], filesRead: 0 };
-    try {
-      slipMix = await readTaxSlipMix(db, sa, { householdId, vaultRootFolderId: financials.vaultRootFolderId, accessToken: await getServiceGoogleAccessToken(db), taxYear });
-    } catch (e) {
-      console.error("governance-audit: tax slips unavailable:", e instanceof Error ? e.message : String(e));
-    }
     // The projection saved on the household Tax page, when there is one, takes the place of the derived one.
     const { data: savedTax } = await db.from("household_tax_columns").select("contact_id, province, lines").eq("household_id", householdId).eq("kind", "projection").eq("tax_year", new Date().getFullYear());
     const savedProjection = projectionFromSaved(((savedTax ?? []) as any[]).map((r) => ({ name: nameOf.get(r.contact_id) ?? "Household", province: r.province, lines: r.lines })), provinceCode);
+    // Without one, the split of non-registered withdrawals uses slips already read on the Tax page; the audit never reads PDFs itself.
+    const slipMix = savedProjection ? { mix: null, files: [] as string[] } : await cachedTaxSlipMix(db, householdId, taxYear);
     const incomeTax = savedProjection ?? projectIncomeTax({
       mix: slipMix.mix,
       province: provinceCode,

@@ -9,7 +9,7 @@ import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { driveDownloadFile, driveListChildren, matchVaultCategoryFolder } from "../_shared/vault-provisioning.ts";
 import { generateVertexContent, GEMINI_EXTRACT_MODEL, parseServiceAccountKey, withThinking, type VertexContent } from "../_shared/vertex-ai.ts";
 import { drawLines } from "../_shared/income-tax-projection.ts";
-import { readTaxSlipMix } from "../_shared/tax-slips-vault.ts";
+import { cachedTaxSlipMix, readTaxSlipMix } from "../_shared/tax-slips-vault.ts";
 import { incomeStructure, sanitizeIncomeSources } from "../_shared/charter-targets.ts";
 import { TAX_TABLES } from "../_shared/governance-audit-tax-config.ts";
 import { LINE_KEYS, linesFromReturn, sanitizeLines, sanitizeReturn, sanitizeSources, taxFromLines, type LineKey, type LineSources, type TaxLines } from "../_shared/tax-lines.ts";
@@ -89,11 +89,7 @@ async function load(db: Db, householdId: string) {
   const fin = await gatherHouseholdFinancials(db, householdId);
   const { data: rev } = await db.from("quarterly_system_reviews").select("diagnostics").eq("household_id", householdId).order("created_at", { ascending: false }).limit(1).maybeSingle();
   const structure = incomeStructure(sanitizeIncomeSources(rev?.diagnostics?.income_sources), null);
-  let mix = null as Awaited<ReturnType<typeof readTaxSlipMix>>["mix"];
-  try {
-    const sa = await parseServiceAccountKey(Deno.env.get("GCP_SERVICE_ACCOUNT_KEY"));
-    mix = (await readTaxSlipMix(db, sa, { householdId, vaultRootFolderId: fin.vaultRootFolderId, accessToken: await getServiceGoogleAccessToken(db), taxYear: baselineYear })).mix;
-  } catch (e) { console.error("household-tax: slip mix unavailable:", e instanceof Error ? e.message : String(e)); }
+  const mix = (await cachedTaxSlipMix(db, householdId, baselineYear)).mix; // read on demand with "Read tax slips"
   const names = new Map(people.map((p) => [p.id, p.name]));
   // deno-lint-ignore no-explicit-any
   const draws: any[] = [...(fin.holdingTank ?? []), ...fin.vineyardAccounts].filter((a) => (Number(a.withdrawals_ytd) || 0) > 0);
@@ -146,6 +142,14 @@ async function save(db: Db, userId: string, body: any) {
   // One province for the household: keep both columns on it.
   await db.from("household_tax_columns").update({ province }).eq("household_id", householdId);
   return { ok: true, computed: compute(province, lines) };
+}
+
+async function readSlips(db: Db, householdId: string) {
+  const taxYear = new Date().getFullYear() - 1;
+  const fin = await gatherHouseholdFinancials(db, householdId);
+  const sa = await parseServiceAccountKey(Deno.env.get("GCP_SERVICE_ACCOUNT_KEY"));
+  const r = await readTaxSlipMix(db, sa, { householdId, vaultRootFolderId: fin.vaultRootFolderId, accessToken: await getServiceGoogleAccessToken(db), taxYear });
+  return { ok: true, taxYear, files: r.files, filesRead: r.filesRead, found: !!r.mix };
 }
 
 async function readReturn(db: Db, userId: string, householdId: string) {
@@ -222,6 +226,7 @@ Deno.serve(async (req) => {
   try {
     const db = admin();
     if (body.action === "save") return json(await save(db, auth.userId, body));
+    if (body.action === "readSlips") return json(await readSlips(db, householdId));
     if (body.action === "readReturn") return json(await readReturn(db, auth.userId, householdId));
     return json(await load(db, householdId));
   } catch (e) {
