@@ -45,7 +45,11 @@ import { driveDownloadFile, driveListChildren, matchVaultCategoryFolder } from "
 import { generateVertexContent, parseServiceAccountKey, type ServiceAccountKey, type VertexContent, GEMINI_EXTRACT_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 import { deriveChoiceMatchesProfile } from "../_shared/investor-profile.ts";
 import { gatherHouseholdFinancials, inferTrackType } from "../_shared/sovereignty-diagnostics.ts";
-import { computePillarTotals, pillarWarnings } from "../_shared/governance-audit-pillars.ts";
+import { pillarWarnings, type PillarTotals } from "../_shared/governance-audit-pillars.ts";
+import { resolveCharter } from "../_shared/charter-resolve.ts";
+import { allocateForHousehold } from "../_shared/review-allocation.ts";
+import { evaluateTargets, type BalanceFigures } from "../_shared/charter-targets.ts";
+import { estateFactsFrom, estateSummary } from "../_shared/quarterly-review-cards.ts";
 import {
   analyzeEstateLiquidity,
   estateAssetSourceRowsFromFinancials,
@@ -491,7 +495,17 @@ async function runFullAudit(db: Db, householdId: string, userId: string, options
 
     // -- Phase 3: calc --
     const provinceCode = options.provinceCode || "BC";
-    const pillarTotals = computePillarTotals(financials);
+    // The same balance-sheet treatment as the Sovereignty Review (shared helper): income funds from the statements count
+    // as the Keep (Liquidity Reserve) when none is set up, insurance cash value as the Armoury (Strategic Reserve), and
+    // real estate in the Legacy Vault (Legacy Trust). The shared diagnostics themselves are unchanged.
+    const { allocation } = await allocateForHousehold(db, financials, {
+      aum: financials.totalAum, net_worth: financials.netWorth, holding_tank_total: financials.totalHoldingTank,
+      vineyard_total: financials.totalVineyard, storehouse_reserves: financials.storehouseReserves,
+    });
+    const pillarTotals: PillarTotals = {
+      vineyard: allocation.vineyard, keep: allocation.reserves.liquidity, armoury: allocation.reserves.strategic,
+      granary: allocation.reserves.philanthropic, legacyVault: allocation.reserves.legacy, unassigned: allocation.holdingTank,
+    };
     const pillarTotalsForNarrative: Record<string, number> = {};
     if (pillarTotals.vineyard > 0) pillarTotalsForNarrative["Vineyard"] = pillarTotals.vineyard;
     if (pillarTotals.keep > 0) pillarTotalsForNarrative["Keep"] = pillarTotals.keep;
@@ -499,7 +513,7 @@ async function runFullAudit(db: Db, householdId: string, userId: string, options
     if (pillarTotals.granary > 0) pillarTotalsForNarrative["Granary"] = pillarTotals.granary;
     if (pillarTotals.legacyVault > 0) pillarTotalsForNarrative["Legacy Vault"] = pillarTotals.legacyVault;
 
-    const assumptions: string[] = [...pillarWarnings(pillarTotals)];
+    const assumptions: string[] = [...pillarWarnings(pillarTotals), ...allocation.notes];
 
     // deno-lint-ignore no-explicit-any
     const allAccounts: any[] = [...financials.vineyardAccounts, ...financials.storehouses];
@@ -557,18 +571,27 @@ async function runFullAudit(db: Db, householdId: string, userId: string, options
     // today (a ratified Charter never expires) -- confirmed with Rolf this
     // is the right bar for now; a re-ratification cadence would be a
     // separate, later policy decision, not invented here.
-    let charterRow: { mission_of_capital: string | null; vision_20_year: string | null; draft_status: string | null; esign_status: string | null; ratified_at: string | null } | undefined;
-    try {
-      const { data: charters } = await db
-        .from("sovereignty_charters")
-        .select("mission_of_capital, vision_20_year, draft_status, esign_status, ratified_at")
-        .in("contact_id", financials.members.map((m) => m.id))
-        .limit(1);
-      charterRow = charters?.[0];
-    } catch {
-      // no Charter row at all -- treated as not-ratified below
-    }
-    const hasRatifiedCharter = charterRow?.draft_status === "ratified" || charterRow?.esign_status === "ratified";
+    // The Charter is resolved exactly as the Sovereignty Review resolves it (Vault copy first), so the two agree.
+    const { data: hhContacts } = await db.from("contacts").select("id, first_name, last_name, family_role, charter_url").eq("household_id", householdId);
+    const resolved = await resolveCharter(db, { householdId, contacts: hhContacts ?? [], vaultRootFolderId: financials.vaultRootFolderId, saKey: sa });
+    const hasRatifiedCharter = resolved.ratified;
+    const charterTone = [resolved.text.mission, resolved.text.vision, resolved.text.purpose].filter(Boolean).join(" ");
+
+    // Charter numeric targets, checked in code against the same balance sheet figures.
+    const figures: BalanceFigures = {
+      areas: {
+        vineyard: allocation.vineyard, liquidity: allocation.reserves.liquidity, strategic: allocation.reserves.strategic,
+        philanthropic: allocation.reserves.philanthropic, legacy: allocation.reserves.legacy, liabilities: liabilitiesTotal,
+      },
+      totalAssets: allocation.aum, investableAssets: allocation.aum - allocation.realEstateAdded, netWorth: allocation.netWorth,
+      monthlySpending: resolved.vaultExtract?.monthly_spending ?? null, withdrawnYtd: allocation.harvest,
+    };
+    const charterTargets = evaluateTargets(resolved.text.targets, figures);
+
+    // Estate documents approved in Glass-Box (Will / Power of Attorney per adult), same reading as the Review.
+    const { data: estateRows } = await db.from("estate_documents").select("contact_id, document_type, signed, document_date").eq("household_id", householdId);
+    const estateFacts = estateFactsFrom(hhContacts ?? [], (estateRows ?? []) as any[], null);
+    const estateDocs = estateSummary(estateFacts);
 
     // -- Compliance footnotes, printed on the document itself (not just
     // staff-only `assumptions`) -- per Rolf's request. Terms of Engagement
@@ -581,7 +604,7 @@ async function runFullAudit(db: Db, householdId: string, userId: string, options
     // this stays an honest manual-review reminder, not a fabricated check.
     const complianceNotes: string[] = [
       hasRatifiedCharter
-        ? `Sovereignty Charter: ratified${charterRow?.ratified_at ? ` ${charterRow.ratified_at.slice(0, 10)}` : ""}.`
+        ? `Sovereignty Charter: ratified${resolved.vaultCharter?.modifiedTime ? ` (signed copy in the Vault, updated ${resolved.vaultCharter.modifiedTime.slice(0, 10)})` : ""}.`
         : "Sovereignty Charter: NOT YET RATIFIED on file for this household -- confirm before this audit's governance recommendations are treated as Charter-aligned.",
       "Terms of Engagement and regulatory disclosures: confirm current signed copies are on file in the Vault " +
         "(Correspondence/TOE, Correspondence/Disclosures) before client delivery -- automated currency tracking not yet implemented.",
@@ -591,11 +614,10 @@ async function runFullAudit(db: Db, householdId: string, userId: string, options
     let targetIncomeEquitySplit: { income_pct: number; equity_pct: number } | null = null;
     let capitalRow: ScorecardRow | undefined;
     if (scoreableProfile && typeof scoreableProfile.total_points === "number") {
-      const charterTone = [charterRow?.mission_of_capital, charterRow?.vision_20_year].filter(Boolean).join(" ") || null;
       try {
         const target = selectTarget(
           { totalPoints: scoreableProfile.total_points, profileCategory: scoreableProfile.profile_category! },
-          charterTone,
+          charterTone || null,
           { advisorTargetEquityPct: options.advisorTargetEquityPct },
         );
         targetIncomeEquitySplit = { income_pct: target.targetIncomePct, equity_pct: target.targetEquityPct };
@@ -645,7 +667,34 @@ async function runFullAudit(db: Db, householdId: string, userId: string, options
         total_liabilities_and_taxes: estateResult.totalLiabilitiesAndTaxes,
         surplus_or_deficit: estateResult.surplusOrDeficit,
       },
+      charter: {
+        source: resolved.source, ratified: resolved.ratified, file_name: resolved.vaultCharter?.name ?? null,
+        purpose: resolved.text.purpose || null, mission: resolved.text.mission || null,
+      },
+      // Numbers are kept as numbers so the narrative can cite them and the grounding check can verify them.
+      charter_targets: charterTargets.map((t) => ({
+        label: t.label, area: t.area, metric: t.metric, target: t.targetText, target_value: t.value, actual: t.actual,
+        status: t.status, over_or_under_target_by: t.gapAmount, charter_words: t.quote,
+      })),
+      estate_documents: { source: estateFacts.source, status: estateDocs.status, detail: estateDocs.detail, actions: estateDocs.actions },
       assumptions,
+    };
+
+    // The Charter baseline each scored element is measured against, in the Charter's own words where it has them.
+    const targetLines = charterTargets.filter((t) => t.status !== "info" && t.metric !== "annual_amount" && t.metric !== "monthly_amount")
+      .map((t) => `${t.label}: ${t.targetText}`);
+    const ruleLines = charterTargets.filter((t) => t.status === "info").map((t) => t.label);
+    const baselineFor = (elementName: string): string => {
+      if (resolved.source === null) return "No Charter is on file: nothing written governs this element yet.";
+      if (elementName === CAPITAL_INFRASTRUCTURE) {
+        const parts = [resolved.text.mission || resolved.text.purpose, ...targetLines].filter(Boolean);
+        return parts.length ? parts.join(" ") : "See Charter mission/tone summary and pillar definitions.";
+      }
+      if (elementName === "Personal Estate & Incapacity Alignment") {
+        const parts = ["A signed Will and Power of Attorney for each adult.", ...ruleLines.slice(0, 4)];
+        return parts.join(" ");
+      }
+      return "See Charter mission/tone summary and pillar definitions.";
     };
 
     // -- Phase 4: narrative --
@@ -663,7 +712,7 @@ async function runFullAudit(db: Db, householdId: string, userId: string, options
       })),
       element_deep_dives: scorecard.map((row) => ({
         element_name: row.elementName,
-        charter_baseline: "See Charter mission/tone summary and pillar definitions.",
+        charter_baseline: baselineFor(row.elementName),
         current_score: row.currentScore,
         max_score: row.maxScore,
         audit_findings: [] as string[],
@@ -692,6 +741,10 @@ async function runFullAudit(db: Db, householdId: string, userId: string, options
       extraction_errors: extractionErrors,
       narrative_ungrounded_dollar_figures: narrativeUngrounded,
       compliance_notes: complianceNotes,
+      charter_summary: { source: resolved.source, ratified: resolved.ratified, file_name: resolved.vaultCharter?.name ?? null, purpose: resolved.text.purpose || null },
+      charter_targets: charterTargets,
+      estate_documents: { source: estateFacts.source, adults: estateFacts.adults, trusts: estateFacts.trusts, status: estateDocs.status, detail: estateDocs.detail, actions: estateDocs.actions },
+      balance_sheet: { total_assets: allocation.aum, net_worth: allocation.netWorth, liabilities: liabilitiesTotal },
     };
 
     await db

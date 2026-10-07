@@ -174,3 +174,28 @@ describe("planRebalance", () => {
     expect(planRebalance(withTargets([flow]))).toEqual([]);
   });
 });
+
+describe("estateFactsFrom (shared by the Review and the Governance Audit)", () => {
+  const people = [{ id: "c1", first_name: "Colleen", family_role: "head_of_family" }, { id: "c2", first_name: "Keith", family_role: "spouse" }, { id: "c3", first_name: "Kid", family_role: "child" }];
+  it("reads each adult's signed Will and Power of Attorney from approved documents", async () => {
+    const { estateFactsFrom } = await import("../../supabase/functions/_shared/quarterly-review-cards");
+    const e = estateFactsFrom(people, [
+      { contact_id: "c1", document_type: "will", signed: true, document_date: "2023-01-17" },
+      { contact_id: "c2", document_type: "will", signed: false, document_date: null },
+      { contact_id: "c2", document_type: "power_of_attorney", signed: true, document_date: null },
+      { contact_id: null, document_type: "trust", signed: null, document_date: null },
+    ], null);
+    expect(e.source).toBe("documents");
+    expect(e.adults).toEqual([
+      { name: "Colleen", will: "signed", willDate: "2023-01-17", poa: "missing" },
+      { name: "Keith", will: "unsigned", willDate: null, poa: "on_file" },
+    ]);
+    expect(e.trusts).toBe(1);
+  });
+  it("falls back to the hand-entered statuses, then to none", async () => {
+    const { estateFactsFrom } = await import("../../supabase/functions/_shared/quarterly-review-cards");
+    expect(estateFactsFrom(people, [], { will: "current", poa: null, beneficiaries: null }).source).toBe("manual");
+    expect(estateFactsFrom(people, [], { will: null, poa: null, beneficiaries: null }).source).toBe("none");
+    expect(estateFactsFrom([], [], null).adults).toEqual([]);
+  });
+});
