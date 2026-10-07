@@ -48,6 +48,7 @@ import { gatherHouseholdFinancials, inferTrackType } from "../_shared/sovereignt
 import { pillarWarnings, type PillarTotals } from "../_shared/governance-audit-pillars.ts";
 import { resolveCharter } from "../_shared/charter-resolve.ts";
 import { allocateForHousehold } from "../_shared/review-allocation.ts";
+import { projectIncomeTax } from "../_shared/income-tax-projection.ts";
 import { evaluateTargets, incomeStructure, type BalanceFigures } from "../_shared/charter-targets.ts";
 import { estateFactsFrom, estateSummary } from "../_shared/quarterly-review-cards.ts";
 import {
@@ -589,6 +590,23 @@ async function runFullAudit(db: Db, householdId: string, userId: string, options
     const charterTargets = evaluateTargets(resolved.text.targets, figures, resolved.text.incomeSources);
     const incomeStruct = incomeStructure(resolved.text.incomeSources, allocation.harvest);
 
+    // This year's income tax on the income the family draws: the year's draw from capital (the Charter's figure when it
+    // states one, otherwise what has actually been withdrawn) spread over the accounts in proportion to what each has paid out.
+    const nameOf = new Map<string, string>((hhContacts ?? []).map((c: any) => [c.id, [c.first_name, c.last_name].filter(Boolean).join(" ")]));
+    // deno-lint-ignore no-explicit-any
+    const drawSources: any[] = [...(financials.holdingTank ?? []), ...financials.vineyardAccounts].filter((a) => (Number(a.withdrawals_ytd) || 0) > 0);
+    const drawnYtd = drawSources.reduce((sum, a) => sum + Number(a.withdrawals_ytd), 0);
+    const drawScale = incomeStruct && drawnYtd > 0 ? incomeStruct.capitalRequired / drawnYtd : 1;
+    const incomeTax = projectIncomeTax({
+      province: provinceCode,
+      accounts: drawSources.map((a) => ({
+        owner: a.contact_id ? nameOf.get(a.contact_id) ?? null : null,
+        accountType: String(a.account_type ?? ""), amount: Number(a.withdrawals_ytd) * drawScale,
+        currentValue: Number(a.current_value) || 0, bookValue: Number(a.book_value) || 0,
+      })),
+      benefitsTotal: incomeStruct ? incomeStruct.externalTotal : 0,
+    });
+
     // Estate documents approved in Glass-Box (Will / Power of Attorney per adult), same reading as the Review.
     const { data: estateRows } = await db.from("estate_documents").select("contact_id, document_type, signed, document_date, file_name").eq("household_id", householdId);
     const estateFacts = estateFactsFrom(hhContacts ?? [], (estateRows ?? []) as any[], null);
@@ -745,6 +763,7 @@ async function runFullAudit(db: Db, householdId: string, userId: string, options
       charter_summary: { source: resolved.source, ratified: resolved.ratified, file_name: resolved.vaultCharter?.name ?? null, purpose: resolved.text.purpose || null },
       charter_targets: charterTargets,
       income_structure: incomeStruct,
+      income_tax: incomeTax,
       estate_documents: { source: estateFacts.source, adults: estateFacts.adults, trusts: estateFacts.trusts, status: estateDocs.status, detail: estateDocs.detail, actions: estateDocs.actions, files: ((estateRows ?? []) as any[]).filter((r) => r.file_name).map((r) => ({ type: r.document_type, file_name: r.file_name })) },
       balance_sheet: { total_assets: allocation.aum, net_worth: allocation.netWorth, liabilities: liabilitiesTotal },
     };
