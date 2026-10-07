@@ -47,6 +47,7 @@ import { HouseholdStatementIngestion } from "@/modules/crm/components/HouseholdS
 import { HoldingTank } from "@/modules/crm/components/HoldingTank";
 import { VaultView } from "@/modules/crm/pages/Vault";
 import { HouseholdLiabilities } from "@/modules/crm/components/HouseholdLiabilities";
+import { HouseholdTax } from "@/modules/crm/components/HouseholdTax";
 import { CharterRatificationTile, StabilizationMapButton, GovernanceAuditButton, QuarterlySystemReviewButton, HouseholdAuditTrailRollup, StartCharterIntakeButton, CausalAIWorkbenchButton } from "@/modules/audit";
 import { ProsPanel } from "@/modules/crm/components/ProsPanel";
 import { AddCompanyDialog } from "@/modules/crm/components/AddCompanyDialog";
@@ -59,6 +60,7 @@ import {
   Loader2,
   Grape,
   Landmark,
+  Receipt,
   Castle,
   Sword,
   Wheat,
@@ -672,6 +674,10 @@ const HouseholdDetail = () => {
             <TabsTrigger value="liabilities" className="flex-1">
               <Landmark className="mr-1.5 h-3.5 w-3.5" />
               Liabilities
+            </TabsTrigger>
+            <TabsTrigger value="tax" className="flex-1">
+              <Receipt className="mr-1.5 h-3.5 w-3.5" />
+              Tax
             </TabsTrigger>
             <TabsTrigger value="pros" className="flex-1">
               <Briefcase className="mr-1.5 h-3.5 w-3.5" />
@@ -1616,6 +1622,10 @@ const HouseholdDetail = () => {
           {/* Pros */}
           <TabsContent value="liabilities" className="space-y-6 mt-4">
             <HouseholdLiabilities householdId={id!} onChanged={() => fetchData()} />
+          </TabsContent>
+
+          <TabsContent value="tax" className="space-y-6 mt-4">
+            <HouseholdTax householdId={id!} />
           </TabsContent>
 
           <TabsContent value="pros" className="space-y-6 mt-4">

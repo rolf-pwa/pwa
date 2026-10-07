@@ -443,7 +443,7 @@ serve(async (req) => {
       ? { purpose: vaultExtract.purpose, mission: vaultExtract.mission, vision: vaultExtract.vision, values: vaultExtract.values, reserve_rules: vaultExtract.reserve_rules, governance: vaultExtract.governance, monthly_spending: vaultExtract.monthly_spending, targets: targetResults }
       : null;
     const diagnostics = {
-      ...adjDiag, charter_file: charterFile, charter_extract: charterExtract, track_type, deltas,
+      ...adjDiag, charter_file: charterFile, charter_extract: charterExtract, income_sources: vaultExtract?.income_sources ?? [], track_type, deltas,
       harvest: { current: allocation.harvest, accounts_read: allocation.accountsWithWithdrawalData },
       allocation: { notes: allocation.notes, income_funds_moved: allocation.incomeFundsMoved, income_funds_on_file: allocation.incomeFundsOnFile, cash_value_added: allocation.cashValueAdded, real_estate_added: allocation.realEstateAdded },
       estate: { source: estate.source, adults: estate.adults, trusts: estate.trusts },
