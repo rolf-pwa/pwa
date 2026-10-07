@@ -13,7 +13,7 @@ import { Textarea } from "@/shared/components/ui/textarea";
 import { useAutoSave, AutoSaveIndicator } from "@/shared/hooks/useAutoSave";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/shared/components/ui/alert-dialog";
 import { planFromCards } from "../../../../supabase/functions/_shared/review-plan";
-import pwLogoWhite from "@/assets/prosperwise-logo-white.png";
+import { DocPrintStyles, DocSidebar } from "../components/document/SovereigntyDoc";
 
 // Quarterly Review / Sovereignty Survey -- same A4 document format as the household Stabilization Map ("Sovereignty Survey"):
 // brand sidebar, summary box, Capital & Asset Protection, status cards, then a 90-day plan on page two.
@@ -417,37 +417,7 @@ export default function QuarterlySystemReview() {
         <div className="mx-auto max-w-[210mm] px-6 py-6 print:p-0 print:max-w-none">
           {/* Page 1 */}
           <div className="stab-doc bg-white shadow-lg print:shadow-none" style={{ width: "210mm", minHeight: "297mm", display: "flex", fontFamily: "'DM Sans', sans-serif", color: "#334155" }}>
-            <aside style={{ width: "60mm", backgroundColor: "#1e293b", color: "#fff", padding: "10mm 6mm", display: "flex", flexDirection: "column", gap: "6mm", flexShrink: 0 }}>
-              <div>
-                <img src={pwLogoWhite} alt="ProsperWise" style={{ width: "42mm", height: "auto", display: "block", marginBottom: "3mm" }} />
-                <div style={{ fontSize: "9pt", fontWeight: 300, color: "rgba(255,255,255,.5)", letterSpacing: ".08em", textTransform: "uppercase" }}>Sovereignty Operating System™</div>
-              </div>
-              <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,.18)" }} />
-              <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "16pt", fontWeight: 300, lineHeight: 1.3 }}>
-                Don't Invest. <em style={{ fontStyle: "italic", color: "rgba(255,255,255,.7)" }}>Integrate.</em>
-              </div>
-              <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,.18)" }} />
-              <div>
-                <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "rgba(255,255,255,.4)", marginBottom: "2mm" }}>Our Process</div>
-                {[["1 · Stabilization", "Secure your funds, lower the noise, buy time to think clearly."], ["2 · Charter", "Define your governing constitution and liquidity rules."], ["3 · Integration", "Deploy capital, coordinate your team, silence the noise."]].map(([t, d]) => (
-                  <div key={t} style={{ marginBottom: "3mm" }}>
-                    <strong style={{ fontSize: "8.5pt", fontWeight: 600 }}>{t}</strong>
-                    <p style={{ fontSize: "7.5pt", color: "rgba(255,255,255,.5)", marginTop: "1pt" }}>{d}</p>
-                  </div>
-                ))}
-              </div>
-              <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,.18)" }} />
-              <div>
-                <strong style={{ display: "block", fontSize: "8.5pt", fontWeight: 600 }}>Prepared By:<br />Rolf Issler, BMgt, CLU</strong>
-                <p style={{ fontSize: "7.5pt", color: "rgba(255,255,255,.5)", marginTop: "1pt" }}>Sudden Wealth Specialist, Family CFO</p>
-              </div>
-              <div style={{ marginTop: "auto", paddingTop: "4mm" }}>
-                <div style={{ fontSize: "6.5pt", color: "rgba(255,255,255,.4)", lineHeight: 1.5 }}>
-                  © {new Date().getFullYear()} ProsperWise Advisors · www.prosperwise.ca<br />
-                  Data residency: Canada. All client data stored and processed in Canadian data centers in compliance with PIPEDA.
-                </div>
-              </div>
-            </aside>
+            <DocSidebar />
 
             <main style={{ flex: 1, padding: "10mm 10mm 0 10mm", display: "flex", flexDirection: "column", gap: "5mm" }}>
               <div style={{ marginBottom: "3mm" }}>
@@ -605,6 +575,7 @@ export default function QuarterlySystemReview() {
           )}
         </div>
       )}
+      <DocPrintStyles />
     </div>
   );
 }

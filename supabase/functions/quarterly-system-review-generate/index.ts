@@ -10,13 +10,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://esm.sh/zod@3.25.76";
 import { GEMINI_GOVERNANCE_MODEL, generateVertexContent, parseServiceAccountKey, withThinking } from "../_shared/vertex-ai.ts";
 import { computeSovereigntyDiagnostics } from "../_shared/sovereignty-diagnostics.ts";
-import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
-import { extractCharter, locateVaultCharter, type CharterExtract } from "../_shared/charter-vault.ts";
-import type { CharterFile } from "../_shared/charter-vault-pick.ts";
+import { resolveCharter } from "../_shared/charter-resolve.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
 import {
   buildAlignmentCards, computeDeltas, dataCompleteness, overallAlignment, quarterLabel, reviewMode,
-  type EstateAdult, type EstateFacts, type ReviewCard, type ReviewFacts, type ReviewMode,
+  estateFactsFrom, type EstateFacts, type ReviewCard, type ReviewFacts, type ReviewMode,
 } from "../_shared/quarterly-review-cards.ts";
 import { allocateForHousehold, applyAllocation, REAL_ESTATE_ASSET_TYPE } from "../_shared/review-allocation.ts";
 import { evaluateTargets, type BalanceFigures } from "../_shared/charter-targets.ts";
@@ -297,45 +295,15 @@ serve(async (req) => {
     const { data: lastMap } = await supabase.from("stabilization_maps").select("diagnostic_inputs").eq("household_id", householdId).order("created_at", { ascending: false }).limit(1).maybeSingle();
     const { track_type, diagnostics: diag, financials } = await computeSovereigntyDiagnostics(supabase, householdId, lastMap?.diagnostic_inputs ?? {});
 
-    const [{ data: hCharter }, { data: cCharters }, { data: estateRows }] = await Promise.all([
-      supabase.from("household_charters").select("status, completed_at, vision_text, core_values").eq("household_id", householdId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
-      supabase.from("sovereignty_charters").select("intro_callout, intro_note, mission_of_capital, vision_20_year").in("contact_id", contactIds).limit(1),
-      supabase.from("estate_documents").select("contact_id, document_type, signed, document_date").eq("household_id", householdId),
-    ]);
-    const cc = (cCharters ?? [])[0] ?? null;
+    const { data: estateRows } = await supabase.from("estate_documents").select("contact_id, document_type, signed, document_date").eq("household_id", householdId);
 
-    // The Charter now lives in the Vault (10 Correspondence, ideally a "Charter" subfolder). Look there first.
-    let vaultCharter: CharterFile | null = null;
-    let vaultExtract: CharterExtract | null = null;
-    let driveToken: string | null = null;
+    // The Charter (Vault copy first, then the household / earlier-format records): shared with the Governance Audit.
     let saKey: Awaited<ReturnType<typeof parseServiceAccountKey>> | null = null;
     try { saKey = await parseServiceAccountKey(Deno.env.get("GCP_SERVICE_ACCOUNT_KEY")); } catch { /* AI steps fall back */ }
-    if (financials.vaultRootFolderId) {
-      try {
-        const { data: corrTmpl } = await supabase.from("vault_folder_templates").select("display_name").eq("slug", "correspondence").eq("is_active", true).maybeSingle();
-        if (corrTmpl) {
-          driveToken = await getServiceGoogleAccessToken(supabase);
-          vaultCharter = await locateVaultCharter(financials.vaultRootFolderId, corrTmpl.display_name, driveToken);
-          if (vaultCharter && saKey) vaultExtract = await extractCharter(saKey, vaultCharter, driveToken);
-        }
-      } catch (e) {
-        console.error("quarterly-system-review-generate: Vault Charter lookup failed:", e instanceof Error ? e.message : String(e));
-      }
-    }
-    const charterSource: "vault" | "household" | "contact" | null = vaultCharter ? "vault" : hCharter ? "household" : (cc || (contacts ?? []).some((c: any) => c.charter_url)) ? "contact" : null;
-    // Household Charter: "complete" status or a completed_at stamp. Earlier-format Charter: a linked charter document counts as on file and ratified.
-    const ratified = vaultCharter ? vaultCharter.ratified : hCharter ? (/complete/i.test(String(hCharter.status ?? "")) || !!hCharter.completed_at) : (contacts ?? []).some((c: any) => !!c.charter_url);
-    const charterText = {
-      source: charterSource, ratified,
-      purpose: clip(vaultExtract?.purpose || cc?.intro_callout || cc?.intro_note, 700),
-      mission: clip(vaultExtract?.mission || cc?.mission_of_capital, 700),
-      vision: clip(vaultExtract?.vision || hCharter?.vision_text || cc?.vision_20_year, 900),
-      values: vaultExtract?.values?.length ? vaultExtract.values : Array.isArray(hCharter?.core_values) ? hCharter.core_values.slice(0, 8).map((v: any) => clip(typeof v === "string" ? v : v?.name ?? v?.label ?? "", 60)).filter(Boolean) : [],
-      reserveRules: vaultExtract?.reserve_rules ?? "",
-      governance: vaultExtract?.governance ?? "",
-      unreadable: !!vaultCharter && !vaultExtract,
-      targets: vaultExtract?.targets ?? [],
-    };
+    const resolved = await resolveCharter(supabase, { householdId, contacts: contacts ?? [], vaultRootFolderId: financials.vaultRootFolderId, saKey });
+    const { vaultCharter, vaultExtract, ratified } = resolved;
+    const charterSource = resolved.source;
+    const charterText = resolved.text;
 
     const sh = financials.storehouses as any[];
     const vaultBased = financials.isLegacyClient;
@@ -360,25 +328,10 @@ serve(async (req) => {
     const targetResults = evaluateTargets(vaultExtract?.targets ?? [], figures);
 
     // ---- Estate: documents approved in Glass-Box when there are any, else the hand-entered statuses.
-    const adultRows = (contacts ?? []).filter((c: any) => c.family_role === "head_of_family" || c.family_role === "spouse");
-    const adults = adultRows.length ? adultRows : [primary];
-    const docs = (estateRows ?? []) as any[];
-    const estateAdults: EstateAdult[] = adults.map((a: any) => {
-      const wills = docs.filter((d) => d.contact_id === a.id && d.document_type === "will");
-      const signed = wills.find((d) => d.signed === true);
-      return {
-        name: a.first_name || "Member",
-        will: signed ? "signed" : wills.length ? "unsigned" : "missing",
-        willDate: signed?.document_date ?? null,
-        poa: docs.some((d) => d.contact_id === a.id && d.document_type === "power_of_attorney") ? "on_file" : "missing",
-      };
-    });
-    const hasManual = !!(eh?.will_status || eh?.poa_status || eh?.beneficiary_coordination_status);
-    const estate: EstateFacts = {
-      source: docs.length ? "documents" : hasManual ? "manual" : "none",
-      adults: estateAdults, trusts: docs.filter((d) => d.document_type === "trust").length,
-      manual: { will: eh?.will_status ?? null, poa: eh?.poa_status ?? null, beneficiaries: eh?.beneficiary_coordination_status ?? null },
-    };
+    const estate: EstateFacts = estateFactsFrom(
+      contacts ?? [], (estateRows ?? []) as any[],
+      { will: eh?.will_status ?? null, poa: eh?.poa_status ?? null, beneficiaries: eh?.beneficiary_coordination_status ?? null },
+    );
 
     // ---- Vineyard: accounts that issue a statement and whether they've been read recently.
     const withStatements = allocAccounts.filter((a) => a.expects_statement);

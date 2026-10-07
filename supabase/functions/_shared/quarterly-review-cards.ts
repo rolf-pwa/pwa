@@ -158,6 +158,35 @@ function withTargets(status: AlignStatus, targets: TargetResult[]): AlignStatus 
 const withMoves = (status: AlignStatus, moves: Move[], area: MoveArea): AlignStatus =>
   status === "Aligned" && moves.some((m) => m.from === area || m.to === area) ? "Partial" : status;
 
+/**
+ * Builds the estate facts the Review and the Governance Audit both use: per adult, a signed Will and a Power of Attorney
+ * read from documents approved in Glass-Box; with no documents, the hand-entered Stabilization Map statuses; else none.
+ */
+export function estateFactsFrom(
+  contacts: Array<{ id: string; first_name: string | null; family_role: string | null }>,
+  docs: Array<{ contact_id: string | null; document_type: string; signed: boolean | null; document_date: string | null }>,
+  manual: { will: string | null; poa: string | null; beneficiaries: string | null } | null,
+): EstateFacts {
+  const adultRows = contacts.filter((c) => c.family_role === "head_of_family" || c.family_role === "spouse");
+  const adults = adultRows.length ? adultRows : contacts.slice(0, 1);
+  const estateAdults: EstateAdult[] = adults.map((a) => {
+    const wills = docs.filter((d) => d.contact_id === a.id && d.document_type === "will");
+    const signed = wills.find((d) => d.signed === true);
+    return {
+      name: a.first_name || "Member",
+      will: signed ? "signed" : wills.length ? "unsigned" : "missing",
+      willDate: signed?.document_date ?? null,
+      poa: docs.some((d) => d.contact_id === a.id && d.document_type === "power_of_attorney") ? "on_file" : "missing",
+    };
+  });
+  const hasManual = !!(manual && (manual.will || manual.poa || manual.beneficiaries));
+  return {
+    source: docs.length ? "documents" : hasManual ? "manual" : "none",
+    adults: estateAdults, trusts: docs.filter((d) => d.document_type === "trust").length,
+    manual: manual ?? { will: null, poa: null, beneficiaries: null },
+  };
+}
+
 /** Estate status and a plain line, from approved documents when there are any, else from the typed-in statuses. */
 export function estateSummary(e: EstateFacts): { status: AlignStatus; detail: string; actions: string[] } {
   if (e.source === "documents") {
