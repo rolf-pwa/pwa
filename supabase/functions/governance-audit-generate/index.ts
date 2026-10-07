@@ -49,7 +49,7 @@ import { resolveCharter } from "../_shared/charter-resolve.ts";
 import { allocateForHousehold } from "../_shared/review-allocation.ts";
 import { readTaxSlipMix } from "../_shared/tax-slips-vault.ts";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
-import { projectIncomeTax } from "../_shared/income-tax-projection.ts";
+import { projectIncomeTax, projectionFromSaved } from "../_shared/income-tax-projection.ts";
 import { evaluateTargets, incomeStructure, type BalanceFigures } from "../_shared/charter-targets.ts";
 import { estateFactsFrom, estateSummary } from "../_shared/quarterly-review-cards.ts";
 import {
@@ -606,7 +606,10 @@ async function runFullAudit(db: Db, householdId: string, userId: string, options
     } catch (e) {
       console.error("governance-audit: tax slips unavailable:", e instanceof Error ? e.message : String(e));
     }
-    const incomeTax = projectIncomeTax({
+    // The projection saved on the household Tax page, when there is one, takes the place of the derived one.
+    const { data: savedTax } = await db.from("household_tax_columns").select("contact_id, province, lines").eq("household_id", householdId).eq("kind", "projection").eq("tax_year", new Date().getFullYear());
+    const savedProjection = projectionFromSaved(((savedTax ?? []) as any[]).map((r) => ({ name: nameOf.get(r.contact_id) ?? "Household", province: r.province, lines: r.lines })), provinceCode);
+    const incomeTax = savedProjection ?? projectIncomeTax({
       mix: slipMix.mix,
       province: provinceCode,
       accounts: drawSources.map((a) => ({

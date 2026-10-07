@@ -79,7 +79,7 @@ interface GovernanceAuditDoc {
   charter_targets?: TargetCheck[];
   estate_documents?: { source: string; adults: EstateAdultRow[]; trusts: number; status: string; detail: string; actions: string[]; files?: { type: string; file_name: string }[] };
   income_structure?: { totalIncome: number; external: { label: string; annual_amount: number }[]; externalTotal: number; capitalRequired: number; withdrawnYtd: number | null; capitalRemaining: number | null } | null;
-  income_tax?: { basis?: "tax_slips" | "unrealised_gain"; slip_files?: string[]; slip_year?: number; mix?: { taxYear: number; shares: { interest: number; eligibleDividends: number; otherDividends: number; capitalGains: number; returnOfCapital: number } } | null; province: string; taxYearTables: number; taxpayers: { name: string; taxableIncome: number; federalTax: number; provincialTax: number; totalTax: number; effectiveRate: number; marginalRate: number }[]; totalDraws: number; totalBenefits: number; grossIncome: number; totalTax: number; afterTaxIncome: number; effectiveRate: number; notes: string[] } | null;
+  income_tax?: { basis?: "tax_slips" | "unrealised_gain" | "household_tax_page"; slip_files?: string[]; slip_year?: number; mix?: { taxYear: number; shares: { interest: number; eligibleDividends: number; otherDividends: number; capitalGains: number; returnOfCapital: number } } | null; province: string; taxYearTables: number; taxpayers: { name: string; taxableIncome: number; federalTax: number; provincialTax: number; totalTax: number; effectiveRate: number; marginalRate: number }[]; totalDraws: number; totalBenefits: number; grossIncome: number; totalTax: number; afterTaxIncome: number; effectiveRate: number; notes: string[] } | null;
   balance_sheet?: { total_assets: number; net_worth: number; liabilities: number };
 }
 interface GovernanceAuditRow {
@@ -450,7 +450,7 @@ export default function GovernanceAudit() {
             {doc.income_tax && (
               <div>
                 <div style={colLabel}>Income Tax Projection</div>
-                <BsRow label="Withdrawals from capital" value={fmtCurrency(doc.income_tax.totalDraws)} />
+                <BsRow label={doc.income_tax.basis === "household_tax_page" ? "Income before government benefits" : "Withdrawals from capital"} value={fmtCurrency(doc.income_tax.totalDraws)} />
                 {doc.income_tax.totalBenefits > 0 && <BsRow label="Government benefits and other outside income" value={fmtCurrency(doc.income_tax.totalBenefits)} />}
                 <BsRow label="Gross income" value={fmtCurrency(doc.income_tax.grossIncome)} strong />
                 {doc.income_tax.taxpayers.map((t) => (
@@ -467,7 +467,7 @@ export default function GovernanceAudit() {
                   );
                 })()}
                 <p style={{ fontSize: "6.5pt", color: "#94a3b8", fontStyle: "italic", margin: "1.5mm 0 0" }}>
-                  Estimate for this year using {doc.income_tax.taxYearTables} federal and {doc.income_tax.province} tax tables and the basic personal amount only. Registered withdrawals are taxed in full and TFSA withdrawals not at all. {doc.income_tax.basis === "tax_slips" ? "Dividends are grossed up and the dividend tax credit applied; capital gains are taxed at the inclusion rate." : "No prior-year T3 or T5 slips were found in the Tax folder, so non-registered withdrawals are taxed only on the share that is unrealised gain."} Age and pension credits, OAS recovery tax and income splitting are not included. Not tax advice; confirm with the family's tax professional.
+                  Estimate for this year using {doc.income_tax.taxYearTables} federal and {doc.income_tax.province} tax tables and the basic personal amount only. {doc.income_tax.basis === "household_tax_page" ? "" : "Registered withdrawals are taxed in full and TFSA withdrawals not at all. "}{doc.income_tax.basis === "household_tax_page" ? "The income lines are those saved on the household Tax page. Dividends are grossed up and the dividend tax credit applied; capital gains are taxed at the inclusion rate." : doc.income_tax.basis === "tax_slips" ? "Dividends are grossed up and the dividend tax credit applied; capital gains are taxed at the inclusion rate." : "No prior-year T3 or T5 slips were found in the Tax folder, so non-registered withdrawals are taxed only on the share that is unrealised gain."} Age and pension credits, OAS recovery tax and income splitting are not included. Not tax advice; confirm with the family's tax professional.
                   {doc.income_tax.notes.map((n) => ` ${n}`).join("")}
                 </p>
               </div>

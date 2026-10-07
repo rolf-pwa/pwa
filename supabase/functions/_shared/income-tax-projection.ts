@@ -12,8 +12,9 @@
 // Credits other than the basic personal amount (age, pension, medical), OAS recovery tax and income splitting are NOT
 // modelled, and neither is tax on income-fund distributions inside non-registered accounts. The result is an estimate.
 
-import { TAX_TABLES, type TaxBracket } from "./governance-audit-tax-config.ts";
+import { TAX_TABLES } from "./governance-audit-tax-config.ts";
 import type { IncomeMix } from "./tax-slip-mix.ts";
+import { emptyLines, sanitizeLines, taxFromLines, type TaxLines } from "./tax-lines.ts";
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -48,7 +49,7 @@ export interface IncomeTaxProjection {
   province: string;
   taxYearTables: number;
   /** How the non-registered withdrawals were split: last year's tax slips, or the accounts' unrealised gain. */
-  basis: "tax_slips" | "unrealised_gain";
+  basis: "tax_slips" | "unrealised_gain" | "household_tax_page";
   mix: IncomeMix | null;
   taxpayers: TaxpayerTax[];
   totalDraws: number;
@@ -62,16 +63,30 @@ export interface IncomeTaxProjection {
 
 const REGISTERED = new Set(["rrsp", "rrif", "lira", "lif", "lrif", "prif", "locked-in", "registered"]);
 
-function progressive(income: number, brackets: TaxBracket[], bpa: number | undefined): { tax: number; marginal: number } {
-  let tax = 0, lower = 0, marginal = brackets[0]?.rate ?? 0;
-  for (const b of brackets) {
-    const upper = b.upTo ?? Infinity;
-    if (income > lower) { tax += (Math.min(income, upper) - lower) * b.rate; marginal = b.rate; }
-    lower = upper;
-    if (income <= upper) break;
+/** Splits the year's withdrawals into income lines: registered in full; non-registered by the slip mix (or, without one, by unrealised gain); TFSA not at all. */
+export function drawLines(accounts: DrawAccount[], mix: IncomeMix | null): { lines: TaxLines; registeredDraws: number; nonRegisteredDraws: number; tfsaDraws: number } {
+  let registeredDraws = 0, nonRegisteredDraws = 0, tfsaDraws = 0, ordinary = 0, eligible = 0, otherDiv = 0, gains = 0;
+  for (const a of accounts) {
+    const type = a.accountType.trim().toLowerCase();
+    if (type === "tfsa") tfsaDraws += a.amount;
+    else if (REGISTERED.has(type)) registeredDraws += a.amount;
+    else {
+      nonRegisteredDraws += a.amount;
+      if (mix) {
+        ordinary += a.amount * mix.shares.interest;
+        eligible += a.amount * mix.shares.eligibleDividends;
+        otherDiv += a.amount * mix.shares.otherDividends;
+        gains += a.amount * mix.shares.capitalGains;
+      } else {
+        const gainShare = a.bookValue > 0 && a.currentValue > a.bookValue ? (a.currentValue - a.bookValue) / a.currentValue : 0;
+        gains += a.amount * gainShare;
+      }
+    }
   }
-  if (bpa) tax -= Math.min(income, bpa) * brackets[0].rate; // credit at the lowest rate
-  return { tax: Math.max(0, tax), marginal };
+  return {
+    lines: { ...emptyLines(), pension_registered: registeredDraws, interest_other: ordinary, eligible_dividends: eligible, other_dividends: otherDiv, capital_gains: gains },
+    registeredDraws, nonRegisteredDraws, tfsaDraws,
+  };
 }
 
 /** null when the province has no table or there is nothing taxable to project. */
@@ -87,43 +102,17 @@ export function projectIncomeTax(opts: { province: string; accounts: DrawAccount
   const share = owners.length ? opts.benefitsTotal / owners.length : 0;
 
   const taxpayers: TaxpayerTax[] = owners.map((name) => {
-    const mine = draws.filter((a) => (a.owner ?? "Household") === name);
-    let registeredDraws = 0, nonRegisteredDraws = 0, taxableGains = 0, tfsaDraws = 0, ordinary = 0, eligible = 0, otherDiv = 0;
-    const mix = opts.mix ?? null;
-    for (const a of mine) {
-      const type = a.accountType.trim().toLowerCase();
-      if (type === "tfsa") tfsaDraws += a.amount;
-      else if (REGISTERED.has(type)) registeredDraws += a.amount;
-      else {
-        nonRegisteredDraws += a.amount;
-        if (mix) {
-          ordinary += a.amount * mix.shares.interest;
-          eligible += a.amount * mix.shares.eligibleDividends;
-          otherDiv += a.amount * mix.shares.otherDividends;
-          taxableGains += a.amount * mix.shares.capitalGains * TAX_TABLES.capitalGainsInclusionRate;
-          continue;
-        }
-        const gainShare = a.bookValue > 0 && a.currentValue > a.bookValue ? (a.currentValue - a.bookValue) / a.currentValue : 0;
-        taxableGains += a.amount * gainShare * TAX_TABLES.capitalGainsInclusionRate;
-      }
-    }
-    const gu = TAX_TABLES.dividendGrossUp;
-    const eligibleGross = eligible * (1 + gu.eligible), otherGross = otherDiv * (1 + gu.other);
-    const dividendsGrossedUp = eligibleGross + otherGross;
-    const taxableIncome = registeredDraws + ordinary + dividendsGrossedUp + taxableGains + share;
-    const credit = (c?: { eligible: number; other: number }) => (c ? eligibleGross * c.eligible + otherGross * c.other : 0);
-    const fed = progressive(taxableIncome, TAX_TABLES.federal.brackets, TAX_TABLES.federal.basicPersonalAmount);
-    const pro = progressive(taxableIncome, prov.brackets, prov.basicPersonalAmount);
-    const fedTax = Math.max(0, fed.tax - credit(TAX_TABLES.federal.dividendCredits));
-    const proTax = Math.max(0, pro.tax - credit(prov.dividendCredits));
-    const dividendCredit = credit(TAX_TABLES.federal.dividendCredits) + credit(prov.dividendCredits);
-    const totalTax = fedTax + proTax;
+    const d = drawLines(draws.filter((a) => (a.owner ?? "Household") === name), opts.mix ?? null);
+    const { registeredDraws, nonRegisteredDraws, tfsaDraws } = d;
+    const lines: TaxLines = { ...d.lines, government_benefits: share };
+    const r = taxFromLines(opts.province, lines)!;
+    const { dividendsGrossedUp, dividendCredit, taxableIncome, federalTax: fedTax, provincialTax: proTax, totalTax } = r;
     const gross = registeredDraws + nonRegisteredDraws + tfsaDraws + share;
     return {
-      name, registeredDraws: round2(registeredDraws), nonRegisteredDraws: round2(nonRegisteredDraws), taxableGains: round2(taxableGains), dividendsGrossedUp: round2(dividendsGrossedUp), dividendCredit: round2(dividendCredit),
-      tfsaDraws: round2(tfsaDraws), benefits: round2(share), taxableIncome: round2(taxableIncome),
-      federalTax: round2(fedTax), provincialTax: round2(proTax), totalTax: round2(totalTax),
-      effectiveRate: gross > 0 ? totalTax / gross : 0, marginalRate: fed.marginal + pro.marginal,
+      name, registeredDraws: round2(registeredDraws), nonRegisteredDraws: round2(nonRegisteredDraws), taxableGains: r.taxableGains, dividendsGrossedUp, dividendCredit,
+      tfsaDraws: round2(tfsaDraws), benefits: round2(share), taxableIncome,
+      federalTax: fedTax, provincialTax: proTax, totalTax,
+      effectiveRate: gross > 0 ? totalTax / gross : 0, marginalRate: r.marginalRate,
     };
   });
 
@@ -136,5 +125,32 @@ export function projectIncomeTax(opts: { province: string; accounts: DrawAccount
     province: opts.province, basis: opts.mix ? "tax_slips" : "unrealised_gain", mix: opts.mix ?? null, taxYearTables: TAX_TABLES.asOfYear, taxpayers, totalDraws: round2(totalDraws), totalBenefits: round2(opts.benefitsTotal),
     grossIncome: round2(grossIncome), totalTax: round2(totalTax), afterTaxIncome: round2(grossIncome - totalTax),
     effectiveRate: grossIncome > 0 ? totalTax / grossIncome : 0, notes,
+  };
+}
+
+/** The projection as saved on the household Tax page (one entry per taxpayer), in the same shape the audit prints. null when nothing usable is saved. */
+export function projectionFromSaved(rows: { name: string; province: string; lines: unknown }[], fallbackProvince: string): IncomeTaxProjection | null {
+  const province = rows[0]?.province ?? fallbackProvince;
+  const taxpayers: TaxpayerTax[] = [];
+  let totalDraws = 0, totalBenefits = 0, gross = 0;
+  for (const row of rows) {
+    const l = sanitizeLines(row.lines);
+    const r = taxFromLines(province, l);
+    if (!r) return null;
+    const cash = l.employment + l.pension_registered + l.government_benefits + l.interest_other + l.other_income + l.eligible_dividends + l.other_dividends + l.capital_gains;
+    if (cash <= 0) continue;
+    const investment = l.interest_other + l.eligible_dividends + l.other_dividends + l.capital_gains;
+    taxpayers.push({
+      name: row.name, registeredDraws: l.pension_registered, nonRegisteredDraws: round2(investment), taxableGains: r.taxableGains, dividendsGrossedUp: r.dividendsGrossedUp, dividendCredit: r.dividendCredit,
+      tfsaDraws: 0, benefits: l.government_benefits, taxableIncome: r.taxableIncome, federalTax: r.federalTax, provincialTax: r.provincialTax, totalTax: r.totalTax,
+      effectiveRate: cash > 0 ? r.totalTax / cash : 0, marginalRate: r.marginalRate,
+    });
+    totalDraws += cash - l.government_benefits; totalBenefits += l.government_benefits; gross += cash;
+  }
+  if (!taxpayers.length) return null;
+  const totalTax = taxpayers.reduce((a, t) => a + t.totalTax, 0);
+  return {
+    province, basis: "household_tax_page", mix: null, taxYearTables: TAX_TABLES.asOfYear, taxpayers, totalDraws: round2(totalDraws), totalBenefits: round2(totalBenefits),
+    grossIncome: round2(gross), totalTax: round2(totalTax), afterTaxIncome: round2(gross - totalTax), effectiveRate: gross > 0 ? totalTax / gross : 0, notes: [],
   };
 }
