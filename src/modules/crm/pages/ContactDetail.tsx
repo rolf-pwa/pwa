@@ -5,6 +5,7 @@ import { AppLayout } from "@/shared/components/AppLayout";
 import { Button } from "@/shared/components/ui/button";
 import { Badge } from "@/shared/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
+import { ContactTax } from "@/modules/crm/components/ContactTax";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
 import { Input } from "@/shared/components/ui/input";
 import { Textarea } from "@/shared/components/ui/textarea";
@@ -15,7 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/shared/compo
 import {
   ArrowLeft, Bell, BellOff, Trash2, Clock, AlertCircle, Shield,
   ExternalLink, Bot, Grape, FileUp, Loader2, Building2, Users, Plus, X,
-  Folder, FolderOpen, ShieldCheck, Landmark, ChevronDown, ChevronRight, ListChecks,
+  Receipt, Folder, FolderOpen, ShieldCheck, Landmark, ChevronDown, ChevronRight, ListChecks,
   Mail, Phone, MapPin, Home, Calendar, Pencil, Eye, Merge, Link2, BarChart3, Anchor,
   ArrowRight, ChevronLeft, Wallet
 } from "lucide-react";
@@ -824,6 +825,10 @@ const ContactDetail = () => {
                   <Grape className="mr-1.5 h-3.5 w-3.5" />
                   The Vineyard
                 </TabsTrigger>
+                <TabsTrigger value="tax" className="flex-1">
+                  <Receipt className="mr-1.5 h-3.5 w-3.5" />
+                  Tax
+                </TabsTrigger>
                 <TabsTrigger value="analytics" className="flex-1">
                   <BarChart3 className="mr-1.5 h-3.5 w-3.5" />
                   Analytics
@@ -1205,6 +1210,12 @@ const ContactDetail = () => {
               </TabsContent>
 
               {/* Analytics Tab */}
+              <TabsContent value="tax" className="space-y-4 mt-4">
+                {contact?.household_id
+                  ? <ContactTax householdId={contact.household_id} contactId={id!} />
+                  : <p className="py-8 text-sm text-muted-foreground">Add this person to a household to build their tax picture.</p>}
+              </TabsContent>
+
               <TabsContent value="analytics" className="space-y-4 mt-4">
                 <ContactAnalytics contactId={contact.id} />
               </TabsContent>

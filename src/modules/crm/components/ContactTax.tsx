@@ -15,17 +15,15 @@ const signed = (n: number) => (n === 0 ? "—" : `${n > 0 ? "+" : "−"}${money(
 type Kind = "baseline" | "projection";
 
 /**
- * The household's tax picture, per person: last year's return as the baseline column and this year's projection beside
+ * One person's tax picture: last year's return as the baseline column and this year's projection beside
  * it. Both are editable and saved as you type. Numbers read from the return or the slips show where they came from; a
  * hand-entered figure is kept when the return is read again. The Governance Audit uses the saved projection.
  */
-export function HouseholdTax({ householdId }: { householdId: string }) {
+export function ContactTax({ householdId, contactId }: { householdId: string; contactId: string }) {
   const [data, setData] = useState<TaxData | null>(null);
   const [loading, setLoading] = useState(true);
   const [reading, setReading] = useState(false);
   const [readingSlips, setReadingSlips] = useState(false);
-  const [personId, setPersonId] = useState<string>("");
-  const [province, setProvince] = useState("BC");
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const call = useCallback(async (body: Record<string, unknown>) => {
@@ -40,14 +38,13 @@ export function HouseholdTax({ householdId }: { householdId: string }) {
     try {
       const d = (await call({ action: "load" })) as TaxData;
       setData(d);
-      setProvince(d.province);
-      setPersonId((cur) => cur || (d.people.find((p) => p.hasAccounts || p.baseline.saved) ?? d.people[0])?.contactId || "");
     } catch (e) { toast.error(`Couldn't load the tax page: ${e instanceof Error ? e.message : String(e)}`); }
     setLoading(false);
   }, [call]);
   useEffect(() => { load(); }, [load]);
 
-  const person = data?.people.find((p) => p.contactId === personId) ?? null;
+  const person = data?.people.find((p) => p.contactId === contactId) ?? null;
+  const province = person?.province ?? "BC";
 
   const patch = (contactId: string, kind: Kind, fn: (c: TaxColumn) => TaxColumn) =>
     setData((d) => d && { ...d, people: d.people.map((p) => (p.contactId === contactId ? { ...p, [kind]: fn(p[kind]) } : p)) });
@@ -80,11 +77,10 @@ export function HouseholdTax({ householdId }: { householdId: string }) {
   };
 
   const changeProvince = async (prov: string) => {
-    setProvince(prov);
     if (!person) return;
     try {
       // Saves both columns on the new province and refreshes the computed rows.
-      await Promise.all((["baseline", "projection"] as Kind[]).filter((k) => person[k].saved).map((k) => call({ action: "save", contact_id: person.contactId, kind: k, province: prov, lines: person[k].lines, sources: person[k].sources })));
+      await Promise.all((["baseline", "projection"] as Kind[]).filter((k) => person[k].saved || k === "projection").map((k) => call({ action: "save", contact_id: person.contactId, kind: k, province: prov, lines: person[k].lines, sources: person[k].sources })));
       await load();
     } catch (e) { toast.error(`Not saved: ${e instanceof Error ? e.message : String(e)}`); }
   };
@@ -113,7 +109,7 @@ export function HouseholdTax({ householdId }: { householdId: string }) {
 
   const rows = useMemo(() => LINE_KEYS, []);
   if (loading && !data) return <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading tax picture…</div>;
-  if (!data || !person) return <p className="py-8 text-sm text-muted-foreground">No household members to build a tax picture for.</p>;
+  if (!data || !person) return <p className="py-8 text-sm text-muted-foreground">This person is not part of a household yet, so there is no tax picture to build.</p>;
 
   const b = person.baseline, pr = person.projection;
   const bc = b.computed, pc = pr.computed;
@@ -132,12 +128,6 @@ export function HouseholdTax({ householdId }: { householdId: string }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        {data.people.length > 1 && (
-          <Select value={personId} onValueChange={setPersonId}>
-            <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
-            <SelectContent>{data.people.map((p) => <SelectItem key={p.contactId} value={p.contactId}>{p.name}</SelectItem>)}</SelectContent>
-          </Select>
-        )}
         <Select value={province} onValueChange={changeProvince}>
           <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
           <SelectContent>{Object.entries(data.provinces).map(([k, n]) => <SelectItem key={k} value={k}>{n}</SelectItem>)}</SelectContent>

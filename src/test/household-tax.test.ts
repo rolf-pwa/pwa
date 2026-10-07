@@ -63,3 +63,21 @@ describe("page edits", () => {
     expect(r.sources.employment).toBe("manual");
   });
 });
+
+import { householdTotals, type TaxPerson } from "@/modules/crm/lib/householdTax";
+
+describe("household roll-up", () => {
+  const comp = (income: number, tax: number) => ({ totalIncome: income, taxableIncome: income, dividendsGrossedUp: 0, taxableGains: 0, dividendCredit: 0, federalTax: tax / 2, provincialTax: tax / 2, totalTax: tax, marginalRate: tax > 0 ? 0.3 : 0, effectiveRate: income ? tax / income : 0, afterTax: income - tax });
+  const col = (c: ReturnType<typeof comp> | null) => ({ saved: !!c, lines: emptyLines(), sources: {}, computed: c, sourceFile: null });
+  const person = (name: string, b: ReturnType<typeof comp> | null, p: ReturnType<typeof comp> | null): TaxPerson => ({ contactId: name, name, province: "BC", hasAccounts: true, baseline: col(b), projection: col(p) });
+  it("adds each person's figures, recomputes the effective rate and names anyone with none", () => {
+    const people = [person("A", comp(100000, 20000), comp(110000, 22000)), person("B", comp(50000, 5000), null)];
+    const proj = householdTotals(people, "projection");
+    expect(proj.totals?.totalIncome).toBe(110000);
+    expect(proj.missing).toEqual(["B"]);
+    const base = householdTotals(people, "baseline");
+    expect(base.totals?.totalTax).toBe(25000);
+    expect(base.totals?.effectiveRate).toBeCloseTo(25000 / 150000);
+    expect(householdTotals([person("X", null, null)], "baseline").totals).toBeNull();
+  });
+});

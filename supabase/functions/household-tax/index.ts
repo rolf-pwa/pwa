@@ -83,7 +83,7 @@ async function load(db: Db, householdId: string) {
   const people = await loadPeople(db, householdId);
   const { data: rows } = await db.from("household_tax_columns").select("*").eq("household_id", householdId).in("tax_year", [baselineYear, year]);
   const row = (contactId: string, kind: string, taxYear: number) => (rows ?? []).find((r: any) => r.contact_id === contactId && r.kind === kind && r.tax_year === taxYear);
-  const province: string = (rows ?? [])[0]?.province ?? "BC";
+  const provinceOf = (contactId: string): string => (rows ?? []).find((r: any) => r.contact_id === contactId)?.province ?? "BC";
 
   // Suggested projection: this year's withdrawals by account (scaled to the Charter's yearly draw when stated), split by the slip mix.
   const fin = await gatherHouseholdFinancials(db, householdId);
@@ -115,13 +115,13 @@ async function load(db: Db, householdId: string) {
       ? { saved: true, lines: sanitizeLines(pr.lines), sources: sanitizeSources(pr.sources), sourceFile: null }
       : { saved: false, lines: suggestedLines, sources: suggestedSources, sourceFile: null };
     return {
-      contactId: p.id, name: p.name,
-      baseline: { ...baseline, computed: compute(b?.province ?? province, baseline.lines) },
-      projection: { ...projection, computed: compute(pr?.province ?? province, projection.lines), suggested: suggestedLines },
+      contactId: p.id, name: p.name, province: provinceOf(p.id),
+      baseline: { ...baseline, computed: compute(provinceOf(p.id), baseline.lines) },
+      projection: { ...projection, computed: compute(provinceOf(p.id), projection.lines), suggested: suggestedLines },
       hasAccounts: taxpayersWithDraws.has(p.id),
     };
   });
-  return { year, baselineYear, province, provinces: Object.fromEntries(Object.entries(TAX_TABLES.provinces).map(([k, v]) => [k, v.name])), tableYear: TAX_TABLES.asOfYear, slipMixYear: mix?.taxYear ?? null, people: out };
+  return { year, baselineYear, provinces: Object.fromEntries(Object.entries(TAX_TABLES.provinces).map(([k, v]) => [k, v.name])), tableYear: TAX_TABLES.asOfYear, slipMixYear: mix?.taxYear ?? null, people: out };
 }
 
 async function save(db: Db, userId: string, body: any) {
@@ -139,8 +139,8 @@ async function save(db: Db, userId: string, body: any) {
     { onConflict: "household_id,contact_id,tax_year,kind" },
   );
   if (error) throw new Error(error.message);
-  // One province for the household: keep both columns on it.
-  await db.from("household_tax_columns").update({ province }).eq("household_id", householdId);
+  // The province belongs to the person: keep both of their columns on it.
+  await db.from("household_tax_columns").update({ province }).eq("household_id", householdId).eq("contact_id", contactId);
   return { ok: true, computed: compute(province, lines) };
 }
 
