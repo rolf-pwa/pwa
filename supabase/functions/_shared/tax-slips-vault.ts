@@ -8,6 +8,7 @@ import { mixFromSlips, sanitizeSlips, type IncomeMix, type SlipExtract } from ".
 const FOLDER = "application/vnd.google-apps.folder";
 const MAX_FILES = 15;
 const MAX_BYTES = 15 * 1024 * 1024;
+const READ_BUDGET_MS = 45_000;
 
 const TOOL = {
   functionDeclarations: [{
@@ -84,31 +85,71 @@ export async function readTaxSlipMix(
     const { data: cached } = await admin.from("tax_slip_extracts").select("drive_id, modified_time, extraction").eq("household_id", opts.householdId);
     const byId = new Map<string, { modified_time: string | null; extraction: SlipExtract[] }>((cached ?? []).map((r: Item) => [r.drive_id, r]));
 
+    // Cached files cost nothing. Files not read before are read 4 at a time, slip-like names first, within a time budget,
+    // so a Tax folder full of unrelated PDFs can't run the audit past the Edge Function time limit; whatever is left is
+    // read on a later run.
     const slips: SlipExtract[] = [];
     const files: string[] = [];
-    for (const f of pdfs) {
-      const hit = byId.get(f.id);
-      let extraction: SlipExtract[] | null = hit && hit.modified_time === (f.modifiedTime ?? null) ? sanitizeSlips(hit.extraction) : null;
-      if (!extraction) {
-        const bytes = await driveDownloadFile(f.id, opts.accessToken);
-        if (bytes.byteLength > MAX_BYTES) continue;
-        const contents: VertexContent[] = [{ role: "user", parts: [{ text: PROMPT }, { inlineData: { mimeType: "application/pdf", data: toBase64(bytes) } }] }];
-        const result = await generateVertexContent(
-          sa, GEMINI_EXTRACT_MODEL, contents, withThinking(GEMINI_EXTRACT_MODEL, { temperature: 0, maxOutputTokens: 4096 }, "low"),
-          { tools: [TOOL], toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["record_tax_slips"] } } },
-        );
-        // deno-lint-ignore no-explicit-any
-        const args = (result?.candidates?.[0]?.content?.parts as any[] | undefined)?.find((p) => p.functionCall)?.functionCall?.args;
-        if (!args) continue;
-        extraction = sanitizeSlips(args.slips);
-        await admin.from("tax_slip_extracts").upsert({ household_id: opts.householdId, drive_id: f.id, file_name: f.name, modified_time: f.modifiedTime ?? null, extraction }, { onConflict: "household_id,drive_id" });
-      }
+    const keep = (f: Item, extraction: SlipExtract[]) => {
       if (extraction.some((s) => s.slip_type !== "other" && s.tax_year === opts.taxYear)) files.push(f.name);
       slips.push(...extraction);
+    };
+    const toRead: Item[] = [];
+    for (const f of pdfs) {
+      const hit = byId.get(f.id);
+      if (hit && hit.modified_time === (f.modifiedTime ?? null)) keep(f, sanitizeSlips(hit.extraction));
+      else toRead.push(f);
     }
+    const slipLike = (n: string) => (/\b(t3|t5|rl-?3|rl-?16|slip|tax|t-slip)\b/i.test(n) ? 0 : 1);
+    toRead.sort((a, b) => slipLike(a.name) - slipLike(b.name));
+    const deadline = Date.now() + READ_BUDGET_MS;
+    let next = 0;
+    const worker = async () => {
+      while (next < toRead.length && Date.now() < deadline) {
+        const f = toRead[next++];
+        try {
+          const bytes = await driveDownloadFile(f.id, opts.accessToken);
+          if (bytes.byteLength > MAX_BYTES) continue;
+          const contents: VertexContent[] = [{ role: "user", parts: [{ text: PROMPT }, { inlineData: { mimeType: "application/pdf", data: toBase64(bytes) } }] }];
+          const result = await generateVertexContent(
+            sa, GEMINI_EXTRACT_MODEL, contents, withThinking(GEMINI_EXTRACT_MODEL, { temperature: 0, maxOutputTokens: 4096 }, "low"),
+            { tools: [TOOL], toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["record_tax_slips"] } } },
+          );
+          // deno-lint-ignore no-explicit-any
+          const args = (result?.candidates?.[0]?.content?.parts as any[] | undefined)?.find((p) => p.functionCall)?.functionCall?.args;
+          if (!args) continue;
+          const extraction = sanitizeSlips(args.slips);
+          await admin.from("tax_slip_extracts").upsert({ household_id: opts.householdId, drive_id: f.id, file_name: f.name, modified_time: f.modifiedTime ?? null, extraction }, { onConflict: "household_id,drive_id" });
+          keep(f, extraction);
+        } catch (e) {
+          console.error("tax-slips-vault: could not read", f.name, e instanceof Error ? e.message : String(e));
+        }
+      }
+    };
+    await Promise.all([worker(), worker(), worker(), worker()]);
     return { mix: mixFromSlips(slips, opts.taxYear), files, filesRead: pdfs.length };
   } catch (e) {
     console.error("tax-slips-vault: failed:", e instanceof Error ? e.message : String(e));
     return none;
+  }
+}
+
+/** The mix from slips already read (and saved) for this household; reads nothing from Drive and calls no model. Never throws. */
+// deno-lint-ignore no-explicit-any
+export async function cachedTaxSlipMix(admin: any, householdId: string, taxYear: number): Promise<{ mix: IncomeMix | null; files: string[] }> {
+  try {
+    const { data } = await admin.from("tax_slip_extracts").select("file_name, extraction").eq("household_id", householdId);
+    const slips: SlipExtract[] = [];
+    const files: string[] = [];
+    // deno-lint-ignore no-explicit-any
+    for (const r of (data ?? []) as any[]) {
+      const ex = sanitizeSlips(r.extraction);
+      if (ex.some((s) => s.slip_type !== "other" && s.tax_year === taxYear) && r.file_name) files.push(r.file_name);
+      slips.push(...ex);
+    }
+    return { mix: mixFromSlips(slips, taxYear), files };
+  } catch (e) {
+    console.error("tax-slips-vault: cached read failed:", e instanceof Error ? e.message : String(e));
+    return { mix: null, files: [] };
   }
 }

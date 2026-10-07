@@ -23,6 +23,7 @@ export function HouseholdTax({ householdId }: { householdId: string }) {
   const [data, setData] = useState<TaxData | null>(null);
   const [loading, setLoading] = useState(true);
   const [reading, setReading] = useState(false);
+  const [readingSlips, setReadingSlips] = useState(false);
   const [personId, setPersonId] = useState<string>("");
   const [province, setProvince] = useState("BC");
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -99,6 +100,17 @@ export function HouseholdTax({ householdId }: { householdId: string }) {
     setReading(false);
   };
 
+  const readSlips = async () => {
+    setReadingSlips(true);
+    try {
+      const r = await call({ action: "readSlips" });
+      if (r.found) toast.success(`Read the ${r.taxYear} tax slips (${r.files.length} file${r.files.length === 1 ? "" : "s"}).`);
+      else toast.message(`No ${r.taxYear} T3 or T5 slips were found in the Tax folder.`);
+      await load();
+    } catch (e) { toast.error(`Couldn't read the slips: ${e instanceof Error ? e.message : String(e)}`); }
+    setReadingSlips(false);
+  };
+
   const rows = useMemo(() => LINE_KEYS, []);
   if (loading && !data) return <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading tax picture…</div>;
   if (!data || !person) return <p className="py-8 text-sm text-muted-foreground">No household members to build a tax picture for.</p>;
@@ -133,6 +145,10 @@ export function HouseholdTax({ householdId }: { householdId: string }) {
         <Button variant="outline" size="sm" onClick={readReturn} disabled={reading}>
           {reading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <FileSearch className="mr-1.5 h-3.5 w-3.5" />}
           Read {data.baselineYear} return from the Vault
+        </Button>
+        <Button variant="outline" size="sm" onClick={readSlips} disabled={readingSlips}>
+          {readingSlips ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <FileSearch className="mr-1.5 h-3.5 w-3.5" />}
+          Read {data.baselineYear} tax slips
         </Button>
         {!pr.saved && pr.suggested && <span className="text-xs text-muted-foreground">The projection is a suggestion until you edit it.</span>}
       </div>
