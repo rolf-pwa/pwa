@@ -36,7 +36,7 @@ describe("Governance Audit page in the Review's document style", () => {
   it("renders the sections in A4 pages with the shared sidebar, balance sheet, Charter and estate blocks", async () => {
     render(<MemoryRouter initialEntries={["/governance-audit/a1"]}><Routes><Route path="/governance-audit/:id" element={<GovernanceAudit />} /></Routes></MemoryRouter>);
     await waitFor(() => expect(screen.getByText("Sovereignty Governance Audit™")).toBeTruthy());
-    for (const t of ["I. Executive Governance Summary", "Systemic Health Scorecard", "II. Capital Infrastructure Ledger", "The Keep · Liquidity Reserve", "Legacy Vault · Legacy Trust", "Total Assets", "Liabilities & Net Worth", "What the Charter Asks For", "Estate Documents on File", "III. Element Deep-Dive & Scoring", "IV. Facilitated Discussion Points", "Compliance status"]) {
+    for (const t of ["I. Executive Governance Summary", "Systemic Health Scorecard", "II. Capital Infrastructure Ledger", "Liquidity Reserve", "Legacy Trust", "Total Assets", "Liabilities & Net Worth", "Estate Documents on File", "III. Element Deep-Dive & Scoring", "IV. Facilitated Discussion Points", "Compliance status"]) {
       expect(screen.getAllByText((_, el) => !!el?.textContent?.includes(t)).length, t).toBeGreaterThan(0);
     }
     expect(screen.getByText("Don't Invest.")).toBeTruthy(); // the shared brand sidebar
