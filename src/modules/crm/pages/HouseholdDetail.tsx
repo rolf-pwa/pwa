@@ -47,7 +47,7 @@ import { HouseholdStatementIngestion } from "@/modules/crm/components/HouseholdS
 import { HoldingTank } from "@/modules/crm/components/HoldingTank";
 import { VaultView } from "@/modules/crm/pages/Vault";
 import { HouseholdLiabilities } from "@/modules/crm/components/HouseholdLiabilities";
-import { HouseholdTax } from "@/modules/crm/components/HouseholdTax";
+import { HouseholdTaxSummary } from "@/modules/crm/components/HouseholdTaxSummary";
 import { CharterRatificationTile, StabilizationMapButton, GovernanceAuditButton, QuarterlySystemReviewButton, HouseholdAuditTrailRollup, StartCharterIntakeButton, CausalAIWorkbenchButton } from "@/modules/audit";
 import { ProsPanel } from "@/modules/crm/components/ProsPanel";
 import { AddCompanyDialog } from "@/modules/crm/components/AddCompanyDialog";
@@ -1625,7 +1625,7 @@ const HouseholdDetail = () => {
           </TabsContent>
 
           <TabsContent value="tax" className="space-y-6 mt-4">
-            <HouseholdTax householdId={id!} />
+            <HouseholdTaxSummary householdId={id!} />
           </TabsContent>
 
           <TabsContent value="pros" className="space-y-6 mt-4">

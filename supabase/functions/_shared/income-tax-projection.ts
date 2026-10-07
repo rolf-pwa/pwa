@@ -135,7 +135,7 @@ export function projectionFromSaved(rows: { name: string; province: string; line
   let totalDraws = 0, totalBenefits = 0, gross = 0;
   for (const row of rows) {
     const l = sanitizeLines(row.lines);
-    const r = taxFromLines(province, l);
+    const r = taxFromLines(row.province || fallbackProvince, l); // each person is taxed in their own province
     if (!r) return null;
     const cash = l.employment + l.pension_registered + l.government_benefits + l.interest_other + l.other_income + l.eligible_dividends + l.other_dividends + l.capital_gains;
     if (cash <= 0) continue;
