@@ -589,7 +589,7 @@ async function runFullAudit(db: Db, householdId: string, userId: string, options
     const charterTargets = evaluateTargets(resolved.text.targets, figures);
 
     // Estate documents approved in Glass-Box (Will / Power of Attorney per adult), same reading as the Review.
-    const { data: estateRows } = await db.from("estate_documents").select("contact_id, document_type, signed, document_date").eq("household_id", householdId);
+    const { data: estateRows } = await db.from("estate_documents").select("contact_id, document_type, signed, document_date, file_name").eq("household_id", householdId);
     const estateFacts = estateFactsFrom(hhContacts ?? [], (estateRows ?? []) as any[], null);
     const estateDocs = estateSummary(estateFacts);
 
@@ -743,7 +743,7 @@ async function runFullAudit(db: Db, householdId: string, userId: string, options
       compliance_notes: complianceNotes,
       charter_summary: { source: resolved.source, ratified: resolved.ratified, file_name: resolved.vaultCharter?.name ?? null, purpose: resolved.text.purpose || null },
       charter_targets: charterTargets,
-      estate_documents: { source: estateFacts.source, adults: estateFacts.adults, trusts: estateFacts.trusts, status: estateDocs.status, detail: estateDocs.detail, actions: estateDocs.actions },
+      estate_documents: { source: estateFacts.source, adults: estateFacts.adults, trusts: estateFacts.trusts, status: estateDocs.status, detail: estateDocs.detail, actions: estateDocs.actions, files: ((estateRows ?? []) as any[]).filter((r) => r.file_name).map((r) => ({ type: r.document_type, file_name: r.file_name })) },
       balance_sheet: { total_assets: allocation.aum, net_worth: allocation.netWorth, liabilities: liabilitiesTotal },
     };
 
