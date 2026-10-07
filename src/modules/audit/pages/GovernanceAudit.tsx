@@ -79,6 +79,7 @@ interface GovernanceAuditDoc {
   charter_targets?: TargetCheck[];
   estate_documents?: { source: string; adults: EstateAdultRow[]; trusts: number; status: string; detail: string; actions: string[]; files?: { type: string; file_name: string }[] };
   income_structure?: { totalIncome: number; external: { label: string; annual_amount: number }[]; externalTotal: number; capitalRequired: number; withdrawnYtd: number | null; capitalRemaining: number | null } | null;
+  income_tax?: { province: string; taxYearTables: number; taxpayers: { name: string; taxableIncome: number; federalTax: number; provincialTax: number; totalTax: number; effectiveRate: number; marginalRate: number }[]; totalDraws: number; totalBenefits: number; grossIncome: number; totalTax: number; afterTaxIncome: number; effectiveRate: number; notes: string[] } | null;
   balance_sheet?: { total_assets: number; net_worth: number; liabilities: number };
 }
 interface GovernanceAuditRow {
@@ -399,7 +400,8 @@ export default function GovernanceAudit() {
           <DocPage>
             <DocPageHeader kicker="Governance Audit" name={doc.client_name} period={doc.review_date} title="II. Capital Infrastructure Ledger" />
             {(() => {
-              const pillars = Object.entries(doc.computed.pillar_totals);
+              const PILLAR_ORDER = Object.keys(PILLAR_LABEL);
+              const pillars: [string, number][] = PILLAR_ORDER.map((k) => [k, doc.computed.pillar_totals[k] ?? 0]);
               const sum = pillars.reduce((a, [, v]) => a + v, 0);
               const bs = doc.balance_sheet;
               const holdingTank = bs ? Math.max(0, Math.round((bs.total_assets - sum) * 100) / 100) : 0;
@@ -407,10 +409,10 @@ export default function GovernanceAudit() {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 8mm" }}>
                   <div style={{ display: "flex", flexDirection: "column" }}>
                     <div style={colLabel}>Assets</div>
-                    {pillars.length === 0 ? <p style={{ ...colText, color: "#94a3b8" }}>No pillar balances on file.</p> : pillars.map(([pillar, total]) => (
+                    {holdingTank > 0 && <BsRow label="Holding Tank" value={fmtCurrency(holdingTank)} />}
+                    {pillars.map(([pillar, total]) => (
                       <BsRow key={pillar} label={PILLAR_LABEL[pillar] ?? pillar} value={fmtCurrency(total)} />
                     ))}
-                    {holdingTank > 0 && <BsRow label="Holding Tank (not yet assigned)" value={fmtCurrency(holdingTank)} />}
                     {bs && (
                       <div style={{ marginTop: "auto", paddingTop: "1.5mm" }}>
                         <hr style={{ border: "none", borderTop: "1.5px solid #334155", margin: "0 0 1.5mm" }} />
@@ -431,6 +433,36 @@ export default function GovernanceAudit() {
             <p style={{ fontSize: "6.5pt", color: "#94a3b8", fontStyle: "italic", margin: 0 }}>
               Pillar totals come from the household's own Vineyard, Storehouse and Holding Tank records, with income funds from the investment statements counted in the Liquidity Reserve and insurance cash value in the Strategic Reserve, exactly as in the Sovereignty Review.
             </p>
+
+            {doc.income_structure && (
+              <div>
+                <div style={colLabel}>Income Structure</div>
+                <BsRow label="Total annual income (Charter)" value={fmtCurrency(doc.income_structure.totalIncome)} strong />
+                <BsRow label="Drawn from capital (portfolio withdrawals and liquidity draws)" value={fmtCurrency(doc.income_structure.capitalRequired)} />
+                {doc.income_structure.external.map((s, i) => <BsRow key={i} label={s.label} value={fmtCurrency(s.annual_amount)} />)}
+                {doc.income_structure.withdrawnYtd !== null && (
+                  <BsRow label="Withdrawn from capital so far this year" value={fmtCurrency(doc.income_structure.withdrawnYtd)} tone={doc.income_structure.withdrawnYtd > doc.income_structure.capitalRequired ? "#c0392b" : undefined} />
+                )}
+              </div>
+            )}
+
+            {doc.income_tax && (
+              <div>
+                <div style={colLabel}>Income Tax Projection</div>
+                <BsRow label="Withdrawals from capital" value={fmtCurrency(doc.income_tax.totalDraws)} />
+                {doc.income_tax.totalBenefits > 0 && <BsRow label="Government benefits and other outside income" value={fmtCurrency(doc.income_tax.totalBenefits)} />}
+                <BsRow label="Gross income" value={fmtCurrency(doc.income_tax.grossIncome)} strong />
+                {doc.income_tax.taxpayers.map((t) => (
+                  <BsRow key={t.name} label={`Estimated tax, ${t.name} (taxable income ${fmtCurrency(t.taxableIncome)}; marginal rate ${(t.marginalRate * 100).toFixed(1)}%)`} value={fmtCurrency(t.totalTax)} tone="#c0392b" />
+                ))}
+                <BsRow label={`Estimated income tax (${(doc.income_tax.effectiveRate * 100).toFixed(1)}% of gross income)`} value={fmtCurrency(doc.income_tax.totalTax)} strong tone="#c0392b" />
+                <BsRow label="Income after tax" value={fmtCurrency(doc.income_tax.afterTaxIncome)} strong />
+                <p style={{ fontSize: "6.5pt", color: "#94a3b8", fontStyle: "italic", margin: "1.5mm 0 0" }}>
+                  Estimate for this year using {doc.income_tax.taxYearTables} federal and {doc.income_tax.province} tax tables and the basic personal amount only. Registered withdrawals are taxed in full, non-registered withdrawals on their share of gain, and TFSA withdrawals not at all. Age and pension credits, OAS recovery tax and income splitting are not included. Not tax advice; confirm with the family's tax professional.
+                  {doc.income_tax.notes.map((n) => ` ${n}`).join("")}
+                </p>
+              </div>
+            )}
 
             {doc.pillar_analyses.length > 0 && (
               <div>
@@ -459,18 +491,6 @@ export default function GovernanceAudit() {
                 </p>
               </div>
             </div>
-
-            {doc.income_structure && (
-              <div>
-                <div style={colLabel}>Income Structure</div>
-                <BsRow label="Total annual income (Charter)" value={fmtCurrency(doc.income_structure.totalIncome)} strong />
-                <BsRow label="Drawn from capital (portfolio withdrawals and liquidity draws)" value={fmtCurrency(doc.income_structure.capitalRequired)} />
-                {doc.income_structure.external.map((s, i) => <BsRow key={i} label={s.label} value={fmtCurrency(s.annual_amount)} />)}
-                {doc.income_structure.withdrawnYtd !== null && (
-                  <BsRow label="Withdrawn from capital so far this year" value={fmtCurrency(doc.income_structure.withdrawnYtd)} tone={doc.income_structure.withdrawnYtd > doc.income_structure.capitalRequired ? "#c0392b" : undefined} />
-                )}
-              </div>
-            )}
 
             {doc.estate_documents && (
               <div>

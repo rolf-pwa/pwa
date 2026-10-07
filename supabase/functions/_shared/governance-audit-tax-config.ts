@@ -20,6 +20,8 @@ export interface TaxBracket {
 
 export interface ProvinceTaxTable {
   name: string;
+  /** Basic personal amount (a non-refundable credit claimed at the lowest bracket rate). */
+  basicPersonalAmount?: number;
   brackets: TaxBracket[];
   combinedTopMarginalRate?: number;
 }
@@ -27,12 +29,13 @@ export interface ProvinceTaxTable {
 export const TAX_TABLES: {
   asOfYear: number;
   capitalGainsInclusionRate: number;
-  federal: { brackets: TaxBracket[] };
+  federal: { brackets: TaxBracket[]; basicPersonalAmount?: number };
   provinces: Record<string, ProvinceTaxTable>;
 } = {
   asOfYear: 2024,
   capitalGainsInclusionRate: 0.50,
   federal: {
+    basicPersonalAmount: 15705,
     brackets: [
       { upTo: 55867, rate: 0.15 },
       { upTo: 111733, rate: 0.205 },
@@ -44,6 +47,7 @@ export const TAX_TABLES: {
   provinces: {
     AB: {
       name: "Alberta",
+      basicPersonalAmount: 21885,
       brackets: [
         { upTo: 148269, rate: 0.10 },
         { upTo: 177922, rate: 0.12 },
@@ -55,6 +59,7 @@ export const TAX_TABLES: {
     },
     BC: {
       name: "British Columbia",
+      basicPersonalAmount: 12580,
       brackets: [
         { upTo: 47937, rate: 0.0506 },
         { upTo: 95875, rate: 0.077 },
