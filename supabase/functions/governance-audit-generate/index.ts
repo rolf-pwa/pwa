@@ -774,6 +774,7 @@ async function runFullAudit(db: Db, householdId: string, userId: string, options
       charter_summary: { source: resolved.source, ratified: resolved.ratified, file_name: resolved.vaultCharter?.name ?? null, purpose: resolved.text.purpose || null },
       charter_targets: charterTargets,
       income_structure: incomeStruct,
+      income_ytd: { withdrawals: allocation.harvest, year_fraction: Math.round(((Date.now() - Date.UTC(new Date().getUTCFullYear(), 0, 1)) / (365 * 86400000)) * 100) / 100 },
       income_tax: incomeTax ? { ...incomeTax, slip_files: slipMix.files, slip_year: taxYear } : null,
       estate_documents: { source: estateFacts.source, adults: estateFacts.adults, trusts: estateFacts.trusts, status: estateDocs.status, detail: estateDocs.detail, actions: estateDocs.actions, files: ((estateRows ?? []) as any[]).filter((r) => r.file_name).map((r) => ({ type: r.document_type, file_name: r.file_name })) },
       balance_sheet: { total_assets: allocation.aum, net_worth: allocation.netWorth, liabilities: liabilitiesTotal },
