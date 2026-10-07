@@ -14,6 +14,7 @@ import {
 } from "@/shared/components/ui/alert-dialog";
 import { ArrowLeft, Loader2, Printer, RefreshCw, ShieldCheck, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
+import type { CSSProperties } from "react";
 import { DOC_FONT, DOC_SERIF, DOC_TAN, DocPage, DocPageHeader, DocPrintStyles, DocSidebar, colLabel, colText } from "../components/document/SovereigntyDoc";
 
 interface ScorecardRow {
@@ -80,6 +81,7 @@ interface GovernanceAuditDoc {
   estate_documents?: { source: string; adults: EstateAdultRow[]; trusts: number; status: string; detail: string; actions: string[]; files?: { type: string; file_name: string }[] };
   income_structure?: { totalIncome: number; external: { label: string; annual_amount: number }[]; externalTotal: number; capitalRequired: number; withdrawnYtd: number | null; capitalRemaining: number | null } | null;
   income_tax?: { basis?: "tax_slips" | "unrealised_gain" | "household_tax_page"; slip_files?: string[]; slip_year?: number; mix?: { taxYear: number; shares: { interest: number; eligibleDividends: number; otherDividends: number; capitalGains: number; returnOfCapital: number } } | null; province: string; taxYearTables: number; taxpayers: { name: string; taxableIncome: number; federalTax: number; provincialTax: number; totalTax: number; effectiveRate: number; marginalRate: number }[]; totalDraws: number; totalBenefits: number; grossIncome: number; totalTax: number; afterTaxIncome: number; effectiveRate: number; notes: string[] } | null;
+  income_ytd?: { withdrawals: number | null; year_fraction: number };
   balance_sheet?: { total_assets: number; net_worth: number; liabilities: number };
 }
 interface GovernanceAuditRow {
@@ -435,43 +437,64 @@ export default function GovernanceAudit() {
               Pillar totals come from the household's own Vineyard, Storehouse and Holding Tank records, with income funds from the investment statements counted in the Liquidity Reserve and insurance cash value in the Strategic Reserve, exactly as in the Sovereignty Review.
             </p>
 
-            {doc.income_structure && (
-              <div>
-                <div style={colLabel}>Income Structure</div>
-                <BsRow label="Total annual income (Charter)" value={fmtCurrency(doc.income_structure.totalIncome)} strong />
-                <BsRow label="Drawn from capital (portfolio withdrawals and liquidity draws)" value={fmtCurrency(doc.income_structure.capitalRequired)} />
-                {doc.income_structure.external.map((s, i) => <BsRow key={i} label={s.label} value={fmtCurrency(s.annual_amount)} />)}
-                {doc.income_structure.withdrawnYtd !== null && (
-                  <BsRow label="Withdrawn from capital so far this year" value={fmtCurrency(doc.income_structure.withdrawnYtd)} tone={doc.income_structure.withdrawnYtd > doc.income_structure.capitalRequired ? "#c0392b" : undefined} />
-                )}
-              </div>
-            )}
-
-            {doc.income_tax && (
-              <div>
-                <div style={colLabel}>Income Tax Projection</div>
-                <BsRow label={doc.income_tax.basis === "household_tax_page" ? "Income before government benefits" : "Withdrawals from capital"} value={fmtCurrency(doc.income_tax.totalDraws)} />
-                {doc.income_tax.totalBenefits > 0 && <BsRow label="Government benefits and other outside income" value={fmtCurrency(doc.income_tax.totalBenefits)} />}
-                <BsRow label="Gross income" value={fmtCurrency(doc.income_tax.grossIncome)} strong />
-                {doc.income_tax.taxpayers.map((t) => (
-                  <BsRow key={t.name} label={`Estimated tax, ${t.name} (taxable income ${fmtCurrency(t.taxableIncome)}; marginal rate ${(t.marginalRate * 100).toFixed(1)}%)`} value={fmtCurrency(t.totalTax)} tone="#c0392b" />
-                ))}
-                <BsRow label={`Estimated income tax (${(doc.income_tax.effectiveRate * 100).toFixed(1)}% of gross income)`} value={fmtCurrency(doc.income_tax.totalTax)} strong tone="#c0392b" />
-                <BsRow label="Income after tax" value={fmtCurrency(doc.income_tax.afterTaxIncome)} strong />
-                {doc.income_tax.basis === "tax_slips" && doc.income_tax.mix && (() => {
-                  const sh = doc.income_tax!.mix!.shares, pct = (n: number) => `${Math.round(n * 100)}%`;
-                  return (
+            {(doc.income_structure || doc.income_tax) && (() => {
+              const st = doc.income_structure, tx = doc.income_tax;
+              const frac = doc.income_ytd?.year_fraction ?? null;
+              const wd = doc.income_ytd?.withdrawals ?? st?.withdrawnYtd ?? null;
+              const benefitsYtd = tx && frac !== null ? tx.totalBenefits * frac : null;
+              const ytdTotal = wd !== null ? wd + (benefitsYtd ?? 0) : null;
+              const cell: CSSProperties = { textAlign: "right", fontVariantNumeric: "tabular-nums" };
+              const Row = ({ label, charter, ytd, proj, strong, tone }: { label: string; charter?: string; ytd?: string; proj?: string; strong?: boolean; tone?: string }) => (
+                <>
+                  <span style={{ fontWeight: strong ? 700 : 400, color: tone ?? (strong ? "#334155" : "#64748b") }}>{label}</span>
+                  <span style={{ ...cell, fontWeight: strong ? 700 : 400, color: strong ? "#334155" : "#64748b" }}>{charter ?? ""}</span>
+                  <span style={{ ...cell, fontWeight: strong ? 700 : 400, color: strong ? "#334155" : "#64748b" }}>{ytd ?? ""}</span>
+                  <span style={{ ...cell, fontWeight: strong ? 700 : 400, color: tone ?? (strong ? "#334155" : "#64748b") }}>{proj ?? ""}</span>
+                </>
+              );
+              const head: CSSProperties = { ...cell, color: "#94a3b8", fontWeight: 600, borderBottom: "1px solid #e2e8f0", paddingBottom: "1mm" };
+              const sh = tx?.basis === "tax_slips" && tx.mix ? tx.mix.shares : null;
+              const pctText = (n: number) => `${Math.round(n * 100)}%`;
+              return (
+                <div>
+                  <div style={colLabel}>Income &amp; Tax</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto", gap: "1mm 5mm", fontSize: "8pt", alignItems: "baseline" }}>
+                    <span style={{ ...head, textAlign: "left" }} />
+                    <span style={head}>Charter requires</span>
+                    <span style={head}>Year to date</span>
+                    <span style={head}>Projected year</span>
+                    <Row label="Drawn from capital (portfolio withdrawals and liquidity draws)" charter={st ? fmtCurrency(st.capitalRequired) : "—"} ytd={wd !== null ? fmtCurrency(wd) : "—"} proj={tx ? fmtCurrency(tx.totalDraws) : "—"} />
+                    {st && st.external.length > 0 ? (
+                      st.external.map((x, i) => (
+                        <Row key={i} label={x.label} charter={fmtCurrency(x.annual_amount)}
+                          ytd={tx && frac !== null && tx.totalBenefits > 0 ? fmtCurrency(tx.totalBenefits * frac * (x.annual_amount / st.externalTotal)) : "—"}
+                          proj={tx && tx.totalBenefits > 0 ? fmtCurrency(tx.totalBenefits * (x.annual_amount / st.externalTotal)) : "—"} />
+                      ))
+                    ) : tx && tx.totalBenefits > 0 ? (
+                      <Row label="Government benefits and other outside income" charter="—" ytd={benefitsYtd !== null ? fmtCurrency(benefitsYtd) : "—"} proj={fmtCurrency(tx.totalBenefits)} />
+                    ) : null}
+                    <Row label="Total income" strong charter={st ? fmtCurrency(st.totalIncome) : "—"} ytd={ytdTotal !== null ? fmtCurrency(ytdTotal) : "—"} proj={tx ? fmtCurrency(tx.grossIncome) : "—"} />
+                    {tx && tx.taxpayers.length > 1 && tx.taxpayers.map((t) => (
+                      <Row key={t.name} label={`Estimated tax, ${t.name} (marginal rate ${(t.marginalRate * 100).toFixed(1)}%)`} proj={fmtCurrency(t.totalTax)} tone="#c0392b" />
+                    ))}
+                    {tx && <Row label={`Estimated income tax (${(tx.effectiveRate * 100).toFixed(1)}% of income${tx.taxpayers.length === 1 ? `; marginal rate ${(tx.taxpayers[0].marginalRate * 100).toFixed(1)}%` : ""})`} proj={fmtCurrency(tx.totalTax)} strong tone="#c0392b" />}
+                    {tx && <Row label="Income after tax" strong proj={fmtCurrency(tx.afterTaxIncome)} />}
+                  </div>
+                  {sh && (
                     <p style={{ ...colText, fontSize: "7.5pt", margin: "1.5mm 0 0" }}>
-                      Withdrawals from non-registered accounts are split as the {doc.income_tax!.mix!.taxYear} tax slips split their income: {pct(sh.interest)} interest and other income, {pct(sh.eligibleDividends)} eligible dividends, {pct(sh.otherDividends)} other dividends, {pct(sh.capitalGains)} capital gains and {pct(sh.returnOfCapital)} return of capital.
+                      Withdrawals from non-registered accounts are split as the {tx!.mix!.taxYear} tax slips split their income: {pctText(sh.interest)} interest and other income, {pctText(sh.eligibleDividends)} eligible dividends, {pctText(sh.otherDividends)} other dividends, {pctText(sh.capitalGains)} capital gains and {pctText(sh.returnOfCapital)} return of capital.
                     </p>
-                  );
-                })()}
-                <p style={{ fontSize: "6.5pt", color: "#94a3b8", fontStyle: "italic", margin: "1.5mm 0 0" }}>
-                  Estimate for this year using {doc.income_tax.taxYearTables} federal and {doc.income_tax.province} tax tables and the basic personal amount only. {doc.income_tax.basis === "household_tax_page" ? "" : "Registered withdrawals are taxed in full and TFSA withdrawals not at all. "}{doc.income_tax.basis === "household_tax_page" ? "The income lines are those saved on the household Tax page. Dividends are grossed up and the dividend tax credit applied; capital gains are taxed at the inclusion rate." : doc.income_tax.basis === "tax_slips" ? "Dividends are grossed up and the dividend tax credit applied; capital gains are taxed at the inclusion rate." : "No prior-year T3 or T5 slips were found in the Tax folder, so non-registered withdrawals are taxed only on the share that is unrealised gain."} Age and pension credits, OAS recovery tax and income splitting are not included. Not tax advice; confirm with the family's tax professional.
-                  {doc.income_tax.notes.map((n) => ` ${n}`).join("")}
-                </p>
-              </div>
-            )}
+                  )}
+                  <p style={{ fontSize: "6.5pt", color: "#94a3b8", fontStyle: "italic", margin: "1.5mm 0 0" }}>
+                    Year to date is what the statements show has been withdrawn{frac !== null ? `; government benefits are the projected year pro-rated to ${Math.round(frac * 100)}% of the year` : ""}. The projected year{doc.income_structure ? " uses the Charter's yearly draw" : ""} and is taxed
+                    {tx ? ` with the ${tx.taxYearTables} federal and ${tx.province} tables and the basic personal amount only` : ""}
+                    {tx?.basis === "household_tax_page" ? ", using the income lines saved on the household Tax page" : tx?.basis === "tax_slips" ? "; dividends are grossed up and the dividend tax credit applied" : tx ? ". No prior-year T3 or T5 slips were on file, so non-registered withdrawals are taxed only on the share that is unrealised gain" : ""}.
+                    Capital gains are taxed at the inclusion rate. Age and pension credits, OAS recovery tax and income splitting are not included. Not tax advice; confirm with the family's tax professional.
+                    {tx ? tx.notes.map((n) => ` ${n}`).join("") : ""}
+                  </p>
+                </div>
+              );
+            })()}
 
             {doc.pillar_analyses.length > 0 && (
               <div>

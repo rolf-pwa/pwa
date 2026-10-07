@@ -21,6 +21,10 @@ const doc = vi.hoisted(() => ({
   charter_summary: { source: "vault", ratified: true, file_name: "Charter - signed.pdf", purpose: "Lifelong independence." },
   charter_targets: [{ label: "Liquidity Reserve Target", area: "liquidity", status: "met", summary: "Charter: Liquidity Reserve Target (target $100,000); actual $171,024, met, $71,024 above the target.", quote: "q" }],
   estate_documents: { source: "documents", adults: [], trusts: 0, status: "Partial", detail: "Colleen: Will signed 2023-01-17; no Power of Attorney on file.", actions: ["Locate or draft Colleen's Power of Attorney."] },
+  income_structure: { totalIncome: 123200, external: [{ label: "Government Benefits", annual_amount: 23200 }], externalTotal: 23200, capitalRequired: 100000, withdrawnYtd: 96162, capitalRemaining: 3838 },
+  income_ytd: { withdrawals: 96162, year_fraction: 0.77 },
+  income_tax: { basis: "household_tax_page", province: "BC", taxYearTables: 2024, mix: null, notes: [], totalDraws: 100000, totalBenefits: 23200, grossIncome: 123200, totalTax: 21000, afterTaxIncome: 102200, effectiveRate: 0.17,
+    taxpayers: [{ name: "Colleen Jerczynski", taxableIncome: 60000, federalTax: 12000, provincialTax: 9000, totalTax: 21000, effectiveRate: 0.17, marginalRate: 0.282 }] },
   balance_sheet: { total_assets: 2519505, net_worth: 1610505, liabilities: 909000 },
 }));
 
@@ -36,7 +40,7 @@ describe("Governance Audit page in the Review's document style", () => {
   it("renders the sections in A4 pages with the shared sidebar, balance sheet, Charter and estate blocks", async () => {
     render(<MemoryRouter initialEntries={["/governance-audit/a1"]}><Routes><Route path="/governance-audit/:id" element={<GovernanceAudit />} /></Routes></MemoryRouter>);
     await waitFor(() => expect(screen.getByText("Sovereignty Governance Audit™")).toBeTruthy());
-    for (const t of ["I. Executive Governance Summary", "Systemic Health Scorecard", "II. Capital Infrastructure Ledger", "Liquidity Reserve", "Legacy Trust", "Total Assets", "Liabilities & Net Worth", "Estate Documents on File", "III. Element Deep-Dive & Scoring", "IV. Facilitated Discussion Points", "Compliance status"]) {
+    for (const t of ["I. Executive Governance Summary", "Systemic Health Scorecard", "II. Capital Infrastructure Ledger", "Liquidity Reserve", "Legacy Trust", "Total Assets", "Liabilities & Net Worth", "Estate Documents on File", "Income & Tax", "Charter requires", "Year to date", "Projected year", "Total income", "Income after tax", "III. Element Deep-Dive & Scoring", "IV. Facilitated Discussion Points", "Compliance status"]) {
       expect(screen.getAllByText((_, el) => !!el?.textContent?.includes(t)).length, t).toBeGreaterThan(0);
     }
     expect(screen.getByText("Don't Invest.")).toBeTruthy(); // the shared brand sidebar
