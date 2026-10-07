@@ -469,6 +469,9 @@ interface RunAuditOptions {
 }
 
 async function runFullAudit(db: Db, householdId: string, userId: string, options: RunAuditOptions) {
+  // A run the platform cut off never gets to record its own failure; close any such row so the page stops waiting on it.
+  await db.from("governance_audits").update({ generation_status: "error", generation_error: "The run timed out; generate it again." })
+    .eq("household_id", householdId).eq("generation_status", "generating").lt("created_at", new Date(Date.now() - 10 * 60 * 1000).toISOString());
   const { data: audit, error: insertErr } = await db
     .from("governance_audits")
     .insert({ household_id: householdId, created_by: userId, generation_status: "generating" })
