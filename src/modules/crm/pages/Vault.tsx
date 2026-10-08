@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams, Navigate, Link } from "react-router-dom";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/shared/components/ui/collapsible";
+import { SidebarSection } from "@/shared/components/SidebarSection";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/shared/components/ui/dialog";
@@ -43,20 +43,6 @@ type DriveFile = {
 type ShareTarget = { driveId: string; name: string; isFolder: boolean };
 
 const FUNCTIONS_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/vault-service`;
-
-/** A collapsed-by-default section in the Vault page's sidebar. */
-function VaultSidebarSection({ title, children, defaultOpen = false }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <Collapsible open={open} onOpenChange={setOpen} className="rounded-lg border bg-card">
-      <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium hover:text-accent">
-        {title}
-        {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-      </CollapsibleTrigger>
-      <CollapsibleContent className="space-y-3 px-2 pb-2">{children}</CollapsibleContent>
-    </Collapsible>
-  );
-}
 
 function formatSize(n: number | null) {
   if (!n) return "—";
@@ -1144,14 +1130,14 @@ export function VaultView({ forcedHouseholdId, embedded = false, sidebarTools }:
           {householdId && (
             <aside className="space-y-3 min-w-0">
               {sidebarTools && (
-                <VaultSidebarSection title="Vault tools" defaultOpen>
+                <SidebarSection title="Vault tools" defaultOpen>
                   <div className="px-2 pb-2">{sidebarTools}</div>
-                </VaultSidebarSection>
+                </SidebarSection>
               )}
-              <VaultSidebarSection title="Shoebox review" defaultOpen>
+              <SidebarSection title="Shoebox review" defaultOpen>
                 <ShoeboxReviewPanel householdId={householdId} showControls={!sidebarTools} />
-              </VaultSidebarSection>
-              <VaultSidebarSection title="Collaborators">
+              </SidebarSection>
+              <SidebarSection title="Collaborators">
                 <CollaboratorsPanel
                   householdId={householdId}
                   rootId={rootId}
@@ -1159,14 +1145,14 @@ export function VaultView({ forcedHouseholdId, embedded = false, sidebarTools }:
                   onShareHandled={() => setShareTarget(null)}
                   deepLinkProfessionalId={deepLinkProfessionalId}
                 />
-              </VaultSidebarSection>
-              <VaultSidebarSection title="Member roles">
+              </SidebarSection>
+              <SidebarSection title="Member roles">
                 <MemberRolesPanel householdId={householdId} />
-              </VaultSidebarSection>
-              <VaultSidebarSection title="Vault links">
+              </SidebarSection>
+              <SidebarSection title="Vault links">
                 <VaultLinksPanel householdId={householdId} />
-              </VaultSidebarSection>
-              <VaultSidebarSection title="Vault root folder">
+              </SidebarSection>
+              <SidebarSection title="Vault root folder">
                 <Card>
                   <CardContent className="space-y-3 pt-6">
                     <div className="text-xs text-muted-foreground">
@@ -1192,7 +1178,7 @@ export function VaultView({ forcedHouseholdId, embedded = false, sidebarTools }:
                     </p>
                   </CardContent>
                 </Card>
-              </VaultSidebarSection>
+              </SidebarSection>
             </aside>
           )}
         </div>

@@ -42,7 +42,7 @@ import { GeorgiaDiagnosticCard } from "@/modules/intake";
 import { Progress } from "@/shared/components/ui/progress";
 import { HouseholdTaskRollup } from "@/modules/crm/components/HouseholdTaskRollup";
 import { HouseholdRequestsRollup } from "@/modules/crm/components/HouseholdRequestsRollup";
-import { HouseholdStatementIngestion } from "@/modules/crm/components/HouseholdStatementIngestion";
+import { SidebarSection } from "@/shared/components/SidebarSection";
 import { HoldingTank } from "@/modules/crm/components/HoldingTank";
 import { VaultView } from "@/modules/crm/pages/Vault";
 import { HouseholdLiabilities } from "@/modules/crm/components/HouseholdLiabilities";
@@ -1310,12 +1310,20 @@ const HouseholdDetail = () => {
           </TabsContent>
 
           {/* Action Items */}
-          <TabsContent value="actions" className="space-y-6 mt-4">
-            <HouseholdStatementIngestion householdId={id!} members={members} onIngested={fetchData} />
-            <HouseholdTaskRollup householdId={id!} members={members} />
-            <HouseholdRequestsRollup members={members} />
-            <HouseholdAuditTrailRollup members={members} />
-            <HoldingTank householdId={id!} onAccountMoved={() => fetchData()} />
+          <TabsContent value="actions" className="mt-4">
+            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
+              <div className="min-w-0 space-y-6">
+                <HouseholdTaskRollup householdId={id!} members={members} />
+              </div>
+              <aside className="min-w-0 space-y-3">
+                <SidebarSection title="Client requests" defaultOpen>
+                  <HouseholdRequestsRollup members={members} />
+                </SidebarSection>
+                <SidebarSection title="Audit trail">
+                  <HouseholdAuditTrailRollup members={members} />
+                </SidebarSection>
+              </aside>
+            </div>
           </TabsContent>
 
           {/* Vineyard / Financials */}
