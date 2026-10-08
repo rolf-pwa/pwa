@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { heldForReviewMessage, isHeldForReview } from "@/modules/crm/lib/vaultScanMessage";
 import { format } from "date-fns";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { AppLayout } from "@/shared/components/AppLayout";
@@ -47,6 +46,7 @@ import { HouseholdStatementIngestion } from "@/modules/crm/components/HouseholdS
 import { HoldingTank } from "@/modules/crm/components/HoldingTank";
 import { VaultView } from "@/modules/crm/pages/Vault";
 import { HouseholdLiabilities } from "@/modules/crm/components/HouseholdLiabilities";
+import { VaultScanButton } from "@/modules/crm/components/vault/VaultScanButton";
 import { ShoeboxToolbar } from "@/modules/crm/components/vault/ShoeboxReviewPanel";
 import { HouseholdTaxSummary } from "@/modules/crm/components/HouseholdTaxSummary";
 import { CharterRatificationTile, StabilizationMapButton, GovernanceAuditButton, QuarterlySystemReviewButton, HouseholdAuditTrailRollup, StartCharterIntakeButton, CausalAIWorkbenchButton } from "@/modules/audit";
@@ -80,7 +80,6 @@ import {
   CalendarOff,
   RotateCcw,
   UserCheck,
-  ScanSearch,
   TrendingDown,
   HeartHandshake,
   Wallet,
@@ -143,7 +142,6 @@ const HouseholdDetail = () => {
   const [endReason, setEndReason] = useState("");
   const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [reopenRelationshipOpen, setReopenRelationshipOpen] = useState(false);
-  const [vaultScanning, setVaultScanning] = useState(false);
   const [charterV2Status, setCharterV2Status] = useState<"draft" | "complete" | null>(null);
 
   // Guard against setState after unmount when fetchData reruns via mutation callbacks.
@@ -978,85 +976,10 @@ const HouseholdDetail = () => {
                     </p>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {/* Step 1 — Scan for Update */}
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-semibold text-muted-foreground">
-                        1
-                      </div>
-                      <div className="flex-1 space-y-1.5">
-                        <p className="text-sm font-medium text-foreground">Scan for updates</p>
-                        <p className="text-xs text-muted-foreground">
-                          Parse new investment statements and insurance policies filed in the Vault.
-                        </p>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={vaultScanning}
-                          onClick={async () => {
-                            if (!id) return;
-                            setVaultScanning(true);
-                            try {
-                              const { data, error } = await supabase.functions.invoke("vault-statement-scan", {
-                                body: { householdId: id },
-                              });
-                              if (error) throw error;
-                              if (data?.error) throw new Error(data.error);
-                              if (isHeldForReview(data)) {
-                                // V2 household: nothing was written; the extractions wait for approval in Glass-Box Review.
-                                toast.success(heldForReviewMessage(data.v2HeldForReview), {
-                                  duration: 15000,
-                                  action: { label: "Review now", onClick: () => navigate("/glass-box-review") },
-                                });
-                                if (data.errors?.length) {
-                                  console.error("vault-statement-scan file errors:", data.errors);
-                                  toast.warning(`${data.errors.length} file(s) couldn't be parsed: ${data.errors.slice(0, 3).join("; ")}`);
-                                }
-                                fetchData();
-                                return;
-                              }
-                              const parts: string[] = [];
-                              if (data.investmentFilesParsed) {
-                                const bits = [];
-                                if (data.investmentAccountsMatched) bits.push(`${data.investmentAccountsMatched} account${data.investmentAccountsMatched === 1 ? "" : "s"} updated`);
-                                if (data.investmentHoldingTankUpdated) bits.push(`${data.investmentHoldingTankUpdated} Holding Tank entr${data.investmentHoldingTankUpdated === 1 ? "y" : "ies"} updated`);
-                                if (data.investmentAccountsUnmatched) bits.push(`${data.investmentAccountsUnmatched} new → Holding Tank`);
-                                parts.push(bits.length ? bits.join(", ") : "no changes");
-                              }
-                              if (data.insuranceFilesParsed) {
-                                parts.push(
-                                  `${data.insurancePoliciesMatched} polic${data.insurancePoliciesMatched === 1 ? "y" : "ies"} updated` +
-                                    (data.insurancePoliciesCreated ? `, ${data.insurancePoliciesCreated} new` : ""),
-                                );
-                              }
-                              if (!data.investmentsFolderFound && !data.insuranceFolderFound) {
-                                toast.error("Couldn't find the Investment Statements or Insurance Vault folders for this household.");
-                              } else if (parts.length === 0) {
-                                toast.info("Scanned the Vault — no statement or policy files found to parse.");
-                              } else {
-                                toast.success(`Vault scan complete: ${parts.join("; ")}.`);
-                              }
-                              if (data.errors?.length) {
-                                console.error("vault-statement-scan file errors:", data.errors);
-                                toast.warning(`${data.errors.length} file(s) couldn't be parsed: ${data.errors.slice(0, 3).join("; ")}${data.errors.length > 3 ? ` (+${data.errors.length - 3} more, see console)` : ""}`, { duration: 15000 });
-                              }
-                              fetchData();
-                            } catch (e: any) {
-                              toast.error(`Vault scan failed: ${e.message || "Unknown error"}`);
-                            } finally {
-                              setVaultScanning(false);
-                            }
-                          }}
-                        >
-                          {vaultScanning ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <ScanSearch className="h-4 w-4 mr-1.5" />}
-                          Scan Vault for Updates
-                        </Button>
-                      </div>
-                    </div>
-
                     {/* Step 2 — Stabilization Map */}
                     <div className="flex items-start gap-3">
                       <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-semibold text-muted-foreground">
-                        2
+                        1
                       </div>
                       <div className="flex-1 space-y-1.5">
                         <p className="text-sm font-medium text-foreground">Stabilization Map</p>
@@ -1070,7 +993,7 @@ const HouseholdDetail = () => {
                     {/* Step 3 — Quarterly Governance Audit */}
                     <div className="flex items-start gap-3">
                       <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-semibold text-muted-foreground">
-                        3
+                        2
                       </div>
                       <div className="flex-1 space-y-1.5">
                         <p className="text-sm font-medium text-foreground">Quarterly Governance Audit</p>
@@ -1101,7 +1024,7 @@ const HouseholdDetail = () => {
                     {!household.onboarding_completed_at && (
                       <div className="flex items-start gap-3">
                         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-semibold text-muted-foreground">
-                          4
+                          3
                         </div>
                         <div className="flex-1 space-y-1.5">
                           <p className="text-sm font-medium text-foreground">Enroll in guided intake</p>
@@ -1127,11 +1050,11 @@ const HouseholdDetail = () => {
                     )}
 
                     {/* Step 5 — Sovereignty Charter v2.0 (Foundational Bedrock).
-                        Never hidden once complete, unlike step 4 — staff
+                        Never hidden once complete, unlike the intake step — staff
                         will plausibly want to revisit and edit this content. */}
                     <div className="flex items-start gap-3">
                       <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-semibold text-muted-foreground">
-                        5
+                        4
                       </div>
                       <div className="flex-1 space-y-1.5">
                         <p className="text-sm font-medium text-foreground">Sovereignty Charter v2.0</p>
@@ -1149,7 +1072,7 @@ const HouseholdDetail = () => {
                         Charter itself, never client-facing. */}
                     <div className="flex items-start gap-3">
                       <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-semibold text-muted-foreground">
-                        6
+                        5
                       </div>
                       <div className="flex-1 space-y-1.5">
                         <p className="text-sm font-medium text-foreground">Causal AI Workbench</p>
@@ -1348,6 +1271,7 @@ const HouseholdDetail = () => {
                 </div>
 
                 {household.vault_root_folder_id && <ShoeboxToolbar householdId={id!} />}
+                {household.vault_root_folder_id && <VaultScanButton householdId={id!} onDone={fetchData} />}
                 <Button size="sm" variant="outline" onClick={pushToIntakeAgent} disabled={pushingIntake}>
                   {pushingIntake ? (
                     <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
