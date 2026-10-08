@@ -1310,12 +1310,15 @@ const HouseholdDetail = () => {
 
           {/* Vault */}
           <TabsContent value="vault" className="space-y-4 mt-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <ShieldCheck className="h-4 w-4 text-accent" />
-                Household document vault — manage visibility and share with collaborators.
-              </div>
-              <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <ShieldCheck className="h-4 w-4 text-accent" />
+              Household document vault — manage visibility and share with collaborators.
+            </div>
+            <VaultView
+              forcedHouseholdId={id!}
+              embedded
+              sidebarTools={
+              <div className="flex flex-wrap items-center gap-2">
                 {/* New clients get the guided Audit onboarding; legacy clients don't. */}
                 <div className="flex items-center gap-2 rounded-md border border-border px-2.5 py-1.5">
                   <Switch
@@ -1378,9 +1381,8 @@ const HouseholdDetail = () => {
                   </Button>
                 )}
               </div>
-
-            </div>
-            <VaultView forcedHouseholdId={id!} embedded />
+              }
+            />
           </TabsContent>
 
           {/* Action Items */}
