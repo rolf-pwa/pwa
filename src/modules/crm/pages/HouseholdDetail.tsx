@@ -48,6 +48,7 @@ import { VaultView } from "@/modules/crm/pages/Vault";
 import { HouseholdLiabilities } from "@/modules/crm/components/HouseholdLiabilities";
 import { VaultScanButton } from "@/modules/crm/components/vault/VaultScanButton";
 import { ShoeboxToolbar } from "@/modules/crm/components/vault/ShoeboxReviewPanel";
+import { VineyardDashboard } from "@/modules/crm/components/VineyardDashboard";
 import { HouseholdTaxSummary } from "@/modules/crm/components/HouseholdTaxSummary";
 import { CharterRatificationTile, StabilizationMapButton, GovernanceAuditButton, QuarterlySystemReviewButton, HouseholdAuditTrailRollup, StartCharterIntakeButton, CausalAIWorkbenchButton } from "@/modules/audit";
 import { ProsPanel } from "@/modules/crm/components/ProsPanel";
@@ -1328,62 +1329,9 @@ const HouseholdDetail = () => {
 
           {/* Vineyard / Financials */}
           <TabsContent value="vineyard" className="space-y-6 mt-4">
-            {(() => {
-              const insCoverage = insurancePolicies.reduce((sum: number, p: any) => sum + (Number(p.coverage_amount) || 0), 0);
-              const stats: [string, number][] = [
-                ["The Vineyard", totalVineyard], ["Storehouses", totalStorehouses], ["Holding Tank", totalHoldingTank],
-                ["Corporate Holdings", totalCorpAssets], ["Insurance coverage", insCoverage],
-              ];
-              return (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                  {stats.map(([label, value]) => (
-                    <div key={label} className="rounded-lg border bg-card px-4 py-3">
-                      <p className="text-xs text-muted-foreground">{label}</p>
-                      <p className="text-lg font-semibold text-foreground">{formatCurrency(value)}</p>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
-
             <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
               <div className="min-w-0 space-y-6">
-            {/* The Vineyard */}
-            <CollapsibleCard
-              defaultCollapsed={false}
-              icon={Grape}
-              iconBgClassName="bg-primary/10"
-              iconColorClassName="text-primary"
-              title="The Vineyard"
-              subtitle="Total Asset Portfolio"
-              headerRight={<p className="text-2xl font-bold text-primary">{formatCurrency(totalVineyard)}</p>}
-            >
-                {Object.entries(byType).length > 0 ? (
-                  Object.entries(byType).map(([type, { accounts, total }]) => (
-                    <div key={type} className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-sm font-medium text-foreground">{type}</h4>
-                        <span className="text-sm font-semibold text-foreground">{formatCurrency(total)}</span>
-                      </div>
-                      {accounts.map((acc) => (
-                        <div
-                          key={acc.id}
-                          className="rounded-lg bg-muted/50 px-4 py-2.5 border border-border"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-foreground/80">{acc.account_name}</span>
-                            <span className="text-sm font-medium text-foreground">
-                              {formatCurrency(Number(acc.current_value) || 0)}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-muted-foreground">No vineyard accounts configured.</p>
-                )}
-            </CollapsibleCard>
+                <VineyardDashboard householdId={id!} />
 
             {/* The Storehouses */}
             <CollapsibleCard
