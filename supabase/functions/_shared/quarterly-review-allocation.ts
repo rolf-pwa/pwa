@@ -3,7 +3,8 @@
 //  - Income funds (from the investment statements) count as Liquidity Reserve when the household has no
 //    Liquidity Reserve set up (no Liquidity storehouse, or one with no target). They come out of the
 //    Vineyard / Holding Tank account they sit in; equity funds stay where they are, so AUM doesn't change.
-//  - Insurance cash value that isn't already booked against a storehouse counts as Strategic Reserve.
+//  - Insurance cash value that isn't already booked against a storehouse counts as Strategic Reserve (unless the policy's
+//    "count in Strategic Reserve" switch is off).
 //    This is an asset the AUM total did not include, so AUM and net worth rise by it.
 //  - Real estate held in a Storehouse (principal residence, investment property) counts in its reserve
 //    (normally Legacy Trust). The shared diagnostics leave it out of AUM, but a balance sheet needs it, so the
@@ -57,7 +58,7 @@ export interface AllocInput {
   reserves: { liquidity: number; strategic: number; philanthropic: number; legacy: number };
   liquidityStorehouse: { exists: boolean; target: number | null };
   accounts: AllocAccount[];
-  policies: { cash_value: number | null; cash_value_storehouse_id: string | null }[];
+  policies: { cash_value: number | null; cash_value_storehouse_id: string | null; cv_in_strategic?: boolean | null }[];
   /** Real-estate Storehouse rows the shared diagnostics exclude, by the reserve they belong to. */
   realEstate?: { liquidity?: number; strategic?: number; philanthropic?: number; legacy?: number };
   /** The household's personal liabilities, for credit assigned to the Strategic Reserve. */
@@ -115,7 +116,7 @@ export function allocateCapital(i: AllocInput): Allocation {
 
   // Insurance cash value not already booked against a storehouse -> Strategic Reserve (new to the total).
   const cashValueAdded = round2(i.policies
-    .filter((p) => !p.cash_value_storehouse_id && isNum(p.cash_value) && p.cash_value > 0)
+    .filter((p) => !p.cash_value_storehouse_id && p.cv_in_strategic !== false && isNum(p.cash_value) && p.cash_value > 0)
     .reduce((s, p) => s + (p.cash_value as number), 0));
   if (cashValueAdded > 0) {
     reserves.strategic += cashValueAdded;

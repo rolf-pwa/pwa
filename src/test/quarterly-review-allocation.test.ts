@@ -117,3 +117,20 @@ describe("available credit and the Strategic Reserve", () => {
     expect(withCredit.notes.join(" ")).toContain("offset by an equal undrawn-credit line");
   });
 });
+
+describe("insurance cash value switch", () => {
+  const base = { aum: 1000, netWorth: 800, holdingTank: 0, vineyard: 1000, reserves: { liquidity: 0, strategic: 0, philanthropic: 0, legacy: 0 }, liquidityStorehouse: { exists: false, target: null }, accounts: [] };
+  it("counts a policy's cash value unless its switch is off, and never one already booked to a storehouse", () => {
+    const policies = [
+      { cash_value: 60000, cash_value_storehouse_id: null, cv_in_strategic: true },
+      { cash_value: 25000, cash_value_storehouse_id: null, cv_in_strategic: false },
+      { cash_value: 5000, cash_value_storehouse_id: null }, // switch never set: on, as before
+      { cash_value: 9000, cash_value_storehouse_id: "s1", cv_in_strategic: true },
+    ];
+    const a = allocateCapital({ ...base, policies });
+    expect(a.cashValueAdded).toBe(65000);
+    expect(a.reserves.strategic).toBe(65000);
+    expect(a.aum).toBe(1000 + 65000);
+    expect(a.netWorth).toBe(800 + 65000);
+  });
+});
