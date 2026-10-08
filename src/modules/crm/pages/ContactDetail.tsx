@@ -749,37 +749,36 @@ const ContactDetail = () => {
               return <ContactTotalsStrip contactId={id!} assets={total} />;
             })()}
 
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
-          {/* Main Content */}
-          <div className="min-w-0 space-y-6">
-            {/* Main Tabs */}
-            <Tabs defaultValue="comms" className="w-full">
-              <TabsList className="w-full">
-                <TabsTrigger value="comms" className="flex-1">Communications</TabsTrigger>
-                <TabsTrigger value="vault" className="flex-1">
-                  <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
-                  Vault
-                </TabsTrigger>
-                <TabsTrigger value="actions" className="flex-1">
-                  <ListChecks className="mr-1.5 h-3.5 w-3.5" />
-                  Action Items
-                </TabsTrigger>
-                <TabsTrigger value="vineyard" className="flex-1">
-                  <Grape className="mr-1.5 h-3.5 w-3.5" />
-                  The Vineyard
-                </TabsTrigger>
-                <TabsTrigger value="tax" className="flex-1">
-                  <Receipt className="mr-1.5 h-3.5 w-3.5" />
-                  Tax
-                </TabsTrigger>
-                <TabsTrigger value="analytics" className="flex-1">
-                  <BarChart3 className="mr-1.5 h-3.5 w-3.5" />
-                  Analytics
-                </TabsTrigger>
-              </TabsList>
+        <Tabs defaultValue="comms" className="w-full space-y-6">
+            <TabsList className="w-full">
+              <TabsTrigger value="comms" className="flex-1">Communications</TabsTrigger>
+              <TabsTrigger value="vault" className="flex-1">
+                <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
+                Vault
+              </TabsTrigger>
+              <TabsTrigger value="actions" className="flex-1">
+                <ListChecks className="mr-1.5 h-3.5 w-3.5" />
+                Action Items
+              </TabsTrigger>
+              <TabsTrigger value="vineyard" className="flex-1">
+                <Grape className="mr-1.5 h-3.5 w-3.5" />
+                The Vineyard
+              </TabsTrigger>
+              <TabsTrigger value="tax" className="flex-1">
+                <Receipt className="mr-1.5 h-3.5 w-3.5" />
+                Tax
+              </TabsTrigger>
+              <TabsTrigger value="analytics" className="flex-1">
+                <BarChart3 className="mr-1.5 h-3.5 w-3.5" />
+                Analytics
+              </TabsTrigger>
+            </TabsList>
+        <div className="min-w-0">
 
               {/* Communications Tab — Messaging first, above the fold */}
-              <TabsContent value="comms" className="space-y-6 mt-4">
+              <TabsContent value="comms" className="mt-4">
+                <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+                  <div className="min-w-0 space-y-6">
                 <ContactRequests contactId={id!} />
                 <QuoCommunications
                   contactId={contact.id}
@@ -795,6 +794,51 @@ const ContactDetail = () => {
                   contactEmail={contact.email}
                   contactName={`${contact.first_name} ${contact.last_name || ""}`.trim()}
                 />
+                  </div>
+                  <aside className="min-w-0 space-y-3">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">AI Workbench</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-2">
+                <SovereigntyCharterButton contactId={id!} className="w-full justify-start" />
+                <GenerateCharterDraftButton contactId={id!} className="w-full justify-start" />
+                <StabilizationMapButton contactId={id!} className="w-full justify-start" />
+                <QuarterlySystemReviewButton contactId={id!} className="w-full justify-start" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start"
+                  onClick={() => navigate(`/workbench/governance-review?scope_id=${contact.household_id ?? ""}`)}
+                  disabled={!contact.household_id}
+                >
+                  <ShieldCheck className="mr-2 h-4 w-4" />
+                  Governance Review
+                </Button>
+
+                <div className="pt-2 mt-1 border-t border-border space-y-2">
+                  <StatementUpload
+                    files={statementFiles}
+                    onFilesChange={setStatementFiles}
+                    isIngesting={isIngesting}
+                  />
+                  {statementFiles.length > 0 && !isIngesting && (
+                    <Button onClick={handleIngestStatements} size="sm" className="w-full">
+                      <FileUp className="h-4 w-4 mr-2" />
+                      Ingest {statementFiles.length} Statement{statementFiles.length !== 1 ? "s" : ""}
+                    </Button>
+                  )}
+                  {isIngesting && (
+                    <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground py-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      AI is parsing statements…
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+                  </aside>
+                </div>
               </TabsContent>
 
               {/* Vault Tab */}
@@ -864,10 +908,20 @@ const ContactDetail = () => {
               </TabsContent>
 
               {/* Action Items Tab */}
-              <TabsContent value="actions" className="space-y-6 mt-4">
-                <ContactCalendar contactEmail={contact.email} contactName={contact.full_name} />
-                <ContactTaskList contactId={contact.id} />
-                <AuditTrail contactId={id!} />
+              <TabsContent value="actions" className="mt-4">
+                <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
+                  <div className="min-w-0 space-y-6">
+                    <ContactTaskList contactId={contact.id} />
+                  </div>
+                  <aside className="min-w-0 space-y-3">
+                    <SidebarSection title="Upcoming events" defaultOpen>
+                      <ContactCalendar contactEmail={contact.email} contactName={contact.full_name} />
+                    </SidebarSection>
+                    <SidebarSection title="Audit trail">
+                      <AuditTrail contactId={id!} />
+                    </SidebarSection>
+                  </aside>
+                </div>
               </TabsContent>
 
               {/* The Vineyard Tab */}
@@ -1166,55 +1220,8 @@ const ContactDetail = () => {
               <TabsContent value="analytics" className="space-y-4 mt-4">
                 <ContactAnalytics contactId={contact.id} />
               </TabsContent>
-            </Tabs>
           </div>
-
-          {/* Right sidebar */}
-          <div className="min-w-0 space-y-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">AI Workbench</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-2">
-                <SovereigntyCharterButton contactId={id!} className="w-full justify-start" />
-                <GenerateCharterDraftButton contactId={id!} className="w-full justify-start" />
-                <StabilizationMapButton contactId={id!} className="w-full justify-start" />
-                <QuarterlySystemReviewButton contactId={id!} className="w-full justify-start" />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full justify-start"
-                  onClick={() => navigate(`/workbench/governance-review?scope_id=${contact.household_id ?? ""}`)}
-                  disabled={!contact.household_id}
-                >
-                  <ShieldCheck className="mr-2 h-4 w-4" />
-                  Governance Review
-                </Button>
-
-                <div className="pt-2 mt-1 border-t border-border space-y-2">
-                  <StatementUpload
-                    files={statementFiles}
-                    onFilesChange={setStatementFiles}
-                    isIngesting={isIngesting}
-                  />
-                  {statementFiles.length > 0 && !isIngesting && (
-                    <Button onClick={handleIngestStatements} size="sm" className="w-full">
-                      <FileUp className="h-4 w-4 mr-2" />
-                      Ingest {statementFiles.length} Statement{statementFiles.length !== 1 ? "s" : ""}
-                    </Button>
-                  )}
-                  {isIngesting && (
-                    <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground py-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      AI is parsing statements…
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-        </div>
+        </Tabs>
       </div>
     </AppLayout>
   );
