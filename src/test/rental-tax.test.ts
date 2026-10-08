@@ -3,7 +3,7 @@ import { emptyLines, linesFromReturn, sanitizeLines, sanitizeReturn, taxFromLine
 import { netRental, summariseRental } from "../../supabase/functions/_shared/rental-income";
 import { projectIncomeTax, projectionFromSaved } from "../../supabase/functions/_shared/income-tax-projection";
 
-const year = (o: Record<string, number>) => ({ property_id: "p1", tax_year: 2026, rent_collected: 0, property_tax: 0, insurance: 0, repairs_maintenance: 0, management_fees: 0, utilities: 0, mortgage_interest: 0, other_expenses: 0, ...o });
+const year = (o: Record<string, number | string>) => ({ property_id: "p1", tax_year: 2026, rent_collected: 0, property_tax: 0, insurance: 0, repairs_maintenance: 0, management_fees: 0, utilities: 0, mortgage_interest: 0, other_expenses: 0, ...o });
 
 describe("rental income in the tax model", () => {
   it("is taxed as ordinary income, and a rental loss reduces it", () => {
@@ -30,15 +30,15 @@ describe("rental summary", () => {
   const props = [{ id: "p1", name: "Duplex", net_income_use: "debt_paydown" as const, paydown_liability_id: "l1" }, { id: "p2", name: "Suite", net_income_use: "household" as const, paydown_liability_id: null }];
   const owners = [{ property_id: "p1", contact_id: "a", ownership_pct: 60 }, { property_id: "p1", contact_id: "b", ownership_pct: 40 }, { property_id: "p2", contact_id: "a", ownership_pct: 100 }];
   it("nets each property, splits by owner and sends income to the household or to debt", () => {
-    const s = summariseRental(props, owners, [year({ rent_collected: 30000, property_tax: 5000 }), year({ property_id: "p2", rent_collected: 12000, insurance: 2000 })], 2026)!;
-    expect(netRental(year({ rent_collected: 30000, property_tax: 5000 }))).toBe(25000);
+    const s = summariseRental(props, owners, [year({ rent_collected: 30000, property_tax: 5000 }), year({ property_id: "p2", rent_collected: 12000, insurance: 2000 })] as never, 2026)!;
+    expect(netRental(year({ rent_collected: 30000, property_tax: 5000 }) as never)).toBe(25000);
     expect(s.net).toBe(35000);
     expect(s.toPaydown).toBe(25000);
     expect(s.toHousehold).toBe(10000);
     expect(s.byContact).toEqual({ a: 25000, b: 10000 });
   });
   it("is null when no property has a row for the year", () => {
-    expect(summariseRental(props, owners, [year({ tax_year: 2025, rent_collected: 1 })], 2026)).toBeNull();
+    expect(summariseRental(props, owners, [year({ tax_year: 2025, rent_collected: 1 })] as never, 2026)).toBeNull();
   });
 });
 
