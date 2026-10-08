@@ -623,7 +623,8 @@ export default function StabilizationMap() {
                       {(diag.holding_tank_total ?? 0) > 0 && <BsRow label="Holding Tank" value={fmtCurrency(diag.holding_tank_total)} />}
                       <BsRow label="Vineyard" value={fmtCurrency(diag.vineyard_total)} />
                       <BsRow label="Liquidity Reserve" value={fmtCurrency(diag.storehouse_reserves?.liquidity)} />
-                      <BsRow label="Strategic Reserve" value={fmtCurrency(diag.storehouse_reserves?.strategic)} />
+                      <BsRow label="Strategic Reserve" value={fmtCurrency((diag.storehouse_reserves?.strategic ?? 0) - (diag.allocation?.credit_capacity ?? 0))} />
+                      {(diag.allocation?.credit_capacity ?? 0) > 0 && <BsRow label="Strategic Reserve · available credit" value={fmtCurrency(diag.allocation!.credit_capacity)} />}
                       <BsRow label="Philanthropic Trust" value={fmtCurrency(diag.storehouse_reserves?.philanthropic)} />
                       <BsRow label="Legacy Trust" value={fmtCurrency(diag.storehouse_reserves?.legacy)} />
                       <div style={{ marginTop: "auto", paddingTop: "1.5mm" }}>
