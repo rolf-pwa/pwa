@@ -49,6 +49,7 @@ import { HouseholdLiabilities } from "@/modules/crm/components/HouseholdLiabilit
 import { VaultScanButton } from "@/modules/crm/components/vault/VaultScanButton";
 import { ShoeboxToolbar } from "@/modules/crm/components/vault/ShoeboxReviewPanel";
 import { VineyardDashboard } from "@/modules/crm/components/VineyardDashboard";
+import { HouseholdTotalsStrip } from "@/modules/crm/components/HouseholdTotalsStrip";
 import { HouseholdTaxSummary } from "@/modules/crm/components/HouseholdTaxSummary";
 import { CharterRatificationTile, StabilizationMapButton, GovernanceAuditButton, QuarterlySystemReviewButton, HouseholdAuditTrailRollup, StartCharterIntakeButton, CausalAIWorkbenchButton } from "@/modules/audit";
 import { ProsPanel } from "@/modules/crm/components/ProsPanel";
@@ -83,7 +84,6 @@ import {
   UserCheck,
   TrendingDown,
   HeartHandshake,
-  Wallet,
 } from "lucide-react";
 import { ContactAnalytics } from "@/modules/crm/components/ContactAnalytics";
 
@@ -696,8 +696,9 @@ const HouseholdDetail = () => {
 
           {/* Overview */}
           <TabsContent value="overview" className="mt-4">
-            <div className="grid gap-4 lg:grid-cols-3">
-              <div className="space-y-6 lg:col-span-2">
+            <HouseholdTotalsStrip householdId={id!} />
+            <div className="mt-4 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
+              <div className="min-w-0 space-y-6">
                 {/* Household Registered Members Directory */}
                 <Card>
                   <CardHeader className="pb-4">
@@ -773,7 +774,7 @@ const HouseholdDetail = () => {
                   <CardHeader className="pb-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <CardTitle className="text-lg">Corporations Directory</CardTitle>
+                        <CardTitle className="text-lg">Corporations</CardTitle>
                         <p className="text-xs text-muted-foreground mt-1">
                           {corporations.length} entit{corporations.length === 1 ? "y" : "ies"} · {formatCurrency(totalCorpAssets)}
                         </p>
@@ -796,183 +797,28 @@ const HouseholdDetail = () => {
                         No corporate entities linked to this household yet.
                       </p>
                     ) : (
-                      <div className="overflow-x-auto border-t border-border">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b border-border text-[10px] uppercase tracking-widest text-muted-foreground">
-                              <th className="text-left font-medium px-6 py-3">Entity</th>
-                              <th className="text-left font-medium px-3 py-3">Type</th>
-                              <th className="text-left font-medium px-3 py-3">Jurisdiction</th>
-                              <th className="text-left font-medium px-3 py-3">Shareholders</th>
-                              <th className="text-right font-medium px-6 py-3">Assets</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {corporations.map((corp: any) => {
-                              const shareholderNames = (corp.shareholders || [])
-                                .map((sh: any) => {
-                                  const member = members.find((m: any) => m.id === sh.contact_id);
-                                  const name = member ? `${member.first_name} ${member.last_name || ""}`.trim() : "Member";
-                                  return `${name} (${sh.ownership_percentage}%)`;
-                                })
-                                .join(", ");
-                              return (
-                                <tr
-                                  key={corp.id}
-                                  onClick={() => navigate(`/corporations/${corp.id}`)}
-                                  className="border-b border-border last:border-0 cursor-pointer hover:bg-muted/40 transition-colors"
-                                >
-                                  <td className="px-6 py-4">
-                                    <div className="flex items-center gap-3 min-w-0">
-                                      <div className="h-8 w-8 shrink-0 rounded-lg bg-primary/10 flex items-center justify-center">
-                                        <Building2 className="h-4 w-4 text-primary" />
-                                      </div>
-                                      <span className="font-semibold text-foreground truncate">{corp.name}</span>
-                                    </div>
-                                  </td>
-                                  <td className="px-3 py-4">
-                                    <Badge variant="outline" className="text-[9px] uppercase">
-                                      {TYPE_LABELS[corp.corporation_type] || corp.corporation_type}
-                                    </Badge>
-                                  </td>
-                                  <td className="px-3 py-4 text-foreground/80">{corp.jurisdiction || "—"}</td>
-                                  <td className="px-3 py-4 text-foreground/80 truncate max-w-[240px]">
-                                    {shareholderNames || "—"}
-                                  </td>
-                                  <td className="px-6 py-4 text-right font-medium text-foreground">
-                                    {formatCurrency(corp.total_assets || 0)}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
+                      <ul className="border-t border-border">
+                        {corporations.map((corp: any) => (
+                          <li key={corp.id} className="flex items-center justify-between gap-3 border-b border-border px-6 py-2.5 last:border-0">
+                            <Link to={`/corporations/${corp.id}`} className="min-w-0 truncate text-sm font-medium text-foreground hover:underline">
+                              {corp.name}
+                              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                                {TYPE_LABELS[corp.corporation_type] || corp.corporation_type}{corp.jurisdiction ? ` · ${corp.jurisdiction}` : ""}
+                              </span>
+                            </Link>
+                            <span className="shrink-0 text-sm tabular-nums text-foreground">{formatCurrency(corp.total_assets || 0)}</span>
+                          </li>
+                        ))}
+                      </ul>
                     )}
                   </CardContent>
                 </Card>
               </div>
 
 
-              {/* Right rail: AUM Stats */}
-              <div className="space-y-4">
-                <CollapsibleCard
-                  icon={Wallet}
-                  iconBgClassName="bg-sanctuary-bronze/10"
-                  iconColorClassName="text-sanctuary-bronze"
-                  title="Assets Under Management"
-                  headerRight={
-                    <p className="text-xl font-bold text-sanctuary-bronze">
-                      {formatCurrency(totalVineyard + totalStorehouses + totalCorpAssets + totalHoldingTank)}
-                    </p>
-                  }
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2 text-muted-foreground">
-                        <Grape className="h-3.5 w-3.5" /> Portfolio
-                      </span>
-                      <span className="font-semibold text-primary">{formatCurrency(totalVineyard)}</span>
-                    </div>
-                    {[
-                      { num: 1, label: "Liquidity Reserve" },
-                      { num: 2, label: "Strategic Reserve" },
-                      { num: 3, label: "Philanthropic Trust" },
-                      { num: 4, label: "Legacy Trust" },
-                    ].map(({ num, label }) => {
-                      const shForNum = storehouses.filter((s: any) => s.storehouse_number === num);
-                      const shIds = new Set(shForNum.map((s: any) => s.id));
-                      const isLegacy = num === 4;
-                      const shTotal = shForNum
-                        .filter((s: any) => isLegacy || s.asset_type !== 'Primary Residence & Protected Legacy Accounts')
-                        .reduce((sum: number, s: any) => sum + (Number(s.current_value) || 0), 0);
-                      const cashTotal = num === 2
-                        ? insurancePolicies.reduce((sum: number, p: any) => sum + (Number(p.cash_value) || 0), 0)
-                        : 0;
-                      const coverageTotal = isLegacy
-                        ? insurancePolicies
-                            .filter((p: any) => p.coverage_storehouse_id && shIds.has(p.coverage_storehouse_id))
-                            .reduce((sum: number, p: any) => sum + (Number(p.coverage_amount) || 0), 0)
-                        : 0;
-                      const rowTotal = shTotal + cashTotal + coverageTotal;
-                      if (rowTotal === 0 && shForNum.length === 0) return null;
-                      return (
-                        <div key={num} className="flex items-center justify-between text-sm">
-                          <span className="flex items-center gap-2 text-muted-foreground">
-                            <Landmark className="h-3.5 w-3.5" /> {label}
-                          </span>
-                          <span className="font-semibold text-accent">{formatCurrency(rowTotal)}</span>
-                        </div>
-                      );
-                    })}
-                    {totalHoldingTank > 0 && (
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-2 text-muted-foreground">
-                          <Anchor className="h-3.5 w-3.5" /> Holding Tank
-                        </span>
-                        <span className="font-semibold text-amber-600">{formatCurrency(totalHoldingTank)}</span>
-                      </div>
-                    )}
-                    {corporations.length > 0 && (
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-2 text-muted-foreground">
-                          <Building2 className="h-3.5 w-3.5" /> Corp Assets
-                        </span>
-                        <span className="font-semibold text-foreground">{formatCurrency(totalCorpAssets)}</span>
-                      </div>
-                    )}
-                    {totalLiabilities > 0 && (
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-2 text-muted-foreground">
-                          <TrendingDown className="h-3.5 w-3.5" /> Liabilities
-                        </span>
-                        <span className="font-semibold text-destructive">-{formatCurrency(totalLiabilities)}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="pt-3 border-t border-border">
-                    <p className="text-xs text-muted-foreground">Net Worth</p>
-                    <p className="text-2xl font-bold text-foreground mb-2">{formatCurrency(netWorth)}</p>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2 text-muted-foreground">
-                        <User className="h-3.5 w-3.5" /> Members
-                      </span>
-                      <span className="font-semibold text-foreground">{members.length}</span>
-                    </div>
-                  </div>
-                </CollapsibleCard>
+              {/* Sidebar */}
+              <div className="min-w-0 space-y-3">
 
-                {insurancePolicies.length > 0 && (() => {
-                  const totalCoverage = insurancePolicies.reduce((s: number, p: any) => s + (Number(p.coverage_amount) || 0), 0);
-                  const memberById = new Map(members.map((m: any) => [m.id, m]));
-                  const corpById = new Map(corporations.map((c: any) => [c.id, c]));
-                  const ownerName = (p: any) => {
-                    if (p.corporation_id) return corpById.get(p.corporation_id)?.name ?? "Corporation";
-                    const m = memberById.get(p.contact_id);
-                    return m ? `${m.first_name} ${m.last_name}` : "Household";
-                  };
-                  return (
-                    <CollapsibleCard
-                      icon={Shield}
-                      iconBgClassName="bg-sanctuary-bronze/10"
-                      iconColorClassName="text-sanctuary-bronze"
-                      title="Insurance"
-                      headerRight={
-                        <p className="text-xl font-bold text-sanctuary-bronze">{formatCurrency(totalCoverage)}</p>
-                      }
-                      contentClassName="space-y-2"
-                    >
-                      {insurancePolicies.map((p: any) => (
-                        <div key={p.id} className="flex items-center justify-between text-sm">
-                          <span className="flex items-center gap-2 text-muted-foreground">
-                            <Shield className="h-3.5 w-3.5" /> {policyTypeLabel(p.policy_type)} — {ownerName(p)}
-                          </span>
-                          <span className="font-semibold text-foreground">{formatCurrency(p.coverage_amount)}</span>
-                        </div>
-                      ))}
-                    </CollapsibleCard>
-                  );
-                })()}
 
                 <Card>
                   <CardHeader className="pb-3">
@@ -1092,11 +938,12 @@ const HouseholdDetail = () => {
                     </div>
                   </CardContent>
                 </Card>
-                <GeorgiaDiagnosticCard householdId={id!} />
+                <SidebarSection title="Georgia Diagnostic"><GeorgiaDiagnosticCard householdId={id!} /></SidebarSection>
                 {(household?.vision_notes || household?.values_notes || household?.purpose_notes ||
                   household?.anchor_transfer_amount != null || household?.spousal_alignment_score != null ||
                   household?.pressure_types?.length > 0 || household?.pending_capex_amount != null ||
                   household?.legacy_advisor_friction_notes) && (
+                  <SidebarSection title="Household Context">
                   <Card>
                     <CardHeader className="pb-3">
                       <CardTitle className="flex items-center gap-2 text-base">
@@ -1171,6 +1018,7 @@ const HouseholdDetail = () => {
                       )}
                     </CardContent>
                   </Card>
+                  </SidebarSection>
                 )}
                 <CharterRatificationTile householdId={id} />
 
@@ -1203,6 +1051,7 @@ const HouseholdDetail = () => {
                     });
                   });
                   return (
+                    <SidebarSection title="Professional Team" meta={rows.length ? String(rows.length) : undefined}>
                     <Card>
                       <CardHeader className="pb-3">
                         <CardTitle className="text-base">Professional Team</CardTitle>
@@ -1211,7 +1060,7 @@ const HouseholdDetail = () => {
                         {rows.length > 0 ? (
                           <ul className="space-y-1.5 text-sm">
                             {rows.map((r, i) => (
-                              <li key={i} className="rounded-md bg-muted/50 px-3 py-2">
+                              <li key={i} className="border-b py-1.5 last:border-0">
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="font-medium truncate">{r.name}{r.firm ? ` — ${r.firm}` : ""}</span>
                                   <span className="text-xs text-muted-foreground shrink-0">{r.role}</span>
@@ -1230,6 +1079,7 @@ const HouseholdDetail = () => {
                         )}
                       </CardContent>
                     </Card>
+                    </SidebarSection>
                   );
                 })()}
               </div>
