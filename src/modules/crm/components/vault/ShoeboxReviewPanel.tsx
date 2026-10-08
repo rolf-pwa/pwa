@@ -137,9 +137,61 @@ function ProposalRow({ proposal, templates }: { proposal: ShoeboxProposal; templ
   );
 }
 
-export default function ShoeboxReviewPanel({ householdId }: { householdId: string }) {
+/** Auto-file switch and Scan Shoebox button. Lives in the Vault tab's top row (or in the Shoebox card on the full page). */
+export function ShoeboxToolbar({ householdId }: { householdId: string }) {
   const queryClient = useQueryClient();
   const [scanning, setScanning] = useState(false);
+
+  const { data: autoEnabled = false } = useQuery({
+    queryKey: ["shoebox-auto-enabled", householdId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("households").select("shoebox_auto_file_enabled").eq("id", householdId).maybeSingle();
+      if (error) throw error;
+      return !!(data as { shoebox_auto_file_enabled?: boolean } | null)?.shoebox_auto_file_enabled;
+    },
+  });
+
+  const toggleAuto = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const { error } = await supabase.from("households").update({ shoebox_auto_file_enabled: enabled } as never).eq("id", householdId);
+      if (error) throw error;
+    },
+    onSuccess: (_d, enabled) => {
+      toast.success(enabled ? "Auto-file on for this household" : "Auto-file off for this household");
+      queryClient.invalidateQueries({ queryKey: ["shoebox-auto-enabled", householdId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const scanShoebox = async () => {
+    setScanning(true);
+    try {
+      const res = await callVault("scanShoebox", { householdId });
+      toast.success(`Scanned ${res.scanned} file(s) — ${res.proposed} proposed, ${res.skipped} skipped`);
+      queryClient.invalidateQueries({ queryKey: ["shoebox-proposals", householdId] });
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  return (
+    <>
+      <label className="flex items-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-xs" title="Automatically rename and file statements and tax slips when every detail is read off the document. Everything else waits for your review.">
+        Auto-file
+        <Switch checked={autoEnabled} onCheckedChange={(v) => toggleAuto.mutate(v)} disabled={toggleAuto.isPending} />
+      </label>
+      <Button size="sm" variant="outline" onClick={scanShoebox} disabled={scanning}>
+        {scanning ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ScanLine className="h-3.5 w-3.5 mr-1.5" />}
+        Scan Shoebox
+      </Button>
+    </>
+  );
+}
+
+export default function ShoeboxReviewPanel({ householdId, showControls = true }: { householdId: string; showControls?: boolean }) {
+  const queryClient = useQueryClient();
 
   const { data: proposals = [], isLoading } = useQuery({
     queryKey: ["shoebox-proposals", householdId],
@@ -167,27 +219,6 @@ export default function ShoeboxReviewPanel({ householdId }: { householdId: strin
     queryFn: async () => ((await callVault("listShoeboxAutoFiled", { householdId })).filed ?? []) as AutoFiledRow[],
   });
 
-  const { data: autoEnabled = false } = useQuery({
-    queryKey: ["shoebox-auto-enabled", householdId],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("households").select("shoebox_auto_file_enabled").eq("id", householdId).maybeSingle();
-      if (error) throw error;
-      return !!(data as { shoebox_auto_file_enabled?: boolean } | null)?.shoebox_auto_file_enabled;
-    },
-  });
-
-  const toggleAuto = useMutation({
-    mutationFn: async (enabled: boolean) => {
-      const { error } = await supabase.from("households").update({ shoebox_auto_file_enabled: enabled } as never).eq("id", householdId);
-      if (error) throw error;
-    },
-    onSuccess: (_d, enabled) => {
-      toast.success(enabled ? "Auto-file on for this household" : "Auto-file off for this household");
-      queryClient.invalidateQueries({ queryKey: ["shoebox-auto-enabled", householdId] });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
   const undo = useMutation({
     mutationFn: (proposalId: string) => callVault("undoShoeboxAutoFile", { proposalId }),
     onSuccess: () => {
@@ -198,19 +229,6 @@ export default function ShoeboxReviewPanel({ householdId }: { householdId: strin
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const scanShoebox = async () => {
-    setScanning(true);
-    try {
-      const res = await callVault("scanShoebox", { householdId });
-      toast.success(`Scanned ${res.scanned} file(s) — ${res.proposed} proposed, ${res.skipped} skipped`);
-      queryClient.invalidateQueries({ queryKey: ["shoebox-proposals", householdId] });
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setScanning(false);
-    }
-  };
-
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-2">
@@ -218,14 +236,7 @@ export default function ShoeboxReviewPanel({ householdId }: { householdId: strin
           Shoebox review
           {proposals.length > 0 && <Badge>{proposals.length} pending</Badge>}
         </CardTitle>
-        <label className="ml-auto flex items-center gap-2 text-xs text-muted-foreground" title="Automatically rename and file statements and tax slips when every detail is read off the document. Everything else waits for your review.">
-          Auto-file
-          <Switch checked={autoEnabled} onCheckedChange={(v) => toggleAuto.mutate(v)} disabled={toggleAuto.isPending} />
-        </label>
-        <Button size="sm" variant="outline" onClick={scanShoebox} disabled={scanning}>
-          {scanning ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <ScanLine className="h-4 w-4 mr-1" />}
-          Scan Shoebox
-        </Button>
+        {showControls && <div className="ml-auto flex items-center gap-2"><ShoeboxToolbar householdId={householdId} /></div>}
       </CardHeader>
       <CardContent className="space-y-3">
         {isLoading ? (
@@ -233,7 +244,7 @@ export default function ShoeboxReviewPanel({ householdId }: { householdId: strin
         ) : proposals.length === 0 ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground italic">
             <FileQuestion className="h-4 w-4" /> Nothing pending review. New Shoebox uploads are classified
-            automatically — click "Scan Shoebox" to check for backlog or anything missed.
+            automatically — use "Scan Shoebox" to check for backlog or anything missed.
           </p>
         ) : (
           proposals.map((p) => <ProposalRow key={p.id} proposal={p} templates={templates} />)
