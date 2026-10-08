@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui
 
 interface Row {
   id: string; group: "holding_tank" | "vineyard" | "storehouse"; owner: string; name: string; accountType: string | null; last4: string | null;
-  boy: number | null; current: number | null; withdrawalsYtd: number | null; growth: number | null; change: number | null; changePct: number | null; asOf: string | null;
+  boy: number | null; boySource: "statement" | "prior_year_end" | "imported" | null; current: number | null; withdrawalsYtd: number | null; growth: number | null; change: number | null; changePct: number | null; asOf: string | null;
 }
 interface Totals { boy: number; current: number; withdrawals: number; growth: number; change: number; changePct: number | null; withBoy: number; withoutBoy: number }
 interface Group { rows: Row[]; totals: Totals }
@@ -113,7 +113,7 @@ export function VineyardDashboard({ householdId }: { householdId: string }) {
                         {r.name}{r.last4 ? <span className="text-xs text-muted-foreground"> ···{r.last4}</span> : null}
                         <span className="block text-[11px] text-muted-foreground">{[r.owner, r.accountType].filter(Boolean).join(" · ")}</span>
                       </td>
-                      <td className="py-1.5 pr-3 text-right tabular-nums">{money(r.boy)}</td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums" title={r.boySource === "statement" ? "Read from the statement's beginning-of-year figure" : r.boySource === "prior_year_end" ? "Closing value of the December 31 statement" : r.boySource === "imported" ? "Imported start-of-year value" : "No start-of-year value on file"}>{money(r.boy)}{r.boySource === "prior_year_end" ? <span className="text-[10px] text-muted-foreground"> Dec 31</span> : null}</td>
                       <td className="py-1.5 pr-3 text-right tabular-nums">{money(r.current)}</td>
                       <td className={`py-1.5 pr-3 text-right tabular-nums ${tone(r.change)}`}>{signed(r.change)}{pct(r.changePct)}</td>
                       {key !== "storehouse" && <td className="py-1.5 pr-3 text-right tabular-nums">{r.withdrawalsYtd === null ? "—" : money(r.withdrawalsYtd)}</td>}

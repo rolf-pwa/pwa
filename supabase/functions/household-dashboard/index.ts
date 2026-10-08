@@ -31,19 +31,20 @@ async function build(db: any, householdId: string) {
     ? await db.from("holding_tank").select("id, contact_id, account_name, account_type, account_number, current_value, withdrawals_ytd, withdrawals_as_of, income_funds_as_of").in("contact_id", memberIds).neq("status", "moved")
     : { data: [] };
   const { data: snaps } = memberIds.length
-    ? await db.from("account_harvest_snapshots").select("vineyard_account_id, holding_tank_id, storehouse_id, boy_value, snapshot_date").eq("reporting_year", year).in("contact_id", memberIds)
+    ? await db.from("account_harvest_snapshots").select("vineyard_account_id, holding_tank_id, storehouse_id, boy_value, boy_source, snapshot_date").eq("reporting_year", year).in("contact_id", memberIds)
     : { data: [] };
   // deno-lint-ignore no-explicit-any
-  const bySnap = (key: string) => latestSnapshots((snaps ?? []) as any[], (r) => r[key] ?? null);
+  // The newest snapshot with a real start-of-year value (zero means the sync had none, not that the account started empty).
+  const bySnap = (key: string) => latestSnapshots(((snaps ?? []) as any[]).filter((r) => Number(r.boy_value) > 0), (r) => r[key] ?? null);
   const vSnap = bySnap("vineyard_account_id"), hSnap = bySnap("holding_tank_id"), sSnap = bySnap("storehouse_id");
 
   const rows: DashRow[] = [
     // deno-lint-ignore no-explicit-any
-    ...(tank ?? []).map((a: any) => dashRow({ id: a.id, group: "holding_tank", owner: nameOf.get(a.contact_id) ?? "", name: a.account_name, accountType: a.account_type, accountNumber: a.account_number, boy: hSnap.get(a.id)?.boy_value, current: a.current_value, withdrawalsYtd: a.withdrawals_ytd, asOf: a.withdrawals_as_of ?? a.income_funds_as_of })),
+    ...(tank ?? []).map((a: any) => dashRow({ id: a.id, group: "holding_tank", owner: nameOf.get(a.contact_id) ?? "", name: a.account_name, accountType: a.account_type, accountNumber: a.account_number, boy: hSnap.get(a.id)?.boy_value, boySource: hSnap.get(a.id)?.boy_source, current: a.current_value, withdrawalsYtd: a.withdrawals_ytd, asOf: a.withdrawals_as_of ?? a.income_funds_as_of })),
     // deno-lint-ignore no-explicit-any
-    ...fin.vineyardAccounts.map((a: any) => dashRow({ id: a.id, group: "vineyard", owner: nameOf.get(a.contact_id) ?? "", name: a.account_name, accountType: a.account_type, accountNumber: a.account_number, boy: vSnap.get(a.id)?.boy_value, current: a.current_value, withdrawalsYtd: a.withdrawals_ytd, asOf: a.withdrawals_as_of ?? a.income_funds_as_of })),
+    ...fin.vineyardAccounts.map((a: any) => dashRow({ id: a.id, group: "vineyard", owner: nameOf.get(a.contact_id) ?? "", name: a.account_name, accountType: a.account_type, accountNumber: a.account_number, boy: vSnap.get(a.id)?.boy_value, boySource: vSnap.get(a.id)?.boy_source, current: a.current_value, withdrawalsYtd: a.withdrawals_ytd, asOf: a.withdrawals_as_of ?? a.income_funds_as_of })),
     // deno-lint-ignore no-explicit-any
-    ...fin.storehouses.filter((s: any) => s.asset_type !== REAL_ESTATE_ASSET_TYPE).map((s: any) => dashRow({ id: s.id, group: "storehouse", owner: nameOf.get(s.contact_id) ?? "", name: s.label || s.asset_type || "Reserve", accountType: s.asset_type, boy: sSnap.get(s.id)?.boy_value, current: s.current_value })),
+    ...fin.storehouses.filter((s: any) => s.asset_type !== REAL_ESTATE_ASSET_TYPE).map((s: any) => dashRow({ id: s.id, group: "storehouse", owner: nameOf.get(s.contact_id) ?? "", name: s.label || s.asset_type || "Reserve", accountType: s.asset_type, boy: sSnap.get(s.id)?.boy_value, boySource: sSnap.get(s.id)?.boy_source, current: s.current_value })),
   ];
 
   const { allocation } = await allocateForHousehold(db, fin, {

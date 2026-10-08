@@ -23,7 +23,7 @@ describe("planInvestmentApply", () => {
       { account_name: "Cash", current_value: 5 },
       { account_name: "zzz", account_number: "TF-9", current_value: 7 },
     ], ctx);
-    expect(plan.map((w) => [w.op, w.table])).toEqual([["update", "storehouses"], ["update", "holding_tank"]]);
+    expect(plan.map((w) => [w.op, (w as { table?: string }).table])).toEqual([["update", "storehouses"], ["update", "holding_tank"]]);
   });
   it("inserts unmatched accounts into the holding tank for the matching owner, else head of household", () => {
     const [w] = planInvestmentApply([{ account_name: "New", account_number: "N1", account_owner: "MARIA E SCILLATO", custodian: "IA Financial", current_value: 1 }], ctx) as any[];
@@ -150,5 +150,34 @@ describe("planInvestmentApply: net withdrawals year to date", () => {
     expect((planInvestmentApply([a({ net_transactions: 500 })], tctx)[0] as any).values).toMatchObject({ withdrawals_ytd: 0 });
     expect((planInvestmentApply([a()], tctx)[0] as any).values).not.toHaveProperty("withdrawals_ytd");
     expect((planInvestmentApply([a({ net_transactions: -5 })], { ...ctx, statementDate: null })[0] as any).values).not.toHaveProperty("withdrawals_ytd");
+  });
+});
+
+import { boySnapshots, planInvestmentApply as planInv } from "../../supabase/functions/_shared/vault-apply";
+
+describe("BOY snapshots from an approved statement", () => {
+  const acct = { account_number: "1819071078", account_name: "iA Non-registered", book_value: 511079.98, current_value: 494915.17, current_harvest: -5000 };
+  it("keeps the statement's own beginning-of-year figure for that year", () => {
+    const [s] = boySnapshots(acct, "2026-09-30");
+    expect(s).toMatchObject({ reporting_year: 2026, snapshot_date: "2026-09-30", boy_value: 511079.98, boy_source: "statement" });
+  });
+  it("adds the December 31 closing value as next year's fallback, dated Jan 1", () => {
+    const snaps = boySnapshots({ ...acct, book_value: null }, "2026-12-31");
+    expect(snaps).toHaveLength(1);
+    expect(snaps[0]).toMatchObject({ reporting_year: 2027, snapshot_date: "2027-01-01", boy_value: 494915.17, boy_source: "prior_year_end" });
+    expect(boySnapshots(acct, "2026-12-31").map((x) => x.boy_source)).toEqual(["statement", "prior_year_end"]);
+  });
+  it("writes nothing for a missing, zero or undated figure", () => {
+    expect(boySnapshots({ ...acct, book_value: null }, "2026-09-30")).toEqual([]);
+    expect(boySnapshots({ ...acct, book_value: 0 }, "2026-09-30")).toEqual([]);
+    expect(boySnapshots(acct, null)).toEqual([]);
+  });
+  it("plans a snapshot beside the update for a matched account, and for a new Holding Tank account after its insert", () => {
+    const ctx = { householdId: "h", members: [{ id: "m1", first_name: "Colleen", last_name: "Jerczynski", family_role: "head" }] as never, vineyard: [{ id: "v1", account_name: "x", account_number: "1819071078", contact_id: "m1" }], storehouses: [], holdingTank: [], sourceFile: null, statementDate: "2026-09-30" };
+    const plan = planInv([acct], ctx);
+    expect(plan.map((w) => w.op)).toEqual(["update", "snapshot"]);
+    const fresh = planInv([{ ...acct, account_number: "999", account_name: "New" }], ctx);
+    expect(fresh.map((w) => w.op)).toEqual(["insert", "snapshot"]);
+    expect((fresh[1] as any).target.key).toBe((fresh[0] as any).key);
   });
 });

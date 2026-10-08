@@ -9,7 +9,7 @@ export interface DashRow {
   accountType: string | null;
   last4: string | null;
   boy: number | null;
-  boySource: "snapshot" | null;
+  boySource: "statement" | "prior_year_end" | "imported" | null;
   current: number | null;
   withdrawalsYtd: number | null;
   /** Current + withdrawals - BOY: how the money did before anything was taken out. null when BOY or current is missing. */
@@ -22,13 +22,13 @@ export interface DashRow {
 const num = (v: unknown): number | null => (v === null || v === undefined || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
-export function dashRow(r: { id: string; group: DashRow["group"]; owner: string; name: string; accountType?: string | null; accountNumber?: string | null; boy?: unknown; current?: unknown; withdrawalsYtd?: unknown; asOf?: string | null }): DashRow {
+export function dashRow(r: { id: string; group: DashRow["group"]; owner: string; name: string; accountType?: string | null; accountNumber?: string | null; boy?: unknown; boySource?: string | null; current?: unknown; withdrawalsYtd?: unknown; asOf?: string | null }): DashRow {
   const boy = num(r.boy), current = num(r.current), w = num(r.withdrawalsYtd);
   const digits = String(r.accountNumber ?? "").replace(/\D/g, "");
   const change = boy !== null && current !== null ? round2(current - boy) : null;
   return {
     id: r.id, group: r.group, owner: r.owner, name: r.name, accountType: r.accountType ?? null, last4: digits.length >= 4 ? digits.slice(-4) : null,
-    boy, boySource: boy !== null ? "snapshot" : null, current, withdrawalsYtd: w,
+    boy, boySource: boy === null ? null : r.boySource === "statement" || r.boySource === "prior_year_end" ? r.boySource : "imported", current, withdrawalsYtd: w,
     change, changePct: change !== null && boy ? round2((change / boy) * 100) : null,
     growth: boy !== null && current !== null ? round2(current + (w ?? 0) - boy) : null,
     asOf: r.asOf ?? null,

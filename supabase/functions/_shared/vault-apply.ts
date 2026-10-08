@@ -96,18 +96,46 @@ export function applyCorrections(
 
 export type PlannedWrite =
   | { op: "update"; table: "vineyard_accounts" | "storehouses" | "holding_tank" | "insurance_policies"; id: string; values: Record<string, unknown>; label: string }
-  | { op: "insert"; table: "holding_tank" | "insurance_policies"; values: Record<string, unknown>; label: string }
+  | { op: "insert"; table: "holding_tank" | "insurance_policies"; values: Record<string, unknown>; label: string; key?: string }
+  | { op: "snapshot"; target: { table: "vineyard_accounts" | "storehouses" | "holding_tank"; id?: string; key?: string }; values: Record<string, unknown>; label: string }
   | { op: "upsert"; table: "estate_documents"; onConflict: string; values: Record<string, unknown>; label: string };
 
 export interface InvestmentContext {
   householdId: string;
   members: Member[];
-  vineyard: Array<{ id: string; account_name: string; account_number: string | null }>;
-  storehouses: Array<{ id: string; label: string | null; asset_type: string | null }>;
-  holdingTank: Array<{ id: string; account_name: string; account_number: string | null }>;
+  vineyard: Array<{ id: string; account_name: string; account_number: string | null; contact_id?: string | null }>;
+  storehouses: Array<{ id: string; label: string | null; asset_type: string | null; contact_id?: string | null }>;
+  holdingTank: Array<{ id: string; account_name: string; account_number: string | null; contact_id?: string | null }>;
   sourceFile: string | null;
   /** The statement's date (YYYY-MM-DD), recorded as the as-of date of the income funds figure. */
   statementDate?: string | null;
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const dayAfter = (iso: string) => new Date(Date.parse(`${iso}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
+
+/**
+ * Start-of-year (BOY) snapshots an approved statement supports for one account:
+ *  1. the statement's own beginning-of-year figure (book_value, read from the statement's year-to-date column), kept for
+ *     the statement's year; and
+ *  2. when the statement is a December 31 statement, its closing value as the BOY of the NEXT year (dated Jan 1), the
+ *     fallback for accounts whose statements don't print a BOY.
+ * A non-positive or missing figure is never written: "no BOY" must not look like a zero start.
+ */
+export function boySnapshots(a: Record<string, any>, statementDate: string | null | undefined): Array<Record<string, unknown>> {
+  if (!statementDate || !ISO_DATE.test(statementDate)) return [];
+  const year = Number(statementDate.slice(0, 4));
+  const current = typeof a.current_value === "number" && Number.isFinite(a.current_value) ? a.current_value : null;
+  const boy = typeof a.book_value === "number" && Number.isFinite(a.book_value) && a.book_value > 0 ? a.book_value : null;
+  const out: Array<Record<string, unknown>> = [];
+  if (boy !== null && current !== null) {
+    const gain = typeof a.current_harvest === "number" && Number.isFinite(a.current_harvest) ? a.current_harvest : current - boy;
+    out.push({ reporting_year: year, snapshot_date: statementDate, boy_value: boy, current_value: current, ytd_value: current, current_harvest: gain, boy_source: "statement", notes: "BOY read from the approved statement" });
+  }
+  if (statementDate.endsWith("-12-31") && current !== null && current > 0) {
+    out.push({ reporting_year: year + 1, snapshot_date: dayAfter(statementDate), boy_value: current, current_value: current, ytd_value: current, current_harvest: 0, boy_source: "prior_year_end", notes: "Closing value of the December 31 statement" });
+  }
+  return out;
 }
 
 const numericOnly = (o: Record<string, unknown>) => Object.fromEntries(Object.entries(o).filter(([, v]) => typeof v === "number"));
@@ -143,17 +171,20 @@ export function planInvestmentApply(accounts: Record<string, any>[], ctx: Invest
       const isVineyard = "account_name" in live;
       const values = isVineyard ? { ...figures, ...income, ...withdrawals } : figures;
       if (Object.keys(values).length) writes.push({ op: "update", table: isVineyard ? "vineyard_accounts" : "storehouses", id: live.id, values, label });
+      if ((live as any).contact_id) for (const snap of boySnapshots(a, ctx.statementDate)) writes.push({ op: "snapshot", target: { table: isVineyard ? "vineyard_accounts" : "storehouses", id: live.id }, values: { ...snap, contact_id: (live as any).contact_id }, label });
       continue;
     }
     const tank = (num && hByNum.get(num)) || hByName.get(name);
     if (tank) {
       const values = { ...figures, ...income, ...withdrawals };
       if (Object.keys(values).length) writes.push({ op: "update", table: "holding_tank", id: tank.id, values, label });
+      if ((tank as any).contact_id) for (const snap of boySnapshots(a, ctx.statementDate)) writes.push({ op: "snapshot", target: { table: "holding_tank", id: tank.id }, values: { ...snap, contact_id: (tank as any).contact_id }, label });
       continue;
     }
     const owner = findMemberByLooseName(ctx.members, a.account_owner) || head;
+    const insertKey = `new:${num || name}`;
     writes.push({
-      op: "insert", table: "holding_tank", label,
+      op: "insert", table: "holding_tank", label, key: insertKey,
       values: {
         contact_id: owner?.id, household_id: ctx.householdId, account_name: a.account_name, account_number: a.account_number ?? null,
         account_type: a.account_type || "Portfolio", account_owner: a.account_owner ?? null, custodian: normalizeCustodian(a.custodian),
@@ -161,6 +192,7 @@ export function planInvestmentApply(accounts: Record<string, any>[], ctx: Invest
         source_file: ctx.sourceFile, status: "holding", ...income, ...withdrawals,
       },
     });
+    if (owner?.id) for (const snap of boySnapshots(a, ctx.statementDate)) writes.push({ op: "snapshot", target: { table: "holding_tank", key: insertKey }, values: { ...snap, contact_id: owner.id }, label });
     // Register so a duplicate within this same approval matches instead of re-inserting.
     const stub = { id: "pending-insert", account_name: String(a.account_name ?? ""), account_number: a.account_number ?? null };
     if (stub.account_number) hByNum.set(normalizeToken(stub.account_number), stub);
@@ -227,7 +259,6 @@ export interface EstateContext {
 }
 
 const ESTATE_TYPE_SET = new Set(["will", "power_of_attorney", "trust", "representation_agreement", "other"]);
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Approved estate documents become (or refresh) one row per file and type, owned by the matching member. */
 export function planEstateApply(documents: Record<string, any>[], ctx: EstateContext): PlannedWrite[] {
@@ -259,12 +290,39 @@ export function planEstateApply(documents: Record<string, any>[], ctx: EstateCon
 
 export interface ApplyResult { updated: number; inserted: number; writes: Array<{ op: string; table: string; label: string }> }
 
+const SNAPSHOT_KEY = { vineyard_accounts: "vineyard_account_id", holding_tank: "holding_tank_id", storehouses: "storehouse_id" } as const;
+
 export async function applyPlan(admin: any, plan: PlannedWrite[]): Promise<ApplyResult> {
   const result: ApplyResult = { updated: 0, inserted: 0, writes: [] };
+  const insertedIds = new Map<string, string>();
   for (const w of plan) {
-    const q = w.op === "update" ? admin.from(w.table).update(w.values).eq("id", w.id)
-      : w.op === "upsert" ? admin.from(w.table).upsert(w.values, { onConflict: w.onConflict })
-      : admin.from(w.table).insert(w.values);
+    if (w.op === "snapshot") {
+      // A start-of-year snapshot is a record kept alongside the account, so a failure here never undoes the approval.
+      try {
+        const id = w.target.id ?? (w.target.key ? insertedIds.get(w.target.key) : undefined);
+        if (!id || id === "pending-insert") continue;
+        const keyField = SNAPSHOT_KEY[w.target.table];
+        const { data: existing, error: selErr } = await admin.from("account_harvest_snapshots").select("id").eq(keyField, id).eq("snapshot_date", w.values.snapshot_date).limit(1);
+        if (selErr) throw new Error(selErr.message);
+        const row = { ...w.values, [keyField]: id };
+        const { error } = existing?.[0]?.id ? await admin.from("account_harvest_snapshots").update(row).eq("id", existing[0].id) : await admin.from("account_harvest_snapshots").insert(row);
+        if (error) throw new Error(error.message);
+        result.writes.push({ op: "snapshot", table: "account_harvest_snapshots", label: w.label });
+      } catch (e) {
+        console.error("vault-apply: BOY snapshot not saved:", w.label, e instanceof Error ? e.message : String(e));
+      }
+      continue;
+    }
+    if (w.op === "insert") {
+      // The new row's id is only fetched when a later snapshot needs it.
+      const { data, error } = w.key ? await admin.from(w.table).insert(w.values).select("id").maybeSingle() : await admin.from(w.table).insert(w.values);
+      if (error) throw new Error(`insert ${w.table} (${w.label}) failed: ${error.message}`);
+      if (w.key && (data as { id?: string } | null)?.id) insertedIds.set(w.key, (data as { id: string }).id);
+      result.inserted += 1;
+      result.writes.push({ op: w.op, table: w.table, label: w.label });
+      continue;
+    }
+    const q = w.op === "update" ? admin.from(w.table).update(w.values).eq("id", w.id) : admin.from(w.table).upsert(w.values, { onConflict: w.onConflict });
     const { error } = await q;
     if (error) throw new Error(`${w.op} ${w.table} (${w.label}) failed: ${error.message}`);
     if (w.op === "update") result.updated += 1; else result.inserted += 1; // an upsert counts as added
