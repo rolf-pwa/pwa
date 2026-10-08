@@ -453,11 +453,6 @@ export default function QuarterlySystemReview() {
                     <BsRow label="Vineyard" value={money(diag.vineyard_total)} />
                     <BsRow label="Liquidity Reserve" value={money(diag.storehouse_reserves?.liquidity)} />
                     <BsRow label="Strategic Reserve" value={money(diag.storehouse_reserves?.strategic)} />
-                    {(diag.allocation?.credit_capacity ?? 0) > 0 && (
-                      <div style={{ fontSize: "7pt", color: "#94a3b8", fontStyle: "italic", textAlign: "right", paddingBottom: "0.8mm" }}>
-                        + {money(diag.allocation!.credit_capacity)} available credit assigned to this reserve (capacity; not in Total Assets)
-                      </div>
-                    )}
                     <BsRow label="Philanthropic Trust" value={money(diag.storehouse_reserves?.philanthropic)} />
                     <BsRow label="Legacy Trust" value={money(diag.storehouse_reserves?.legacy)} />
                     <div style={{ marginTop: "auto", paddingTop: "1.5mm" }}>
@@ -471,6 +466,7 @@ export default function QuarterlySystemReview() {
                   <div style={{ display: "flex", flexDirection: "column" }}>
                     <div style={bsHead}>Liabilities &amp; Net Worth</div>
                     <BsRow label="Liabilities" value={money(liabilities)} tone="#c0392b" />
+                    {(diag.allocation?.credit_capacity ?? 0) > 0 && <BsRow label="Undrawn credit (offsets the Strategic Reserve)" value={money(diag.allocation!.credit_capacity)} tone="#c0392b" />}
                     <BsRow label="Net Worth" value={money(diag.net_worth ?? diag.aum)} strong />
                     {deltas && deltas.netWorth !== null && (
                       <div style={{ fontSize: "7pt", color: "#94a3b8", textAlign: "right" }}>{signed(deltas.netWorth)} since {deltas.previousLabel ?? "last review"}</div>

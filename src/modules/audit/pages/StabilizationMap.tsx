@@ -624,11 +624,6 @@ export default function StabilizationMap() {
                       <BsRow label="Vineyard" value={fmtCurrency(diag.vineyard_total)} />
                       <BsRow label="Liquidity Reserve" value={fmtCurrency(diag.storehouse_reserves?.liquidity)} />
                       <BsRow label="Strategic Reserve" value={fmtCurrency(diag.storehouse_reserves?.strategic)} />
-                      {(diag.allocation?.credit_capacity ?? 0) > 0 && (
-                        <div style={{ fontSize: "7pt", color: "#94a3b8", fontStyle: "italic", textAlign: "right", paddingBottom: "0.8mm" }}>
-                          + {fmtCurrency(diag.allocation!.credit_capacity)} available credit assigned to this reserve (capacity; not in Total Assets)
-                        </div>
-                      )}
                       <BsRow label="Philanthropic Trust" value={fmtCurrency(diag.storehouse_reserves?.philanthropic)} />
                       <BsRow label="Legacy Trust" value={fmtCurrency(diag.storehouse_reserves?.legacy)} />
                       <div style={{ marginTop: "auto", paddingTop: "1.5mm" }}>
@@ -639,6 +634,7 @@ export default function StabilizationMap() {
                     <div style={{ display: "flex", flexDirection: "column" }}>
                       <div style={bsHead}>Liabilities &amp; Net Worth</div>
                       <BsRow label="Liabilities" value={fmtCurrency((diag.personal_liabilities_total ?? 0) + (diag.corp_liabilities_total ?? 0))} tone="#c0392b" />
+                      {(diag.allocation?.credit_capacity ?? 0) > 0 && <BsRow label="Undrawn credit (offsets the Strategic Reserve)" value={fmtCurrency(diag.allocation!.credit_capacity)} tone="#c0392b" />}
                       <BsRow label="Net Worth" value={fmtCurrency(diag.net_worth ?? diag.aum)} strong />
                       <div style={{ marginTop: "auto", paddingTop: "1.5mm" }}>
                         <hr style={{ border: "none", borderTop: "1.5px solid #334155", margin: "0 0 1.5mm" }} />

@@ -205,7 +205,7 @@ export function HouseholdLiabilities({ householdId, onChanged }: { householdId: 
           )}
         </div>
         {!readOnly && isRevolving(r.liability_type) && creditAvailable(r) !== null && (
-          <label className="flex items-center gap-2 text-[11px] text-muted-foreground md:col-span-6" title="Counts the unused credit as Strategic Reserve capacity. It is not an asset: Total Assets and Net Worth are unchanged.">
+          <label className="flex items-center gap-2 text-[11px] text-muted-foreground md:col-span-6" title="Counts the unused credit in the Strategic Reserve and Total Assets, with an equal undrawn-credit line in liabilities, so Net Worth is unchanged.">
             <Switch checked={r.credit_in_strategic} onCheckedChange={(v) => setInStrategic(r, v)} />
             Count available credit ({money(creditAvailable(r))}) toward the Strategic Reserve
           </label>
