@@ -1329,7 +1329,7 @@ const HouseholdDetail = () => {
 
           {/* Vineyard / Financials */}
           <TabsContent value="vineyard" className="space-y-6 mt-4">
-            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
+            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
               <div className="min-w-0 space-y-6">
                 <VineyardDashboard householdId={id!} />
 
