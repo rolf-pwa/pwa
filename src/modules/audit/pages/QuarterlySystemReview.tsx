@@ -452,7 +452,8 @@ export default function QuarterlySystemReview() {
                     {(diag.holding_tank_total ?? 0) > 0 && <BsRow label="Holding Tank" value={money(diag.holding_tank_total)} />}
                     <BsRow label="Vineyard" value={money(diag.vineyard_total)} />
                     <BsRow label="Liquidity Reserve" value={money(diag.storehouse_reserves?.liquidity)} />
-                    <BsRow label="Strategic Reserve" value={money(diag.storehouse_reserves?.strategic)} />
+                    <BsRow label="Strategic Reserve" value={money((diag.storehouse_reserves?.strategic ?? 0) - (diag.allocation?.credit_capacity ?? 0))} />
+                    {(diag.allocation?.credit_capacity ?? 0) > 0 && <BsRow label="Strategic Reserve · available credit" value={money(diag.allocation!.credit_capacity)} />}
                     <BsRow label="Philanthropic Trust" value={money(diag.storehouse_reserves?.philanthropic)} />
                     <BsRow label="Legacy Trust" value={money(diag.storehouse_reserves?.legacy)} />
                     <div style={{ marginTop: "auto", paddingTop: "1.5mm" }}>

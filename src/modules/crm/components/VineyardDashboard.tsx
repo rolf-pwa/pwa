@@ -70,7 +70,8 @@ export function VineyardDashboard({ householdId }: { householdId: string }) {
             {b.holdingTank > 0 && <BsLine label="Holding Tank" value={money(b.holdingTank)} />}
             <BsLine label="Vineyard" value={money(b.vineyard)} />
             <BsLine label="Liquidity Reserve" value={money(b.liquidity)} />
-            <BsLine label="Strategic Reserve" value={money(b.strategic)} />
+            <BsLine label="Strategic Reserve" value={money(b.strategic - (b.creditCapacity ?? 0))} />
+            {(b.creditCapacity ?? 0) > 0 && <BsLine label="Strategic Reserve · available credit" value={money(b.creditCapacity)} />}
             <BsLine label="Philanthropic Trust" value={money(b.philanthropic)} />
             <BsLine label="Legacy Trust" value={money(b.legacy)} />
             <div className="mt-1 border-t pt-1"><BsLine label="Total Assets" value={money(b.totalAssets)} strong /></div>

@@ -413,9 +413,15 @@ export default function GovernanceAudit() {
                   <div style={{ display: "flex", flexDirection: "column" }}>
                     <div style={colLabel}>Assets</div>
                     {holdingTank > 0 && <BsRow label="Holding Tank" value={fmtCurrency(holdingTank)} />}
-                    {pillars.map(([pillar, total]) => (
-                      <BsRow key={pillar} label={PILLAR_LABEL[pillar] ?? pillar} value={fmtCurrency(total)} />
-                    ))}
+                    {pillars.map(([pillar, total]) => {
+                      const credit = pillar === "Armoury" ? bs?.undrawn_credit ?? 0 : 0;
+                      return (
+                        <div key={pillar}>
+                          <BsRow label={PILLAR_LABEL[pillar] ?? pillar} value={fmtCurrency(total - credit)} />
+                          {credit > 0 && <BsRow label="Strategic Reserve · available credit" value={fmtCurrency(credit)} />}
+                        </div>
+                      );
+                    })}
                     {bs && (
                       <div style={{ marginTop: "auto", paddingTop: "1.5mm" }}>
                         <hr style={{ border: "none", borderTop: "1.5px solid #334155", margin: "0 0 1.5mm" }} />
