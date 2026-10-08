@@ -1328,10 +1328,29 @@ const HouseholdDetail = () => {
 
           {/* Vineyard / Financials */}
           <TabsContent value="vineyard" className="space-y-6 mt-4">
-            <HoldingTank householdId={id!} onAccountMoved={() => fetchData()} />
+            {(() => {
+              const insCoverage = insurancePolicies.reduce((sum: number, p: any) => sum + (Number(p.coverage_amount) || 0), 0);
+              const stats: [string, number][] = [
+                ["The Vineyard", totalVineyard], ["Storehouses", totalStorehouses], ["Holding Tank", totalHoldingTank],
+                ["Corporate Holdings", totalCorpAssets], ["Insurance coverage", insCoverage],
+              ];
+              return (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                  {stats.map(([label, value]) => (
+                    <div key={label} className="rounded-lg border bg-card px-4 py-3">
+                      <p className="text-xs text-muted-foreground">{label}</p>
+                      <p className="text-lg font-semibold text-foreground">{formatCurrency(value)}</p>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
 
+            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
+              <div className="min-w-0 space-y-6">
             {/* The Vineyard */}
             <CollapsibleCard
+              defaultCollapsed={false}
               icon={Grape}
               iconBgClassName="bg-primary/10"
               iconColorClassName="text-primary"
@@ -1366,89 +1385,9 @@ const HouseholdDetail = () => {
                 )}
             </CollapsibleCard>
 
-            {/* Corporate Holdings */}
-            <CollapsibleCard
-              icon={Building2}
-              iconBgClassName="bg-primary/10"
-              iconColorClassName="text-primary"
-              title="Corporate Holdings"
-              subtitle={`${corporations.length} entit${corporations.length === 1 ? "y" : "ies"}`}
-              headerRight={
-                <div className="flex items-center gap-3">
-                  <p className="text-2xl font-bold text-foreground">{formatCurrency(totalCorpAssets)}</p>
-                  <AddCompanyDialog
-                    members={members
-                      .filter((m: any) => !m.is_minor)
-                      .map((m: any) => ({
-                        id: m.id,
-                        name: `${m.first_name} ${m.last_name || ""}`.trim(),
-                      }))}
-                    existingCorpIds={corporations.map((c: any) => c.id)}
-                    onCreated={fetchData}
-                  />
-                </div>
-              }
-            >
-                {corporations.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    No corporate entities linked to this household yet.
-                  </p>
-                )}
-                  {corporations.map((corp: any) => (
-                    <div key={corp.id} className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Link
-                            to={`/corporations/${corp.id}`}
-                            className="text-sm font-medium text-foreground hover:underline flex items-center gap-1.5"
-                          >
-                            {corp.name}
-                            <Badge variant="outline" className="text-[9px] uppercase">
-                              {TYPE_LABELS[corp.corporation_type] || corp.corporation_type}
-                            </Badge>
-                          </Link>
-                          {corp.jurisdiction && (
-                            <span className="text-xs text-muted-foreground">· {corp.jurisdiction}</span>
-                          )}
-                        </div>
-                        <span className="text-sm font-semibold text-foreground">
-                          {formatCurrency(corp.total_assets || 0)}
-                        </span>
-                      </div>
-                      <div className="pl-6 space-y-0.5">
-                        {corp.shareholders.map((sh: any) => {
-                          const member = members.find((m: any) => m.id === sh.contact_id);
-                          const name = member ? `${member.first_name} ${member.last_name || ""}`.trim() : "Member";
-                          return (
-                            <p key={sh.contact_id} className="text-xs text-muted-foreground">
-                              {name} — {sh.ownership_percentage}% {sh.share_class || "Common"}
-                              {sh.role_title ? ` · ${sh.role_title}` : ""}
-                            </p>
-                          );
-                        })}
-                      </div>
-                      {(corp.vineyard_accounts || []).map((acc: any) => (
-                        <div
-                          key={acc.id}
-                          className="rounded-lg bg-muted/50 px-4 py-2.5 border border-border"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-foreground/80">{acc.account_name}</span>
-                            <span className="text-sm font-medium text-foreground">
-                              {formatCurrency(Number(acc.current_value) || 0)}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                      {(corp.vineyard_accounts || []).length === 0 && (
-                        <p className="text-xs text-muted-foreground pl-6">No corporate accounts configured</p>
-                      )}
-                    </div>
-                  ))}
-            </CollapsibleCard>
-
             {/* The Storehouses */}
             <CollapsibleCard
+              defaultCollapsed={false}
               icon={Landmark}
               iconBgClassName="bg-accent/10"
               iconColorClassName="text-accent"
@@ -1509,6 +1448,87 @@ const HouseholdDetail = () => {
                 })}
             </CollapsibleCard>
 
+              </div>
+              <aside className="min-w-0 space-y-3">
+            <SidebarSection title="Holding Tank" meta={formatCurrency(totalHoldingTank)}>
+              <HoldingTank householdId={id!} onAccountMoved={() => fetchData()} />
+            </SidebarSection>
+
+            {/* Corporate Holdings */}
+            <SidebarSection title="Corporate Holdings" meta={formatCurrency(totalCorpAssets)}>
+              <div className="flex items-center justify-between px-2 pt-1">
+                <span className="text-xs text-muted-foreground">{`${corporations.length} entit${corporations.length === 1 ? "y" : "ies"}`}</span>
+                <AddCompanyDialog
+                    members={members
+                      .filter((m: any) => !m.is_minor)
+                      .map((m: any) => ({
+                        id: m.id,
+                        name: `${m.first_name} ${m.last_name || ""}`.trim(),
+                      }))}
+                    existingCorpIds={corporations.map((c: any) => c.id)}
+                    onCreated={fetchData}
+                  />
+              </div>
+              <div className="space-y-4 px-2">
+                {corporations.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No corporate entities linked to this household yet.
+                  </p>
+                )}
+                  {corporations.map((corp: any) => (
+                    <div key={corp.id} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Link
+                            to={`/corporations/${corp.id}`}
+                            className="text-sm font-medium text-foreground hover:underline flex items-center gap-1.5"
+                          >
+                            {corp.name}
+                            <Badge variant="outline" className="text-[9px] uppercase">
+                              {TYPE_LABELS[corp.corporation_type] || corp.corporation_type}
+                            </Badge>
+                          </Link>
+                          {corp.jurisdiction && (
+                            <span className="text-xs text-muted-foreground">· {corp.jurisdiction}</span>
+                          )}
+                        </div>
+                        <span className="text-sm font-semibold text-foreground">
+                          {formatCurrency(corp.total_assets || 0)}
+                        </span>
+                      </div>
+                      <div className="pl-6 space-y-0.5">
+                        {corp.shareholders.map((sh: any) => {
+                          const member = members.find((m: any) => m.id === sh.contact_id);
+                          const name = member ? `${member.first_name} ${member.last_name || ""}`.trim() : "Member";
+                          return (
+                            <p key={sh.contact_id} className="text-xs text-muted-foreground">
+                              {name} — {sh.ownership_percentage}% {sh.share_class || "Common"}
+                              {sh.role_title ? ` · ${sh.role_title}` : ""}
+                            </p>
+                          );
+                        })}
+                      </div>
+                      {(corp.vineyard_accounts || []).map((acc: any) => (
+                        <div
+                          key={acc.id}
+                          className="rounded-lg bg-muted/50 px-4 py-2.5 border border-border"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-foreground/80">{acc.account_name}</span>
+                            <span className="text-sm font-medium text-foreground">
+                              {formatCurrency(Number(acc.current_value) || 0)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                      {(corp.vineyard_accounts || []).length === 0 && (
+                        <p className="text-xs text-muted-foreground pl-6">No corporate accounts configured</p>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            </SidebarSection>
+
             {/* Insurance */}
             {insurancePolicies.length > 0 && (() => {
               const totalCoverage = insurancePolicies.reduce((sum: number, p: any) => sum + (Number(p.coverage_amount) || 0), 0);
@@ -1520,14 +1540,7 @@ const HouseholdDetail = () => {
                 return m ? `${m.first_name} ${m.last_name || ""}`.trim() : "Household";
               };
               return (
-                <CollapsibleCard
-                  icon={Shield}
-                  iconBgClassName="bg-accent/10"
-                  iconColorClassName="text-accent"
-                  title="Insurance"
-                  subtitle="Asset Protection"
-                  headerRight={<p className="text-2xl font-bold text-accent">{formatCurrency(totalCoverage)}</p>}
-                >
+                <SidebarSection title="Insurance" meta={formatCurrency(totalCoverage)}>
                   {insurancePolicies.map((p: any) => (
                     <div key={p.id} className="rounded-lg bg-muted/50 px-4 py-2.5 border border-border">
                       <div className="flex items-center justify-between">
@@ -1545,9 +1558,11 @@ const HouseholdDetail = () => {
                       )}
                     </div>
                   ))}
-                </CollapsibleCard>
+                </SidebarSection>
               );
             })()}
+              </aside>
+            </div>
           </TabsContent>
 
           {/* Analytics */}
