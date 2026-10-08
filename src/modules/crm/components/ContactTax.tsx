@@ -161,7 +161,7 @@ export function ContactTax({ householdId, contactId }: { householdId: string; co
                   <td className="py-1.5 pr-4">{LINE_LABELS[k]}</td>
                   {([["baseline", b], ["projection", pr]] as const).map(([kind, col]) => (
                     <td key={kind} className="py-1.5 pr-4">
-                      <Input type="number" min={0} step="1" className="h-8" value={col.lines[k] === 0 ? "" : String(col.lines[k])} placeholder="0" onChange={(e) => edit(person, kind, k, e.target.value)} />
+                      <Input type="number" min={k === "rental_income" ? undefined : 0} step="1" className="h-8" value={col.lines[k] === 0 ? "" : String(col.lines[k])} placeholder="0" onChange={(e) => edit(person, kind, k, e.target.value)} />
                       <span className="text-[10px] text-muted-foreground">{srcLabel(col, k)}</span>
                     </td>
                   ))}

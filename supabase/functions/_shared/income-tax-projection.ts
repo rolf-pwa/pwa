@@ -53,6 +53,8 @@ export interface IncomeTaxProjection {
   mix: IncomeMix | null;
   taxpayers: TaxpayerTax[];
   totalDraws: number;
+  /** Net rental income (a loss is negative), counted in grossIncome but not in totalDraws. */
+  totalRental: number;
   totalBenefits: number;
   grossIncome: number;
   totalTax: number;
@@ -90,11 +92,13 @@ export function drawLines(accounts: DrawAccount[], mix: IncomeMix | null): { lin
 }
 
 /** null when the province has no table or there is nothing taxable to project. */
-export function projectIncomeTax(opts: { province: string; accounts: DrawAccount[]; benefitsTotal: number; mix?: IncomeMix | null }): IncomeTaxProjection | null {
+export function projectIncomeTax(opts: { province: string; accounts: DrawAccount[]; benefitsTotal: number; mix?: IncomeMix | null; rentalByOwner?: Record<string, number> }): IncomeTaxProjection | null {
   const prov = TAX_TABLES.provinces[opts.province];
   if (!prov) return null;
   const draws = opts.accounts.filter((a) => a.amount > 0);
-  const owners = [...new Set(draws.map((a) => a.owner ?? "Household"))];
+  const rental = opts.rentalByOwner ?? {};
+  const rentalTotal = round2(Object.values(rental).reduce((a, v) => a + v, 0));
+  const owners = [...new Set([...draws.map((a) => a.owner ?? "Household"), ...Object.keys(rental)])];
   if (owners.length === 0 && opts.benefitsTotal <= 0) return null;
   if (owners.length === 0) owners.push("Household");
   const notes: string[] = [];
@@ -104,10 +108,10 @@ export function projectIncomeTax(opts: { province: string; accounts: DrawAccount
   const taxpayers: TaxpayerTax[] = owners.map((name) => {
     const d = drawLines(draws.filter((a) => (a.owner ?? "Household") === name), opts.mix ?? null);
     const { registeredDraws, nonRegisteredDraws, tfsaDraws } = d;
-    const lines: TaxLines = { ...d.lines, government_benefits: share };
+    const lines: TaxLines = { ...d.lines, government_benefits: share, rental_income: rental[name] ?? 0 };
     const r = taxFromLines(opts.province, lines)!;
     const { dividendsGrossedUp, dividendCredit, taxableIncome, federalTax: fedTax, provincialTax: proTax, totalTax } = r;
-    const gross = registeredDraws + nonRegisteredDraws + tfsaDraws + share;
+    const gross = registeredDraws + nonRegisteredDraws + tfsaDraws + share + (rental[name] ?? 0);
     return {
       name, registeredDraws: round2(registeredDraws), nonRegisteredDraws: round2(nonRegisteredDraws), taxableGains: r.taxableGains, dividendsGrossedUp, dividendCredit,
       tfsaDraws: round2(tfsaDraws), benefits: round2(share), taxableIncome,
@@ -117,12 +121,12 @@ export function projectIncomeTax(opts: { province: string; accounts: DrawAccount
   });
 
   const totalDraws = draws.reduce((a, d) => a + d.amount, 0);
-  const grossIncome = totalDraws + opts.benefitsTotal;
+  const grossIncome = totalDraws + opts.benefitsTotal + rentalTotal;
   const totalTax = taxpayers.reduce((a, t) => a + t.totalTax, 0);
   if (!opts.mix && draws.some((a) => !REGISTERED.has(a.accountType.trim().toLowerCase()) && a.accountType.trim().toLowerCase() !== "tfsa" && !(a.bookValue > 0)))
     notes.push("Some non-registered accounts have no book value on file, so their withdrawals are treated as return of capital (no tax).");
   return {
-    province: opts.province, basis: opts.mix ? "tax_slips" : "unrealised_gain", mix: opts.mix ?? null, taxYearTables: TAX_TABLES.asOfYear, taxpayers, totalDraws: round2(totalDraws), totalBenefits: round2(opts.benefitsTotal),
+    province: opts.province, basis: opts.mix ? "tax_slips" : "unrealised_gain", mix: opts.mix ?? null, taxYearTables: TAX_TABLES.asOfYear, taxpayers, totalDraws: round2(totalDraws), totalRental: rentalTotal, totalBenefits: round2(opts.benefitsTotal),
     grossIncome: round2(grossIncome), totalTax: round2(totalTax), afterTaxIncome: round2(grossIncome - totalTax),
     effectiveRate: grossIncome > 0 ? totalTax / grossIncome : 0, notes,
   };
@@ -132,25 +136,26 @@ export function projectIncomeTax(opts: { province: string; accounts: DrawAccount
 export function projectionFromSaved(rows: { name: string; province: string; lines: unknown }[], fallbackProvince: string): IncomeTaxProjection | null {
   const province = rows[0]?.province ?? fallbackProvince;
   const taxpayers: TaxpayerTax[] = [];
-  let totalDraws = 0, totalBenefits = 0, gross = 0;
+  let totalDraws = 0, totalBenefits = 0, totalRental = 0, gross = 0;
   for (const row of rows) {
     const l = sanitizeLines(row.lines);
     const r = taxFromLines(row.province || fallbackProvince, l); // each person is taxed in their own province
     if (!r) return null;
-    const cash = l.employment + l.pension_registered + l.government_benefits + l.interest_other + l.other_income + l.eligible_dividends + l.other_dividends + l.capital_gains;
-    if (cash <= 0) continue;
+    const cash = l.employment + l.pension_registered + l.government_benefits + l.interest_other + l.rental_income + l.other_income + l.eligible_dividends + l.other_dividends + l.capital_gains;
+    if (cash === 0) continue;
     const investment = l.interest_other + l.eligible_dividends + l.other_dividends + l.capital_gains;
     taxpayers.push({
       name: row.name, registeredDraws: l.pension_registered, nonRegisteredDraws: round2(investment), taxableGains: r.taxableGains, dividendsGrossedUp: r.dividendsGrossedUp, dividendCredit: r.dividendCredit,
       tfsaDraws: 0, benefits: l.government_benefits, taxableIncome: r.taxableIncome, federalTax: r.federalTax, provincialTax: r.provincialTax, totalTax: r.totalTax,
       effectiveRate: cash > 0 ? r.totalTax / cash : 0, marginalRate: r.marginalRate,
     });
-    totalDraws += cash - l.government_benefits; totalBenefits += l.government_benefits; gross += cash;
+    totalRental += l.rental_income;
+    totalDraws += cash - l.government_benefits - l.rental_income; totalBenefits += l.government_benefits; gross += cash;
   }
   if (!taxpayers.length) return null;
   const totalTax = taxpayers.reduce((a, t) => a + t.totalTax, 0);
   return {
-    province, basis: "household_tax_page", mix: null, taxYearTables: TAX_TABLES.asOfYear, taxpayers, totalDraws: round2(totalDraws), totalBenefits: round2(totalBenefits),
+    province, basis: "household_tax_page", mix: null, taxYearTables: TAX_TABLES.asOfYear, taxpayers, totalDraws: round2(totalDraws), totalRental: round2(totalRental), totalBenefits: round2(totalBenefits),
     grossIncome: round2(gross), totalTax: round2(totalTax), afterTaxIncome: round2(gross - totalTax), effectiveRate: gross > 0 ? totalTax / gross : 0, notes: [],
   };
 }

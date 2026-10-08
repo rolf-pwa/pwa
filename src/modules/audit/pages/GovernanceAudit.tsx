@@ -81,6 +81,7 @@ interface GovernanceAuditDoc {
   estate_documents?: { source: string; adults: EstateAdultRow[]; trusts: number; status: string; detail: string; actions: string[]; files?: { type: string; file_name: string }[] };
   income_structure?: { totalIncome: number; external: { label: string; annual_amount: number }[]; externalTotal: number; capitalRequired: number; withdrawnYtd: number | null; capitalRemaining: number | null } | null;
   income_tax?: { basis?: "tax_slips" | "unrealised_gain" | "household_tax_page"; slip_files?: string[]; slip_year?: number; mix?: { taxYear: number; shares: { interest: number; eligibleDividends: number; otherDividends: number; capitalGains: number; returnOfCapital: number } } | null; province: string; taxYearTables: number; taxpayers: { name: string; taxableIncome: number; federalTax: number; provincialTax: number; totalTax: number; effectiveRate: number; marginalRate: number }[]; totalDraws: number; totalBenefits: number; grossIncome: number; totalTax: number; afterTaxIncome: number; effectiveRate: number; notes: string[] } | null;
+  rental_income?: { year: number; net: number; toHousehold: number; toPaydown: number; properties: { name: string; net: number; use: string }[] } | null;
   income_ytd?: { withdrawals: number | null; year_fraction: number };
   balance_sheet?: { total_assets: number; net_worth: number; liabilities: number; undrawn_credit?: number };
 }
@@ -449,7 +450,9 @@ export default function GovernanceAudit() {
               const frac = doc.income_ytd?.year_fraction ?? null;
               const wd = doc.income_ytd?.withdrawals ?? st?.withdrawnYtd ?? null;
               const benefitsYtd = tx && frac !== null ? tx.totalBenefits * frac : null;
-              const ytdTotal = wd !== null ? wd + (benefitsYtd ?? 0) : null;
+              const rent = doc.rental_income ?? null;
+              const rentYtd = rent && frac !== null ? rent.net * frac : null;
+              const ytdTotal = wd !== null ? wd + (benefitsYtd ?? 0) + (rentYtd ?? 0) : null;
               const cell: CSSProperties = { textAlign: "right", fontVariantNumeric: "tabular-nums" };
               const Row = ({ label, charter, ytd, proj, strong, tone }: { label: string; charter?: string; ytd?: string; proj?: string; strong?: boolean; tone?: string }) => (
                 <>
@@ -480,6 +483,9 @@ export default function GovernanceAudit() {
                     ) : tx && tx.totalBenefits > 0 ? (
                       <Row label="Government benefits and other outside income" charter="—" ytd={benefitsYtd !== null ? fmtCurrency(benefitsYtd) : "—"} proj={fmtCurrency(tx.totalBenefits)} />
                     ) : null}
+                    {rent && <Row label={`Net rental income${rent.properties.length === 1 ? ` · ${rent.properties[0].name}` : ""}`} charter="—" ytd={rentYtd !== null ? fmtCurrency(rentYtd) : "—"} proj={fmtCurrency(rent.net)} />}
+                    {rent && rent.toPaydown > 0 && <Row label="Rental income to the household" proj={fmtCurrency(rent.toHousehold)} />}
+                    {rent && rent.toPaydown > 0 && <Row label="Rental income to debt paydown" proj={fmtCurrency(rent.toPaydown)} />}
                     <Row label="Total income" strong charter={st ? fmtCurrency(st.totalIncome) : "—"} ytd={ytdTotal !== null ? fmtCurrency(ytdTotal) : "—"} proj={tx ? fmtCurrency(tx.grossIncome) : "—"} />
                     {tx && tx.taxpayers.length > 1 && tx.taxpayers.map((t) => (
                       <Row key={t.name} label={`Estimated tax, ${t.name} (marginal rate ${(t.marginalRate * 100).toFixed(1)}%)`} proj={fmtCurrency(t.totalTax)} tone="#c0392b" />
@@ -493,7 +499,7 @@ export default function GovernanceAudit() {
                     </p>
                   )}
                   <p style={{ fontSize: "6.5pt", color: "#94a3b8", fontStyle: "italic", margin: "1.5mm 0 0" }}>
-                    Year to date is what the statements show has been withdrawn{frac !== null ? `; government benefits are the projected year pro-rated to ${Math.round(frac * 100)}% of the year` : ""}. The projected year{doc.income_structure ? " uses the Charter's yearly draw" : ""} and is taxed
+                    Year to date is what the statements show has been withdrawn{frac !== null ? `; government benefits and rental income are the projected year pro-rated to ${Math.round(frac * 100)}% of the year` : ""}. The projected year{doc.income_structure ? " uses the Charter's yearly draw" : ""} and is taxed
                     {tx ? ` with the ${tx.taxYearTables} federal and ${tx.province} tables and the basic personal amount only` : ""}
                     {tx?.basis === "household_tax_page" ? ", using the income lines saved on the household Tax page" : tx?.basis === "tax_slips" ? "; dividends are grossed up and the dividend tax credit applied" : tx ? ". No prior-year T3 or T5 slips were on file, so non-registered withdrawals are taxed only on the share that is unrealised gain" : ""}.
                     Capital gains are taxed at the inclusion rate. Age and pension credits, OAS recovery tax and income splitting are not included. Not tax advice; confirm with the family's tax professional.

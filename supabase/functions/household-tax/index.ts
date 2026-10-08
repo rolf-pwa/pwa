@@ -11,6 +11,7 @@ import { generateVertexContent, GEMINI_EXTRACT_MODEL, parseServiceAccountKey, wi
 import { drawLines } from "../_shared/income-tax-projection.ts";
 import { cachedTaxSlipMix, readTaxSlipMix } from "../_shared/tax-slips-vault.ts";
 import { incomeStructure, sanitizeIncomeSources } from "../_shared/charter-targets.ts";
+import { loadRentalSummary } from "../_shared/rental-income.ts";
 import { TAX_TABLES } from "../_shared/governance-audit-tax-config.ts";
 import { LINE_KEYS, linesFromReturn, sanitizeLines, sanitizeReturn, sanitizeSources, taxFromLines, type LineKey, type LineSources, type TaxLines } from "../_shared/tax-lines.ts";
 import { matchContactByName, pickReturnFiles } from "../_shared/tax-return-pick.ts";
@@ -45,7 +46,8 @@ const RETURN_TOOL = {
         employment_income: { type: "NUMBER", description: "Employment income (line 10100) plus other employment income (10400) plus net self-employment income (13500 and similar)." },
         pension_income: { type: "NUMBER", description: "Pension and annuity income: lines 11500, 11600 (RRIF/RRSP/annuity payments) and 12900 (RRSP income)." },
         cpp_oas_income: { type: "NUMBER", description: "CPP/QPP benefits (11400) plus Old Age Security (11300)." },
-        interest_investment_income: { type: "NUMBER", description: "Interest and other investment income (12100), plus net rental income (12600) and foreign income if shown." },
+        interest_investment_income: { type: "NUMBER", description: "Interest and other investment income (line 12100), plus foreign income if shown. Not rental income." },
+        rental_income: { type: "NUMBER", description: "Net rental income (line 12600) as printed; negative for a rental loss." },
         dividends_taxable_total: { type: "NUMBER", description: "Line 12000: taxable amount of dividends (already grossed up) from taxable Canadian corporations." },
         dividends_taxable_other: { type: "NUMBER", description: "Line 12010: taxable amount of dividends OTHER than eligible dividends." },
         taxable_capital_gains: { type: "NUMBER", description: "Line 12700: taxable capital gains (the taxable half)." },
@@ -95,6 +97,7 @@ async function load(db: Db, householdId: string) {
   const draws: any[] = [...(fin.holdingTank ?? []), ...fin.vineyardAccounts].filter((a) => (Number(a.withdrawals_ytd) || 0) > 0);
   const drawnYtd = draws.reduce((s, a) => s + Number(a.withdrawals_ytd), 0);
   const scale = structure && drawnYtd > 0 ? structure.capitalRequired / drawnYtd : 1;
+  const rental = await loadRentalSummary(db, householdId, year);
   const taxpayersWithDraws = new Set(draws.map((a) => a.contact_id).filter(Boolean));
 
   const out = people.map((p) => {
@@ -108,8 +111,8 @@ async function load(db: Db, householdId: string) {
     const d = drawLines(mine, mix);
     const adults = taxpayersWithDraws.size || 1;
     const benefits = structure ? structure.externalTotal / adults : baseline.lines.government_benefits;
-    const suggestedLines: TaxLines = { ...d.lines, government_benefits: taxpayersWithDraws.has(p.id) || !taxpayersWithDraws.size ? benefits : baseline.lines.government_benefits };
-    const suggestedSources: LineSources = Object.fromEntries(LINE_KEYS.filter((k) => suggestedLines[k] > 0).map((k) => [k, "detected"])) as LineSources;
+    const suggestedLines: TaxLines = { ...d.lines, government_benefits: taxpayersWithDraws.has(p.id) || !taxpayersWithDraws.size ? benefits : baseline.lines.government_benefits, rental_income: rental?.byContact[p.id] ?? 0 };
+    const suggestedSources: LineSources = Object.fromEntries(LINE_KEYS.filter((k) => suggestedLines[k] !== 0).map((k) => [k, "detected"])) as LineSources;
     const pr = row(p.id, "projection", year);
     const projection = pr
       ? { saved: true, lines: sanitizeLines(pr.lines), sources: sanitizeSources(pr.sources), sourceFile: null }
