@@ -34,8 +34,8 @@ const REVOLVING = new Set(["heloc", "credit_card", "line_of_credit"]);
 
 /**
  * Unused credit staff have assigned to the Strategic Reserve: credit limit less balance on each flagged revolving line
- * (never below zero). It is reserve CAPACITY, not an asset, so it is reported beside the reserve and left out of Total
- * Assets and Net Worth (otherwise the balance sheet would no longer balance).
+ * (never below zero). It is counted in the Strategic Reserve and in Total Assets, with an equal "undrawn credit" line on
+ * the liabilities side, so Net Worth is unchanged and the balance sheet still balances.
  */
 export function creditForStrategic(lines: CreditLine[] | undefined): { total: number; lines: { description: string; available: number }[] } {
   const out: { description: string; available: number }[] = [];
@@ -74,7 +74,7 @@ export interface Allocation {
   incomeFundsOnFile: number;      // income funds known from statements, moved or not
   cashValueAdded: number;         // policy cash value counted as Strategic
   realEstateAdded: number;        // real estate counted in the reserves (and in assets / net worth)
-  creditCapacity: number;         // available credit assigned to the Strategic Reserve (NOT in assets or net worth)
+  creditCapacity: number;         // available credit assigned to the Strategic Reserve: in the reserve and Total Assets, offset by an equal undrawn-credit liability (Net Worth unchanged)
   creditLines: { description: string; available: number }[];
   totalWithdrawals: number;       // all withdrawals read from statements
   accountsWithWithdrawalData: number;
@@ -133,8 +133,13 @@ export function allocateCapital(i: AllocInput): Allocation {
     notes.push(`Legacy Trust includes ${money(num(re.legacy))} of real estate (principal residence and investment property).`);
   }
 
+  // Available credit assigned to the Strategic Reserve: an asset in the reserve and Total Assets, offset by an equal
+  // undrawn-credit liability, so Net Worth does not move.
   const credit = creditForStrategic(i.credit);
-  if (credit.total > 0) notes.push(`Strategic Reserve capacity includes ${money(credit.total)} of available credit; it is not counted in Total Assets or Net Worth.`);
+  if (credit.total > 0) {
+    reserves.strategic += credit.total;
+    notes.push(`Strategic Reserve includes ${money(credit.total)} of available credit, offset by an equal undrawn-credit line in liabilities (Net Worth is unchanged).`);
+  }
 
   // Only accounts that issue a statement can be "read"; the rest are left out of the counts and notes.
   const expecting = i.accounts.filter((a) => a.expects_statement !== false);
@@ -148,7 +153,7 @@ export function allocateCapital(i: AllocInput): Allocation {
   }
 
   return {
-    aum: round2(i.aum + cashValueAdded + realEstateAdded),
+    aum: round2(i.aum + cashValueAdded + realEstateAdded + credit.total),
     netWorth: round2(i.netWorth + cashValueAdded + realEstateAdded),
     holdingTank: round2(holdingTank),
     vineyard: round2(vineyard),

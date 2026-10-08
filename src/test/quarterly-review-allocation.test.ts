@@ -106,14 +106,14 @@ describe("available credit and the Strategic Reserve", () => {
     expect(c.total).toBe(180000);
     expect(c.lines).toEqual([{ description: "Hardie Rd HELOC", available: 180000 }]);
   });
-  it("is capacity, not an asset: Total Assets, Net Worth and the reserve row do not move", () => {
+  it("is an asset in the reserve and Total Assets, offset by an undrawn-credit liability so Net Worth is unchanged", () => {
     const base = { aum: 1000, netWorth: 800, holdingTank: 0, vineyard: 1000, reserves: { liquidity: 0, strategic: 0, philanthropic: 0, legacy: 0 }, liquidityStorehouse: { exists: false, target: null }, accounts: [], policies: [] };
     const without = allocCap(base);
     const withCredit = allocCap({ ...base, credit: [heloc] });
     expect(withCredit.creditCapacity).toBe(180000);
-    expect(withCredit.aum).toBe(without.aum);
-    expect(withCredit.netWorth).toBe(without.netWorth);
-    expect(withCredit.reserves.strategic).toBe(without.reserves.strategic);
-    expect(withCredit.notes.join(" ")).toContain("not counted in Total Assets");
+    expect(withCredit.reserves.strategic).toBe(without.reserves.strategic + 180000);
+    expect(withCredit.aum).toBe(without.aum + 180000);
+    expect(withCredit.netWorth).toBe(without.netWorth); // assets up by the credit, liabilities up by the same undrawn credit
+    expect(withCredit.notes.join(" ")).toContain("offset by an equal undrawn-credit line");
   });
 });

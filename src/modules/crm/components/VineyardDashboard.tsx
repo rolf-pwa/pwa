@@ -71,7 +71,6 @@ export function VineyardDashboard({ householdId }: { householdId: string }) {
             <BsLine label="Vineyard" value={money(b.vineyard)} />
             <BsLine label="Liquidity Reserve" value={money(b.liquidity)} />
             <BsLine label="Strategic Reserve" value={money(b.strategic)} />
-            {(b.creditCapacity ?? 0) > 0 && <p className="-mt-0.5 pb-0.5 text-right text-[11px] italic text-muted-foreground">+ {money(b.creditCapacity)} available credit assigned to this reserve (capacity; not in Total Assets)</p>}
             <BsLine label="Philanthropic Trust" value={money(b.philanthropic)} />
             <BsLine label="Legacy Trust" value={money(b.legacy)} />
             <div className="mt-1 border-t pt-1"><BsLine label="Total Assets" value={money(b.totalAssets)} strong /></div>
@@ -79,6 +78,7 @@ export function VineyardDashboard({ householdId }: { householdId: string }) {
           <div>
             <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Liabilities &amp; Net Worth</p>
             <BsLine label="Liabilities" value={money(b.liabilities)} negative />
+            {(b.creditCapacity ?? 0) > 0 && <BsLine label="Undrawn credit (offsets the Strategic Reserve)" value={money(b.creditCapacity)} negative />}
             <BsLine label="Net Worth" value={money(b.netWorth)} strong />
             <div className="mt-3 border-t pt-2">
               <BsLine label="Harvest to date (all withdrawals)" value={b.harvest === null ? "—" : money(b.harvest)} strong />

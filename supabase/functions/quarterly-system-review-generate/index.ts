@@ -321,7 +321,7 @@ serve(async (req) => {
     // ---- Charter targets, checked against the SAME balance sheet figures the document shows.
     const liabilitiesTotal = (diag.personal_liabilities_total ?? 0) + (diag.corp_liabilities_total ?? 0);
     const figures: BalanceFigures = {
-      areas: { vineyard: allocation.vineyard, liquidity: allocation.reserves.liquidity, strategic: allocation.reserves.strategic + allocation.creditCapacity, philanthropic: allocation.reserves.philanthropic, legacy: allocation.reserves.legacy, liabilities: liabilitiesTotal },
+      areas: { vineyard: allocation.vineyard, liquidity: allocation.reserves.liquidity, strategic: allocation.reserves.strategic, philanthropic: allocation.reserves.philanthropic, legacy: allocation.reserves.legacy, liabilities: liabilitiesTotal },
       totalAssets: allocation.aum, investableAssets: allocation.aum - allocation.realEstateAdded, netWorth: allocation.netWorth,
       monthlySpending: vaultExtract?.monthly_spending ?? null, withdrawnYtd: allocation.harvest,
     };
