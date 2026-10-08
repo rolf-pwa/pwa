@@ -8,11 +8,13 @@ import { Input } from "@/shared/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/shared/components/ui/dialog";
 import { Label } from "@/shared/components/ui/label";
 import { Switch } from "@/shared/components/ui/switch";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/shared/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/shared/components/ui/select";
 import { Badge } from "@/shared/components/ui/badge";
 import {
   Folder,
   FileText,
+  MoreHorizontal,
   ChevronRight,
   ChevronDown,
   Loader2,
@@ -266,52 +268,52 @@ function FolderNode({
           {files.map((f) => {
             const visible = visMap[f.id] !== false; // default visible; staff can toggle off
             return (
-              <div key={f.id} className="flex items-center gap-2 py-1.5 text-sm group">
-                <FileText className="h-4 w-4 text-muted-foreground" />
-                <span className="flex-1 truncate">{f.name}</span>
-                {householdId && (
-                  <span className="flex items-center gap-1.5 mr-2" title="Visible to client">
-                    <ShieldCheck className={`h-3.5 w-3.5 ${visible ? "text-accent" : "text-muted-foreground/40"}`} />
-                    <Switch checked={visible} onCheckedChange={(v) => toggleVisibility(f, v)} />
-                  </span>
-                )}
-                <span className="text-xs text-muted-foreground">{formatSize(f.size)}</span>
-                <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => onPreview(f)}>
-                  <Eye className="h-3.5 w-3.5" />
-                </Button>
-                <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => downloadFile(f)}>
-                  <Download className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 px-2"
-                  title="Add to Second Brain"
-                  disabled={brainBusyId === f.id}
-                  onClick={() => addToBrain(f)}
-                >
-                  {brainBusyId === f.id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Brain className="h-3.5 w-3.5" />
+              <div key={f.id} className="flex items-start gap-2 py-1.5 text-sm">
+                <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1 break-words" title={f.name}>{f.name}</span>
+                <div className="flex shrink-0 items-center gap-1">
+                  {householdId && (
+                    <span className="mr-1 flex items-center gap-1.5" title="Visible to client">
+                      <ShieldCheck className={`h-3.5 w-3.5 ${visible ? "text-accent" : "text-muted-foreground/40"}`} />
+                      <Switch checked={visible} onCheckedChange={(v) => toggleVisibility(f, v)} />
+                    </span>
                   )}
-                </Button>
-                {householdId && (
-                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
-                    <Button size="sm" variant="ghost" className="h-7 px-1.5" title="Rename" onClick={() => renameItem(f.id, f.name, false)}>
-                      <span className="text-[10px] font-mono">Aa</span>
-                    </Button>
-                    <Button size="sm" variant="ghost" className="h-7 px-1.5" title="Copy Vault link" onClick={() => copyVaultLink(f.id, false)}>
-                      <Copy className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button size="sm" variant="ghost" className="h-7 px-1.5" title="Share with collaborator" onClick={() => onShare({ driveId: f.id, name: f.name, isFolder: false })}>
-                      <Share2 className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button size="sm" variant="ghost" className="h-7 px-1.5 text-destructive" title="Move to trash" onClick={() => deleteItem(f.id, false)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                )}
+                  <span className="hidden whitespace-nowrap text-xs text-muted-foreground sm:inline">{formatSize(f.size)}</span>
+                  <Button size="sm" variant="ghost" className="h-7 px-2" title="Preview" onClick={() => onPreview(f)}>
+                    <Eye className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 px-2" title="Download" onClick={() => downloadFile(f)}>
+                    <Download className="h-3.5 w-3.5" />
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" variant="ghost" className="h-7 px-2" title="More actions">
+                        {brainBusyId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MoreHorizontal className="h-3.5 w-3.5" />}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem disabled={brainBusyId === f.id} onClick={() => addToBrain(f)}>
+                        <Brain className="mr-2 h-3.5 w-3.5" /> Add to Second Brain
+                      </DropdownMenuItem>
+                      {householdId && (
+                        <>
+                          <DropdownMenuItem onClick={() => renameItem(f.id, f.name, false)}>
+                            <span className="mr-2 w-3.5 text-center font-mono text-[10px]">Aa</span> Rename
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => copyVaultLink(f.id, false)}>
+                            <Copy className="mr-2 h-3.5 w-3.5" /> Copy Vault link
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => onShare({ driveId: f.id, name: f.name, isFolder: false })}>
+                            <Share2 className="mr-2 h-3.5 w-3.5" /> Share with collaborator
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteItem(f.id, false)}>
+                            <Trash2 className="mr-2 h-3.5 w-3.5" /> Move to trash
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
             );
           })}
