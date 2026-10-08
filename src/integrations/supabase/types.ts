@@ -41,6 +41,7 @@ export type Database = {
     Tables: {
       account_harvest_snapshots: {
         Row: {
+          boy_source: string | null
           boy_value: number
           contact_id: string
           created_at: string
@@ -64,6 +65,7 @@ export type Database = {
           ytd_value: number
         }
         Insert: {
+          boy_source?: string | null
           boy_value?: number
           contact_id: string
           created_at?: string
@@ -87,6 +89,7 @@ export type Database = {
           ytd_value?: number
         }
         Update: {
+          boy_source?: string | null
           boy_value?: number
           contact_id?: string
           created_at?: string
@@ -1893,35 +1896,35 @@ export type Database = {
       golden_dataset_overrides: {
         Row: {
           advisor_id: string
-          corrected_value: Json
+          corrected_value: Json | null
           created_at: string
           document_id: string | null
           field_name: string
           household_id: string
           id: string
-          original_ai_value: Json
+          original_ai_value: Json | null
           reasoning_notes: string | null
         }
         Insert: {
           advisor_id: string
-          corrected_value: Json
+          corrected_value?: Json | null
           created_at?: string
           document_id?: string | null
           field_name: string
           household_id: string
           id?: string
-          original_ai_value: Json
+          original_ai_value?: Json | null
           reasoning_notes?: string | null
         }
         Update: {
           advisor_id?: string
-          corrected_value?: Json
+          corrected_value?: Json | null
           created_at?: string
           document_id?: string | null
           field_name?: string
           household_id?: string
           id?: string
-          original_ai_value?: Json
+          original_ai_value?: Json | null
           reasoning_notes?: string | null
         }
         Relationships: [
@@ -2453,6 +2456,69 @@ export type Database = {
           },
         ]
       }
+      household_tax_columns: {
+        Row: {
+          contact_id: string
+          created_at: string
+          household_id: string
+          id: string
+          kind: string
+          lines: Json
+          province: string
+          reported: Json | null
+          source_file: string | null
+          sources: Json
+          tax_year: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          household_id: string
+          id?: string
+          kind: string
+          lines?: Json
+          province?: string
+          reported?: Json | null
+          source_file?: string | null
+          sources?: Json
+          tax_year: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          household_id?: string
+          id?: string
+          kind?: string
+          lines?: Json
+          province?: string
+          reported?: Json | null
+          source_file?: string | null
+          sources?: Json
+          tax_year?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_tax_columns_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "household_tax_columns_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       households: {
         Row: {
           address: string | null
@@ -2619,6 +2685,7 @@ export type Database = {
           coverage_amount: number | null
           coverage_storehouse_id: string | null
           created_at: string
+          cv_in_strategic: boolean
           id: string
           insured_name: string | null
           issue_date: string | null
@@ -2644,6 +2711,7 @@ export type Database = {
           coverage_amount?: number | null
           coverage_storehouse_id?: string | null
           created_at?: string
+          cv_in_strategic?: boolean
           id?: string
           insured_name?: string | null
           issue_date?: string | null
@@ -2669,6 +2737,7 @@ export type Database = {
           coverage_amount?: number | null
           coverage_storehouse_id?: string | null
           created_at?: string
+          cv_in_strategic?: boolean
           id?: string
           insured_name?: string | null
           issue_date?: string | null
@@ -3086,6 +3155,7 @@ export type Database = {
             | null
           created_at: string
           created_by: string
+          credit_in_strategic: boolean
           credit_limit: number | null
           current_balance: number
           description: string
@@ -3110,6 +3180,7 @@ export type Database = {
             | null
           created_at?: string
           created_by: string
+          credit_in_strategic?: boolean
           credit_limit?: number | null
           current_balance?: number
           description: string
@@ -3134,6 +3205,7 @@ export type Database = {
             | null
           created_at?: string
           created_by?: string
+          credit_in_strategic?: boolean
           credit_limit?: number | null
           current_balance?: number
           description?: string
@@ -4706,6 +4778,193 @@ export type Database = {
         }
         Relationships: []
       }
+      rental_properties: {
+        Row: {
+          address: string | null
+          city: string | null
+          created_at: string
+          created_by: string | null
+          current_value: number | null
+          household_id: string
+          id: string
+          mortgage_liability_id: string | null
+          name: string
+          net_income_use: string
+          notes: string | null
+          paydown_liability_id: string | null
+          postal_code: string | null
+          province: string | null
+          purchase_date: string | null
+          purchase_price: number | null
+          storehouse_id: string | null
+          updated_at: string
+          value_as_of: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          created_at?: string
+          created_by?: string | null
+          current_value?: number | null
+          household_id: string
+          id?: string
+          mortgage_liability_id?: string | null
+          name: string
+          net_income_use?: string
+          notes?: string | null
+          paydown_liability_id?: string | null
+          postal_code?: string | null
+          province?: string | null
+          purchase_date?: string | null
+          purchase_price?: number | null
+          storehouse_id?: string | null
+          updated_at?: string
+          value_as_of?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          created_at?: string
+          created_by?: string | null
+          current_value?: number | null
+          household_id?: string
+          id?: string
+          mortgage_liability_id?: string | null
+          name?: string
+          net_income_use?: string
+          notes?: string | null
+          paydown_liability_id?: string | null
+          postal_code?: string | null
+          province?: string | null
+          purchase_date?: string | null
+          purchase_price?: number | null
+          storehouse_id?: string | null
+          updated_at?: string
+          value_as_of?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rental_properties_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_properties_mortgage_liability_id_fkey"
+            columns: ["mortgage_liability_id"]
+            isOneToOne: false
+            referencedRelation: "liabilities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_properties_paydown_liability_id_fkey"
+            columns: ["paydown_liability_id"]
+            isOneToOne: false
+            referencedRelation: "liabilities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_properties_storehouse_id_fkey"
+            columns: ["storehouse_id"]
+            isOneToOne: false
+            referencedRelation: "storehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rental_property_owners: {
+        Row: {
+          contact_id: string
+          ownership_pct: number
+          property_id: string
+        }
+        Insert: {
+          contact_id: string
+          ownership_pct?: number
+          property_id: string
+        }
+        Update: {
+          contact_id?: string
+          ownership_pct?: number
+          property_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rental_property_owners_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_property_owners_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "rental_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rental_property_years: {
+        Row: {
+          created_at: string
+          id: string
+          insurance: number
+          management_fees: number
+          mortgage_interest: number
+          notes: string | null
+          other_expenses: number
+          property_id: string
+          property_tax: number
+          rent_collected: number
+          repairs_maintenance: number
+          tax_year: number
+          updated_at: string
+          utilities: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          insurance?: number
+          management_fees?: number
+          mortgage_interest?: number
+          notes?: string | null
+          other_expenses?: number
+          property_id: string
+          property_tax?: number
+          rent_collected?: number
+          repairs_maintenance?: number
+          tax_year: number
+          updated_at?: string
+          utilities?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          insurance?: number
+          management_fees?: number
+          mortgage_interest?: number
+          notes?: string | null
+          other_expenses?: number
+          property_id?: string
+          property_tax?: number
+          rent_collected?: number
+          repairs_maintenance?: number
+          tax_year?: number
+          updated_at?: string
+          utilities?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rental_property_years_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "rental_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       review_queue: {
         Row: {
           action_description: string
@@ -5851,6 +6110,44 @@ export type Database = {
             columns: ["professional_id"]
             isOneToOne: false
             referencedRelation: "professionals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tax_slip_extracts: {
+        Row: {
+          created_at: string
+          drive_id: string
+          extraction: Json
+          file_name: string | null
+          household_id: string
+          id: string
+          modified_time: string | null
+        }
+        Insert: {
+          created_at?: string
+          drive_id: string
+          extraction: Json
+          file_name?: string | null
+          household_id: string
+          id?: string
+          modified_time?: string | null
+        }
+        Update: {
+          created_at?: string
+          drive_id?: string
+          extraction?: Json
+          file_name?: string | null
+          household_id?: string
+          id?: string
+          modified_time?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tax_slip_extracts_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
             referencedColumns: ["id"]
           },
         ]

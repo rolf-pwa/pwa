@@ -49,6 +49,7 @@ import { HouseholdLiabilities } from "@/modules/crm/components/HouseholdLiabilit
 import { VaultScanButton } from "@/modules/crm/components/vault/VaultScanButton";
 import { ShoeboxToolbar } from "@/modules/crm/components/vault/ShoeboxReviewPanel";
 import { VineyardDashboard } from "@/modules/crm/components/VineyardDashboard";
+import { RentalPropertiesCard } from "@/modules/crm/components/RentalPropertiesCard";
 import { HouseholdTotalsStrip } from "@/modules/crm/components/HouseholdTotalsStrip";
 import { HouseholdTaxSummary } from "@/modules/crm/components/HouseholdTaxSummary";
 import { CharterRatificationTile, StabilizationMapButton, GovernanceAuditButton, QuarterlySystemReviewButton, HouseholdAuditTrailRollup, StartCharterIntakeButton, CausalAIWorkbenchButton } from "@/modules/audit";
@@ -813,6 +814,8 @@ const HouseholdDetail = () => {
                     )}
                   </CardContent>
                 </Card>
+
+                <RentalPropertiesCard householdId={id!} members={members} />
               </div>
 
 
