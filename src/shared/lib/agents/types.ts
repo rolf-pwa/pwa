@@ -137,20 +137,31 @@ export interface InvoiceDraftResult {
   needsContact?: boolean;
 }
 
+export interface VeemPayerDetails {
+  payer_type: "Personal" | "Business";
+  first_name: string | null; last_name: string | null; phone: string | null; phone_country_code: string | null; country_code: string | null;
+  business_name: string | null; industry: string | null; sub_industry: string | null; entity: string | null; tax_id_number: string | null;
+  street: string | null; city: string | null; province: string | null; postal_code: string | null; address_country_code: string | null;
+}
+export interface VeemPayerState { ok: boolean; details: VeemPayerDetails; email: string | null; saved: boolean; missing: string[] }
+
 export interface IInvoiceAgentProvider {
   readonly id: string;
   /** Drafts an invoice from a plain-language prompt (status stays `draft`). */
   draftInvoice(prompt: string): Promise<InvoiceDraftResult>;
   /** Advisor-approved send: pushes to Square and emails the client. */
-  sendInvoice(invoiceId: string): Promise<{ ok: boolean; publicUrl?: string; status?: string }>;
-  refreshInvoice(invoiceId: string): Promise<{ ok: boolean; status?: string }>;
-  cancelInvoice(invoiceId: string): Promise<{ ok: boolean }>;
+  sendInvoice(invoiceId: string, paymentMethod?: string | null): Promise<{ ok: boolean; publicUrl?: string; status?: string }>;
+  refreshInvoice(invoiceId: string, paymentMethod?: string | null): Promise<{ ok: boolean; status?: string }>;
+  cancelInvoice(invoiceId: string, paymentMethod?: string | null): Promise<{ ok: boolean }>;
+  /** Veem needs details about the payer that Square doesn't; these read and save them per client. */
+  getVeemPayer(contactId: string): Promise<VeemPayerState>;
+  saveVeemPayer(contactId: string, details: Record<string, string>): Promise<VeemPayerState>;
   /** Interac e-Transfer: issue the invoice without charging a card. */
   markSentManually(invoiceId: string): Promise<{ ok: boolean; status?: string }>;
   /** Interac e-Transfer: advisor confirms funds landed; records payment + revenue. */
   markPaidManually(invoiceId: string, reference?: string): Promise<{ ok: boolean; status?: string }>;
-  /** Permanent removal. Paid invoices are refused server-side. */
-  deleteInvoice(invoiceId: string): Promise<{ ok: boolean }>;
+  /** Permanent removal. Paid invoices are refused server-side. A sent Veem invoice is canceled in Veem first. */
+  deleteInvoice(invoiceId: string, paymentMethod?: string | null, status?: string | null): Promise<{ ok: boolean }>;
 
   syncService(serviceId: string): Promise<{ ok: boolean; squareId?: string }>;
   /** Permanent removal. Services with bookings attached are refused server-side. */

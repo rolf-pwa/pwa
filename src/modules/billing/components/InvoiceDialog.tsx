@@ -38,7 +38,7 @@ export function InvoiceDialog({ open, onOpenChange, invoiceId, onSaved }: Props)
   const [tax, setTax] = useState("0");
   const [taxRate, setTaxRate] = useState("5");
   const [autoTax, setAutoTax] = useState(true);
-  const [paymentMethod, setPaymentMethod] = useState<"card" | "e_transfer" | "either">("either");
+  const [paymentMethod, setPaymentMethod] = useState<"card" | "e_transfer" | "either" | "veem">("either");
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -72,7 +72,9 @@ export function InvoiceDialog({ open, onOpenChange, invoiceId, onSaved }: Props)
             ? "e_transfer"
             : invoice?.payment_method === "card"
               ? "card"
-              : "either",
+              : invoice?.payment_method === "veem"
+                ? "veem"
+                : "either",
         );
         setAutoTax(Number(invoice?.tax_rate ?? 0) > 0);
         setReadOnly(Boolean(invoice && invoice.status !== "draft"));
@@ -255,7 +257,7 @@ export function InvoiceDialog({ open, onOpenChange, invoiceId, onSaved }: Props)
                 <Label>Payment method</Label>
                 <Select
                   value={paymentMethod}
-                  onValueChange={(v) => setPaymentMethod(v as "card" | "e_transfer" | "either")}
+                  onValueChange={(v) => setPaymentMethod(v as "card" | "e_transfer" | "either" | "veem")}
                   disabled={readOnly}
                 >
                   <SelectTrigger>
@@ -265,11 +267,14 @@ export function InvoiceDialog({ open, onOpenChange, invoiceId, onSaved }: Props)
                     <SelectItem value="either">Client's choice — card or e-Transfer</SelectItem>
                     <SelectItem value="card">Credit card (Square)</SelectItem>
                     <SelectItem value="e_transfer">Interac e-Transfer only</SelectItem>
+                    <SelectItem value="veem">Bank payment (Veem)</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
                   {paymentMethod === "card"
                     ? "Sends through Square with a hosted card payment page."
+                    : paymentMethod === "veem"
+                      ? "Sends through Veem: the client gets an email with a link to pay by bank transfer, in CAD, USD, EUR or GBP, from Canada or abroad. Veem needs a few details about the client first."
                     : paymentMethod === "e_transfer"
                       ? "No Square charge — put your e-Transfer address in the notes, then mark the invoice paid when the funds land."
                       : "Sends through Square with a card payment page and e-Transfer instructions on the invoice. If they e-Transfer instead, mark it paid here."}
