@@ -1333,16 +1333,16 @@ const HouseholdDetail = () => {
               <div className="min-w-0 space-y-6">
                 <VineyardDashboard householdId={id!} />
 
+
+              </div>
+              <aside className="min-w-0 space-y-3">
+            <SidebarSection title="Holding Tank" meta={formatCurrency(totalHoldingTank)}>
+              <HoldingTank householdId={id!} onAccountMoved={() => fetchData()} />
+            </SidebarSection>
+
             {/* The Storehouses */}
-            <CollapsibleCard
-              defaultCollapsed={false}
-              icon={Landmark}
-              iconBgClassName="bg-accent/10"
-              iconColorClassName="text-accent"
-              title="The Storehouses"
-              subtitle="Strategic Asset Allocation"
-              headerRight={<p className="text-2xl font-bold text-accent">{formatCurrency(totalStorehouses)}</p>}
-            >
+            <SidebarSection title="The Storehouses" meta={formatCurrency(totalStorehouses)}>
+              <div className="space-y-4 px-2 pt-1">
                 {STOREHOUSE_CONFIG.map(({ num, name, icon: Icon }) => {
                   const accounts = storehouses.filter((s) => s.storehouse_number === num);
                   const insuranceHere = num === 2
@@ -1394,12 +1394,7 @@ const HouseholdDetail = () => {
                     </div>
                   );
                 })}
-            </CollapsibleCard>
-
-              </div>
-              <aside className="min-w-0 space-y-3">
-            <SidebarSection title="Holding Tank" meta={formatCurrency(totalHoldingTank)}>
-              <HoldingTank householdId={id!} onAccountMoved={() => fetchData()} />
+            </div>
             </SidebarSection>
 
             {/* Corporate Holdings */}

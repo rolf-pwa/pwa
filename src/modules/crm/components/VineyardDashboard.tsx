@@ -54,9 +54,8 @@ export function VineyardDashboard({ householdId }: { householdId: string }) {
   if (!data) return <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading dashboard…</div>;
 
   const b = data.balance;
-  const sections: { key: "holding_tank" | "vineyard" | "storehouse"; title: string }[] = [
-    { key: "vineyard", title: "The Vineyard" }, { key: "holding_tank", title: "Holding Tank" }, { key: "storehouse", title: "Reserves (Storehouses)" },
-  ];
+  // Holding Tank and the Storehouses have their own panels in the sidebar; the dashboard's account table is the Vineyard.
+  const sections: { key: "holding_tank" | "vineyard" | "storehouse"; title: string }[] = [{ key: "vineyard", title: "The Vineyard" }];
 
   return (
     <div className="space-y-4">
@@ -82,7 +81,7 @@ export function VineyardDashboard({ householdId }: { householdId: string }) {
             <BsLine label="Net Worth" value={money(b.netWorth)} strong />
             <div className="mt-3 border-t pt-2">
               <BsLine label="Harvest to date (all withdrawals)" value={b.harvest === null ? "—" : money(b.harvest)} strong />
-              <BsLine label="Growth on accounts with a BOY, withdrawals added back" value={signed(data.all.growth)} />
+              <BsLine label="Vineyard growth, withdrawals added back" value={data.groups.vineyard.totals.withBoy ? signed(data.groups.vineyard.totals.growth) : "—"} />
             </div>
           </div>
           {b.notes.length > 0 && <p className="text-[11px] text-muted-foreground md:col-span-2">{b.notes.join(" ")}</p>}
