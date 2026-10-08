@@ -126,9 +126,9 @@ Deno.serve(async (req) => {
       });
     } else if (kind === "investment") {
       const [{ data: vineyard }, { data: storehouses }, { data: tank }] = await Promise.all([
-        memberIds.length ? admin.from("vineyard_accounts").select("id, account_name, account_number").in("contact_id", memberIds) : { data: [] },
-        memberIds.length ? admin.from("storehouses").select("id, label, asset_type").in("contact_id", memberIds) : { data: [] },
-        memberIds.length ? admin.from("holding_tank").select("id, account_name, account_number").in("contact_id", memberIds).neq("status", "moved") : { data: [] },
+        memberIds.length ? admin.from("vineyard_accounts").select("id, contact_id, account_name, account_number").in("contact_id", memberIds) : { data: [] },
+        memberIds.length ? admin.from("storehouses").select("id, contact_id, label, asset_type").in("contact_id", memberIds) : { data: [] },
+        memberIds.length ? admin.from("holding_tank").select("id, contact_id, account_name, account_number").in("contact_id", memberIds).neq("status", "moved") : { data: [] },
       ]);
       plan = planInvestmentApply(corrected.extraction[listKey] ?? [], {
         householdId: audit.household_id, members: members ?? [], vineyard: vineyard ?? [], storehouses: storehouses ?? [], holdingTank: tank ?? [],
