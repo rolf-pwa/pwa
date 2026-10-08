@@ -58,7 +58,7 @@ async function build(db: any, householdId: string) {
     balance: {
       holdingTank: allocation.holdingTank, vineyard: allocation.vineyard, liquidity: allocation.reserves.liquidity, strategic: allocation.reserves.strategic,
       philanthropic: allocation.reserves.philanthropic, legacy: allocation.reserves.legacy, totalAssets: allocation.aum, liabilities, netWorth: allocation.netWorth,
-      harvest: allocation.harvest, notes: allocation.notes,
+      harvest: allocation.harvest, creditCapacity: allocation.creditCapacity, notes: allocation.notes,
     },
     groups: { holding_tank: group("holding_tank"), vineyard: group("vineyard"), storehouse: group("storehouse") },
     all: dashTotals(rows.filter((r) => r.group !== "storehouse")),

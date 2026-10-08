@@ -28,3 +28,20 @@ describe("household liabilities helpers", () => {
     expect(t).toEqual({ balance: 354_200.5, revolvingLimit: 110_000, creditAvailable: 60_799.5 });
   });
 });
+
+import { annualInterest, interestTotals, utilisationPct } from "@/modules/crm/lib/liabilities";
+
+describe("yearly interest and utilisation", () => {
+  const heloc = { liability_type: "heloc", current_balance: 300000, credit_limit: 400000, interest_rate_pct: 6.5 };
+  it("costs a liability at balance x rate and leaves unrated debt out, counting it", () => {
+    expect(annualInterest(heloc)).toBe(19500);
+    expect(annualInterest({ ...heloc, interest_rate_pct: null })).toBeNull();
+    const t = interestTotals([heloc, { liability_type: "mortgage", current_balance: 200000, interest_rate_pct: null }, { liability_type: "credit_card", current_balance: 0, interest_rate_pct: null }]);
+    expect(t).toMatchObject({ interest: 19500, ratedCount: 1, unratedCount: 1, unratedBalance: 200000 });
+  });
+  it("reports how much of a credit limit is used, for revolving credit only", () => {
+    expect(utilisationPct(heloc)).toBe(75);
+    expect(utilisationPct({ liability_type: "mortgage", current_balance: 1, credit_limit: 5 })).toBeNull();
+    expect(utilisationPct({ ...heloc, credit_limit: null })).toBeNull();
+  });
+});

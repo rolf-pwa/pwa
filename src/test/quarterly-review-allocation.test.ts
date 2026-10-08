@@ -96,3 +96,24 @@ describe("allocateCapital", () => {
     expect(r).toMatchObject({ aum: 920_598, vineyard: 910_264, holdingTank: 10_000, harvest: null, notes: [] });
   });
 });
+
+import { allocateCapital as allocCap, creditForStrategic } from "../../supabase/functions/_shared/quarterly-review-allocation";
+
+describe("available credit and the Strategic Reserve", () => {
+  const heloc = { description: "Hardie Rd HELOC", liability_type: "heloc", credit_limit: 300000, current_balance: 120000, credit_in_strategic: true };
+  it("counts limit less balance on flagged revolving lines only", () => {
+    const c = creditForStrategic([heloc, { ...heloc, description: "Card", liability_type: "credit_card", credit_in_strategic: false }, { description: "Mortgage", liability_type: "mortgage", credit_limit: 500000, current_balance: 1, credit_in_strategic: true }, { ...heloc, description: "Maxed", credit_limit: 1000, current_balance: 5000 }]);
+    expect(c.total).toBe(180000);
+    expect(c.lines).toEqual([{ description: "Hardie Rd HELOC", available: 180000 }]);
+  });
+  it("is capacity, not an asset: Total Assets, Net Worth and the reserve row do not move", () => {
+    const base = { aum: 1000, netWorth: 800, holdingTank: 0, vineyard: 1000, reserves: { liquidity: 0, strategic: 0, philanthropic: 0, legacy: 0 }, liquidityStorehouse: { exists: false, target: null }, accounts: [], policies: [] };
+    const without = allocCap(base);
+    const withCredit = allocCap({ ...base, credit: [heloc] });
+    expect(withCredit.creditCapacity).toBe(180000);
+    expect(withCredit.aum).toBe(without.aum);
+    expect(withCredit.netWorth).toBe(without.netWorth);
+    expect(withCredit.reserves.strategic).toBe(without.reserves.strategic);
+    expect(withCredit.notes.join(" ")).toContain("not counted in Total Assets");
+  });
+});

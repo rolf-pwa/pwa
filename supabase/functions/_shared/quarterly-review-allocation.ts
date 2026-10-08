@@ -22,6 +22,33 @@ export interface AllocAccount {
   as_of?: string | null;
 }
 
+/** A liability row, as far as the Strategic Reserve's available-credit rule needs it. */
+export interface CreditLine {
+  description?: string | null;
+  liability_type: string;
+  credit_limit: number | string | null;
+  current_balance: number | string | null;
+  credit_in_strategic?: boolean | null;
+}
+const REVOLVING = new Set(["heloc", "credit_card", "line_of_credit"]);
+
+/**
+ * Unused credit staff have assigned to the Strategic Reserve: credit limit less balance on each flagged revolving line
+ * (never below zero). It is reserve CAPACITY, not an asset, so it is reported beside the reserve and left out of Total
+ * Assets and Net Worth (otherwise the balance sheet would no longer balance).
+ */
+export function creditForStrategic(lines: CreditLine[] | undefined): { total: number; lines: { description: string; available: number }[] } {
+  const out: { description: string; available: number }[] = [];
+  for (const l of lines ?? []) {
+    if (!l.credit_in_strategic || !REVOLVING.has(l.liability_type)) continue;
+    const limit = Number(l.credit_limit), bal = Number(l.current_balance) || 0;
+    if (!Number.isFinite(limit) || limit <= 0) continue;
+    const available = Math.max(0, Math.round((limit - bal) * 100) / 100);
+    if (available > 0) out.push({ description: String(l.description ?? "Credit line"), available });
+  }
+  return { total: Math.round(out.reduce((a, x) => a + x.available, 0) * 100) / 100, lines: out };
+}
+
 export interface AllocInput {
   aum: number;
   netWorth: number;
@@ -33,6 +60,8 @@ export interface AllocInput {
   policies: { cash_value: number | null; cash_value_storehouse_id: string | null }[];
   /** Real-estate Storehouse rows the shared diagnostics exclude, by the reserve they belong to. */
   realEstate?: { liquidity?: number; strategic?: number; philanthropic?: number; legacy?: number };
+  /** The household's personal liabilities, for credit assigned to the Strategic Reserve. */
+  credit?: CreditLine[];
 }
 
 export interface Allocation {
@@ -45,6 +74,8 @@ export interface Allocation {
   incomeFundsOnFile: number;      // income funds known from statements, moved or not
   cashValueAdded: number;         // policy cash value counted as Strategic
   realEstateAdded: number;        // real estate counted in the reserves (and in assets / net worth)
+  creditCapacity: number;         // available credit assigned to the Strategic Reserve (NOT in assets or net worth)
+  creditLines: { description: string; available: number }[];
   totalWithdrawals: number;       // all withdrawals read from statements
   accountsWithWithdrawalData: number;
   harvest: number | null;         // = totalWithdrawals when any account has data, else null
@@ -102,6 +133,9 @@ export function allocateCapital(i: AllocInput): Allocation {
     notes.push(`Legacy Trust includes ${money(num(re.legacy))} of real estate (principal residence and investment property).`);
   }
 
+  const credit = creditForStrategic(i.credit);
+  if (credit.total > 0) notes.push(`Strategic Reserve capacity includes ${money(credit.total)} of available credit; it is not counted in Total Assets or Net Worth.`);
+
   // Only accounts that issue a statement can be "read"; the rest are left out of the counts and notes.
   const expecting = i.accounts.filter((a) => a.expects_statement !== false);
   const withData = expecting.filter((a) => isNum(a.withdrawals_ytd));
@@ -122,7 +156,7 @@ export function allocateCapital(i: AllocInput): Allocation {
       liquidity: round2(reserves.liquidity), strategic: round2(reserves.strategic),
       philanthropic: round2(reserves.philanthropic), legacy: round2(reserves.legacy),
     },
-    incomeFundsMoved, incomeFundsOnFile, cashValueAdded, realEstateAdded, totalWithdrawals,
+    incomeFundsMoved, incomeFundsOnFile, cashValueAdded, realEstateAdded, creditCapacity: credit.total, creditLines: credit.lines, totalWithdrawals,
     accountsWithWithdrawalData: withData.length, harvest, notes,
   };
 }

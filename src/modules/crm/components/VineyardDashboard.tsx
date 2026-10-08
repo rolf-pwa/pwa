@@ -13,7 +13,7 @@ interface Totals { boy: number; current: number; withdrawals: number; growth: nu
 interface Group { rows: Row[]; totals: Totals }
 interface Dashboard {
   year: number; asOf: string | null;
-  balance: { holdingTank: number; vineyard: number; liquidity: number; strategic: number; philanthropic: number; legacy: number; totalAssets: number; liabilities: number; netWorth: number; harvest: number | null; notes: string[] };
+  balance: { holdingTank: number; vineyard: number; liquidity: number; strategic: number; philanthropic: number; legacy: number; totalAssets: number; liabilities: number; netWorth: number; harvest: number | null; creditCapacity?: number; notes: string[] };
   groups: Record<"holding_tank" | "vineyard" | "storehouse", Group>;
   all: Totals;
 }
@@ -71,6 +71,7 @@ export function VineyardDashboard({ householdId }: { householdId: string }) {
             <BsLine label="Vineyard" value={money(b.vineyard)} />
             <BsLine label="Liquidity Reserve" value={money(b.liquidity)} />
             <BsLine label="Strategic Reserve" value={money(b.strategic)} />
+            {(b.creditCapacity ?? 0) > 0 && <p className="-mt-0.5 pb-0.5 text-right text-[11px] italic text-muted-foreground">+ {money(b.creditCapacity)} available credit assigned to this reserve (capacity; not in Total Assets)</p>}
             <BsLine label="Philanthropic Trust" value={money(b.philanthropic)} />
             <BsLine label="Legacy Trust" value={money(b.legacy)} />
             <div className="mt-1 border-t pt-1"><BsLine label="Total Assets" value={money(b.totalAssets)} strong /></div>

@@ -40,7 +40,7 @@ type Diag = {
   charter_extract?: { purpose: string; mission: string; vision: string; values: string[]; reserve_rules: string; governance: string; monthly_spending: number | null; targets: TargetCheck[] } | null;
   charter_file?: { name: string; modifiedTime: string | null; ratified: boolean; viaSubfolder: boolean; textRead: boolean } | null;
   harvest?: { current: number | null; snapshot_growth?: number; accounts_read?: number };
-  allocation?: { notes: string[]; income_funds_moved: number; income_funds_on_file: number; cash_value_added: number; real_estate_added?: number };
+  allocation?: { notes: string[]; income_funds_moved: number; income_funds_on_file: number; cash_value_added: number; real_estate_added?: number; credit_capacity?: number };
   tracked_accounts?: number;
   accounts?: number;
 };
@@ -453,6 +453,11 @@ export default function QuarterlySystemReview() {
                     <BsRow label="Vineyard" value={money(diag.vineyard_total)} />
                     <BsRow label="Liquidity Reserve" value={money(diag.storehouse_reserves?.liquidity)} />
                     <BsRow label="Strategic Reserve" value={money(diag.storehouse_reserves?.strategic)} />
+                    {(diag.allocation?.credit_capacity ?? 0) > 0 && (
+                      <div style={{ fontSize: "7pt", color: "#94a3b8", fontStyle: "italic", textAlign: "right", paddingBottom: "0.8mm" }}>
+                        + {money(diag.allocation!.credit_capacity)} available credit assigned to this reserve (capacity; not in Total Assets)
+                      </div>
+                    )}
                     <BsRow label="Philanthropic Trust" value={money(diag.storehouse_reserves?.philanthropic)} />
                     <BsRow label="Legacy Trust" value={money(diag.storehouse_reserves?.legacy)} />
                     <div style={{ marginTop: "auto", paddingTop: "1.5mm" }}>
