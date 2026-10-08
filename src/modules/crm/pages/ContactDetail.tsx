@@ -749,34 +749,34 @@ const ContactDetail = () => {
               return <ContactTotalsStrip contactId={id!} assets={total} />;
             })()}
 
+        <Tabs defaultValue="comms" className="w-full space-y-6">
+            <TabsList className="w-full">
+              <TabsTrigger value="comms" className="flex-1">Communications</TabsTrigger>
+              <TabsTrigger value="vault" className="flex-1">
+                <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
+                Vault
+              </TabsTrigger>
+              <TabsTrigger value="actions" className="flex-1">
+                <ListChecks className="mr-1.5 h-3.5 w-3.5" />
+                Action Items
+              </TabsTrigger>
+              <TabsTrigger value="vineyard" className="flex-1">
+                <Grape className="mr-1.5 h-3.5 w-3.5" />
+                The Vineyard
+              </TabsTrigger>
+              <TabsTrigger value="tax" className="flex-1">
+                <Receipt className="mr-1.5 h-3.5 w-3.5" />
+                Tax
+              </TabsTrigger>
+              <TabsTrigger value="analytics" className="flex-1">
+                <BarChart3 className="mr-1.5 h-3.5 w-3.5" />
+                Analytics
+              </TabsTrigger>
+            </TabsList>
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
           {/* Main Content */}
           <div className="min-w-0 space-y-6">
             {/* Main Tabs */}
-            <Tabs defaultValue="comms" className="w-full">
-              <TabsList className="w-full">
-                <TabsTrigger value="comms" className="flex-1">Communications</TabsTrigger>
-                <TabsTrigger value="vault" className="flex-1">
-                  <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
-                  Vault
-                </TabsTrigger>
-                <TabsTrigger value="actions" className="flex-1">
-                  <ListChecks className="mr-1.5 h-3.5 w-3.5" />
-                  Action Items
-                </TabsTrigger>
-                <TabsTrigger value="vineyard" className="flex-1">
-                  <Grape className="mr-1.5 h-3.5 w-3.5" />
-                  The Vineyard
-                </TabsTrigger>
-                <TabsTrigger value="tax" className="flex-1">
-                  <Receipt className="mr-1.5 h-3.5 w-3.5" />
-                  Tax
-                </TabsTrigger>
-                <TabsTrigger value="analytics" className="flex-1">
-                  <BarChart3 className="mr-1.5 h-3.5 w-3.5" />
-                  Analytics
-                </TabsTrigger>
-              </TabsList>
 
               {/* Communications Tab — Messaging first, above the fold */}
               <TabsContent value="comms" className="space-y-6 mt-4">
@@ -1166,7 +1166,6 @@ const ContactDetail = () => {
               <TabsContent value="analytics" className="space-y-4 mt-4">
                 <ContactAnalytics contactId={contact.id} />
               </TabsContent>
-            </Tabs>
           </div>
 
           {/* Right sidebar */}
@@ -1215,6 +1214,7 @@ const ContactDetail = () => {
           </div>
 
         </div>
+        </Tabs>
       </div>
     </AppLayout>
   );
