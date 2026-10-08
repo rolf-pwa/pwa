@@ -2,7 +2,7 @@
 
 export const LINE_KEYS = [
   "employment", "pension_registered", "government_benefits", "interest_other", "eligible_dividends", "other_dividends",
-  "capital_gains", "other_income", "deductions", "credit_amounts",
+  "capital_gains", "rental_income", "other_income", "deductions", "credit_amounts",
 ] as const;
 export type LineKey = (typeof LINE_KEYS)[number];
 export type Lines = Record<LineKey, number>;
@@ -16,6 +16,7 @@ export const LINE_LABELS: Record<LineKey, string> = {
   eligible_dividends: "Eligible dividends (actual amount)",
   other_dividends: "Other dividends (actual amount)",
   capital_gains: "Capital gains (full gain)",
+  rental_income: "Net rental income (after expenses; a loss is negative)",
   other_income: "Other income",
   deductions: "Deductions (RRSP, carrying charges, etc.)",
   credit_amounts: "Other non-refundable credit amounts (age, pension, etc.)",
@@ -38,7 +39,7 @@ export interface TaxData {
 
 /** A line edited by hand is marked manual so a re-read of the return or slips never overwrites it. */
 export function withEdit(lines: Lines, sources: Sources, key: LineKey, value: number): { lines: Lines; sources: Sources } {
-  return { lines: { ...lines, [key]: Math.max(0, Number.isFinite(value) ? value : 0) }, sources: { ...sources, [key]: "manual" } };
+  return { lines: { ...lines, [key]: key === "rental_income" ? (Number.isFinite(value) ? value : 0) : Math.max(0, Number.isFinite(value) ? value : 0) }, sources: { ...sources, [key]: "manual" } };
 }
 
 export const change = (base: number, proj: number) => proj - base;

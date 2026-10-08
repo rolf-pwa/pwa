@@ -49,6 +49,7 @@ import { resolveCharter } from "../_shared/charter-resolve.ts";
 import { allocateForHousehold } from "../_shared/review-allocation.ts";
 import { cachedTaxSlipMix } from "../_shared/tax-slips-vault.ts";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
+import { loadRentalSummary } from "../_shared/rental-income.ts";
 import { projectIncomeTax, projectionFromSaved } from "../_shared/income-tax-projection.ts";
 import { evaluateTargets, incomeStructure, type BalanceFigures } from "../_shared/charter-targets.ts";
 import { estateFactsFrom, estateSummary } from "../_shared/quarterly-review-cards.ts";
@@ -607,7 +608,12 @@ async function runFullAudit(db: Db, householdId: string, userId: string, options
     const savedProjection = projectionFromSaved(((savedTax ?? []) as any[]).map((r) => ({ name: nameOf.get(r.contact_id) ?? "Household", province: r.province, lines: r.lines })), provinceCode);
     // Without one, the split of non-registered withdrawals uses slips already read on the Tax page; the audit never reads PDFs itself.
     const slipMix = savedProjection ? { mix: null, files: [] as string[] } : await cachedTaxSlipMix(db, householdId, taxYear);
+    // Rental properties: this year's net rental income by owner, and where it goes.
+    const rentalSummary = await loadRentalSummary(db, householdId, new Date().getFullYear());
+    const rentalByOwner: Record<string, number> = {};
+    for (const [cid, v] of Object.entries(rentalSummary?.byContact ?? {})) rentalByOwner[nameOf.get(cid) ?? "Household"] = v;
     const incomeTax = savedProjection ?? projectIncomeTax({
+      rentalByOwner,
       mix: slipMix.mix,
       province: provinceCode,
       accounts: drawSources.map((a) => ({
@@ -774,6 +780,7 @@ async function runFullAudit(db: Db, householdId: string, userId: string, options
       charter_summary: { source: resolved.source, ratified: resolved.ratified, file_name: resolved.vaultCharter?.name ?? null, purpose: resolved.text.purpose || null },
       charter_targets: charterTargets,
       income_structure: incomeStruct,
+      rental_income: rentalSummary,
       income_ytd: { withdrawals: allocation.harvest, year_fraction: Math.round(((Date.now() - Date.UTC(new Date().getUTCFullYear(), 0, 1)) / (365 * 86400000)) * 100) / 100 },
       income_tax: incomeTax ? { ...incomeTax, slip_files: slipMix.files, slip_year: taxYear } : null,
       estate_documents: { source: estateFacts.source, adults: estateFacts.adults, trusts: estateFacts.trusts, status: estateDocs.status, detail: estateDocs.detail, actions: estateDocs.actions, files: ((estateRows ?? []) as any[]).filter((r) => r.file_name).map((r) => ({ type: r.document_type, file_name: r.file_name })) },
