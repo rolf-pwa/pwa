@@ -47,6 +47,7 @@ import { HouseholdStatementIngestion } from "@/modules/crm/components/HouseholdS
 import { HoldingTank } from "@/modules/crm/components/HoldingTank";
 import { VaultView } from "@/modules/crm/pages/Vault";
 import { HouseholdLiabilities } from "@/modules/crm/components/HouseholdLiabilities";
+import { ShoeboxToolbar } from "@/modules/crm/components/vault/ShoeboxReviewPanel";
 import { HouseholdTaxSummary } from "@/modules/crm/components/HouseholdTaxSummary";
 import { CharterRatificationTile, StabilizationMapButton, GovernanceAuditButton, QuarterlySystemReviewButton, HouseholdAuditTrailRollup, StartCharterIntakeButton, CausalAIWorkbenchButton } from "@/modules/audit";
 import { ProsPanel } from "@/modules/crm/components/ProsPanel";
@@ -1343,6 +1344,7 @@ const HouseholdDetail = () => {
                   </Label>
                 </div>
 
+                {household.vault_root_folder_id && <ShoeboxToolbar householdId={id!} />}
                 <Button size="sm" variant="outline" onClick={pushToIntakeAgent} disabled={pushingIntake}>
                   {pushingIntake ? (
                     <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />

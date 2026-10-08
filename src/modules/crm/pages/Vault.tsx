@@ -1123,7 +1123,7 @@ export function VaultView({ forcedHouseholdId, embedded = false }: { forcedHouse
         </Card>
       )}
 
-      {householdId && rootId && <ShoeboxReviewPanel householdId={householdId} />}
+      {householdId && rootId && <ShoeboxReviewPanel householdId={householdId} showControls={!embedded} />}
 
       {householdId && rootId && (
         <Card>
