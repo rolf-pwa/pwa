@@ -223,6 +223,7 @@ const ContactDetail = () => {
   const [viewPortalLoading, setViewPortalLoading] = useState(false);
   const [copyLoading, setCopyLoading] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
+  const [tab, setTab] = useState("comms");
   const [bookMeetingOpen, setBookMeetingOpen] = useState(false);
   const [embeddedBooking, setEmbeddedBooking] = useState<{ label: string; embedUrl: string } | null>(null);
 
@@ -749,7 +750,7 @@ const ContactDetail = () => {
               return <ContactTotalsStrip contactId={id!} assets={total} />;
             })()}
 
-        <Tabs defaultValue="comms" className="w-full space-y-6">
+        <Tabs value={tab} onValueChange={setTab} className="w-full space-y-6">
             <TabsList className="w-full">
               <TabsTrigger value="comms" className="flex-1">Communications</TabsTrigger>
               <TabsTrigger value="vault" className="flex-1">
@@ -773,7 +774,8 @@ const ContactDetail = () => {
                 Analytics
               </TabsTrigger>
             </TabsList>
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
+        {/* The Vault tab carries its own sidebar, so the page sidebar steps aside and the Vault gets the full width. */}
+        <div className={tab === "vault" ? "grid items-start gap-6" : "grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]"}>
           {/* Main Content */}
           <div className="min-w-0 space-y-6">
             {/* Main Tabs */}
@@ -1169,7 +1171,7 @@ const ContactDetail = () => {
           </div>
 
           {/* Right sidebar */}
-          <div className="min-w-0 space-y-4">
+          <div className={tab === "vault" ? "hidden" : "min-w-0 space-y-4"}>
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">AI Workbench</CardTitle>
