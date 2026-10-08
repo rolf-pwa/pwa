@@ -43,7 +43,7 @@ export async function allocateForHousehold(
     liquidityStorehouse: { exists: !!liquidityRow, target: nn(liquidityRow?.target_value) },
     accounts: allocAccounts, realEstate,
     credit: (financials.liabilities ?? []).filter((l) => l.holder_type === "contact"),
-    policies: financials.insurancePolicies.map((p) => ({ cash_value: nn(p.cash_value), cash_value_storehouse_id: p.cash_value_storehouse_id ?? null })),
+    policies: financials.insurancePolicies.map((p) => ({ cash_value: nn(p.cash_value), cash_value_storehouse_id: p.cash_value_storehouse_id ?? null, cv_in_strategic: p.cv_in_strategic ?? true })),
   });
   return { allocation, allocAccounts };
 }

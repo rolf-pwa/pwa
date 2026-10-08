@@ -360,15 +360,20 @@ const HouseholdDetail = () => {
   );
   // Cash value always belongs to Strategic Reserve, by policy — not linked to a specific
   // storehouse account row, so it can't be broken by deleting a manual account.
-  const totalInsuranceInStorehouses = insurancePolicies.reduce(
-    (sum, p) => sum + (Number(p.cash_value) || 0),
-    0
-  );
+  const totalInsuranceInStorehouses = insurancePolicies
+    .filter((p) => p.cv_in_strategic !== false)
+    .reduce((sum, p) => sum + (Number(p.cash_value) || 0), 0);
+  // Unused credit on revolving lines staff assigned to the Strategic Reserve (limit less balance).
+  const strategicCreditLines = liabilities
+    .filter((l: any) => l.holder_type === "contact" && l.credit_in_strategic && ["heloc", "credit_card", "line_of_credit"].includes(l.liability_type) && Number(l.credit_limit) > 0)
+    .map((l: any) => ({ id: l.id, description: l.description as string, available: Math.max(0, Number(l.credit_limit) - (Number(l.current_balance) || 0)) }))
+    .filter((l) => l.available > 0);
+  const strategicCredit = strategicCreditLines.reduce((sum, l) => sum + l.available, 0);
   const totalStorehouses =
     storehouses
       .filter((s: any) => s.asset_type !== 'Primary Residence & Protected Legacy Accounts')
       .reduce((sum, s) => sum + (Number(s.current_value) || 0), 0) +
-    totalInsuranceInStorehouses;
+    totalInsuranceInStorehouses + strategicCredit;
   const totalCorpAssets = corporations.reduce(
     (sum, c) => sum + (c.total_assets || 0),
     0
@@ -1345,10 +1350,9 @@ const HouseholdDetail = () => {
               <div className="space-y-4 px-2 pt-1">
                 {STOREHOUSE_CONFIG.map(({ num, name, icon: Icon }) => {
                   const accounts = storehouses.filter((s) => s.storehouse_number === num);
-                  const insuranceHere = num === 2
-                    ? insurancePolicies.reduce((sum, p: any) => sum + (Number(p.cash_value) || 0), 0)
-                    : 0;
-                  const total = accounts.reduce((sum, s) => sum + (Number(s.current_value) || 0), 0) + insuranceHere;
+                  const insuranceHere = num === 2 ? totalInsuranceInStorehouses : 0;
+                  const creditHere = num === 2 ? strategicCredit : 0;
+                  const total = accounts.reduce((sum, s) => sum + (Number(s.current_value) || 0), 0) + insuranceHere + creditHere;
                   const targetTotal = accounts.reduce((sum, s) => sum + (Number(s.target_value) || 0), 0);
                   const pct = targetTotal > 0 ? Math.min((total / targetTotal) * 100, 100) : 0;
 
@@ -1389,8 +1393,20 @@ const HouseholdDetail = () => {
                           ))}
                         </>
                       ) : (
-                        <p className="text-xs text-muted-foreground pl-6">No accounts configured</p>
+                        insuranceHere + creditHere > 0 ? null : <p className="text-xs text-muted-foreground pl-6">No accounts configured</p>
                       )}
+                      {insuranceHere > 0 && (
+                        <div className="flex items-center justify-between py-1 pl-6">
+                          <span className="text-sm text-foreground/80">Insurance cash value</span>
+                          <span className="text-sm font-medium text-foreground">{formatCurrency(insuranceHere)}</span>
+                        </div>
+                      )}
+                      {num === 2 && strategicCreditLines.map((l) => (
+                        <div key={l.id} className="flex items-center justify-between py-1 pl-6">
+                          <span className="text-sm text-foreground/80">Available credit · {l.description}</span>
+                          <span className="text-sm font-medium text-foreground">{formatCurrency(l.available)}</span>
+                        </div>
+                      ))}
                     </div>
                   );
                 })}
@@ -1495,9 +1511,27 @@ const HouseholdDetail = () => {
                         </span>
                       </div>
                       {p.cash_value > 0 && (
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Cash Value: {formatCurrency(Number(p.cash_value) || 0)}
-                        </p>
+                        <>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Cash Value: {formatCurrency(Number(p.cash_value) || 0)}
+                          </p>
+                          {!p.cash_value_storehouse_id && (
+                            <label className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground" title="Counts this policy's cash value in the Strategic Reserve and Total Assets. On by default.">
+                              <Switch
+                                checked={p.cv_in_strategic !== false}
+                                onCheckedChange={async (on) => {
+                                  setInsurancePolicies((prev) => prev.map((x) => (x.id === p.id ? { ...x, cv_in_strategic: on } : x)));
+                                  const { error } = await (supabase.from("insurance_policies" as any) as any).update({ cv_in_strategic: on }).eq("id", p.id);
+                                  if (error) {
+                                    setInsurancePolicies((prev) => prev.map((x) => (x.id === p.id ? { ...x, cv_in_strategic: !on } : x)));
+                                    toast.error("Couldn't update the Strategic Reserve setting.");
+                                  } else toast.success(on ? "Cash value now counts toward the Strategic Reserve." : "Cash value removed from the Strategic Reserve.");
+                                }}
+                              />
+                              Count cash value in the Strategic Reserve
+                            </label>
+                          )}
+                        </>
                       )}
                     </div>
                   ))}
