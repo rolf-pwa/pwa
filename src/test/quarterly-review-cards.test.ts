@@ -199,3 +199,19 @@ describe("estateFactsFrom (shared by the Review and the Governance Audit)", () =
     expect(estateFactsFrom([], [], null).adults).toEqual([]);
   });
 });
+
+describe("Strategic Reserve with assigned credit", () => {
+  it("lists the credit as capacity beside the reserve and never as a source of money", () => {
+    const f: ReviewFacts = { ...good(), balance: { ...good().balance, strategic: 50_000, creditCapacity: 180_000 }, strategic: { policyCount: 0, coverageTotal: 0, missingCoverageCount: 0, missingBeneficiaryCount: 0, renewalsDueSoon: 0, documentsFiled: null } };
+    const c = card(f, "strategic");
+    expect(c.current.join(" ")).toContain("$180,000 of available credit");
+    expect(c.current.join(" ")).toContain("$230,000 of capacity");
+    expect(c.status).not.toBe("Not Assessed");
+  });
+  it("caps what a Strategic surplus can send on at the real money in the reserve", () => {
+    const strategicTarget = evaluateTarget({ area: "strategic", label: "Strategic Reserve", metric: "amount", comparison: "at_least", value: 100_000, value_max: null, quote: "" }, { ...figures, areas: { ...figures.areas, strategic: 280_000 } });
+    const f: ReviewFacts = { ...good(), balance: { ...good().balance, strategic: 100_000, creditCapacity: 180_000 }, targets: [strategicTarget] };
+    const moves = planRebalance(f).filter((m) => m.from === "strategic");
+    expect(moves.every((m) => m.amount <= 100_000)).toBe(true);
+  });
+});

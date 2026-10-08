@@ -82,7 +82,7 @@ interface GovernanceAuditDoc {
   income_structure?: { totalIncome: number; external: { label: string; annual_amount: number }[]; externalTotal: number; capitalRequired: number; withdrawnYtd: number | null; capitalRemaining: number | null } | null;
   income_tax?: { basis?: "tax_slips" | "unrealised_gain" | "household_tax_page"; slip_files?: string[]; slip_year?: number; mix?: { taxYear: number; shares: { interest: number; eligibleDividends: number; otherDividends: number; capitalGains: number; returnOfCapital: number } } | null; province: string; taxYearTables: number; taxpayers: { name: string; taxableIncome: number; federalTax: number; provincialTax: number; totalTax: number; effectiveRate: number; marginalRate: number }[]; totalDraws: number; totalBenefits: number; grossIncome: number; totalTax: number; afterTaxIncome: number; effectiveRate: number; notes: string[] } | null;
   income_ytd?: { withdrawals: number | null; year_fraction: number };
-  balance_sheet?: { total_assets: number; net_worth: number; liabilities: number };
+  balance_sheet?: { total_assets: number; net_worth: number; liabilities: number; credit_capacity?: number };
 }
 interface GovernanceAuditRow {
   id: string;
@@ -414,7 +414,12 @@ export default function GovernanceAudit() {
                     <div style={colLabel}>Assets</div>
                     {holdingTank > 0 && <BsRow label="Holding Tank" value={fmtCurrency(holdingTank)} />}
                     {pillars.map(([pillar, total]) => (
-                      <BsRow key={pillar} label={PILLAR_LABEL[pillar] ?? pillar} value={fmtCurrency(total)} />
+                      <div key={pillar}>
+                        <BsRow label={PILLAR_LABEL[pillar] ?? pillar} value={fmtCurrency(total)} />
+                        {pillar === "Armoury" && (bs?.credit_capacity ?? 0) > 0 && (
+                          <div style={{ fontSize: "7pt", color: "#94a3b8", fontStyle: "italic", textAlign: "right" }}>+ {fmtCurrency(bs!.credit_capacity!)} available credit assigned to this reserve (capacity; not in Total Assets)</div>
+                        )}
+                      </div>
                     ))}
                     {bs && (
                       <div style={{ marginTop: "auto", paddingTop: "1.5mm" }}>

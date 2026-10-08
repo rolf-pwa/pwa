@@ -50,7 +50,7 @@ type Diagnostics = {
   aum?: number;
   storehouse_reserves?: { liquidity: number; strategic: number; philanthropic: number; legacy: number };
   insurance_coverage_total?: number;
-  allocation?: { notes: string[]; income_funds_moved: number; income_funds_on_file: number; cash_value_added: number; real_estate_added?: number };
+  allocation?: { notes: string[]; income_funds_moved: number; income_funds_on_file: number; cash_value_added: number; real_estate_added?: number; credit_capacity?: number };
   vineyard_total?: number;
   holding_tank_total?: number;
   net_worth?: number;
@@ -624,6 +624,11 @@ export default function StabilizationMap() {
                       <BsRow label="Vineyard" value={fmtCurrency(diag.vineyard_total)} />
                       <BsRow label="Liquidity Reserve" value={fmtCurrency(diag.storehouse_reserves?.liquidity)} />
                       <BsRow label="Strategic Reserve" value={fmtCurrency(diag.storehouse_reserves?.strategic)} />
+                      {(diag.allocation?.credit_capacity ?? 0) > 0 && (
+                        <div style={{ fontSize: "7pt", color: "#94a3b8", fontStyle: "italic", textAlign: "right", paddingBottom: "0.8mm" }}>
+                          + {fmtCurrency(diag.allocation!.credit_capacity)} available credit assigned to this reserve (capacity; not in Total Assets)
+                        </div>
+                      )}
                       <BsRow label="Philanthropic Trust" value={fmtCurrency(diag.storehouse_reserves?.philanthropic)} />
                       <BsRow label="Legacy Trust" value={fmtCurrency(diag.storehouse_reserves?.legacy)} />
                       <div style={{ marginTop: "auto", paddingTop: "1.5mm" }}>

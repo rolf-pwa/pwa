@@ -15,7 +15,7 @@ const nn = (v: unknown) => (v === null || v === undefined || v === "" ? null : N
 
 export async function allocateForHousehold(
   supabase: any,
-  financials: { holdingTank: any[]; vineyardAccounts: any[]; storehouses: any[]; insurancePolicies: any[] },
+  financials: { holdingTank: any[]; vineyardAccounts: any[]; storehouses: any[]; insurancePolicies: any[]; liabilities?: any[] },
   diag: { aum: number; net_worth: number; holding_tank_total: number; vineyard_total: number; storehouse_reserves: Allocation["reserves"] },
 ) {
   const { data: tankRows } = financials.holdingTank.length
@@ -42,6 +42,7 @@ export async function allocateForHousehold(
     reserves: diag.storehouse_reserves,
     liquidityStorehouse: { exists: !!liquidityRow, target: nn(liquidityRow?.target_value) },
     accounts: allocAccounts, realEstate,
+    credit: (financials.liabilities ?? []).filter((l) => l.holder_type === "contact"),
     policies: financials.insurancePolicies.map((p) => ({ cash_value: nn(p.cash_value), cash_value_storehouse_id: p.cash_value_storehouse_id ?? null })),
   });
   return { allocation, allocAccounts };
@@ -59,5 +60,5 @@ export function applyAllocation<T extends { aum: number; net_worth: number; hold
 
 export const allocationSummary = (a: Allocation) => ({
   notes: a.notes, income_funds_moved: a.incomeFundsMoved, income_funds_on_file: a.incomeFundsOnFile,
-  cash_value_added: a.cashValueAdded, real_estate_added: a.realEstateAdded,
+  cash_value_added: a.cashValueAdded, real_estate_added: a.realEstateAdded, credit_capacity: a.creditCapacity, credit_lines: a.creditLines,
 });

@@ -10,6 +10,7 @@ export interface LiabilityLike {
   current_balance: number | null;
   credit_limit?: number | null;
   original_amount?: number | null;
+  interest_rate_pct?: number | null;
 }
 
 export const isRevolving = (type: string) => REVOLVING_TYPES.has(type);
@@ -54,3 +55,32 @@ export const TYPE_LABELS: Record<LiabilityType, string> = {
   mortgage: "Mortgage", heloc: "HELOC", credit_card: "Credit Card", personal_loan: "Personal Loan",
   line_of_credit: "Line of Credit", other_debt: "Other Debt",
 };
+
+/** Estimated yearly interest on one liability: balance x rate. null when no rate is recorded. */
+export function annualInterest(l: LiabilityLike): number | null {
+  const rate = num(l.interest_rate_pct);
+  if (rate === null) return null;
+  return Math.round(((num(l.current_balance) ?? 0) * rate) / 100);
+}
+
+export interface InterestTotals { interest: number; ratedCount: number; unratedCount: number; unratedBalance: number }
+
+/** Yearly interest on the liabilities that have a rate, and how many (and how much debt) have none and so can't be costed. Debts with no balance are ignored. */
+export function interestTotals(rows: LiabilityLike[]): InterestTotals {
+  let interest = 0, ratedCount = 0, unratedCount = 0, unratedBalance = 0;
+  for (const r of rows) {
+    const bal = num(r.current_balance) ?? 0;
+    if (bal <= 0) continue;
+    const i = annualInterest(r);
+    if (i === null) { unratedCount += 1; unratedBalance += bal; } else { interest += i; ratedCount += 1; }
+  }
+  return { interest, ratedCount, unratedCount, unratedBalance: Math.round(unratedBalance * 100) / 100 };
+}
+
+/** Share of a credit limit in use, 0-100; null for term debt or with no limit. */
+export function utilisationPct(l: LiabilityLike): number | null {
+  if (!isRevolving(l.liability_type)) return null;
+  const limit = num(l.credit_limit);
+  if (limit === null || limit <= 0) return null;
+  return Math.min(100, Math.max(0, Math.round(((num(l.current_balance) ?? 0) / limit) * 100)));
+}

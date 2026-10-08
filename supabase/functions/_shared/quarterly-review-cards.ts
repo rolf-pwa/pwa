@@ -51,6 +51,8 @@ export interface ReviewFacts {
     vineyard: number; holdingTank: number; liquidity: number; strategic: number; philanthropic: number; legacy: number;
     totalAssets: number; liabilities: number; netWorth: number;
     realEstate: number; cashValue: number; incomeFundsInLiquidity: number;
+    /** Available credit staff assigned to the Strategic Reserve: capacity beside the reserve, not part of `strategic`, assets or net worth. */
+    creditCapacity?: number;
   };
   vineyard: {
     accountCount: number;          // accounts that issue a statement
@@ -105,9 +107,12 @@ export function planRebalance(f: ReviewFacts): Move[] {
   for (const area of areas) {
     const t = f.targets.find((x) => x.area === area && x.gapAmount !== null && (x.status === "met" || x.status === "below" || x.status === "above"));
     if (!t || t.gapAmount === null) continue;
-    const balance = f.balance[area];
+    // A reserve's target is measured against its capacity (for Strategic, assets plus assigned available credit),
+    // but only real money can be moved: credit is never a source.
+    const credit = area === "strategic" ? f.balance.creditCapacity ?? 0 : 0;
+    const balance = f.balance[area] + credit;
     const targetDollars = balance - t.gapAmount;
-    if (t.gapAmount > 0 && targetDollars > 0 && t.gapAmount / targetDollars > SURPLUS_TOLERANCE) surplus.push({ area, amount: t.gapAmount });
+    if (t.gapAmount > 0 && targetDollars > 0 && t.gapAmount / targetDollars > SURPLUS_TOLERANCE) surplus.push({ area, amount: Math.min(t.gapAmount, f.balance[area]) });
     else if (t.status === "below" && t.gapAmount < 0) short.push({ area, amount: -t.gapAmount });
   }
   const moves: Move[] = [];
@@ -293,10 +298,12 @@ export function buildAlignmentCards(f: ReviewFacts): ReviewCard[] {
     const s = f.strategic;
     const targets = forArea(f, "strategic");
     const desired = desiredFor(f, "strategic");
+    const credit = b.creditCapacity ?? 0;
     const current = [`${money(b.strategic)} in the reserve${b.cashValue > 0 ? `, of which ${money(b.cashValue)} is insurance cash value` : ""}.`];
+    if (credit > 0) current.push(`Plus ${money(credit)} of available credit assigned to the reserve (${money(b.strategic + credit)} of capacity); the credit is not counted in Total Assets or Net Worth.`);
     const actions: string[] = [];
     let status: AlignStatus;
-    if (s.policyCount === 0 && b.strategic <= 0) { status = "Not Assessed"; current.push("No insurance policies are on record."); }
+    if (s.policyCount === 0 && b.strategic <= 0 && credit <= 0) { status = "Not Assessed"; current.push("No insurance policies are on record."); }
     else {
       if (s.policyCount > 0) current.push(`${plural(s.policyCount, "policy", "policies")} with ${money(s.coverageTotal)} of coverage.`);
       if (s.missingCoverageCount) actions.push(`Record the coverage amount on ${plural(s.missingCoverageCount, "policy", "policies")}.`);
