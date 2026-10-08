@@ -1,151 +1,80 @@
-import { useMemo } from "react";
-import { useCalendarEvents } from "@/shared/hooks/useGoogle";
-import { useGoogleStatus } from "@/shared/hooks/useGoogle";
-import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
-import { Button } from "@/shared/components/ui/button";
-import { Calendar, MapPin, Building2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useCalendarEvents, useGoogleStatus } from "@/shared/hooks/useGoogle";
 import { format } from "date-fns";
+import { eventsWithContact, splitMeetings, type CalEvent } from "../lib/meetings";
 
 interface ContactCalendarProps {
   contactEmail: string | null;
   contactName?: string;
 }
 
-export function ContactCalendar({ contactEmail, contactName }: ContactCalendarProps) {
-  const appointmentParams = new URLSearchParams();
-  if (contactName) appointmentParams.set("name", contactName);
-  if (contactEmail) appointmentParams.set("email", contactEmail);
-  const qs = appointmentParams.toString() ? `?${appointmentParams.toString()}` : "";
+const PREVIOUS_SHOWN = 5;
+
+function EventRow({ event }: { event: CalEvent }) {
+  const start = event.start?.dateTime || event.start?.date;
+  const parsed = start ? new Date(event.start?.dateTime ? start : `${start}T00:00:00`) : null;
+  const ok = parsed && !isNaN(parsed.getTime());
+  return (
+    <li>
+      <a
+        href={event.htmlLink || (ok ? `https://calendar.google.com/calendar/r/day/${format(parsed!, "yyyy/MM/dd")}` : "https://calendar.google.com")}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-start gap-3 rounded-md py-1.5 transition-colors hover:bg-muted/50"
+      >
+        {ok && (
+          <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-md bg-primary/10 text-primary">
+            <span className="text-[10px] font-medium uppercase leading-none">{format(parsed!, "MMM")}</span>
+            <span className="text-sm font-bold leading-tight">{format(parsed!, "d")}</span>
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">{event.summary || "(No title)"}</p>
+          {ok && <p className="text-xs text-muted-foreground">{format(parsed!, event.start?.dateTime ? "EEEE, MMM d, yyyy · h:mm a" : "EEEE, MMM d, yyyy")}</p>}
+        </div>
+      </a>
+    </li>
+  );
+}
+
+/** Meetings with this contact, from the connected Google Calendar: what is coming up, and the past year. */
+export function ContactCalendar({ contactEmail }: ContactCalendarProps) {
   const { data: status } = useGoogleStatus();
-  const { now, sixMonthsOut } = useMemo(() => ({
-    now: new Date().toISOString(),
+  const [showAllPrevious, setShowAllPrevious] = useState(false);
+  const { yearAgo, sixMonthsOut } = useMemo(() => ({
+    yearAgo: new Date(Date.now() - 365 * 86400000).toISOString(),
     sixMonthsOut: new Date(Date.now() + 180 * 86400000).toISOString(),
   }), []);
-  const { data, isLoading, error } = useCalendarEvents(now, sixMonthsOut, status?.connected);
+  // Google filters by the contact's email, so a busy calendar doesn't push their meetings out of the result.
+  const { data, isLoading, error } = useCalendarEvents(yearAgo, sixMonthsOut, Boolean(status?.connected && contactEmail), { q: contactEmail ?? undefined, maxResults: 250 });
 
-  if (!contactEmail) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Calendar className="h-4 w-4" />
-            Upcoming Events
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">No email address on file.</p>
-        </CardContent>
-      </Card>
-    );
-  }
+  if (!contactEmail) return <p className="px-2 pb-2 text-sm text-muted-foreground">No email address on file.</p>;
+  if (!status?.connected) return <p className="px-2 pb-2 text-sm text-muted-foreground">Connect Google on the Dashboard to see meetings.</p>;
+  if (isLoading) return <p className="animate-pulse px-2 pb-2 text-sm text-muted-foreground">Loading meetings…</p>;
+  if (error) return <p className="px-2 pb-2 text-sm text-destructive">Failed to load meetings.</p>;
 
-  if (!status?.connected) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Calendar className="h-4 w-4" />
-            Upcoming Events
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Connect Google on the Dashboard to see events.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // Filter events where the contact is an attendee
-  const contactEvents = (data?.items || []).filter((event: any) => {
-    const email = contactEmail.toLowerCase();
-    const attendees = event.attendees || [];
-    const isAttendee = attendees.some(
-      (a: any) => a.email?.toLowerCase() === email
-    );
-    const isOrganizer = event.organizer?.email?.toLowerCase() === email;
-    const isCreator = event.creator?.email?.toLowerCase() === email;
-    return isAttendee || isOrganizer || isCreator;
-  });
+  const { upcoming, previous } = splitMeetings(eventsWithContact(((data as { items?: CalEvent[] })?.items) ?? [], contactEmail));
+  const shownPrevious = showAllPrevious ? previous : previous.slice(0, PREVIOUS_SHOWN);
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Calendar className="h-4 w-4" />
-          Upcoming Events
-        </CardTitle>
-        <div className="flex items-center gap-1">
-          <a
-            href={`https://calendar.app.google/Fwsmx2LC8BjWf3Zh9${qs}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Button variant="ghost" size="sm" className="gap-1">
-              <MapPin className="h-3 w-3" />
-              Audit — Personal
-            </Button>
-          </a>
-          <a
-            href={`https://calendar.app.google/raxnRa2RFQGL7KnD9${qs}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Button variant="ghost" size="sm" className="gap-1">
-              <Building2 className="h-3 w-3" />
-              Audit — Corporate
-            </Button>
-          </a>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <p className="text-sm text-muted-foreground animate-pulse">Loading events...</p>
-        ) : error ? (
-          <p className="text-sm text-destructive">Failed to load events.</p>
-        ) : !contactEvents.length ? (
-          <p className="text-sm text-muted-foreground">No upcoming events with this contact.</p>
-        ) : (
-          <ul className="space-y-3">
-            {contactEvents.slice(0, 10).map((event: any) => {
-              const start = event.start?.dateTime || event.start?.date;
-              const parsedStart = start ? new Date(start) : null;
-              return (
-                <li key={event.id}>
-                  <a
-                    href={event.htmlLink || `https://calendar.google.com/calendar/r/day/${parsedStart ? format(parsedStart, "yyyy/MM/dd") : ""}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-start gap-3 rounded-md border-b border-border/50 pb-3 last:border-0 last:pb-0 transition-colors hover:bg-muted/50 -mx-1 px-1"
-                  >
-                    {parsedStart && !isNaN(parsedStart.getTime()) && (
-                      <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-md bg-primary/10 text-primary">
-                        <span className="text-[10px] font-medium uppercase leading-none">
-                          {format(parsedStart, "MMM")}
-                        </span>
-                        <span className="text-sm font-bold leading-tight">
-                          {format(parsedStart, "d")}
-                        </span>
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">
-                        {event.summary || "(No title)"}
-                      </p>
-                      {parsedStart && !isNaN(parsedStart.getTime()) && (
-                        <p className="text-xs text-muted-foreground">
-                          {format(parsedStart, "EEEE, MMM d · h:mm a")}
-                        </p>
-                      )}
-                    </div>
-                  </a>
-                </li>
-              );
-            })}
-          </ul>
+    <div className="space-y-4 px-2 pb-2">
+      <section>
+        <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Upcoming</h4>
+        {upcoming.length === 0 ? <p className="text-sm text-muted-foreground">No upcoming meetings.</p> : <ul>{upcoming.slice(0, 10).map((e) => <EventRow key={e.id} event={e} />)}</ul>}
+      </section>
+      <section>
+        <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Previous · last 12 months</h4>
+        {previous.length === 0 ? <p className="text-sm text-muted-foreground">No meetings in the past year.</p> : (
+          <>
+            <ul>{shownPrevious.map((e) => <EventRow key={e.id} event={e} />)}</ul>
+            {previous.length > PREVIOUS_SHOWN && (
+              <button className="mt-1 text-xs text-muted-foreground underline" onClick={() => setShowAllPrevious((v) => !v)}>
+                {showAllPrevious ? "Show fewer" : `Show all ${previous.length}`}
+              </button>
+            )}
+          </>
         )}
-      </CardContent>
-    </Card>
+      </section>
+    </div>
   );
 }
