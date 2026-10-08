@@ -333,7 +333,7 @@ export function HoldingTank({ contactId, householdId, onAccountMoved }: HoldingT
 
   return (
     <>
-      <Card className="border-amber-500/30 bg-amber-50/5">
+      <Card>
         <CardHeader className="pb-2 cursor-pointer select-none" onClick={() => setCollapsed((c) => !c)}>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Anchor className="h-5 w-5 text-amber-600" />

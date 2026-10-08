@@ -1375,7 +1375,7 @@ const HouseholdDetail = () => {
                           {accounts.map((acc: any) => (
                             <div
                               key={acc.id}
-                              className="rounded-lg bg-muted/50 px-4 py-2.5 border border-border"
+                              className="py-1 pl-6"
                             >
                               <div className="flex items-center justify-between">
                                 <span className="text-sm text-foreground/80">
@@ -1454,7 +1454,7 @@ const HouseholdDetail = () => {
                       {(corp.vineyard_accounts || []).map((acc: any) => (
                         <div
                           key={acc.id}
-                          className="rounded-lg bg-muted/50 px-4 py-2.5 border border-border"
+                          className="py-1 pl-6"
                         >
                           <div className="flex items-center justify-between">
                             <span className="text-sm text-foreground/80">{acc.account_name}</span>
@@ -1485,7 +1485,7 @@ const HouseholdDetail = () => {
               return (
                 <SidebarSection title="Insurance" meta={formatCurrency(totalCoverage)}>
                   {insurancePolicies.map((p: any) => (
-                    <div key={p.id} className="rounded-lg bg-muted/50 px-4 py-2.5 border border-border">
+                    <div key={p.id} className="py-1 pl-6">
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-foreground/80">
                           {policyTypeLabel(p.policy_type)} — {p.carrier} — {ownerName(p)}
