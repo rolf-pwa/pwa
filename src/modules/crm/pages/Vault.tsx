@@ -45,8 +45,8 @@ type ShareTarget = { driveId: string; name: string; isFolder: boolean };
 const FUNCTIONS_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/vault-service`;
 
 /** A collapsed-by-default section in the Vault page's sidebar. */
-function VaultSidebarSection({ title, children }: { title: string; children: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
+function VaultSidebarSection({ title, children, defaultOpen = false }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="rounded-lg border bg-card">
       <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium hover:text-accent">
@@ -926,7 +926,7 @@ function VaultLinksPanel({ householdId }: { householdId: string }) {
   );
 }
 
-export function VaultView({ forcedHouseholdId, embedded = false }: { forcedHouseholdId?: string; embedded?: boolean }) {
+export function VaultView({ forcedHouseholdId, embedded = false, sidebarTools }: { forcedHouseholdId?: string; embedded?: boolean; sidebarTools?: React.ReactNode }) {
   const params = useParams<{ householdId?: string; contactId?: string }>();
   const [searchParams] = useSearchParams();
   const deepLinkProfessionalId = searchParams.get("shareProfessionalId");
@@ -1124,7 +1124,7 @@ export function VaultView({ forcedHouseholdId, embedded = false }: { forcedHouse
       )}
 
       {rootId && (
-        <div className={householdId ? "grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]" : ""}>
+        <div className={householdId ? "grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]" : ""}>
           <div className="space-y-6 min-w-0">
             <Card>
               <CardContent className="pt-6">
@@ -1139,11 +1139,18 @@ export function VaultView({ forcedHouseholdId, embedded = false }: { forcedHouse
               </CardContent>
             </Card>
 
-            {householdId && <ShoeboxReviewPanel householdId={householdId} showControls={!embedded} />}
           </div>
 
           {householdId && (
             <aside className="space-y-3 min-w-0">
+              {sidebarTools && (
+                <VaultSidebarSection title="Vault tools" defaultOpen>
+                  <div className="px-2 pb-2">{sidebarTools}</div>
+                </VaultSidebarSection>
+              )}
+              <VaultSidebarSection title="Shoebox review" defaultOpen>
+                <ShoeboxReviewPanel householdId={householdId} showControls={!sidebarTools} />
+              </VaultSidebarSection>
               <VaultSidebarSection title="Collaborators">
                 <CollaboratorsPanel
                   householdId={householdId}
