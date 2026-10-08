@@ -9,24 +9,25 @@ import { ContactTax } from "@/modules/crm/components/ContactTax";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
 import { Input } from "@/shared/components/ui/input";
 import { Textarea } from "@/shared/components/ui/textarea";
-import { Progress } from "@/shared/components/ui/progress";
 import { Switch } from "@/shared/components/ui/switch";
 import { Label } from "@/shared/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/shared/components/ui/dialog";
 import {
-  ArrowLeft, Bell, BellOff, Trash2, Clock, AlertCircle, Shield,
+  ArrowLeft, Bell, BellOff, Trash2, 
   ExternalLink, Bot, Grape, FileUp, Loader2, Building2, Users, Plus, X,
   Receipt, Folder, FolderOpen, ShieldCheck, Landmark, ChevronDown, ChevronRight, ListChecks,
-  Mail, Phone, MapPin, Home, Calendar, Pencil, Eye, Merge, Link2, BarChart3, Anchor,
-  ArrowRight, ChevronLeft, Wallet
+  Mail, Phone, MapPin, Home, Calendar, Pencil, Eye, Merge, Link2, BarChart3,
+  ArrowRight, ChevronLeft
 } from "lucide-react";
 import { ContactAnalytics } from "@/modules/crm/components/ContactAnalytics";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator
 } from "@/shared/components/ui/dropdown-menu";
+import { SidebarSection } from "@/shared/components/SidebarSection";
+import { ContactTotalsStrip } from "@/modules/crm/components/ContactTotalsStrip";
 import { CollapsibleCard } from "@/shared/components/CollapsibleCard";
 import { toast } from "sonner";
-import { format, differenceInDays, addDays } from "date-fns";
+import { format } from "date-fns";
 import { PageBreadcrumbs } from "@/shared/components/PageBreadcrumbs";
 import { policyTypeLabel } from "@/shared/lib/insurance";
 import { ContactMerge } from "@/modules/crm/components/ContactMerge";
@@ -538,12 +539,6 @@ const ContactDetail = () => {
     return (<AppLayout><p className="text-muted-foreground">Contact not found.</p></AppLayout>);
   }
 
-  const isStabilization = householdGovernanceStatus === "stabilization";
-  const quietStart = contact.quiet_period_start_date ? new Date(contact.quiet_period_start_date) : null;
-  const quietEnd = quietStart ? addDays(quietStart, 90) : null;
-  const daysElapsed = quietStart ? Math.min(differenceInDays(new Date(), quietStart), 90) : 0;
-  const daysLeft = quietEnd ? Math.max(differenceInDays(quietEnd, new Date()), 0) : null;
-  const progressPct = quietStart ? Math.min((daysElapsed / 90) * 100, 100) : 0;
 
   const resourceLinks = [
     { label: "Google Drive", url: contact.google_drive_url, icon: FolderOpen },
@@ -617,11 +612,6 @@ const ContactDetail = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <Button asChild variant="ghost" size="icon" title="Edit contact">
-                  <Link to={`/contacts/${id}/edit`}>
-                    <Pencil className="h-4 w-4" />
-                  </Link>
-                </Button>
                 <Button
                   className="bg-sanctuary-green text-sanctuary-bronze hover:bg-sanctuary-green/90 gap-1.5"
                   onClick={handleViewPortal}
@@ -677,45 +667,15 @@ const ContactDetail = () => {
               </div>
             </div>
 
-            {/* Contact info grid */}
-            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Primary email</p>
-                {contact.email ? (
-                  <a href={`mailto:${contact.email}`} className="flex items-center gap-2 text-sm font-medium hover:underline break-all">
-                    <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    {contact.email}
-                  </a>
-                ) : (
-                  <p className="text-sm text-muted-foreground">—</p>
-                )}
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Primary phone</p>
-                {contact.phone ? (
-                  <button
-                    type="button"
-                    onClick={() => dialViaQuo(contact.phone!)}
-                    className="flex items-center gap-2 text-sm font-medium hover:underline"
-                  >
-                    <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    {contact.phone}
-                  </button>
-                ) : (
-                  <p className="text-sm text-muted-foreground">—</p>
-                )}
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Address</p>
-                {contact.address ? (
-                  <div className="flex items-start gap-2 text-sm font-medium">
-                    <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                    <span>{contact.address}</span>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">—</p>
-                )}
-              </div>
+            {/* Contact details, one line */}
+            <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+              {contact.email ? (
+                <a href={`mailto:${contact.email}`} className="flex items-center gap-1.5 hover:underline break-all"><Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />{contact.email}</a>
+              ) : <span className="text-muted-foreground">No email</span>}
+              {contact.phone ? (
+                <button type="button" onClick={() => dialViaQuo(contact.phone!)} className="flex items-center gap-1.5 hover:underline"><Phone className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />{contact.phone}</button>
+              ) : <span className="text-muted-foreground">No phone</span>}
+              {contact.address && <span className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />{contact.address}</span>}
             </div>
           </CardContent>
         </Card>
@@ -774,41 +734,24 @@ const ContactDetail = () => {
           </DialogContent>
         </Dialog>
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Main Content */}
-          <div className="space-y-6 lg:col-span-2">
-            {/* Quiet Period Timer */}
-            {isStabilization && quietStart && (
-               <Card className="border-sanctuary-green/30">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <Clock className="h-5 w-5 text-sanctuary-green" />
-                    <h3 className="font-semibold">Quiet Period</h3>
-                    <Badge className="ml-auto bg-sanctuary-green/10 text-sanctuary-green border-sanctuary-green/20">
-                      <AlertCircle className="mr-1 h-3 w-3" />
-                      Zero Sales Pressure
-                    </Badge>
-                  </div>
-                  <Progress value={progressPct} className="mb-3 h-2" />
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Started {format(quietStart, "MMM d, yyyy")}</span>
-                    <span className="font-medium text-foreground">
-                      {daysLeft !== null && daysLeft > 0
-                        ? `${daysLeft} days remaining`
-                        : "Quiet Period Complete"}
-                    </span>
-                    <span>Ends {quietEnd && format(quietEnd, "MMM d, yyyy")}</span>
-                  </div>
-                  {daysLeft === 0 && (
-                    <div className="mt-4 rounded-md bg-sanctuary-bronze/10 p-3 text-center text-sm text-sanctuary-bronze">
-                      <Shield className="mr-1 inline h-4 w-4" />
-                      Ready for Charter Ratification
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+        {(() => {
+              const totalVineyard = vineyardAccounts.reduce((s, a) => s + (Number(a.current_value) || 0), 0);
+                const nonRealEstateStorehouses = storehouses.filter((s: any) => s.asset_type !== 'Primary Residence & Protected Legacy Accounts');
+                // Cash value always belongs to Strategic Reserve, by policy.
+                const insuranceCashInStorehouses = insurancePolicies
+                  .reduce((sum: number, p: any) => sum + (Number(p.cash_value) || 0), 0);
+                const totalStorehouses = nonRealEstateStorehouses.reduce((s, a) => s + (Number(a.current_value) || 0), 0) + insuranceCashInStorehouses;
+                const totalHoldingTank = holdingTankAccounts.reduce((s, a) => s + (Number(a.current_value) || 0), 0);
+                const totalCorpAssets = corporateStakes.reduce((s, st) =>
+                  s + (Number(st.pro_rata) || 0) + st.subsidiaries.reduce((ss, sub) => ss + (Number(sub.indirect_pro_rata) || 0), 0)
+                , 0);
+                const total = totalVineyard + totalStorehouses + totalHoldingTank + totalCorpAssets;
+              return <ContactTotalsStrip contactId={id!} assets={total} />;
+            })()}
 
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
+          {/* Main Content */}
+          <div className="min-w-0 space-y-6">
             {/* Main Tabs */}
             <Tabs defaultValue="comms" className="w-full">
               <TabsList className="w-full">
@@ -929,20 +872,6 @@ const ContactDetail = () => {
 
               {/* The Vineyard Tab */}
               <TabsContent value="vineyard" className="space-y-4 mt-4">
-                {/* Holding Tank */}
-                <HoldingTank contactId={id!} onAccountMoved={() => fetchData()} />
-
-                {/* Insurance */}
-                <InsurancePanel
-                  scope={insuranceScope}
-                  storehouses={insuranceStorehouses}
-                  onStorehousesChanged={() => fetchData()}
-                />
-
-                {/* Liabilities */}
-                <LiabilitiesCard holderType="contact" holderId={id!} />
-
-
                 {/* The Vineyard Accounts */}
                 <AssetContainer
                   title="The Vineyard"
@@ -1053,7 +982,23 @@ const ContactDetail = () => {
                   }
                 />
 
-                {/* Corporate Stakes */}
+                <SidebarSection title="Holding Tank">
+                <HoldingTank contactId={id!} onAccountMoved={() => fetchData()} />
+                </SidebarSection>
+
+                <SidebarSection title="Insurance">
+                <InsurancePanel
+                  scope={insuranceScope}
+                  storehouses={insuranceStorehouses}
+                  onStorehousesChanged={() => fetchData()}
+                />
+                </SidebarSection>
+
+                <SidebarSection title="Liabilities">
+                <LiabilitiesCard holderType="contact" holderId={id!} />
+                </SidebarSection>
+
+                <SidebarSection title="Corporate Holdings">
                 {corporateStakes.length > 0 && (
                   <div className="rounded-lg border border-border bg-card">
                     <div
@@ -1115,8 +1060,9 @@ const ContactDetail = () => {
                     )}
                   </div>
                 )}
+                </SidebarSection>
 
-                {/* Storehouse Containers */}
+                <SidebarSection title="The Storehouses">
                 {[1, 2, 3, 4].map((num) => {
                   const accounts = storehouses.filter((s) => s.storehouse_number === num);
                   const storehouseName = STOREHOUSE_NAMES[num - 1];
@@ -1207,6 +1153,7 @@ const ContactDetail = () => {
                     </div>
                   );
                 })}
+                </SidebarSection>
               </TabsContent>
 
               {/* Analytics Tab */}
@@ -1222,112 +1169,8 @@ const ContactDetail = () => {
             </Tabs>
           </div>
 
-          {/* Right Sidebar — Individual AUM */}
-          <div className="space-y-4">
-            {(() => {
-              const totalVineyard = vineyardAccounts.reduce((s, a) => s + (Number(a.current_value) || 0), 0);
-              const nonRealEstateStorehouses = storehouses.filter((s: any) => s.asset_type !== 'Primary Residence & Protected Legacy Accounts');
-              // Cash value always belongs to Strategic Reserve, by policy.
-              const insuranceCashInStorehouses = insurancePolicies
-                .reduce((sum: number, p: any) => sum + (Number(p.cash_value) || 0), 0);
-              const totalStorehouses = nonRealEstateStorehouses.reduce((s, a) => s + (Number(a.current_value) || 0), 0) + insuranceCashInStorehouses;
-              const totalHoldingTank = holdingTankAccounts.reduce((s, a) => s + (Number(a.current_value) || 0), 0);
-              const totalCorpAssets = corporateStakes.reduce((s, st) =>
-                s + (Number(st.pro_rata) || 0) + st.subsidiaries.reduce((ss, sub) => ss + (Number(sub.indirect_pro_rata) || 0), 0)
-              , 0);
-              const total = totalVineyard + totalStorehouses + totalHoldingTank + totalCorpAssets;
-              return (
-                <CollapsibleCard
-                  icon={Wallet}
-                  iconBgClassName="bg-sanctuary-bronze/10"
-                  iconColorClassName="text-sanctuary-bronze"
-                  title="Assets Under Management"
-                  headerRight={
-                    <p className="text-xl font-bold text-sanctuary-bronze">{formatCurrency(total)}</p>
-                  }
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2 text-muted-foreground">
-                        <Grape className="h-3.5 w-3.5" /> Portfolio
-                      </span>
-                      <span className="font-semibold text-primary">{formatCurrency(totalVineyard)}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2 text-muted-foreground">
-                        <Anchor className="h-3.5 w-3.5" /> Holding Tank
-                      </span>
-                      <span className="font-semibold text-accent">{formatCurrency(totalHoldingTank)}</span>
-                    </div>
-                    {[
-                      { num: 1, label: "Liquidity Reserve" },
-                      { num: 2, label: "Strategic Reserve" },
-                      { num: 3, label: "Philanthropic Trust" },
-                      { num: 4, label: "Legacy Trust" },
-                    ].map(({ num, label }) => {
-                      const shForNum = storehouses.filter((s: any) => s.storehouse_number === num);
-                      const shIds = new Set(shForNum.map((s: any) => s.id));
-                      // Legacy Trust displays full container total (incl. real estate + coverage);
-                      // other rows follow AUM rules (exclude real estate, exclude coverage).
-                      const isLegacy = num === 4;
-                      const shTotal = shForNum
-                        .filter((s: any) => isLegacy || s.asset_type !== 'Primary Residence & Protected Legacy Accounts')
-                        .reduce((sum: number, s: any) => sum + (Number(s.current_value) || 0), 0);
-                      const cashTotal = num === 2
-                        ? insurancePolicies.reduce((sum: number, p: any) => sum + (Number(p.cash_value) || 0), 0)
-                        : 0;
-                      const coverageTotal = isLegacy
-                        ? insurancePolicies
-                            .filter((p: any) => p.coverage_storehouse_id && shIds.has(p.coverage_storehouse_id))
-                            .reduce((sum: number, p: any) => sum + (Number(p.coverage_amount) || 0), 0)
-                        : 0;
-                      const rowTotal = shTotal + cashTotal + coverageTotal;
-                      if (rowTotal === 0 && shForNum.length === 0) return null;
-                      return (
-                        <div key={num} className="flex items-center justify-between text-sm">
-                          <span className="flex items-center gap-2 text-muted-foreground">
-                            <Landmark className="h-3.5 w-3.5" /> {label}
-                          </span>
-                          <span className="font-semibold text-accent">{formatCurrency(rowTotal)}</span>
-                        </div>
-                      );
-                    })}
-                    {corporateStakes.length > 0 && (
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-2 text-muted-foreground">
-                          <Building2 className="h-3.5 w-3.5" /> Corp Assets
-                        </span>
-                        <span className="font-semibold text-foreground">{formatCurrency(totalCorpAssets)}</span>
-                      </div>
-                    )}
-                  </div>
-                </CollapsibleCard>
-              );
-            })()}
-            {insurancePolicies.length > 0 && (() => {
-              const totalCoverage = insurancePolicies.reduce((s: number, p: any) => s + (Number(p.coverage_amount) || 0), 0);
-              return (
-                <CollapsibleCard
-                  icon={Shield}
-                  iconBgClassName="bg-sanctuary-bronze/10"
-                  iconColorClassName="text-sanctuary-bronze"
-                  title="Insurance"
-                  headerRight={
-                    <p className="text-xl font-bold text-sanctuary-bronze">{formatCurrency(totalCoverage)}</p>
-                  }
-                  contentClassName="space-y-2"
-                >
-                  {insurancePolicies.map((p: any) => (
-                    <div key={p.id} className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2 text-muted-foreground">
-                        <Shield className="h-3.5 w-3.5" /> {policyTypeLabel(p.policy_type)} — {p.carrier}
-                      </span>
-                      <span className="font-semibold text-foreground">{formatCurrency(p.coverage_amount)}</span>
-                    </div>
-                  ))}
-                </CollapsibleCard>
-              );
-            })()}
+          {/* Right sidebar */}
+          <div className="min-w-0 space-y-4">
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">AI Workbench</CardTitle>
