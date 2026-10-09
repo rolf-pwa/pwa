@@ -4,13 +4,17 @@ import { CommandPalette } from "@/shared/components/CommandPalette";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { signOut } from "@/shared/lib/auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/shared/components/ui/avatar";
-import { LogOut } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, LogOut, PenLine } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/shared/components/ui/dropdown-menu";
+import { EmailSignatureDialog } from "@/shared/components/EmailSignatureDialog";
 import { format } from "date-fns";
 import { NotificationBell } from "@/shared/components/NotificationBell";
 import prosperwiseWordmark from "@/assets/prosperwise-logo-full.png";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const [signatureOpen, setSignatureOpen] = useState(false);
   const today = format(new Date(), "EEEE, MMMM d, yyyy");
 
   return (
@@ -31,23 +35,31 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="flex items-center gap-3 shrink-0">
               <NotificationBell />
               <div className="h-6 w-px bg-border" />
-              <Avatar className="h-8 w-8 border border-border">
-                <AvatarImage src={user?.user_metadata?.avatar_url} />
-                <AvatarFallback className="bg-primary text-xs text-primary-foreground">
-                  {user?.email?.charAt(0).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div className="hidden sm:block overflow-hidden">
-                <p className="truncate text-xs font-medium text-foreground">
-                  {user?.user_metadata?.full_name || user?.email}
-                </p>
-              </div>
-              <button
-                onClick={() => signOut()}
-                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger className="flex items-center gap-2 rounded-md p-0.5 outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring">
+                  <Avatar className="h-8 w-8 border border-border">
+                    <AvatarImage src={user?.user_metadata?.avatar_url} />
+                    <AvatarFallback className="bg-primary text-xs text-primary-foreground">
+                      {user?.email?.charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <p className="hidden sm:block max-w-[12rem] truncate text-xs font-medium text-foreground">
+                    {user?.user_metadata?.full_name || user?.email}
+                  </p>
+                  <ChevronDown className="hidden h-3.5 w-3.5 text-muted-foreground sm:block" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  <DropdownMenuItem onSelect={() => setSignatureOpen(true)}>
+                    <PenLine className="mr-2 h-4 w-4" />
+                    Email signature
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => signOut()}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </header>
@@ -64,6 +76,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <AssistantSidebar />
         </div>
         <CommandPalette />
+        {user && <EmailSignatureDialog open={signatureOpen} onOpenChange={setSignatureOpen} userId={user.id} email={user.email} />}
       </div>
     </SidebarCollapseProvider>
   );
