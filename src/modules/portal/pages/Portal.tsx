@@ -1260,7 +1260,6 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
                 <PortalDashboard
                   totals={dashTotals}
                   meetings={meetings}
-                  requests={portal_requests || []}
                   taskCounts={taskCounts}
                   onGo={setActiveTab}
                   sidebar={dashboardSidebar}
