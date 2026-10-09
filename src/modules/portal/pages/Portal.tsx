@@ -1098,9 +1098,9 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
 
 
     return (
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Main Content: Tabbed Interface */}
-        <div className="space-y-4 lg:col-span-2">
+      <div className={effectiveTab === "tasks" ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]" : "grid gap-6"}>
+        {/* Main Content: Tabbed Interface. The sidebar belongs to Action Items only; every other tab gets the full width. */}
+        <div className="min-w-0 space-y-4">
           {/* Sovereignty Survey — auto-hides once the survey is complete */}
           {isSelf && (
             <PortalIntakeBanner
@@ -1289,8 +1289,9 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
 
         </div>
 
-        {/* Right Sidebar */}
-        <div className="space-y-4">
+        {/* Right Sidebar (Action Items tab only) */}
+        {effectiveTab === "tasks" && (
+        <div className="min-w-0 space-y-4">
           {/* Ask Georgia for Help — top of the sidebar on desktop */}
           {askGeorgiaButton("hidden lg:inline-flex")}
 
@@ -1382,15 +1383,18 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
 
 
 
-          {/* Timeline — bottom of sidebar */}
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <Clock className="h-4 w-4 text-muted-foreground" />
-              <h3 className="text-sm font-medium text-muted-foreground">Timeline</h3>
+          {/* Timeline — only when there are client-visible governance decisions to show */}
+          {(audit_trail ?? []).length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <h3 className="text-sm font-medium text-muted-foreground">Timeline</h3>
+              </div>
+              <PortalTimeline auditTrail={audit_trail} />
             </div>
-            <PortalTimeline auditTrail={audit_trail} />
-          </div>
+          )}
         </div>
+        )}
       </div>
     );
   };
