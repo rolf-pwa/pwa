@@ -9,13 +9,15 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 interface Props {
   portalToken: string;
   householdId: string | null | undefined;
+  /** Render as a plain list row (for the Concierge) instead of an outlined button. */
+  row?: boolean;
 }
 
 /** Standalone "send a document to your Shoebox" uploader for the Concierge
  * sidebar — same underlying vault-service calls as PortalVault.tsx's
  * upload bar, without the folder-browser state (crumbs/loadFolder) that
  * lives there, since this has no folder view to refresh. */
-export function PortalShoeboxUpload({ portalToken, householdId }: Props) {
+export function PortalShoeboxUpload({ portalToken, householdId, row }: Props) {
   const { toast } = useToast();
   const [shoeboxId, setShoeboxId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -106,6 +108,17 @@ export function PortalShoeboxUpload({ portalToken, householdId }: Props) {
         onChange={(e) => handleFiles(e.target.files)}
         accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.doc,.docx,.xls,.xlsx,.txt,.csv"
       />
+      {row ? (
+        <button
+          type="button"
+          disabled={uploading || !shoeboxId}
+          onClick={() => fileInputRef.current?.click()}
+          className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-muted/40 disabled:opacity-50"
+        >
+          {uploading ? <Loader2 className="h-4 w-4 animate-spin text-accent" /> : <Inbox className="h-4 w-4 text-accent" />}
+          {uploading ? "Uploading…" : "Send to Shoebox"}
+        </button>
+      ) : (
       <Button
         variant="outline"
         className="w-full border-accent/30 text-accent hover:bg-accent/10 justify-start"
@@ -115,6 +128,7 @@ export function PortalShoeboxUpload({ portalToken, householdId }: Props) {
         {uploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Inbox className="h-4 w-4 mr-2" />}
         {uploading ? "Uploading…" : "Send to Shoebox"}
       </Button>
+      )}
     </>
   );
 }

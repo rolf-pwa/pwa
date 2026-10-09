@@ -21,6 +21,8 @@ interface Props {
   contactId?: string;
   /** When given, the Completed list renders there (the page sidebar) instead of under the active tasks. */
   completedTarget?: HTMLElement | null;
+  /** Start the sidebar Completed list closed; the header opens it. */
+  completedCollapsed?: boolean;
 }
 
 type TaskCategory = "new" | "ongoing";
@@ -107,7 +109,8 @@ function TaskCard({ task, onClick, isExpanded }: { task: PmTask; onClick: () => 
   );
 }
 
-export function PortalTasks({ portalToken, clientName, contactId, completedTarget }: Props) {
+export function PortalTasks({ portalToken, clientName, contactId, completedTarget, completedCollapsed }: Props) {
+  const [completedOpen, setCompletedOpen] = useState(!completedCollapsed);
   const [tasks, setTasks] = useState<PmTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -230,11 +233,12 @@ export function PortalTasks({ portalToken, clientName, contactId, completedTarge
   const completedBlock = completedTasks.length > 0 ? (
         <Card>
           <CardContent className="space-y-2 p-4">
-          <div className="flex items-center gap-2">
+          <button type="button" onClick={() => completedCollapsed && setCompletedOpen((o) => !o)} className={cn("flex w-full items-center gap-2 text-left", !completedCollapsed && "cursor-default")}>
             <CheckSquare className="h-4 w-4 text-accent" />
             <h3 className="font-serif text-sm font-semibold text-foreground">Completed ({completedTasks.length})</h3>
-          </div>
-          <ul className="space-y-1 pl-1">
+            {completedCollapsed && <ChevronRight className={cn("ml-auto h-4 w-4 text-muted-foreground transition-transform", completedOpen && "rotate-90")} />}
+          </button>
+          {completedOpen && <ul className="space-y-1 pl-1">
             {completedTasks.slice(0, 10).map((task) => (
               <li key={task.id}>
                 <button
@@ -258,7 +262,7 @@ export function PortalTasks({ portalToken, clientName, contactId, completedTarge
                 )}
               </li>
             ))}
-          </ul>
+          </ul>}
           </CardContent>
         </Card>
   ) : null;
