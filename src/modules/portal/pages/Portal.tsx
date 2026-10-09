@@ -95,7 +95,7 @@ const LINK_ICONS: Record<string, any> = {
   Globe: ExternalLink,
 };
 
-function PortalDynamicLinks({ contact }: { contact: any }) {
+function PortalDynamicLinks({ contact, layout = "stack" }: { contact: any; layout?: "stack" | "grid" }) {
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
 
   const { data: links = [] } = useQuery({
@@ -156,7 +156,7 @@ function PortalDynamicLinks({ contact }: { contact: any }) {
   const customUngrouped = ungrouped.filter((l: any) => !l.is_system);
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className={layout === "grid" ? "grid items-start gap-3 sm:grid-cols-2" : "flex flex-col gap-1.5"}>
       {/* System ungrouped links first */}
       {systemUngrouped.map((link: any) => {
         const IconComp = LINK_ICONS[link.icon] || ExternalLink;
@@ -1262,7 +1262,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
                   taskCounts={taskCounts}
                   onGo={setActiveTab}
                   sidebar={dashboardSidebar}
-                  links={isSelf ? <PortalDynamicLinks layout="grid" /> : null}
+                  links={isSelf ? <PortalDynamicLinks contact={contact} layout="grid" /> : null}
                 />
               </TabsContent>
             )}
