@@ -53,10 +53,10 @@ export function useSyncCharterDriveSources() {
   });
 }
 
-export function useCalendarEvents(timeMin?: string, timeMax?: string, enabled = true) {
+export function useCalendarEvents(timeMin?: string, timeMax?: string, enabled = true, opts: { q?: string; maxResults?: number } = {}) {
   return useQuery({
-    queryKey: ["calendar-events", timeMin, timeMax],
-    queryFn: () => listCalendarEvents(timeMin, timeMax),
+    queryKey: ["calendar-events", timeMin, timeMax, opts.q ?? null, opts.maxResults ?? null],
+    queryFn: () => listCalendarEvents(timeMin, timeMax, opts),
     enabled,
     staleTime: 60_000,
   });

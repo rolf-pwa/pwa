@@ -94,7 +94,9 @@ if (req.method === "OPTIONS") {
     if (action === "list") {
       const timeMin = url.searchParams.get("timeMin") || new Date().toISOString();
       const timeMax = url.searchParams.get("timeMax") || new Date(Date.now() + 7 * 86400000).toISOString();
-      const maxResults = url.searchParams.get("maxResults") || "20";
+      const maxResults = String(Math.min(250, Math.max(1, Number(url.searchParams.get("maxResults")) || 20)));
+      // Optional free-text filter, matched by Google against title, description, location and attendees (e.g. a contact's email).
+      const q = url.searchParams.get("q");
 
       const calRes = await fetch(
         `https://www.googleapis.com/calendar/v3/calendars/primary/events?` +
@@ -104,6 +106,7 @@ if (req.method === "OPTIONS") {
           maxResults,
           singleEvents: "true",
           orderBy: "startTime",
+          ...(q ? { q } : {}),
         }),
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );

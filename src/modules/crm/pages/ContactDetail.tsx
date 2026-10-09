@@ -914,7 +914,7 @@ const ContactDetail = () => {
                     <ContactTaskList contactId={contact.id} />
                   </div>
                   <aside className="min-w-0 space-y-3">
-                    <SidebarSection title="Upcoming events" defaultOpen>
+                    <SidebarSection title="Meetings" defaultOpen>
                       <ContactCalendar contactEmail={contact.email} contactName={contact.full_name} />
                     </SidebarSection>
                     <SidebarSection title="Audit trail">

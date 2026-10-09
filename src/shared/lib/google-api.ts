@@ -71,11 +71,13 @@ export async function disconnectGoogle() {
 
 // --- Calendar ---
 
-export async function listCalendarEvents(timeMin?: string, timeMax?: string) {
+export async function listCalendarEvents(timeMin?: string, timeMax?: string, opts: { q?: string; maxResults?: number } = {}) {
   const headers = await getAuthHeaders();
   const params = new URLSearchParams({ action: "list" });
   if (timeMin) params.set("timeMin", timeMin);
   if (timeMax) params.set("timeMax", timeMax);
+  if (opts.q) params.set("q", opts.q);
+  if (opts.maxResults) params.set("maxResults", String(opts.maxResults));
   const res = await fetch(`${FUNCTIONS_URL}/google-calendar?${params}`, { headers });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Failed to list events");
