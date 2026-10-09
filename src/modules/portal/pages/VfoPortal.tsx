@@ -15,6 +15,7 @@ import {
 import { PortalTerritory } from "@/modules/portal/components/PortalTerritory";
 import { PortalHoldingTank } from "@/modules/portal/components/PortalHoldingTank";
 import { PortalInsurance } from "@/modules/portal/components/PortalInsurance";
+import { PortalTotalsCard, type TotalsRow } from "@/modules/portal/components/PortalTotalsCard";
 import { PortalDashboard } from "@/modules/portal/components/PortalDashboard";
 import { PortalRequests } from "@/modules/portal/components/PortalRequests";
 import { PortalMeetings } from "@/modules/portal/components/PortalMeetings";
@@ -191,7 +192,6 @@ const VfoPortal = () => {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("dashboard");
   const [drilldown, setDrilldown] = useState<DrilldownState>({ level: "individual" });
-  const [openTotals, setOpenTotals] = useState<Set<string>>(new Set());
   const [completedEl, setCompletedEl] = useState<HTMLElement | null>(null);
   const [expandedCorps, setExpandedCorps] = useState<Set<string>>(new Set());
   const [georgiaOpen, setGeorgiaOpen] = useState(false);
@@ -411,6 +411,44 @@ const VfoPortal = () => {
     + sumValues(holding_tank)
     + insuranceCashForStorehouses(selfInsurance);
 
+  // One household's assets from this viewer's seat: their own household in full (their own records
+  // plus whatever housemates share with the household), any other household only what it has shared
+  // with the whole family. Private never appears.
+  const HOUSEHOLD_SCOPES = new Set(["household_shared", "family_shared"]);
+  const breakdownFor = (hh: { id?: string; members?: any[] }) => {
+    const members = hh.members || [];
+    const own = (!!hh.id && hh.id === contact.household_id) || members.some((m: any) => m.id === contact.id);
+    const allowed = own ? HOUSEHOLD_SCOPES : new Set(["family_shared"]);
+    const others = members.filter((m: any) => m.id !== contact.id);
+    const otherIds = new Set(others.map((m: any) => m.id));
+    const vineyard = [
+      ...(own ? vineyard_accounts : []),
+      ...others.flatMap((m: any) => (m.vineyard_accounts || []).filter((a: any) => allowed.has(a.visibility_scope))),
+    ];
+    const store = [
+      ...(own ? storehouses.filter(isAumStorehouse) : []),
+      ...others.flatMap((m: any) => (m.storehouses || []).filter((a: any) => isAumStorehouse(a) && allowed.has(a.visibility_scope))),
+    ];
+    const tankRaw = [
+      ...(own ? (holding_tank || []) : []),
+      ...(household_holding_tank || []).filter((t: any) => otherIds.has(t.contact_id) && allowed.has(t.visibility_scope)),
+      ...(family_holding_tank || []).filter((t: any) => otherIds.has(t.contact_id) && allowed.has(t.visibility_scope)),
+    ];
+    const tank = Array.from(new Map(tankRaw.map((t: any) => [t.id, t])).values());
+    const ins = [
+      ...(own ? (insurance_policies || []).filter((p: any) => p.contact_id === contact.id) : []),
+      ...(insurance_policies || []).filter((p: any) => otherIds.has(p.contact_id) && allowed.has(p.visibility_scope)),
+    ];
+    const total = sumValues(vineyard) + sumValues(store) + sumValues(tank) + insuranceCashForStorehouses(ins);
+    return { own, vineyard, store, tank, ins, total };
+  };
+  const totalsRowsFor = (parts: { vineyard: any[]; store: any[]; tank: any[]; ins: any[] }): TotalsRow[] => [
+    { label: "Holding Tank", total: sumValues(parts.tank), items: parts.tank.map((a: any) => ({ id: a.id, name: a.account_name, value: Number(a.current_value) || 0 })) },
+    { label: "Vineyard", total: sumValues(parts.vineyard), items: parts.vineyard.map((a: any) => ({ id: a.id, name: a.account_name, value: Number(a.current_value) || 0 })) },
+    { label: "Storehouses", total: sumValues(parts.store) + insuranceCashForStorehouses(parts.ins), items: parts.store.map((a: any) => ({ id: a.id, name: a.label || a.asset_type || a.notes || "Account", value: Number(a.current_value) || 0 })) },
+  ].filter((r) => r.items.length > 0 || r.label !== "Holding Tank");
+  const familyHouseholds: any[] = hierarchy?.households || [];
+
   const headerAumLabel =
     viewerRole === "head_of_family" ? (famAllMembers.length > 1 ? "Total Family AUM" : "Total AUM")
     : viewerRole === "head_of_household" ? "Total Household AUM"
@@ -425,8 +463,12 @@ const VfoPortal = () => {
     + sumValues(famAllMembers.filter(notSelf).flatMap((m: any) => (m.storehouses || []).filter((a: any) => a.visibility_scope === "family_shared" && isAumStorehouse(a))))
     + sumValues(familySharedTank.filter(notSelf))
     + insuranceCashForStorehouses(familySharedIns.filter(notSelf));
+  // The header figure for a head of family is the sum of what each household card shows.
+  const hofTotalByHousehold = familyHouseholds.length > 0
+    ? familyHouseholds.reduce((n: number, hh: any) => n + breakdownFor(hh).total, 0)
+    : hofTotal;
   const totalAum =
-    viewerRole === "head_of_family" ? hofTotal
+    viewerRole === "head_of_family" ? hofTotalByHousehold
     : viewerRole === "head_of_household" ? householdTotalForHoh
     : individualTotal;
 
@@ -606,106 +648,63 @@ const VfoPortal = () => {
 
   // ── Family View ──
   const renderFamilyView = () => {
-    const households = hierarchy?.households || [];
-    const fa = aggregateAssetsAtLevel("family");
+    const households = familyHouseholds;
+    const parts = households.map((hh: any) => breakdownFor(hh));
+    const merged = {
+      vineyard: parts.flatMap((p) => p.vineyard),
+      store: parts.flatMap((p) => p.store),
+      tank: parts.flatMap((p) => p.tank),
+      ins: parts.flatMap((p) => p.ins),
+    };
+    const sortRole = (a: any, b: any) => {
+      const order: Record<string, number> = { head_of_family: 0, head_of_household: 1, spouse: 2, beneficiary: 3, minor: 4 };
+      return (order[a.family_role] ?? 4) - (order[b.family_role] ?? 4);
+    };
 
     return (
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-5">
-          <Card className="border-accent/20 bg-gradient-to-br from-accent/[0.04] to-transparent">
-            <CardContent className="p-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10">
-                  <Crown className="h-5 w-5 text-accent" />
-                </div>
-                <div className="flex-1">
-                  <h2 className="font-serif text-lg text-foreground">{familyName}</h2>
-                  <p className="text-xs text-muted-foreground">
-                    {households.length} household{households.length !== 1 ? "s" : ""} · {memberCount} members
-                  </p>
-                </div>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="min-w-0 space-y-4">
+          <Card>
+            <CardContent className="p-0 divide-y divide-border">
+              <div className="flex items-center gap-2 px-4 py-3">
+                <Crown className="h-4 w-4 text-accent" />
+                <h2 className="font-serif text-sm font-semibold text-foreground">{familyName} Family</h2>
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {households.length} household{households.length !== 1 ? "s" : ""} · {memberCount} members
+                </span>
               </div>
+              {households.map((hh: any, i: number) => {
+                const p = parts[i];
+                const members = [...(hh.members || [])].sort(sortRole);
+                return (
+                  <button
+                    key={hh.id}
+                    onClick={() => setDrilldown({ level: "household", householdId: hh.id })}
+                    className="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
+                  >
+                    <Home className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {hh.label} Household{p.own ? <span className="ml-1.5 text-xs font-normal text-accent">Yours</span> : null}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">{members.map((m: any) => m.first_name).join(", ")}</p>
+                    </div>
+                    {p.total > 0 ? (
+                      <span className="font-serif text-sm font-semibold tabular-nums text-foreground">{fmt(p.total)}</span>
+                    ) : (
+                      <span className="text-xs italic text-muted-foreground">Private</span>
+                    )}
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  </button>
+                );
+              })}
             </CardContent>
           </Card>
-
-          {/* Family-shared totals, broken out by category — same three
-              numbers that sum to familySharedTotal (the header's Total
-              Family AUM figure), so nothing here can drift from the header. */}
-          <div className="grid gap-3 sm:grid-cols-3">
-            <FinancialSummaryCard icon={Anchor} label="Holding Tank" value={fmt(sumValues(familySharedTank))} />
-            <FinancialSummaryCard icon={Grape} label="Vineyard" value={fmt(sumValues(familySharedVineyard))} />
-            <FinancialSummaryCard icon={Landmark} label="Storehouses" value={fmt(sumValues(familySharedStore) + insuranceCashForStorehouses(familySharedIns))} />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            {households.map((hh: any) => {
-              const members = hh.members || [];
-              // Family view — every household card, including the viewer's own,
-              // shows only family_shared assets so its total is a component of
-              // the Family AUM total shown above, and no private/household-only
-              // asset is exposed at the family level.
-              const hhV = members.flatMap((m: any) =>
-                (m.vineyard_accounts || []).filter((a: any) => a.visibility_scope === "family_shared")
-              );
-              const hhS = members.flatMap((m: any) =>
-                (m.storehouses || []).filter((a: any) => a.visibility_scope === "family_shared" && isAumStorehouse(a))
-              );
-              const memberIds = new Set(members.map((m: any) => m.id));
-              const hhT = (family_holding_tank || []).filter(
-                (t: any) => memberIds.has(t.contact_id) && t.visibility_scope === "family_shared"
-              );
-              const hhInsurance = (insurance_policies || []).filter(
-                (p: any) => memberIds.has(p.contact_id) && p.visibility_scope === "family_shared"
-              );
-              const hhTotal = sumValues(hhV) + sumValues(hhS) + sumValues(hhT)
-                + insuranceCashForStorehouses(hhInsurance);
-              return (
-                <button
-                  key={hh.id}
-                  onClick={() => setDrilldown({ level: "household", householdId: hh.id })}
-                  className="text-left rounded-lg border border-accent/15 bg-card p-5 hover:border-accent/40 hover:bg-accent/[0.03] transition-colors group"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Home className="h-4 w-4 text-accent" />
-                      <h3 className="font-serif text-foreground">{hh.label} Household</h3>
-                    </div>
-                    <ArrowRight className="h-4 w-4 text-accent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                  {hh.address && <p className="text-xs text-muted-foreground mb-3">{hh.address}</p>}
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground flex items-center gap-1.5">
-                      <Users className="h-3.5 w-3.5" />
-                      {(hh.members || []).length} member{(hh.members || []).length !== 1 ? "s" : ""}
-                    </span>
-                    {hhTotal > 0 ? (
-                      <span className="font-serif text-foreground">{fmt(hhTotal)}</span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground italic">Private</span>
-                    )}
-                  </div>
-
-                  <div className="mt-3 flex flex-wrap gap-1">
-                    {(hh.members || []).slice(0, 5).map((m: any) => (
-                      <span key={m.id} className="rounded-full bg-accent/5 border border-accent/15 px-2 py-0.5 text-[10px] text-muted-foreground">
-                        {m.first_name}
-                      </span>
-                    ))}
-                    {(hh.members || []).length > 5 && (
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
-                        +{(hh.members || []).length - 5}
-                      </span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
         </div>
 
-        <aside className="space-y-4">
+        <aside className="min-w-0 space-y-4">
+          <PortalTotalsCard title="Family Totals" rows={totalsRowsFor(merged)} />
           {renderConciergeCard()}
-
           <PortalYourTeam professionals={professionals} engagements={engagements} />
         </aside>
       </div>
@@ -714,174 +713,124 @@ const VfoPortal = () => {
 
   // ── Household View ──
   const renderHouseholdView = () => {
-    const members = currentHousehold?.members || hierarchy?.members || [];
-    const hhLabel = currentHousehold?.label || household?.label || "Household";
-    const viewingOwnHousehold = members.some((m: any) => m.id === contact.id);
-    // Privacy firewall: viewing your own household surfaces anything shared
-    // at least within the household; viewing a sibling household (as HoF)
-    // only surfaces what's explicitly shared with the whole family.
-    const allowedScopes = viewingOwnHousehold
-      ? new Set(["household_shared", "family_shared"])
-      : new Set(["family_shared"]);
-    const rawHhAssets = aggregateAssetsAtLevel("household", drilldown.householdId);
-    const hhAssets = {
-      vineyard: rawHhAssets.vineyard.filter((a: any) => allowedScopes.has(a.visibility_scope)),
-      storehouses: rawHhAssets.storehouses.filter((a: any) => allowedScopes.has(a.visibility_scope)),
+    const hhRecord = currentHousehold
+      || (household?.id ? { id: household.id, label: household.label, members: hierarchy?.members || [] } : { members: hierarchy?.members || [] });
+    const members: any[] = hhRecord.members || [];
+    const hhLabel = hhRecord.label || household?.label || "Household";
+    const bd = breakdownFor(hhRecord);
+    // hierarchy.members lists the OTHER members of the viewer's own household, so "is the viewer in
+    // the list" is not enough to know whose household this is.
+    const viewingOwnHousehold = bd.own || !drilldown.householdId;
+    const allowedScopes = viewingOwnHousehold ? HOUSEHOLD_SCOPES : new Set(["family_shared"]);
+    const sortRole = (a: any, b: any) => {
+      const order: Record<string, number> = { head_of_family: 0, head_of_household: 1, spouse: 2, beneficiary: 3, minor: 4 };
+      return (order[a.family_role] ?? 4) - (order[b.family_role] ?? 4);
     };
-    const visibleInsurance = (insurance_policies || []).filter((p: any) => allowedScopes.has(p.visibility_scope));
-    const visibleHouseholdTank = (household_holding_tank || []).filter((t: any) => allowedScopes.has(t.visibility_scope));
-
     const orderedMembers = (!viewingOwnHousehold
       ? members.map((m: any) => ({ ...m, _isSelf: false }))
       : [
           { ...contact, _isSelf: true },
           ...members.filter((m: any) => m.id !== contact.id).map((m: any) => ({ ...m, _isSelf: false })),
         ]
-    ).sort((a: any, b: any) => {
-      const order: Record<string, number> = { head_of_family: 0, head_of_household: 1, spouse: 2, beneficiary: 3, minor: 4 };
-      return (order[a.family_role] ?? 4) - (order[b.family_role] ?? 4);
-    });
+    ).sort(sortRole);
 
     return (
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-5">
-          <Card className="border-accent/20 bg-gradient-to-br from-accent/[0.04] to-transparent">
-            <CardContent className="p-5 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10">
-                <Home className="h-5 w-5 text-accent" />
-              </div>
-              <div>
-                <h2 className="font-serif text-lg text-foreground">{hhLabel} Household</h2>
-                <p className="text-xs text-muted-foreground">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="min-w-0 space-y-4">
+          <Card>
+            <CardContent className="p-0 divide-y divide-border">
+              <div className="flex items-center gap-2 px-4 py-3">
+                <Home className="h-4 w-4 text-accent" />
+                <h2 className="font-serif text-sm font-semibold text-foreground">{hhLabel} Household</h2>
+                <span className="ml-auto text-xs text-muted-foreground">
                   {orderedMembers.length} member{orderedMembers.length !== 1 ? "s" : ""}
-                </p>
+                </span>
               </div>
+              {orderedMembers.map((m: any) => {
+                const isSelf = m._isSelf;
+                const canDrill = isSelf || viewingOwnHousehold;
+                const mVineyard = (isSelf ? vineyard_accounts : (m.vineyard_accounts || [])).filter((a: any) => allowedScopes.has(a.visibility_scope));
+                const mStoreAum = (isSelf ? storehouses : (m.storehouses || [])).filter(isAumStorehouse).filter((a: any) => allowedScopes.has(a.visibility_scope));
+                const mTankRaw = ((isSelf ? (holding_tank || []) : []) as any[])
+                  .concat((household_holding_tank || []).filter((t: any) => t.contact_id === m.id))
+                  .concat((family_holding_tank || []).filter((t: any) => t.contact_id === m.id));
+                const mTank = Array.from(new Map(mTankRaw.map((t: any) => [t.id, t])).values())
+                  .filter((t: any) => allowedScopes.has(t.visibility_scope));
+                const mInsurance = (insurance_policies || []).filter((p: any) => p.contact_id === m.id && allowedScopes.has(p.visibility_scope));
+                const mTotal = sumValues(mVineyard) + sumValues(mStoreAum) + sumValues(mTank) + insuranceCashForStorehouses(mInsurance);
+                return (
+                  <button
+                    key={m.id}
+                    disabled={!canDrill}
+                    onClick={() => {
+                      if (!canDrill) return;
+                      setDrilldown({ level: "individual", householdId: drilldown.householdId || household?.id, memberId: isSelf ? undefined : m.id });
+                      setTab("dashboard");
+                    }}
+                    className={`group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${canDrill ? "hover:bg-muted/40" : "cursor-default"}`}
+                  >
+                    {isSelf ? <img src={prosperwiseLogo} alt="" className="h-4 w-4 shrink-0" /> : <Users className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-foreground">{m.first_name} {m.last_name || ""}</p>
+                      <p className="text-xs text-muted-foreground">{ROLE_LABELS[m.family_role] || m.family_role}{isSelf ? " · You" : ""}</p>
+                    </div>
+                    <span className="font-serif text-sm font-semibold tabular-nums text-foreground">{fmt(mTotal)}</span>
+                    {canDrill && <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                  </button>
+                );
+              })}
             </CardContent>
           </Card>
 
-          {/* Same three categories as the Family page, scoped to this
-              household (household_shared + family_shared for your own
-              household; family_shared only when a HoF is viewing a
-              sibling household). */}
-          <div className="grid gap-3 sm:grid-cols-3">
-            <FinancialSummaryCard icon={Anchor} label="Holding Tank" value={fmt(sumValues(visibleHouseholdTank))} />
-            <FinancialSummaryCard icon={Grape} label="Vineyard" value={fmt(sumValues(hhAssets.vineyard))} />
-            <FinancialSummaryCard icon={Landmark} label="Storehouses" value={fmt(sumValues(hhAssets.storehouses) + insuranceCashForStorehouses(visibleInsurance))} />
-          </div>
-
-          <div className="grid gap-3">
-            {orderedMembers.map((m: any) => {
-              const isSelf = m._isSelf;
-              const canDrill = isSelf || viewingOwnHousehold;
-              const mVineyardRaw = isSelf ? vineyard_accounts : (m.vineyard_accounts || []);
-              const mStoreAumRaw = (isSelf ? storehouses : (m.storehouses || [])).filter(isAumStorehouse);
-              const mVineyard = mVineyardRaw.filter((a: any) => allowedScopes.has(a.visibility_scope));
-              const mStoreAum = mStoreAumRaw.filter((a: any) => allowedScopes.has(a.visibility_scope));
-              const mTank = ((isSelf ? (holding_tank || []) : []) as any[])
-                .concat((household_holding_tank || []).filter((t: any) => t.contact_id === m.id))
-                .concat((family_holding_tank || []).filter((t: any) => t.contact_id === m.id));
-              const mTankDedup = Array.from(new Map(mTank.map((t: any) => [t.id, t])).values())
-                .filter((t: any) => allowedScopes.has(t.visibility_scope));
-              const mInsurance = insurance_policies.filter(
-                (p: any) => p.contact_id === m.id && allowedScopes.has(p.visibility_scope)
-              );
-              const mTotal = sumValues(mVineyard) + sumValues(mStoreAum) + sumValues(mTankDedup)
-                + insuranceCashForStorehouses(mInsurance);
-
-
-              return (
-                <button
-                  key={m.id}
-                  disabled={!canDrill}
-                  onClick={() => {
-                    if (!canDrill) return;
-                    setDrilldown({ level: "individual", householdId: drilldown.householdId, memberId: isSelf ? undefined : m.id });
-                  }}
-                  className={`text-left rounded-lg p-4 transition-colors group ${
-                    isSelf
-                      ? "border border-accent/40 bg-accent/[0.06] hover:bg-accent/[0.1]"
-                      : canDrill
-                        ? "border border-accent/15 bg-card hover:border-accent/40 hover:bg-accent/[0.03]"
-                        : "border border-accent/15 bg-card cursor-default"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`flex h-8 w-8 items-center justify-center rounded-full ${isSelf ? "bg-accent/20" : "bg-muted"}`}>
-                        {isSelf ? <img src={prosperwiseLogo} alt="" className="h-4 w-4" /> : <Users className="h-4 w-4 text-muted-foreground" />}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{m.first_name} {m.last_name || ""}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {ROLE_LABELS[m.family_role] || m.family_role}{isSelf ? " · You" : ""}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="font-serif text-foreground">{fmt(mTotal)}</span>
-                      {canDrill && <ArrowRight className="h-4 w-4 text-accent opacity-0 group-hover:opacity-100 transition-opacity" />}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* `corporations` is always the viewer's own shareholdings
-              (portal-validate scopes it to the viewer's own household, not
-              the household being viewed), so only show it on that page. */}
+          {/* `corporations` is always the viewer's own shareholdings (portal-validate scopes it to the
+              viewer's own household, not the household being viewed), so only show it on that page. */}
           {viewingOwnHousehold && corporations.length > 0 && (
-            <div className="space-y-3 pt-2">
-              <div className="flex items-center gap-2">
-                <Building2 className="h-4 w-4 text-accent/70" />
-                <h3 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Corporate Entities</h3>
-              </div>
-              {corporations.map((corp: any) => {
-                const isExpanded = expandedCorps.has(corp.id);
-                return (
-                  <button
-                    key={corp.id}
-                    onClick={() => setExpandedCorps(prev => { const n = new Set(prev); n.has(corp.id) ? n.delete(corp.id) : n.add(corp.id); return n; })}
-                    className="w-full text-left rounded-lg border border-accent/15 bg-card p-4 space-y-2 hover:border-accent/40 transition-colors"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/10">
-                          <Building2 className="h-4 w-4 text-accent" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-foreground">{corp.name}</p>
+            <Card>
+              <CardContent className="p-0 divide-y divide-border">
+                <div className="flex items-center gap-2 px-4 py-3">
+                  <Building2 className="h-4 w-4 text-accent" />
+                  <h2 className="font-serif text-sm font-semibold text-foreground">Corporate Entities</h2>
+                </div>
+                {corporations.map((corp: any) => {
+                  const isExpanded = expandedCorps.has(corp.id);
+                  return (
+                    <div key={corp.id}>
+                      <button
+                        onClick={() => setExpandedCorps((prev) => { const n = new Set(prev); n.has(corp.id) ? n.delete(corp.id) : n.add(corp.id); return n; })}
+                        className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
+                      >
+                        <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-foreground">{corp.name}</p>
                           <p className="text-xs text-muted-foreground">
                             {CORP_TYPE_LABELS[corp.corporation_type] || corp.corporation_type}
                             {corp.jurisdiction ? ` · ${corp.jurisdiction}` : ""}
                           </p>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-serif text-foreground">{fmt(corp.total_assets || 0)}</span>
-                        {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                      </div>
+                        <span className="font-serif text-sm font-semibold tabular-nums text-foreground">{fmt(corp.total_assets || 0)}</span>
+                        {isExpanded ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                      </button>
+                      {isExpanded && (corp.vineyard_accounts || []).length > 0 && (
+                        <div className="pb-2">
+                          {corp.vineyard_accounts.map((acc: any) => (
+                            <div key={acc.id} className="flex items-center justify-between pl-11 pr-4 py-1.5">
+                              <span className="text-xs text-muted-foreground">{acc.account_name}</span>
+                              <span className="text-xs tabular-nums text-foreground">{fmt(Number(acc.current_value) || 0)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    {isExpanded && (corp.vineyard_accounts || []).length > 0 && (
-                      <div className="pl-11 space-y-1 border-t border-accent/10 pt-2">
-                        {corp.vineyard_accounts.map((acc: any) => (
-                          <div key={acc.id} className="flex items-center justify-between text-xs">
-                            <span className="text-foreground/80">{acc.account_name}</span>
-                            <span className="font-medium text-foreground">{fmt(Number(acc.current_value) || 0)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
           )}
         </div>
 
-        <aside className="space-y-4">
+        <aside className="min-w-0 space-y-4">
+          <PortalTotalsCard title="Household Totals" rows={totalsRowsFor(bd)} />
           {renderConciergeCard()}
-
           <PortalYourTeam professionals={professionals} engagements={engagements} />
         </aside>
       </div>
@@ -951,48 +900,11 @@ const VfoPortal = () => {
     );
 
     // Financials sidebar: totals by category; each row opens to its accounts and balances.
-    const totalsRows = [
-      ...(isSelf ? [{ label: "Holding Tank", total: holdingTankTotal, items: (holding_tank || []).map((a: any) => ({ id: a.id, name: a.account_name, value: Number(a.current_value) || 0 })) }] : []),
-      { label: "Vineyard", total: vineyardTotal, items: indVineyardAccounts.map((a: any) => ({ id: a.id, name: a.account_name, value: Number(a.current_value) || 0 })) },
-      { label: "Storehouses", total: storehousesTotal, items: indAumStorehouses.map((a: any) => ({ id: a.id, name: a.label || a.asset_type || a.notes || "Account", value: Number(a.current_value) || 0 })) },
-    ].filter((r) => r.items.length > 0 || r.label !== "Holding Tank");
     const totalsCard = (
-      <Card>
-        <CardContent className="p-0 divide-y divide-border">
-          <div className="px-4 py-3">
-            <h2 className="font-serif text-sm font-semibold text-foreground">Totals</h2>
-          </div>
-          {totalsRows.map((r) => {
-            const open = openTotals.has(r.label);
-            const expandable = r.items.length > 0;
-            return (
-              <div key={r.label}>
-                <button
-                  disabled={!expandable}
-                  onClick={() => setOpenTotals((prev) => { const n = new Set(prev); n.has(r.label) ? n.delete(r.label) : n.add(r.label); return n; })}
-                  className={`flex w-full items-center justify-between px-4 py-3 text-left transition-colors ${expandable ? "hover:bg-muted/40" : "cursor-default"}`}
-                >
-                  <span className="flex items-center gap-1.5 text-sm text-foreground">
-                    {expandable ? (open ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />) : <span className="w-4" />}
-                    {r.label}
-                  </span>
-                  <span className="font-serif text-sm font-semibold tabular-nums text-foreground">{fmt(r.total)}</span>
-                </button>
-                {open && (
-                  <div className="pb-2">
-                    {r.items.map((it: any) => (
-                      <div key={it.id} className="flex items-center justify-between pl-10 pr-4 py-1.5">
-                        <span className="text-xs text-muted-foreground">{it.name}</span>
-                        <span className="text-xs tabular-nums text-foreground">{fmt(it.value)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </CardContent>
-      </Card>
+      <PortalTotalsCard
+        title="Totals"
+        rows={totalsRowsFor({ vineyard: indVineyardAccounts, store: indAumStorehouses, tank: isSelf ? (holding_tank || []) : [], ins: ind.insurancePolicies })}
+      />
     );
 
     const tabTrigger = "flex-1 gap-1.5 data-[state=active]:bg-accent/10 data-[state=active]:text-accent";
