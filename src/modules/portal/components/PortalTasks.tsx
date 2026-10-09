@@ -4,6 +4,7 @@ import { parseLocalDate } from "@/shared/lib/date-utils";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { CheckSquare, Clock, AlertCircle, ChevronRight, Loader2, Sparkles, RotateCw, X } from "lucide-react";
 import { Badge } from "@/shared/components/ui/badge";
+import { Card, CardContent } from "@/shared/components/ui/card";
 import { PortalTaskConversation } from "./PortalTaskConversation";
 import { cn } from "@/shared/lib/utils";
 
@@ -230,12 +231,11 @@ export function PortalTasks({ portalToken, clientName, contactId, completedTarge
   };
 
   const completedBlock = completedTasks.length > 0 ? (
-        <div className="space-y-2">
+        <Card>
+          <CardContent className="space-y-2 p-4">
           <div className="flex items-center gap-2">
-            <CheckSquare className="h-4 w-4 text-muted-foreground/50" />
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-              Completed ({completedTasks.length})
-            </p>
+            <CheckSquare className="h-4 w-4 text-accent" />
+            <h3 className="font-serif text-sm font-semibold text-foreground">Completed ({completedTasks.length})</h3>
           </div>
           <ul className="space-y-1 pl-1">
             {completedTasks.slice(0, 10).map((task) => (
@@ -262,7 +262,8 @@ export function PortalTasks({ portalToken, clientName, contactId, completedTarge
               </li>
             ))}
           </ul>
-        </div>
+          </CardContent>
+        </Card>
   ) : null;
 
   return (
