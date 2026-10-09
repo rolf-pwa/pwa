@@ -10,7 +10,7 @@ import { Button } from "@/shared/components/ui/button";
 import {
   Loader2, Crown, ShieldCheck, Calendar, CheckSquare, Landmark, FolderLock,
   ClipboardList, MessageCircle, ScrollText, Home, Users, ChevronLeft,
-  ChevronDown, ChevronRight, ArrowRight, Building2, Briefcase, Anchor, Grape,
+  ChevronDown, ChevronRight, MessageSquare, ArrowRight, Building2, Briefcase, Anchor, Grape,
 } from "lucide-react";
 import { PortalTerritory } from "@/modules/portal/components/PortalTerritory";
 import { PortalHoldingTank } from "@/modules/portal/components/PortalHoldingTank";
@@ -23,6 +23,7 @@ import { PortalCharter } from "@/modules/portal/components/PortalCharter";
 import { PortalTasks, useTaskCounts } from "@/modules/portal/components/PortalTasks";
 import { PortalVault } from "@/modules/portal/components/PortalVault";
 import { PortalGeorgiaChat } from "@/modules/portal/components/PortalGeorgiaChat";
+import { PortalMessages } from "@/modules/portal/components/PortalMessages";
 import { PortalYourTeam } from "@/modules/portal/components/PortalYourTeam";
 import { PortalProfessionals } from "@/modules/portal/components/PortalProfessionals";
 import { insuranceCashForStorehouses, sumValues, isAumStorehouse, formatCurrency, householdName } from "@/modules/portal/lib/portalAum";
@@ -197,6 +198,8 @@ const VfoPortal = () => {
   const [georgiaOpen, setGeorgiaOpen] = useState(false);
   const [requestsOpen, setRequestsOpen] = useState(false);
   const [bookMeetingOpen, setBookMeetingOpen] = useState(false);
+  const [messagesOpen, setMessagesOpen] = useState(false);
+  const [completedReqOpen, setCompletedReqOpen] = useState(false);
   const [embeddedBooking, setEmbeddedBooking] = useState<{ label: string; embedUrl: string } | null>(null);
   // Set right before a "Book a Meeting" click also changes drilldown (e.g.
   // navigating from Family/Household to the viewer's own individual page),
@@ -450,9 +453,7 @@ const VfoPortal = () => {
   const familyHouseholds: any[] = hierarchy?.households || [];
 
   const headerAumLabel =
-    viewerRole === "head_of_family" ? (famAllMembers.length > 1 ? "Total Family AUM" : "Total AUM")
-    : viewerRole === "head_of_household" ? "Total Household AUM"
-    : "Your Total AUM";
+    "Investable AUM";
   // Head of Family: their own holdings in full (it's their data) plus what other
   // members have shared with the whole family — never other members' private or
   // household-only assets. familySharedTotal alone omitted the viewer's own
@@ -577,74 +578,71 @@ const VfoPortal = () => {
   // views. Every action here operates on the viewer themselves (Georgia,
   // Requests, Shoebox, booking a meeting) regardless of which page is
   // currently being browsed, so it's safe to show from any view level.
-  const renderConciergeCard = () => (
-    <Card className="border-accent/20 bg-gradient-to-b from-accent/5 to-transparent">
-      <CardContent className="p-5 space-y-3">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4 text-accent" />
-          <h3 className="font-serif text-sm text-foreground">Your Concierge</h3>
-        </div>
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          Chat with Georgia for instant help, or open a private request for your advisory team.
-        </p>
-        <Button
-          className="w-full bg-accent text-accent-foreground hover:bg-accent/90"
-          onClick={() => setGeorgiaOpen(true)}
-        >
-          <MessageCircle className="h-4 w-4 mr-2" />
-          Ask Georgia
-        </Button>
-        <Button
-          variant="ghost"
-          className="w-full justify-between px-2 text-foreground hover:bg-accent/10 [&_svg]:text-accent"
-          onClick={() => setRequestsOpen(true)}
-        >
-          <span className="flex items-center">
-            <ClipboardList className="h-4 w-4 mr-2" />
-            Requests
-          </span>
-          {requestsOpenCount > 0 && (
-            <Badge variant="secondary" className="bg-accent/15 text-accent border-accent/30">{requestsOpenCount} open</Badge>
-          )}
-        </Button>
-        <Button
-          variant="ghost"
-          className="w-full justify-between px-2 text-foreground hover:bg-accent/10 [&_svg]:text-accent"
-          onClick={() => setBookMeetingOpen((o) => !o)}
-        >
-          <span className="flex items-center">
-            <Calendar className="h-4 w-4 mr-2" />
-            Book a Meeting
-          </span>
-          {bookMeetingOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-        </Button>
-        {bookMeetingOpen && (
-          <div className="space-y-1.5 pl-1">
-            {(((data as any)?.meeting_types as typeof MEETING_BOOKING_LINKS | undefined) ?? MEETING_BOOKING_LINKS).map((link) => (
-              <button
-                key={link.url}
-                onClick={() => {
-                  setEmbeddedBooking(link);
-                  setBookMeetingOpen(false);
-                  // Booking always concerns the viewer's own meetings, so
-                  // jump to their own individual page's Meetings tab even
-                  // if this was clicked from the Family or Household view.
-                  skipEmbedResetRef.current = true;
-                  setDrilldown({ level: "individual", householdId: household?.id });
-                  setTab("meetings");
-                }}
-                className="w-full flex items-center justify-between rounded-md border border-accent/15 bg-card px-3 py-2 text-xs text-foreground hover:border-accent/40 hover:bg-accent/[0.03] transition-colors text-left"
-              >
-                {link.label}
-                <ArrowRight className="h-3.5 w-3.5 text-accent" />
-              </button>
-            ))}
+  const renderConciergeCard = () => {
+    const smsEligible = household?.governance_status === "sovereign" && household?.fiduciary_entity === "pwa";
+    const meetingTypes = (((data as any)?.meeting_types as typeof MEETING_BOOKING_LINKS | undefined) ?? MEETING_BOOKING_LINKS);
+    const rowClass = "flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-muted/40";
+    return (
+      <Card>
+        <CardContent className="p-0 divide-y divide-border">
+          <div className="space-y-3 px-4 py-4">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-accent" />
+              <h3 className="font-serif text-sm font-semibold text-foreground">Your Concierge</h3>
+            </div>
+            <Button className="w-full gap-2 bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => setGeorgiaOpen(true)}>
+              <MessageCircle className="h-4 w-4" />
+              Ask Georgia
+            </Button>
           </div>
-        )}
-        <PortalShoeboxUpload portalToken={portalToken} householdId={household?.id} />
-      </CardContent>
-    </Card>
-  );
+          <button className={rowClass} onClick={() => setRequestsOpen(true)}>
+            <ClipboardList className="h-4 w-4 text-accent" />
+            Requests
+            {requestsOpenCount > 0 && <span className="ml-auto rounded-full bg-accent/15 px-2 py-0.5 text-xs text-accent">{requestsOpenCount} open</span>}
+            <ChevronRight className={`h-4 w-4 text-muted-foreground ${requestsOpenCount > 0 ? "" : "ml-auto"}`} />
+          </button>
+          {smsEligible && (
+            <button className={rowClass} onClick={() => setMessagesOpen(true)}>
+              <MessageSquare className="h-4 w-4 text-accent" />
+              Text your advisor
+              <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
+            </button>
+          )}
+          <div>
+            <button className={rowClass} onClick={() => setBookMeetingOpen((o) => !o)}>
+              <Calendar className="h-4 w-4 text-accent" />
+              Book a meeting
+              {bookMeetingOpen ? <ChevronDown className="ml-auto h-4 w-4 text-muted-foreground" /> : <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />}
+            </button>
+            {bookMeetingOpen && (
+              <div className="pb-2">
+                {meetingTypes.map((link) => (
+                  <button
+                    key={link.url}
+                    onClick={() => {
+                      setEmbeddedBooking(link);
+                      setBookMeetingOpen(false);
+                      // Booking always concerns the viewer's own meetings, so jump to their own
+                      // individual page's Meetings tab even if this was clicked from the Family
+                      // or Household view.
+                      skipEmbedResetRef.current = true;
+                      setDrilldown({ level: "individual", householdId: household?.id });
+                      setTab("meetings");
+                    }}
+                    className="flex w-full items-center justify-between py-1.5 pl-10 pr-4 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+                  >
+                    {link.label}
+                    <ArrowRight className="h-3.5 w-3.5 text-accent" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <PortalShoeboxUpload row portalToken={portalToken} householdId={household?.id} />
+        </CardContent>
+      </Card>
+    );
+  };
 
   // ── Family View ──
   const renderFamilyView = () => {
@@ -946,7 +944,7 @@ const VfoPortal = () => {
 
             <TabsContent value="tasks" className="mt-0">
               {isSelf ? (
-                <PortalTasks portalToken={portalToken} clientName={ind.name} contactId={contact.id} completedTarget={completedEl} />
+                <PortalTasks portalToken={portalToken} clientName={ind.name} contactId={contact.id} completedTarget={completedEl} completedCollapsed />
               ) : (
                 <div className="rounded-lg border border-border bg-muted/30 p-8 text-center text-sm text-muted-foreground">
                   Task view is only available on your own profile.
@@ -1019,11 +1017,12 @@ const VfoPortal = () => {
               {(portal_requests || []).some((r: any) => r.status === "resolved") && (
                 <Card>
                   <CardContent className="space-y-2 p-4">
-                    <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => setCompletedReqOpen((o) => !o)} className="flex w-full items-center gap-2 text-left">
                       <ClipboardList className="h-4 w-4 text-accent" />
                       <h3 className="font-serif text-sm font-semibold text-foreground">Completed requests</h3>
-                    </div>
-                    <PortalRequests show="resolved" requests={portal_requests || []} contactId={contact.id} contactName={fullName} portalToken={portalToken} onUpdate={refreshData} />
+                      <ChevronRight className={`ml-auto h-4 w-4 text-muted-foreground transition-transform ${completedReqOpen ? "rotate-90" : ""}`} />
+                    </button>
+                    {completedReqOpen && <PortalRequests show="resolved" requests={portal_requests || []} contactId={contact.id} contactName={fullName} portalToken={portalToken} onUpdate={refreshData} />}
                   </CardContent>
                 </Card>
               )}
@@ -1198,6 +1197,17 @@ const VfoPortal = () => {
             portalToken={portalToken}
             onUpdate={refreshData}
           />
+        </DialogContent>
+      </Dialog>
+      <Dialog open={messagesOpen} onOpenChange={setMessagesOpen}>
+        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-serif flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-accent" />
+              Text your advisor
+            </DialogTitle>
+          </DialogHeader>
+          <PortalMessages portalToken={portalToken} contactName={`${contact.first_name || ""} ${contact.last_name || ""}`.trim()} />
         </DialogContent>
       </Dialog>
     </div>
