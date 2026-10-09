@@ -557,8 +557,8 @@ const VfoPortal = () => {
         {crumbs.map((c, i) => {
           const last = i === crumbs.length - 1;
           return (
-            <div key={i} className="flex items-center gap-2">
-              {i > 0 && <ChevronRight className="h-3 w-3 text-accent/40" />}
+            <div key={i} className={`items-center gap-2 ${last ? "flex" : "hidden sm:flex"}`}>
+              {i > 0 && <ChevronRight className="hidden h-3 w-3 text-accent/40 sm:block" />}
               {last || !c.onClick ? (
                 <span className="text-foreground font-medium tracking-wide">{c.label}</span>
               ) : (
@@ -669,8 +669,8 @@ const VfoPortal = () => {
               <div className="flex items-center gap-2 px-4 py-3">
                 <Crown className="h-4 w-4 text-accent" />
                 <h2 className="font-serif text-sm font-semibold text-foreground">{familyName} Family</h2>
-                <span className="ml-auto text-xs text-muted-foreground">
-                  {households.length} household{households.length !== 1 ? "s" : ""} · {memberCount} members
+                <span className="ml-auto shrink-0 whitespace-nowrap text-xs text-muted-foreground">
+                  {households.length} household{households.length !== 1 ? "s" : ""}<span className="hidden sm:inline"> · {memberCount} members</span>
                 </span>
               </div>
               {households.map((hh: any, i: number) => {
@@ -684,7 +684,7 @@ const VfoPortal = () => {
                   >
                     <Home className="h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-foreground">
+                      <p className="text-sm font-medium text-foreground">
                         {householdName(hh.label)}{p.own ? <span className="ml-1.5 text-xs font-normal text-accent">Yours</span> : null}
                       </p>
                       <p className="truncate text-xs text-muted-foreground">{members.map((m: any) => m.first_name).join(", ")}</p>
@@ -912,7 +912,7 @@ const VfoPortal = () => {
 
     return (
       <Tabs value={effectiveTab} onValueChange={setTab} className="w-full space-y-4">
-        <TabsList className="w-full bg-muted/30 border border-accent/15 flex-wrap h-auto">
+        <TabsList className="w-full bg-muted/30 border border-accent/15 flex-wrap h-auto max-sm:grid max-sm:grid-cols-3">
           {isSelf && (
             <TabsTrigger value="dashboard" className={tabTrigger}><Home className="h-4 w-4" />Dashboard</TabsTrigger>
           )}
@@ -1107,18 +1107,18 @@ const VfoPortal = () => {
     <div className="min-h-screen bg-background text-foreground">
       {/* Premium Header */}
       <header className="border-b border-primary-foreground/10 bg-primary">
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          <div className="flex items-start justify-between gap-6 flex-wrap">
+        <div className="max-w-7xl mx-auto px-4 py-5 sm:px-6 sm:py-8">
+          <div className="flex items-start justify-between gap-4 sm:gap-6 flex-wrap">
             <div className="flex items-center gap-4 min-w-0">
               <img src={prosperwiseIconPaper} alt="" className="h-10 w-10 opacity-90" />
               <div className="min-w-0">
-                <h1 className="font-serif text-3xl md:text-4xl text-primary-foreground leading-tight truncate">
+                <h1 className="font-serif text-2xl sm:text-3xl md:text-4xl text-primary-foreground leading-tight sm:truncate">
                   {familyName} Family Office
                 </h1>
                 <p className="text-sm text-primary-foreground/70 mt-1">{subtitle}</p>
               </div>
             </div>
-            <div className="flex items-center gap-6 border-l border-primary-foreground/15 pl-6">
+            <div className="flex items-center gap-6 sm:border-l sm:border-primary-foreground/15 sm:pl-6">
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-primary-foreground/60">{headerAumLabel}</p>
                 <p className="font-serif text-2xl text-primary-foreground">{fmt(totalAum)}</p>
@@ -1143,11 +1143,11 @@ const VfoPortal = () => {
               )}
             </div>
           </div>
-          <div className="mt-6 h-px bg-gradient-to-r from-transparent via-primary-foreground/30 to-transparent" />
+          <div className="mt-4 sm:mt-6 h-px bg-gradient-to-r from-transparent via-primary-foreground/30 to-transparent" />
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto px-4 py-5 sm:px-6 sm:py-8">
         <div className="flex items-center justify-between gap-4 mb-1">
           {renderBreadcrumb()}
           {canUp && (
