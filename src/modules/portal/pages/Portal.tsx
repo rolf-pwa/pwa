@@ -95,7 +95,7 @@ const LINK_ICONS: Record<string, any> = {
   Globe: ExternalLink,
 };
 
-function PortalDynamicLinks({ contact, layout = "stack" }: { contact: any; layout?: "stack" | "grid" }) {
+function PortalDynamicLinks({ contact, layout = "stack", groupsOnly = false, alwaysOpen = false }: { contact: any; layout?: "stack" | "grid"; groupsOnly?: boolean; alwaysOpen?: boolean }) {
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
 
   const { data: links = [] } = useQuery({
@@ -158,7 +158,7 @@ function PortalDynamicLinks({ contact, layout = "stack" }: { contact: any; layou
   return (
     <div className={layout === "grid" ? "grid items-start gap-3 sm:grid-cols-2" : "flex flex-col gap-1.5"}>
       {/* System ungrouped links first */}
-      {systemUngrouped.map((link: any) => {
+      {!groupsOnly && systemUngrouped.map((link: any) => {
         const IconComp = LINK_ICONS[link.icon] || ExternalLink;
         const href = link.url;
 
@@ -179,17 +179,17 @@ function PortalDynamicLinks({ contact, layout = "stack" }: { contact: any; layou
 
       {/* Grouped links (e.g. My Accounts) */}
       {Object.entries(grouped).map(([groupName, groupLinks]) => {
-        const isOpen = openGroups.has(groupName);
+        const isOpen = alwaysOpen || openGroups.has(groupName);
         return (
           <div key={groupName} className="rounded-md border border-border">
             <button
               type="button"
-              onClick={() => toggleGroup(groupName)}
+              onClick={() => !alwaysOpen && toggleGroup(groupName)}
               className="flex w-full items-center gap-2 px-3 py-2.5 text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
             >
               <Landmark className="h-4 w-4" />
               {groupName}
-              {isOpen ? (
+              {alwaysOpen ? null : isOpen ? (
                 <ChevronDown className="ml-auto h-3.5 w-3.5 opacity-60" />
               ) : (
                 <ChevronRight className="ml-auto h-3.5 w-3.5 opacity-60" />
@@ -204,7 +204,7 @@ function PortalDynamicLinks({ contact, layout = "stack" }: { contact: any; layou
         );
       })}
       {/* Custom user-created links after groups */}
-      {customUngrouped.map((link: any) => {
+      {!groupsOnly && customUngrouped.map((link: any) => {
         const IconComp = LINK_ICONS[link.icon] || ExternalLink;
         return (
           <a
@@ -1253,7 +1253,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
                   </TabsTrigger>
                 )}
             </TabsList>
-            <div className={effectiveTab === "tasks" || effectiveTab === "meetings" ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]" : "grid gap-6"}>
+            <div className={effectiveTab === "tasks" || effectiveTab === "meetings" || (effectiveTab === "financials" && isSelf) ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]" : "grid gap-6"}>
         <div className="min-w-0 space-y-4">
 
             {/* Dashboard Tab */}
@@ -1421,6 +1421,13 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
               ))}
             </CardContent>
           </Card>
+        </div>
+        )}
+
+        {/* Right Sidebar (Financials tab): My Accounts, always open */}
+        {effectiveTab === "financials" && isSelf && (
+        <div className="min-w-0 space-y-4">
+          <PortalDynamicLinks contact={contact} groupsOnly alwaysOpen />
         </div>
         )}
 
