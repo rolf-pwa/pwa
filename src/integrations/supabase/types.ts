@@ -3015,6 +3015,7 @@ export type Database = {
           tax_rate: number
           total: number
           updated_at: string
+          veem_invoice_id: string | null
         }
         Insert: {
           ai_prompt?: string | null
@@ -3046,6 +3047,7 @@ export type Database = {
           tax_rate?: number
           total?: number
           updated_at?: string
+          veem_invoice_id?: string | null
         }
         Update: {
           ai_prompt?: string | null
@@ -3077,6 +3079,7 @@ export type Database = {
           tax_rate?: number
           total?: number
           updated_at?: string
+          veem_invoice_id?: string | null
         }
         Relationships: [
           {
@@ -3364,6 +3367,51 @@ export type Database = {
           target_governance_status?: string
           target_household_ids?: string[] | null
           title?: string
+          url?: string
+        }
+        Relationships: []
+      }
+      meeting_types: {
+        Row: {
+          active: boolean
+          client_label: string | null
+          client_visible: boolean
+          created_at: string
+          embed_url: string | null
+          id: string
+          label: string
+          minutes: number | null
+          note: string | null
+          sort_order: number
+          staff_visible: boolean
+          url: string
+        }
+        Insert: {
+          active?: boolean
+          client_label?: string | null
+          client_visible?: boolean
+          created_at?: string
+          embed_url?: string | null
+          id?: string
+          label: string
+          minutes?: number | null
+          note?: string | null
+          sort_order?: number
+          staff_visible?: boolean
+          url: string
+        }
+        Update: {
+          active?: boolean
+          client_label?: string | null
+          client_visible?: boolean
+          created_at?: string
+          embed_url?: string | null
+          id?: string
+          label?: string
+          minutes?: number | null
+          note?: string | null
+          sort_order?: number
+          staff_visible?: boolean
           url?: string
         }
         Relationships: []
@@ -6727,6 +6775,80 @@ export type Database = {
             columns: ["household_id"]
             isOneToOne: false
             referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      veem_payer_details: {
+        Row: {
+          address_country_code: string | null
+          business_name: string | null
+          city: string | null
+          contact_id: string
+          country_code: string | null
+          created_at: string
+          entity: string | null
+          first_name: string | null
+          industry: string | null
+          last_name: string | null
+          payer_type: string
+          phone: string | null
+          phone_country_code: string | null
+          postal_code: string | null
+          province: string | null
+          street: string | null
+          sub_industry: string | null
+          tax_id_number: string | null
+          updated_at: string
+        }
+        Insert: {
+          address_country_code?: string | null
+          business_name?: string | null
+          city?: string | null
+          contact_id: string
+          country_code?: string | null
+          created_at?: string
+          entity?: string | null
+          first_name?: string | null
+          industry?: string | null
+          last_name?: string | null
+          payer_type?: string
+          phone?: string | null
+          phone_country_code?: string | null
+          postal_code?: string | null
+          province?: string | null
+          street?: string | null
+          sub_industry?: string | null
+          tax_id_number?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address_country_code?: string | null
+          business_name?: string | null
+          city?: string | null
+          contact_id?: string
+          country_code?: string | null
+          created_at?: string
+          entity?: string | null
+          first_name?: string | null
+          industry?: string | null
+          last_name?: string | null
+          payer_type?: string
+          phone?: string | null
+          phone_country_code?: string | null
+          postal_code?: string | null
+          province?: string | null
+          street?: string | null
+          sub_industry?: string | null
+          tax_id_number?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "veem_payer_details_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: true
+            referencedRelation: "contacts"
             referencedColumns: ["id"]
           },
         ]
