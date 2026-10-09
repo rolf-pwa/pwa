@@ -539,6 +539,15 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
       console.error("[portal-validate] insurance fetch error", e);
     }
 
+    // Meeting types clients may book (managed in the CRM under Book a meeting > Edit meeting types).
+    let meeting_types: { label: string; url: string; embedUrl: string }[] | null = null;
+    try {
+      const { data: mt } = await supabase.from("meeting_types").select("label, client_label, url, embed_url").eq("active", true).eq("client_visible", true).order("sort_order");
+      meeting_types = (mt ?? []).map((t: any) => ({ label: t.client_label || t.label, url: t.url, embedUrl: t.embed_url || t.url }));
+    } catch (e) {
+      console.error("[portal-validate] meeting types fetch error", e);
+    }
+
     return new Response(JSON.stringify({
       contact: contactRes.data,
       vineyard_accounts: accountsRes.data || [],
@@ -563,7 +572,7 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
       professionals,
       engagements,
       insurance_policies,
-
+      meeting_types,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

@@ -559,7 +559,7 @@ const VfoPortal = () => {
         </Button>
         {bookMeetingOpen && (
           <div className="space-y-1.5 pl-1">
-            {MEETING_BOOKING_LINKS.map((link) => (
+            {(((data as any)?.meeting_types as typeof MEETING_BOOKING_LINKS | undefined) ?? MEETING_BOOKING_LINKS).map((link) => (
               <button
                 key={link.url}
                 onClick={() => {

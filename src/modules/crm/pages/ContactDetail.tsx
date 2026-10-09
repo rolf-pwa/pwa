@@ -66,7 +66,9 @@ import { SovereigntyCharterButton } from "@/modules/audit";
 import { GenerateCharterDraftButton } from "@/modules/audit";
 import { VaultView } from "@/modules/crm/pages/Vault";
 import { dialViaQuo } from "@/shared/lib/quo-dial";
-import { STAFF_MEETING_TYPES } from "@/shared/lib/staffMeetingTypes";
+import { useMeetingTypes } from "@/shared/hooks/useMeetingTypes";
+import { forStaff } from "@/shared/lib/meetingTypes";
+import { MeetingTypesDialog } from "@/modules/crm/components/MeetingTypesDialog";
 import { SERVICE_TIER_LABEL, type ServiceTier } from "@/shared/lib/serviceTier";
 import { 
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
@@ -224,6 +226,9 @@ const ContactDetail = () => {
   const [copyLoading, setCopyLoading] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
   const [bookMeetingOpen, setBookMeetingOpen] = useState(false);
+  const [manageTypesOpen, setManageTypesOpen] = useState(false);
+  const { data: allMeetingTypes = [] } = useMeetingTypes();
+  const staffMeetingTypes = forStaff(allMeetingTypes);
   const [embeddedBooking, setEmbeddedBooking] = useState<{ label: string; embedUrl: string } | null>(null);
 
   // Guard against setState after unmount when fetchData is triggered by
@@ -719,10 +724,10 @@ const ContactDetail = () => {
               </div>
             ) : (
               <div className="space-y-1.5">
-                {STAFF_MEETING_TYPES.map((link) => (
+                {staffMeetingTypes.map((link) => (
                   <button
                     key={link.url}
-                    onClick={() => setEmbeddedBooking(link)}
+                    onClick={() => link.embed_url ? setEmbeddedBooking({ label: link.label, embedUrl: link.embed_url }) : window.open(link.url, "_blank", "noopener,noreferrer")}
                     className="w-full flex items-center justify-between rounded-md border border-border bg-card px-3 py-2.5 text-sm text-foreground hover:border-accent/40 hover:bg-accent/[0.03] transition-colors text-left"
                   >
                     {link.label}
@@ -918,17 +923,17 @@ const ContactDetail = () => {
                       <ContactCalendar contactEmail={contact.email} contactName={contact.full_name} />
                     </SidebarSection>
                     <SidebarSection title="Book a meeting" defaultOpen>
-                      <ul className="px-2 pb-2">
-                        {STAFF_MEETING_TYPES.map((m) => (
-                          <li key={m.url} className="flex items-center gap-1 border-b border-border/50 py-1.5 last:border-0">
+                      <ul className="px-2 pb-1">
+                        {staffMeetingTypes.map((m) => (
+                          <li key={m.id} className="flex items-center gap-1 border-b border-border/50 py-1.5 last:border-0">
                             <button
                               type="button"
                               className="min-w-0 flex-1 text-left hover:text-accent"
-                              title={m.note ?? `Book a ${m.minutes}-minute ${m.label}`}
-                              onClick={() => { setEmbeddedBooking(m); setBookMeetingOpen(true); }}
+                              title={m.note ?? `Book a ${m.minutes ?? ""}-minute ${m.label}`}
+                              onClick={() => (m.embed_url ? (setEmbeddedBooking({ label: m.label, embedUrl: m.embed_url }), setBookMeetingOpen(true)) : window.open(m.url, "_blank", "noopener,noreferrer"))}
                             >
                               <span className="block truncate text-sm font-medium">{m.label}</span>
-                              <span className="block text-[11px] text-muted-foreground">{m.minutes} min</span>
+                              {m.minutes && <span className="block text-[11px] text-muted-foreground">{m.minutes} min</span>}
                             </button>
                             <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Copy booking link to send to the client"
                               onClick={() => { navigator.clipboard?.writeText(m.url); toast.success(`${m.label} link copied`); }}>
@@ -940,6 +945,8 @@ const ContactDetail = () => {
                           </li>
                         ))}
                       </ul>
+                      <div className="px-2 pb-2"><button className="text-xs text-muted-foreground underline" onClick={() => setManageTypesOpen(true)}>Edit meeting types</button></div>
+                      <MeetingTypesDialog open={manageTypesOpen} onOpenChange={setManageTypesOpen} />
                     </SidebarSection>
                     <SidebarSection title="Audit trail">
                       <AuditTrail contactId={id!} />
