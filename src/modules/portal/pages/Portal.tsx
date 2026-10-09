@@ -27,6 +27,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/shared/components/ui/input-otp";
 import { Grape, ScrollText, Clock, Calendar, FolderOpen, CheckSquare, ShieldCheck, ExternalLink, FileBarChart, Mail, MailX, Loader2, Home, Users, ChevronLeft, ChevronDown, ChevronRight, ArrowRight, Landmark, MessageCircle, Video, MapPin, ClipboardList, LogOut, Building2, FolderLock, LayoutDashboard } from "lucide-react";
 import prosperwiseLogo from "@/assets/prosperwise-icon-paper.png";
+import { policyTypeLabel } from "@/shared/lib/insurance";
 import { insuranceCashForStorehouses, sumValues, isAumStorehouse, formatCurrency } from "@/modules/portal/lib/portalAum";
 
 interface PortalData {
@@ -232,6 +233,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(!!token);
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [openTotals, setOpenTotals] = useState<Set<string>>(new Set());
   const [completedEl, setCompletedEl] = useState<HTMLElement | null>(null);
   const [embeddedBooking, setEmbeddedBooking] = useState<{ label: string; embedUrl: string } | null>(null);
   useEffect(() => { if (activeTab !== "meetings") setEmbeddedBooking(null); }, [activeTab]);
@@ -1020,35 +1022,48 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
             const tank = viewingOwnHousehold
               ? household_holding_tank.filter((t: any) => allowedScopes.has(t.visibility_scope))
               : [];
+            const storeAccts = hhAssets.storehouses.filter((a: any) => isAumStorehouse(a));
             const rows = [
-              { label: "Holding Tank", total: sumValues(tank), count: tank.length },
-              { label: "Vineyard", total: sumValues(hhAssets.vineyard), count: hhAssets.vineyard.length },
-              { label: "Storehouses", total: sumValues(hhAssets.storehouses.filter((a: any) => isAumStorehouse(a))) + insuranceCashForStorehouses(visibleInsurance), count: hhAssets.storehouses.length + visibleInsurance.length },
-              { label: "Insurance", total: visibleInsurance.reduce((n: number, p: any) => n + (p.coverage_amount || 0), 0), count: visibleInsurance.length, suffix: "coverage" },
-            ].filter((r) => r.count > 0 || r.label === "Vineyard" || r.label === "Storehouses");
+              { label: "Holding Tank", total: sumValues(tank), items: tank.map((a: any) => ({ id: a.id, name: a.account_name, value: Number(a.current_value) || 0 })) },
+              { label: "Vineyard", total: sumValues(hhAssets.vineyard), items: hhAssets.vineyard.map((a: any) => ({ id: a.id, name: a.account_name, value: Number(a.current_value) || 0 })) },
+              { label: "Storehouses", total: sumValues(storeAccts) + insuranceCashForStorehouses(visibleInsurance), items: storeAccts.map((a: any) => ({ id: a.id, name: a.label || a.asset_type || a.notes || "Account", value: Number(a.current_value) || 0 })) },
+              { label: "Insurance", total: visibleInsurance.reduce((n: number, p: any) => n + (p.coverage_amount || 0), 0), suffix: "coverage", items: visibleInsurance.map((p: any) => ({ id: p.id, name: policyTypeLabel(p.policy_type), value: Number(p.coverage_amount) || 0 })) },
+            ].filter((r) => r.items.length > 0 || r.label === "Vineyard" || r.label === "Storehouses");
             return (
               <Card>
                 <CardContent className="p-0 divide-y divide-border">
                   <div className="px-4 py-3">
                     <h2 className="font-serif text-sm font-semibold text-foreground">Household Totals</h2>
                   </div>
-                  {rows.map((r) => (
-                    <button
-                      key={r.label}
-                      disabled={!viewingOwnHousehold}
-                      onClick={() => {
-                        setDrilldown({ level: "individual", householdId: household?.id });
-                        setActiveTab("financials");
-                      }}
-                      className={`flex w-full items-center justify-between px-4 py-3 text-left transition-colors ${viewingOwnHousehold ? "hover:bg-muted/40" : "cursor-default"}`}
-                    >
-                      <span className="text-sm text-foreground">{r.label}{r.suffix ? <span className="ml-1 text-xs text-muted-foreground">{r.suffix}</span> : null}</span>
-                      <span className="flex items-center gap-1.5">
-                        <span className="font-serif text-sm font-semibold tabular-nums text-foreground">{formatCurrency(r.total)}</span>
-                        {viewingOwnHousehold && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                      </span>
-                    </button>
-                  ))}
+                  {rows.map((r) => {
+                    const open = openTotals.has(r.label);
+                    const expandable = r.items.length > 0;
+                    return (
+                      <div key={r.label}>
+                        <button
+                          disabled={!expandable}
+                          onClick={() => setOpenTotals((prev) => { const n = new Set(prev); n.has(r.label) ? n.delete(r.label) : n.add(r.label); return n; })}
+                          className={`flex w-full items-center justify-between px-4 py-3 text-left transition-colors ${expandable ? "hover:bg-muted/40" : "cursor-default"}`}
+                        >
+                          <span className="flex items-center gap-1.5 text-sm text-foreground">
+                            {expandable ? (open ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />) : <span className="w-4" />}
+                            {r.label}{r.suffix ? <span className="text-xs text-muted-foreground">{r.suffix}</span> : null}
+                          </span>
+                          <span className="font-serif text-sm font-semibold tabular-nums text-foreground">{formatCurrency(r.total)}</span>
+                        </button>
+                        {open && (
+                          <div className="pb-2">
+                            {r.items.map((it: any) => (
+                              <div key={it.id} className="flex items-center justify-between pl-10 pr-4 py-1.5">
+                                <span className="text-xs text-muted-foreground">{it.name}</span>
+                                <span className="text-xs tabular-nums text-foreground">{formatCurrency(it.value)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </CardContent>
               </Card>
             );
