@@ -1111,29 +1111,29 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
           <Tabs value={effectiveTab} onValueChange={setActiveTab} className="w-full space-y-4">
             <TabsList className="w-full bg-muted border border-border flex-wrap h-auto">
               {isSelf && (
-                <TabsTrigger value="dashboard" className="flex-1 gap-1.5">
+                <TabsTrigger value="dashboard" className="flex-1 gap-1.5 max-sm:flex-col max-sm:gap-0.5 max-sm:px-1 max-sm:text-[11px]">
                   <LayoutDashboard className="h-4 w-4" />
                   Dashboard
                 </TabsTrigger>
               )}
-              <TabsTrigger value="tasks" className="flex-1 gap-1.5">
+              <TabsTrigger value="tasks" className="flex-1 gap-1.5 max-sm:flex-col max-sm:gap-0.5 max-sm:px-1 max-sm:text-[11px]">
                 <CheckSquare className="h-4 w-4" />
                 <span className="hidden sm:inline">Action Items</span>
                 <span className="sm:hidden">Tasks</span>
               </TabsTrigger>
-              <TabsTrigger value="meetings" className="flex-1 gap-1.5">
+              <TabsTrigger value="meetings" className="flex-1 gap-1.5 max-sm:flex-col max-sm:gap-0.5 max-sm:px-1 max-sm:text-[11px]">
                 <Calendar className="h-4 w-4" />
                 Meetings
               </TabsTrigger>
               {hasFinancials && (
-                <TabsTrigger value="financials" className="flex-1 gap-1.5">
+                <TabsTrigger value="financials" className="flex-1 gap-1.5 max-sm:flex-col max-sm:gap-0.5 max-sm:px-1 max-sm:text-[11px]">
                   <Landmark className="h-4 w-4" />
                   Financials
                 </TabsTrigger>
               )}
 
               {isSelf && (
-                <TabsTrigger value="vault" className="flex-1 gap-1.5">
+                <TabsTrigger value="vault" className="flex-1 gap-1.5 max-sm:flex-col max-sm:gap-0.5 max-sm:px-1 max-sm:text-[11px]">
                   <FolderLock className="h-4 w-4" />
                   Documents
                 </TabsTrigger>
@@ -1141,7 +1141,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
               {isSelf &&
                 household?.governance_status === "sovereign" &&
                 household?.fiduciary_entity === "pwa" && (
-                  <TabsTrigger value="messages" className="flex-1 gap-1.5">
+                  <TabsTrigger value="messages" className="flex-1 gap-1.5 max-sm:flex-col max-sm:gap-0.5 max-sm:px-1 max-sm:text-[11px]">
                     <MessageCircle className="h-4 w-4" />
                     Messages
                   </TabsTrigger>
@@ -1402,7 +1402,10 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
       return householdName(label);
     }
     if (currentMember) return `${currentMember.first_name} ${currentMember.last_name || ""}`;
-    return family?.name ? `${family.name} — ${household?.label || ""}` : "Sovereign Financial Territory";
+    if (!family?.name) return "Sovereign Financial Territory";
+    // Many families share their name with their only household: say it once.
+    const hh = (household?.label || "").trim();
+    return hh && hh.toLowerCase() !== family.name.trim().toLowerCase() ? `${family.name} — ${hh}` : family.name;
   };
 
   return (
