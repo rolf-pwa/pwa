@@ -1200,9 +1200,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
     );
 
     return (
-      <div className={effectiveTab === "tasks" ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]" : "grid gap-6"}>
-        {/* Main Content: Tabbed Interface. The sidebar belongs to Action Items only; every other tab gets the full width. */}
-        <div className="min-w-0 space-y-4">
+      <div className="space-y-4">
           {/* Sovereignty Survey — auto-hides once the survey is complete */}
           {isSelf && (
             <PortalIntakeBanner
@@ -1213,7 +1211,8 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
 
 
           {/* Main Tabs */}
-          <Tabs value={effectiveTab} onValueChange={setActiveTab} className="w-full">
+          {/* Main Tabs: the bar spans the full width; the sidebar sits under it, beside the Action Items content. */}
+          <Tabs value={effectiveTab} onValueChange={setActiveTab} className="w-full space-y-4">
             <TabsList className="w-full bg-muted border border-border flex-wrap h-auto">
               {isSelf && (
                 <TabsTrigger value="dashboard" className="flex-1 gap-1.5">
@@ -1252,6 +1251,8 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
                   </TabsTrigger>
                 )}
             </TabsList>
+            <div className={effectiveTab === "tasks" ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]" : "grid gap-6"}>
+        <div className="min-w-0 space-y-4">
 
             {/* Dashboard Tab */}
             {isSelf && (
@@ -1403,9 +1404,6 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
                   />
                 </TabsContent>
               )}
-
-          </Tabs>
-
         </div>
 
         {/* Right Sidebar (Action Items tab only): what is finished */}
@@ -1431,6 +1429,8 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
           )}
         </div>
         )}
+            </div>
+          </Tabs>
       </div>
     );
   };
