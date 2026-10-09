@@ -1258,7 +1258,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
 
             {/* Dashboard Tab */}
             {isSelf && (
-              <TabsContent value="dashboard" className="mt-4">
+              <TabsContent value="dashboard" className="mt-0">
                 <PortalDashboard
                   totals={dashTotals}
                   meetings={meetings}
@@ -1271,7 +1271,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
             )}
 
             {/* Action Items Tab */}
-            <TabsContent value="tasks" className="mt-4">
+            <TabsContent value="tasks" className="mt-0">
               {isSelf ? (
                 <PortalTasks portalToken={portalToken} clientName={`${contact.first_name} ${contact.last_name || ""}`.trim()} contactId={contact.id} completedTarget={completedEl} />
               ) : (
@@ -1283,7 +1283,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
             </TabsContent>
 
             {/* Meetings Tab (with Reviews) */}
-            <TabsContent value="meetings" className="mt-4 space-y-6">
+            <TabsContent value="meetings" className="mt-0 space-y-6">
               {isSelf && embeddedBooking ? (
                 <div className="space-y-3">
                   <button
@@ -1353,7 +1353,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
 
             {/* Financials Tab — Holding Tank, Vineyard, Storehouses, Insurance */}
             {hasFinancials && (
-              <TabsContent value="financials" className="mt-4 space-y-6">
+              <TabsContent value="financials" className="mt-0 space-y-6">
                 {isSelf && holding_tank.length > 0 && (
                   <PortalHoldingTank accounts={holding_tank} defaultCollapsed />
                 )}
@@ -1383,7 +1383,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
 
             {/* Vault Tab */}
             {isSelf && (
-              <TabsContent value="vault" className="mt-4">
+              <TabsContent value="vault" className="mt-0">
                 <PortalVault portalToken={portalToken} householdId={contact.household_id ?? null} />
               </TabsContent>
             )}
@@ -1391,7 +1391,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
             {isSelf &&
               household?.governance_status === "sovereign" &&
               household?.fiduciary_entity === "pwa" && (
-                <TabsContent value="messages" className="mt-4">
+                <TabsContent value="messages" className="mt-0">
                   <PortalMessages
                     portalToken={portalToken}
                     contactName={`${contact.first_name} ${contact.last_name || ""}`.trim()}
