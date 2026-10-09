@@ -26,6 +26,7 @@ import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/shared/components/ui/input-otp";
 import { Grape, ScrollText, Clock, Calendar, FolderOpen, CheckSquare, ShieldCheck, ExternalLink, FileBarChart, Mail, MailX, Loader2, Home, Users, ChevronLeft, ChevronDown, ChevronRight, ArrowRight, Landmark, MessageCircle, Video, MapPin, ClipboardList, LogOut, Building2, FolderLock, LayoutDashboard } from "lucide-react";
+import { getPortalSession, setPortalSession, clearPortalSession } from "@/modules/portal/lib/portalSession";
 import prosperwiseLogo from "@/assets/prosperwise-icon-paper.png";
 import { policyTypeLabel } from "@/shared/lib/insurance";
 import { insuranceCashForStorehouses, sumValues, isAumStorehouse, formatCurrency } from "@/modules/portal/lib/portalAum";
@@ -237,7 +238,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
   const [completedEl, setCompletedEl] = useState<HTMLElement | null>(null);
   const [embeddedBooking, setEmbeddedBooking] = useState<{ label: string; embedUrl: string } | null>(null);
   useEffect(() => { if (activeTab !== "meetings") setEmbeddedBooking(null); }, [activeTab]);
-  const taskCounts = useTaskCounts(token || (data as any)?.portal_token || "", data?.contact?.id);
+  const taskCounts = useTaskCounts(getPortalSession(token) || token || (data as any)?.portal_token || "", data?.contact?.id);
 
   // Drill-down state
   const [drilldown, setDrilldown] = useState<DrilldownState>({ level: "individual" });
@@ -367,9 +368,15 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
     if (!token) return;
     (async () => {
       try {
-        const resp = await supabase.functions.invoke("portal-validate", {
-          body: { token },
+        const stored = getPortalSession(token);
+        let resp = await supabase.functions.invoke("portal-validate", {
+          body: { token: stored || token },
         });
+        if (stored && (resp.error || resp.data?.error)) {
+          clearPortalSession(token);
+          resp = await supabase.functions.invoke("portal-validate", { body: { token } });
+        }
+        setPortalSession(token, resp.data?.session_token);
         if (resp.error || resp.data?.error) {
           setError(resp.data?.error || "Invalid link");
         } else {
@@ -598,13 +605,14 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
           <p className="text-muted-foreground text-sm max-w-sm">
             {error || "This portal link is invalid or has expired. Please contact your Personal CFO for a new link."}
           </p>
+          <a href="/portal" className="inline-block text-sm text-primary underline underline-offset-2">Sign in with your email</a>
         </div>
       </div>
     );
   }
 
   const { contact, charter, vineyard_accounts, storehouses, holding_tank = [], household_holding_tank = [], family_holding_tank = [], audit_trail, portal_requests, meetings, family, household, household_members, hierarchy, corporations = [], quarterly_reviews = [], insurance_policies = [] } = data;
-  const portalToken = token || data.portal_token || "";
+  const portalToken = getPortalSession(token) || token || data.portal_token || "";
   const hierarchyLevel = hierarchy?.level || "individual";
 
   // Determine current view context

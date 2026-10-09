@@ -27,6 +27,7 @@ import { insuranceCashForStorehouses, sumValues, isAumStorehouse, formatCurrency
 import { MEETING_BOOKING_LINKS } from "@/shared/lib/meetingBookingLinks";
 import { PortalDynamicLinks } from "@/modules/portal/components/PortalDynamicLinks";
 import { PortalShoeboxUpload } from "@/modules/portal/components/PortalShoeboxUpload";
+import { getPortalSession, setPortalSession, clearPortalSession } from "@/modules/portal/lib/portalSession";
 import prosperwiseLogo from "@/assets/prosperwise-logo.png";
 import prosperwiseIconPaper from "@/assets/prosperwise-icon-paper.png";
 
@@ -218,7 +219,14 @@ const VfoPortal = () => {
     let cancelled = false;
     (async () => {
       try {
-        const { data: res, error: err } = await supabase.functions.invoke("portal-validate", { body: { token } });
+        const stored = getPortalSession(token);
+        let { data: res, error: err } = await supabase.functions.invoke("portal-validate", { body: { token: stored || token } });
+        if (stored && (err || (res as any)?.error)) {
+          // Stored session expired or was revoked: fall back to the link (which may itself be spent).
+          clearPortalSession(token);
+          ({ data: res, error: err } = await supabase.functions.invoke("portal-validate", { body: { token } }));
+        }
+        setPortalSession(token, (res as any)?.session_token);
         if (cancelled) return;
         if (err) throw err;
         if (!res || (res as any).error) throw new Error((res as any)?.error || "Invalid link");
@@ -241,7 +249,7 @@ const VfoPortal = () => {
   const refreshData = async () => {
     if (!token) return;
     try {
-      const resp = await supabase.functions.invoke("portal-validate", { body: { token } });
+      const resp = await supabase.functions.invoke("portal-validate", { body: { token: getPortalSession(token) || token } });
       if (!resp.error && !resp.data?.error) setData(resp.data);
     } catch {}
   };
@@ -249,7 +257,7 @@ const VfoPortal = () => {
   // Action Items are always the logged-in user's own — never a housemate's
   // (PortalTasks is only ever rendered when isSelf) — so this uses the
   // logged-in contact specifically, not whichever page is being viewed.
-  const { newCount: taskNewCount, ongoingCount: taskOngoingCount } = useTaskCounts(token || "", data?.contact?.id);
+  const { newCount: taskNewCount, ongoingCount: taskOngoingCount } = useTaskCounts(getPortalSession(token) || token || "", data?.contact?.id);
 
   if (loading) {
     return (
@@ -267,11 +275,9 @@ const VfoPortal = () => {
             <Crown className="h-8 w-8 text-accent mx-auto" />
             <h1 className="font-serif text-xl text-foreground">Family Office unavailable</h1>
             <p className="text-sm text-muted-foreground">{error || "Please contact your advisor."}</p>
-            {token && (
-              <Button variant="outline" asChild>
-                <Link to={`/portal/${token}`}>Open standard portal</Link>
-              </Button>
-            )}
+            <Button variant="outline" asChild>
+              <Link to="/portal">Sign in with your email</Link>
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -313,7 +319,7 @@ const VfoPortal = () => {
 
   const familyName = family?.name || "Family";
   const hierarchyLevel = hierarchy?.level || "individual";
-  const portalToken = token!;
+  const portalToken = getPortalSession(token) || token!;
 
   const currentHousehold = drilldown.householdId
     ? hierarchy?.households?.find((h: any) => h.id === drilldown.householdId)

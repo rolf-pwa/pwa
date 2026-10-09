@@ -279,12 +279,26 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
       });
     }
 
+    let sessionToken: string | null = null;
     if (portalToken.single_use && !portalToken.used_at) {
       const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
       await supabase
         .from("portal_tokens")
         .update({ used_at: new Date().toISOString(), first_used_ip: clientIp })
         .eq("token", token);
+
+      // The link itself is now spent, so hand back a short-lived session token. The page keeps it
+      // for the life of the tab, which lets a signed-in client refresh without a new link.
+      const { data: sess } = await supabase
+        .from("portal_tokens")
+        .insert({
+          contact_id: portalToken.contact_id,
+          created_by: portalToken.created_by,
+          expires_at: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
+        })
+        .select("token")
+        .single();
+      sessionToken = sess?.token ?? null;
     }
 
     const contactId = portalToken.contact_id;
@@ -576,6 +590,7 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
     }
 
     return new Response(JSON.stringify({
+      session_token: sessionToken,
       contact: contactRes.data,
       vineyard_accounts: accountsRes.data || [],
       storehouses: storehousesRes.data || [],
