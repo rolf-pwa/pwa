@@ -26,8 +26,8 @@ export function PortalDashboard({ totals, meetings, requests, taskCounts, onGo, 
   const open = requests.filter((r) => r.status !== "resolved");
   const actions = taskCounts.newCount + taskCounts.ongoingCount;
 
-  const Tile = ({ icon, title, value, note, to }: { icon: React.ReactNode; title: string; value: string; note?: string; to: string }) => (
-    <button onClick={() => onGo(to)} className="rounded-lg border border-border bg-card p-4 text-left transition-colors hover:border-accent/40">
+  const Tile = ({ icon, title, value, note, to }: { icon: React.ReactNode; title: string; value: string; note?: string; to?: string }) => (
+    <button onClick={() => to && onGo(to)} disabled={!to} className={`rounded-lg border border-border bg-card p-4 text-left ${to ? "transition-colors hover:border-accent/40" : "cursor-default"}`}>
       <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">{icon}{title}</div>
       <p className="font-serif text-lg font-semibold text-foreground">{value}</p>
       {note && <p className="mt-0.5 text-xs text-muted-foreground">{note}</p>}
@@ -54,7 +54,7 @@ export function PortalDashboard({ totals, meetings, requests, taskCounts, onGo, 
         <Tile icon={<CheckSquare className="h-3.5 w-3.5" />} title="Action items" to="tasks"
           value={actions === 0 ? "All caught up" : `${actions} open`}
           note={taskCounts.newCount > 0 ? `${taskCounts.newCount} new` : undefined} />
-        <Tile icon={<MessageSquare className="h-3.5 w-3.5" />} title="Requests" to="tasks"
+        <Tile icon={<MessageSquare className="h-3.5 w-3.5" />} title="Requests"
           value={open.length === 0 ? "None open" : `${open.length} open`}
           note={open[0]?.request_type ? TYPE_LABELS[open[0].request_type] ?? open[0].request_type : undefined} />
       </div>

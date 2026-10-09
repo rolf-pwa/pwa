@@ -48,9 +48,11 @@ interface Props {
   contactName: string;
   portalToken: string;
   onUpdate?: () => void;
+  /** Which requests to list: open ones, resolved ones, or both (default). The detail dialog works the same for each. */
+  show?: "open" | "resolved" | "all";
 }
 
-export function PortalRequests({ requests, contactId, contactName, portalToken, onUpdate }: Props) {
+export function PortalRequests({ requests, contactId, contactName, portalToken, onUpdate, show = "all" }: Props) {
   const [selected, setSelected] = useState<PortalRequest | null>(null);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
@@ -99,9 +101,13 @@ export function PortalRequests({ requests, contactId, contactName, portalToken, 
     }
   };
 
-  const openRequests = requests.filter((r) => r.status !== "resolved");
-  const resolvedRequests = requests.filter((r) => r.status === "resolved");
+  const openRequests = show === "resolved" ? [] : requests.filter((r) => r.status !== "resolved");
+  const resolvedRequests = show === "open" ? [] : requests.filter((r) => r.status === "resolved");
 
+  if (show === "resolved" && resolvedRequests.length === 0) return null;
+  if (show === "open" && openRequests.length === 0) {
+    return <p className="text-sm text-muted-foreground">Nothing open. Ask Georgia if you need something.</p>;
+  }
   if (requests.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-border bg-muted/20 p-8 text-center">
@@ -160,7 +166,7 @@ export function PortalRequests({ requests, contactId, contactName, portalToken, 
         )}
 
         {resolvedRequests.length > 0 && (
-          <details className="group">
+          <details className="group" open={show === "resolved"}>
             <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors py-2">
               Resolved ({resolvedRequests.length})
             </summary>

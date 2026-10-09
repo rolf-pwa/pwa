@@ -231,6 +231,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(!!token);
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [completedEl, setCompletedEl] = useState<HTMLElement | null>(null);
   const taskCounts = useTaskCounts(token || (data as any)?.portal_token || "", data?.contact?.id);
 
   // Drill-down state
@@ -1161,6 +1162,44 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
           
     ) : null;
 
+    // The Dashboard's sidebar: household, quick links, the Charter, and open requests with Ask Georgia.
+    const charterUrl = charter?.draft_status === "ratified" ? (contact.charter_url || family?.charter_document_url) : null;
+    const dashboardSidebar = (
+      <>
+        {familyTile}
+        {isSelf && <PortalDynamicLinks contact={contact} />}
+        {charterUrl ? <PortalCharter charterUrl={charterUrl} /> : null}
+        {isSelf && (
+          <Card>
+            <CardContent className="space-y-3 p-4">
+              <div className="flex items-center gap-2">
+                <ClipboardList className="h-4 w-4 text-accent" />
+                <h3 className="text-sm font-semibold text-foreground font-serif">Requests</h3>
+              </div>
+              <PortalRequests
+                show="open"
+                requests={portal_requests || []}
+                contactId={contact.id}
+                contactName={`${contact.first_name} ${contact.last_name || ""}`.trim()}
+                portalToken={portalToken}
+                onUpdate={() => refreshData(portalToken)}
+              />
+              {askGeorgiaButton("")}
+            </CardContent>
+          </Card>
+        )}
+        {(audit_trail ?? []).length > 0 && (
+          <div>
+            <div className="mb-3 flex items-center gap-2">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <h3 className="text-sm font-medium text-muted-foreground">Timeline</h3>
+            </div>
+            <PortalTimeline auditTrail={audit_trail} />
+          </div>
+        )}
+      </>
+    );
+
     return (
       <div className={effectiveTab === "tasks" ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]" : "grid gap-6"}>
         {/* Main Content: Tabbed Interface. The sidebar belongs to Action Items only; every other tab gets the full width. */}
@@ -1224,7 +1263,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
                   requests={portal_requests || []}
                   taskCounts={taskCounts}
                   onGo={setActiveTab}
-                  sidebar={<>{askGeorgiaButton("")}{familyTile}</>}
+                  sidebar={dashboardSidebar}
                 />
               </TabsContent>
             )}
@@ -1232,7 +1271,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
             {/* Action Items Tab */}
             <TabsContent value="tasks" className="mt-4">
               {isSelf ? (
-                <PortalTasks portalToken={portalToken} clientName={`${contact.first_name} ${contact.last_name || ""}`.trim()} contactId={contact.id} />
+                <PortalTasks portalToken={portalToken} clientName={`${contact.first_name} ${contact.last_name || ""}`.trim()} contactId={contact.id} completedTarget={completedEl} />
               ) : (
                 <div className="rounded-lg border border-border bg-muted/30 p-8 text-center">
                   <CheckSquare className="mx-auto h-8 w-8 text-muted-foreground mb-3" />
@@ -1370,50 +1409,25 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
 
         </div>
 
-        {/* Right Sidebar (Action Items tab only) */}
-        {effectiveTab === "tasks" && (
+        {/* Right Sidebar (Action Items tab only): what is finished */}
+        {effectiveTab === "tasks" && isSelf && (
         <div className="min-w-0 space-y-4">
-          {/* Dynamic Quick Links (My Accounts, Empathy, etc.) — pinned below Household */}
-          {isSelf && <PortalDynamicLinks contact={contact} />}
-
-          {/* Charter — hidden if no charter file */}
-          {(() => {
-            const charterUrl = charter?.draft_status === "ratified" ? (contact.charter_url || family?.charter_document_url) : null;
-            return charterUrl ? <PortalCharter charterUrl={charterUrl} /> : null;
-          })()}
-
-
-          {/* Requests — moved from tabs */}
-          {isSelf && (
-            <Card>
-              <CardContent className="p-4 space-y-2">
-                <div className="flex items-center gap-2">
-                  <ClipboardList className="h-4 w-4 text-accent" />
-                  <h3 className="text-sm font-semibold text-foreground font-serif">Requests</h3>
-                </div>
-                <PortalRequests
-                  requests={portal_requests || []}
-                  contactId={contact.id}
-                  contactName={`${contact.first_name} ${contact.last_name || ""}`.trim()}
-                  portalToken={portalToken}
-                  onUpdate={() => refreshData(portalToken)}
-                />
-              </CardContent>
-            </Card>
-          )}
-
-
-
-
-
-          {/* Timeline — only when there are client-visible governance decisions to show */}
-          {(audit_trail ?? []).length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <Clock className="h-4 w-4 text-muted-foreground" />
-                <h3 className="text-sm font-medium text-muted-foreground">Timeline</h3>
+          {/* Completed action items render here (PortalTasks portals its list into this element) */}
+          <div ref={setCompletedEl} />
+          {(portal_requests || []).some((r: any) => r.status === "resolved") && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <ClipboardList className="h-4 w-4 text-muted-foreground/50" />
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Completed requests</p>
               </div>
-              <PortalTimeline auditTrail={audit_trail} />
+              <PortalRequests
+                show="resolved"
+                requests={portal_requests || []}
+                contactId={contact.id}
+                contactName={`${contact.first_name} ${contact.last_name || ""}`.trim()}
+                portalToken={portalToken}
+                onUpdate={() => refreshData(portalToken)}
+              />
             </div>
           )}
         </div>
