@@ -11,7 +11,8 @@ import { PortalRequests } from "@/modules/portal/components/PortalRequests";
 import { PortalMeetings } from "@/modules/portal/components/PortalMeetings";
 import { PortalCharter } from "@/modules/portal/components/PortalCharter";
 import { PortalTimeline } from "@/modules/portal/components/PortalTimeline";
-import { PortalTasks } from "@/modules/portal/components/PortalTasks";
+import { PortalTasks, useTaskCounts } from "@/modules/portal/components/PortalTasks";
+import { PortalDashboard } from "@/modules/portal/components/PortalDashboard";
 import { PortalGeorgiaChat } from "@/modules/portal/components/PortalGeorgiaChat";
 import { PortalNotificationBell } from "@/modules/portal/components/PortalNotificationBell";
 import { PortalMessages } from "@/modules/portal/components/PortalMessages";
@@ -23,7 +24,7 @@ import { Input } from "@/shared/components/ui/input";
 import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/shared/components/ui/input-otp";
-import { Grape, ScrollText, Clock, Calendar, FolderOpen, CheckSquare, ShieldCheck, ExternalLink, FileBarChart, Mail, MailX, Loader2, Home, Users, ChevronLeft, ChevronDown, ChevronRight, ArrowRight, Landmark, MessageCircle, Video, MapPin, ClipboardList, LogOut, Building2, FolderLock } from "lucide-react";
+import { Grape, ScrollText, Clock, Calendar, FolderOpen, CheckSquare, ShieldCheck, ExternalLink, FileBarChart, Mail, MailX, Loader2, Home, Users, ChevronLeft, ChevronDown, ChevronRight, ArrowRight, Landmark, MessageCircle, Video, MapPin, ClipboardList, LogOut, Building2, FolderLock, LayoutDashboard } from "lucide-react";
 import prosperwiseLogo from "@/assets/prosperwise-icon-paper.png";
 import { insuranceCashForStorehouses, sumValues, isAumStorehouse, formatCurrency } from "@/modules/portal/lib/portalAum";
 
@@ -229,7 +230,8 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
   const [data, setData] = useState<PortalData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(!!token);
-  const [activeTab, setActiveTab] = useState("tasks");
+  const [activeTab, setActiveTab] = useState("dashboard");
+  const taskCounts = useTaskCounts(token || (data as any)?.portal_token || "", data?.contact?.id);
 
   // Drill-down state
   const [drilldown, setDrilldown] = useState<DrilldownState>({ level: "individual" });
@@ -1090,8 +1092,15 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
 
     const hasTerritory = (ind.vineyardAccounts?.length || 0) > 0 || (ind.memberStorehouses?.length || 0) > 0;
     const hasInsurance = (ind.insurancePolicies?.length || 0) > 0;
+    // The viewer's own balance sheet for the dashboard: what they hold, less what they owe. Their own records only.
+    const dashTotals = (() => {
+      if (!isSelf || !hasTerritory && !(holding_tank?.length)) return null;
+      const sum = (rows: any[]) => rows.reduce((a, r) => a + (Number(r.current_value) || 0), 0);
+      const cash = (ind.insurancePolicies || []).filter((p: any) => !p.cash_value_storehouse_id && p.cv_in_strategic !== false).reduce((a: number, p: any) => a + (Number(p.cash_value) || 0), 0);
+      return { assets: sum(ind.vineyardAccounts || []) + sum(ind.memberStorehouses || []) + sum(holding_tank || []) + cash, liabilities: Number((data as any).liabilities_total) || 0 };
+    })();
     const hasFinancials = hasTerritory || hasInsurance || (isSelf && holding_tank.length > 0);
-    const effectiveTab = !hasFinancials && activeTab === "financials" ? "tasks" : activeTab;
+    const effectiveTab = (!hasFinancials && activeTab === "financials") || (!isSelf && activeTab === "dashboard") ? "tasks" : activeTab;
 
 
 
@@ -1116,6 +1125,12 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
           {/* Main Tabs */}
           <Tabs value={effectiveTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="w-full bg-muted border border-border flex-wrap h-auto">
+              {isSelf && (
+                <TabsTrigger value="dashboard" className="flex-1 gap-1.5">
+                  <LayoutDashboard className="h-4 w-4" />
+                  Dashboard
+                </TabsTrigger>
+              )}
               <TabsTrigger value="tasks" className="flex-1 gap-1.5">
                 <CheckSquare className="h-4 w-4" />
                 <span className="hidden sm:inline">Action Items</span>
@@ -1147,6 +1162,19 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
                   </TabsTrigger>
                 )}
             </TabsList>
+
+            {/* Dashboard Tab */}
+            {isSelf && (
+              <TabsContent value="dashboard" className="mt-4">
+                <PortalDashboard
+                  totals={dashTotals}
+                  meetings={meetings}
+                  requests={portal_requests || []}
+                  taskCounts={taskCounts}
+                  onGo={setActiveTab}
+                />
+              </TabsContent>
+            )}
 
             {/* Action Items Tab */}
             <TabsContent value="tasks" className="mt-4">

@@ -540,6 +540,15 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
       console.error("[portal-validate] insurance fetch error", e);
     }
 
+    // The viewer's own debts, for the dashboard's balance line (a single total, never the individual loans).
+    let liabilities_total: number | null = null;
+    try {
+      const { data: liabs } = await supabase.from("liabilities").select("current_balance").eq("holder_type", "contact").eq("contact_id", contactId);
+      liabilities_total = (liabs ?? []).reduce((a: number, r: any) => a + (Number(r.current_balance) || 0), 0);
+    } catch (e) {
+      console.error("[portal-validate] liabilities fetch error", e);
+    }
+
     // Meeting types clients may book (managed in the CRM under Book a meeting > Edit meeting types).
     let meeting_types: { label: string; url: string; embedUrl: string }[] | null = null;
     try {
@@ -574,6 +583,7 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
       engagements,
       insurance_policies,
       meeting_types,
+      liabilities_total,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
