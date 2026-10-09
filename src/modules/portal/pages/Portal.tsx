@@ -854,24 +854,15 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main Content: Household info + member cards */}
         <div className="space-y-6 lg:col-span-2">
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10">
-                  <Home className="h-5 w-5 text-accent" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-foreground font-serif">{hhLabel} Household</h2>
-                  <p className="text-xs text-muted-foreground">
-                    {memberCount} member{memberCount !== 1 ? "s" : ""}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
 
-          {/* Member cards — ordered: Head, Spouse, Beneficiary, Minor */}
-          <div className="grid gap-3">
+          {/* Members — ordered: Head, Spouse, Beneficiary, Minor */}
+          <Card>
+          <CardContent className="p-0 divide-y divide-border">
+            <div className="flex items-center gap-2 px-4 py-3">
+              <Home className="h-4 w-4 text-accent" />
+              <h2 className="font-serif text-sm font-semibold text-foreground">{hhLabel} Household</h2>
+              <span className="ml-auto text-xs text-muted-foreground">{memberCount} member{memberCount !== 1 ? "s" : ""}</span>
+            </div>
             {(!viewingOwnHousehold
               ? members.map((m: any) => ({ ...m, _isSelf: false }))
               : [
@@ -914,19 +905,11 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
                         memberId: isSelf ? undefined : m.id,
                       });
                     }}
-                    className={`text-left rounded-lg p-4 transition-colors group ${
-                      isSelf
-                        ? "border border-primary/30 bg-primary/5 hover:bg-primary/10"
-                        : canDrill
-                          ? "border border-border bg-card hover:border-primary/30 hover:bg-muted/30"
-                          : "border border-border bg-card cursor-default"
-                    }`}
+                    className={`group w-full px-4 py-3 text-left transition-colors ${canDrill ? "hover:bg-muted/40" : "cursor-default"}`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className={`flex h-8 w-8 items-center justify-center rounded-full ${isSelf ? "bg-primary/20" : "bg-muted"}`}>
-                          {isSelf ? <img src={prosperwiseLogo} alt="" className="h-4 w-4" /> : <Users className="h-4 w-4 text-muted-foreground" />}
-                        </div>
+                        {isSelf ? <img src={prosperwiseLogo} alt="" className="h-4 w-4" /> : <Users className="h-4 w-4 text-muted-foreground" />}
                         <div>
                           <p className="text-sm font-medium text-foreground">{m.first_name} {m.last_name || ""}</p>
                           <p className="text-xs text-muted-foreground">
@@ -936,15 +919,16 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        {<span className="text-sm font-semibold text-foreground">{formatCurrency(mTotal)}</span>}
-                        {canDrill && <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />}
+                        <span className="font-serif text-sm font-semibold tabular-nums text-foreground">{formatCurrency(mTotal)}</span>
+                        {canDrill && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                       </div>
                     </div>
                   </button>
                 );
               })
             }
-          </div>
+          </CardContent>
+          </Card>
 
           {/* Corporation cards — `corporations` is always the viewer's own
               shareholdings (portal-validate scopes it to the viewer's own
@@ -1030,33 +1014,46 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
           )}
         </div>
 
-        {/* Right Sidebar: Household-Shared Territory */}
+        {/* Right Sidebar: totals only — details live in each person's own portal */}
         <div className="space-y-4">
-          {/* Household Holding Tank — private to household members only */}
-          {viewingOwnHousehold && (() => {
-            const visibleTank = household_holding_tank.filter((t: any) => allowedScopes.has(t.visibility_scope));
-            return visibleTank.length > 0 && (
-              <PortalHoldingTank accounts={visibleTank} defaultCollapsed />
+          {(() => {
+            const tank = viewingOwnHousehold
+              ? household_holding_tank.filter((t: any) => allowedScopes.has(t.visibility_scope))
+              : [];
+            const rows = [
+              { label: "Holding Tank", total: sumValues(tank), count: tank.length },
+              { label: "Vineyard", total: sumValues(hhAssets.vineyard), count: hhAssets.vineyard.length },
+              { label: "Storehouses", total: sumValues(hhAssets.storehouses.filter((a: any) => isAumStorehouse(a))) + insuranceCashForStorehouses(visibleInsurance), count: hhAssets.storehouses.length + visibleInsurance.length },
+              { label: "Insurance", total: visibleInsurance.reduce((n: number, p: any) => n + (p.coverage_amount || 0), 0), count: visibleInsurance.length, suffix: "coverage" },
+            ].filter((r) => r.count > 0);
+            if (rows.length === 0) return null;
+            return (
+              <Card>
+                <CardContent className="p-0 divide-y divide-border">
+                  <div className="px-4 py-3">
+                    <h2 className="font-serif text-sm font-semibold text-foreground">Household Totals</h2>
+                  </div>
+                  {rows.map((r) => (
+                    <button
+                      key={r.label}
+                      disabled={!viewingOwnHousehold}
+                      onClick={() => {
+                        setDrilldown({ level: "individual", householdId: household?.id });
+                        setActiveTab("financials");
+                      }}
+                      className={`flex w-full items-center justify-between px-4 py-3 text-left transition-colors ${viewingOwnHousehold ? "hover:bg-muted/40" : "cursor-default"}`}
+                    >
+                      <span className="text-sm text-foreground">{r.label}{r.suffix ? <span className="ml-1 text-xs text-muted-foreground">{r.suffix}</span> : null}</span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="font-serif text-sm font-semibold tabular-nums text-foreground">{formatCurrency(r.total)}</span>
+                        {viewingOwnHousehold && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                      </span>
+                    </button>
+                  ))}
+                </CardContent>
+              </Card>
             );
           })()}
-
-          <PortalTerritory
-            vineyardAccounts={hhAssets.vineyard}
-            storehouses={hhAssets.storehouses}
-            insurancePolicies={visibleInsurance}
-            contact={contact}
-            family={family}
-            household={currentHousehold || household}
-            householdMembers={[]}
-            scopeLabel={viewingOwnHousehold ? "Household Shared" : "Family-Shared"}
-            portalToken={portalToken}
-            onScopeChange={() => refreshData(portalToken)}
-            corporations={viewingOwnHousehold ? corporations : []}
-            defaultCollapsed
-          />
-          {visibleInsurance.length > 0 && (
-            <PortalInsurance policies={visibleInsurance} defaultCollapsed />
-          )}
         </div>
       </div>
     );
