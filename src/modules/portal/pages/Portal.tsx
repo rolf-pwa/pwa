@@ -17,6 +17,7 @@ import { PortalGeorgiaChat } from "@/modules/portal/components/PortalGeorgiaChat
 import { PortalNotificationBell } from "@/modules/portal/components/PortalNotificationBell";
 import { PortalMessages } from "@/modules/portal/components/PortalMessages";
 import { PortalVault } from "@/modules/portal/components/PortalVault";
+import { PortalShoeboxUpload } from "@/modules/portal/components/PortalShoeboxUpload";
 import { PortalIntakeBanner } from "@/modules/intake";
 import { OnboardingShell } from "@/modules/intake";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
@@ -1253,7 +1254,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
                   </TabsTrigger>
                 )}
             </TabsList>
-            <div className={effectiveTab === "tasks" || effectiveTab === "meetings" || (effectiveTab === "financials" && isSelf) ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]" : "grid gap-6"}>
+            <div className={effectiveTab === "tasks" || effectiveTab === "meetings" || (effectiveTab === "financials" && isSelf) || (effectiveTab === "vault" && isSelf) ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]" : "grid gap-6"}>
         <div className="min-w-0 space-y-4">
 
             {/* Dashboard Tab */}
@@ -1428,6 +1429,24 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
         {effectiveTab === "financials" && isSelf && (
         <div className="min-w-0 space-y-4">
           <PortalDynamicLinks contact={contact} groupsOnly alwaysOpen />
+        </div>
+        )}
+
+        {/* Right Sidebar (Documents tab): send a document to the Shoebox */}
+        {effectiveTab === "vault" && isSelf && (
+        <div className="min-w-0 space-y-4">
+          <Card>
+            <CardContent className="space-y-3 p-4">
+              <div className="flex items-center gap-2">
+                <FolderLock className="h-4 w-4 text-accent" />
+                <h3 className="font-serif text-sm font-semibold text-foreground">Send a document</h3>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Statements, tax slips, anything your Personal CFO should have. Files go to your Shoebox and are filed for you.
+              </p>
+              <PortalShoeboxUpload portalToken={portalToken} householdId={contact.household_id ?? null} />
+            </CardContent>
+          </Card>
         </div>
         )}
 

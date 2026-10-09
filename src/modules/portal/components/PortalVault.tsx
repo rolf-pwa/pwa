@@ -346,29 +346,24 @@ export function PortalVault({ portalToken, householdId }: Props) {
 
   return (
     <div className="space-y-3">
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2 text-sm flex-wrap">
-            <ShieldCheck className="h-4 w-4 text-accent shrink-0" />
-            {crumbs.map((c, i) => (
-              <div key={c.id} className="flex items-center gap-2">
-                {i > 0 && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
-                {i === crumbs.length - 1 ? (
-                  <span className="font-serif text-foreground truncate max-w-[260px]">{c.name}</span>
-                ) : (
-                  <button
-                    onClick={() => goToCrumb(i)}
-                    className="text-muted-foreground hover:text-accent transition-colors truncate max-w-[200px]"
-                  >
-                    {i === 0 ? <Home className="h-3.5 w-3.5 inline" /> : c.name}
-                  </button>
-                )}
-              </div>
-            ))}
-            {loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground ml-auto" />}
-          </div>
-        </CardContent>
-      </Card>
+      {crumbs.length > 1 && (
+        <div className="flex flex-wrap items-center gap-2 px-1 text-sm">
+          <button onClick={() => goToCrumb(0)} className="flex items-center gap-1 text-muted-foreground transition-colors hover:text-accent">
+            <Home className="h-3.5 w-3.5" /> Documents
+          </button>
+          {crumbs.slice(1).map((c, i) => (
+            <div key={c.id} className="flex items-center gap-2">
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+              {i === crumbs.length - 2 ? (
+                <span className="max-w-[260px] truncate font-serif text-foreground">{c.name}</span>
+              ) : (
+                <button onClick={() => goToCrumb(i + 1)} className="max-w-[200px] truncate text-muted-foreground transition-colors hover:text-accent">{c.name}</button>
+              )}
+            </div>
+          ))}
+          {loading && <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+        </div>
+      )}
 
       {/* Folder-level controls when client has elevated permission here */}
       {(currentPerm === "upload" || currentPerm === "manage") && crumbs.length > 0 && (
@@ -410,22 +405,25 @@ export function PortalVault({ portalToken, householdId }: Props) {
       ) : (
         <Card>
           <CardContent className="p-0 divide-y divide-border">
+            <div className="flex items-center gap-2 px-4 py-3">
+              <Folder className="h-4 w-4 text-accent" />
+              <h3 className="font-serif text-sm font-semibold text-foreground">{crumbs.length > 1 ? crumbs[crumbs.length - 1].name : "Documents"}</h3>
+              {crumbs.length <= 1 && loading && <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+            </div>
             {folders.map((f) => {
               const isShoebox = f.id === shoeboxId || f.name?.toLowerCase().includes("shoebox");
               return (
                 <button
                   key={f.id}
                   onClick={() => enterFolder(f)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
-                    isShoebox ? "bg-accent/10 hover:bg-accent/15" : "hover:bg-muted/40"
-                  }`}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
                 >
                   {isShoebox ? (
                     <Inbox className="h-4 w-4 text-accent shrink-0" />
                   ) : (
                     <Folder className="h-4 w-4 text-accent shrink-0" />
                   )}
-                  <span className={`text-sm flex-1 truncate ${isShoebox ? "font-serif text-accent" : ""}`}>
+                  <span className="text-sm flex-1 truncate">
                     {f.name}
                   </span>
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
