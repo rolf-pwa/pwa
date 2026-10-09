@@ -25,7 +25,8 @@ export function PortalAccountSnapshot({ snapshot }: { snapshot: Snapshot | null 
   const boy = snapshot.boy_value != null ? Number(snapshot.boy_value) : null;
   const cur = snapshot.current_value != null ? Number(snapshot.current_value) : null;
   const harvest = snapshot.current_harvest != null ? Number(snapshot.current_harvest) : null;
-  const pct = snapshot.ytd_value != null ? Number(snapshot.ytd_value) : null;
+  // YTD change as a share of the start-of-year value. (ytd_value holds the current value in dollars, not a percentage.)
+  const pct = harvest != null && boy != null && boy > 0 ? (harvest / boy) * 100 : null;
   const pos = (harvest ?? 0) >= 0;
   const rors = [
     ["YTD", snapshot.ror_ytd],
@@ -38,7 +39,7 @@ export function PortalAccountSnapshot({ snapshot }: { snapshot: Snapshot | null 
   const hasRor = rors.some(([, v]) => v != null);
 
   return (
-    <div className="mt-2 rounded-md border border-border/60 bg-background/60 px-3 py-2 space-y-2">
+    <div className="mt-2 space-y-2">
       <div className="grid grid-cols-3 gap-2 text-[11px]">
         <div>
           <div className="text-[9px] uppercase tracking-wider text-muted-foreground">Beginning of Year</div>

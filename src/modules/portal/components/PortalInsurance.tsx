@@ -31,7 +31,7 @@ export function PortalInsurance({ policies, defaultCollapsed = false }: PortalIn
   const totalCoverage = policies.reduce((sum, p) => sum + (p.coverage_amount || 0), 0);
 
   return (
-    <Card className="border-accent/20 bg-gradient-to-b from-accent/5 to-transparent">
+    <Card>
       <CardContent
         className="p-5 space-y-2 cursor-pointer select-none"
         onClick={() => setOpen((o) => !o)}
@@ -39,7 +39,7 @@ export function PortalInsurance({ policies, defaultCollapsed = false }: PortalIn
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Shield className="h-4 w-4 text-accent" />
-            <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground">The Shield</h3>
+            <h3 className="font-serif text-sm font-semibold text-foreground">The Shield</h3>
           </div>
           {open ? (
             <ChevronDown className="h-4 w-4 text-muted-foreground" />
@@ -47,7 +47,7 @@ export function PortalInsurance({ policies, defaultCollapsed = false }: PortalIn
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
           )}
         </div>
-        <p className="font-serif text-2xl text-accent">{formatCurrency(totalCoverage)}</p>
+        <p className="font-serif text-lg font-semibold tabular-nums text-foreground">{formatCurrency(totalCoverage)}</p>
         <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-2 border-t border-accent/10">
           <span>Asset Protection</span>
           <Badge variant="secondary" className="text-[10px]">
@@ -58,7 +58,7 @@ export function PortalInsurance({ policies, defaultCollapsed = false }: PortalIn
       {open && (
         <CardContent className="px-5 pb-5 pt-0 space-y-2">
           {policies.map((p) => (
-            <div key={p.id} className="rounded-md border border-border bg-muted/30 px-3 py-2">
+            <div key={p.id} className="border-t border-border/60 py-2">
               <div className="flex items-center justify-between">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">{p.carrier}</p>

@@ -1356,7 +1356,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
             {hasFinancials && (
               <TabsContent value="financials" className="mt-0 space-y-6">
                 {isSelf && holding_tank.length > 0 && (
-                  <PortalHoldingTank accounts={holding_tank} defaultCollapsed />
+                  <PortalHoldingTank accounts={holding_tank} />
                 )}
                 {hasTerritory && (
                   <PortalTerritory
