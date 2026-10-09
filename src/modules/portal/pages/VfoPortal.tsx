@@ -405,11 +405,21 @@ const VfoPortal = () => {
     + insuranceCashForStorehouses(selfInsurance);
 
   const headerAumLabel =
-    viewerRole === "head_of_family" ? "Total Family AUM"
+    viewerRole === "head_of_family" ? (famAllMembers.length > 1 ? "Total Family AUM" : "Total AUM")
     : viewerRole === "head_of_household" ? "Total Household AUM"
     : "Your Total AUM";
+  // Head of Family: their own holdings in full (it's their data) plus what other
+  // members have shared with the whole family — never other members' private or
+  // household-only assets. familySharedTotal alone omitted the viewer's own
+  // non-family-shared accounts and so understated their wealth.
+  const notSelf = (r: any) => r.id !== contact.id && r.contact_id !== contact.id;
+  const hofTotal = individualTotal
+    + sumValues(famAllMembers.filter(notSelf).flatMap((m: any) => (m.vineyard_accounts || []).filter((a: any) => a.visibility_scope === "family_shared")))
+    + sumValues(famAllMembers.filter(notSelf).flatMap((m: any) => (m.storehouses || []).filter((a: any) => a.visibility_scope === "family_shared" && isAumStorehouse(a))))
+    + sumValues(familySharedTank.filter(notSelf))
+    + insuranceCashForStorehouses(familySharedIns.filter(notSelf));
   const totalAum =
-    viewerRole === "head_of_family" ? familySharedTotal
+    viewerRole === "head_of_family" ? hofTotal
     : viewerRole === "head_of_household" ? householdTotalForHoh
     : individualTotal;
 
@@ -417,6 +427,8 @@ const VfoPortal = () => {
   const memberCount = hierarchy?.households
     ? hierarchy.households.reduce((s: number, hh: any) => s + (hh.members?.length || 0), 0)
     : household_members.length + 1;
+  // One person, one household: the family/household levels add nothing to look at.
+  const isSolo = householdCount <= 1 && memberCount <= 1;
 
   // Backend hof_visible gating only decides which households reach the
   // client at all — it says nothing about which assets within a visible
@@ -487,7 +499,7 @@ const VfoPortal = () => {
       const m = currentMember || contact;
       crumbs.push({ label: `${m.first_name || ""} ${m.last_name || ""}`.trim() });
     }
-    if (crumbs.length <= 1) return null;
+    if (crumbs.length <= 1 || isSolo) return null;
     return (
       <nav aria-label="breadcrumb" className="mb-5 flex items-center gap-2 text-xs">
         {crumbs.map((c, i) => {
@@ -534,8 +546,8 @@ const VfoPortal = () => {
           Ask Georgia
         </Button>
         <Button
-          variant="outline"
-          className="w-full border-accent/30 text-accent hover:bg-accent/10 justify-between"
+          variant="ghost"
+          className="w-full justify-between px-2 text-foreground hover:bg-accent/10 [&_svg]:text-accent"
           onClick={() => setRequestsOpen(true)}
         >
           <span className="flex items-center">
@@ -547,8 +559,8 @@ const VfoPortal = () => {
           )}
         </Button>
         <Button
-          variant="outline"
-          className="w-full border-accent/30 text-accent hover:bg-accent/10 justify-between"
+          variant="ghost"
+          className="w-full justify-between px-2 text-foreground hover:bg-accent/10 [&_svg]:text-accent"
           onClick={() => setBookMeetingOpen((o) => !o)}
         >
           <span className="flex items-center">
@@ -963,8 +975,6 @@ const VfoPortal = () => {
                   label="Vineyard"
                   caption="Total Asset Portfolio"
                   value={hasVineyard ? fmt(vineyardTotal) : "No accounts yet"}
-                  colorClass="text-primary"
-                  bgClass="bg-primary/10"
                   muted={!hasVineyard}
                   layout="row"
                   onClick={() => { setFinancialsFocus("vineyard"); setTab("financials"); }}
@@ -1171,9 +1181,9 @@ const VfoPortal = () => {
       setDrilldown({ level: "family" });
     }
   };
-  const canUp =
+  const canUp = !isSolo && (
     (drilldown.level === "individual" && (drilldown.householdId || household)) ||
-    (drilldown.level === "household" && hierarchyLevel === "family");
+    (drilldown.level === "household" && hierarchyLevel === "family"));
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -1195,7 +1205,7 @@ const VfoPortal = () => {
                 <p className="text-[10px] uppercase tracking-wider text-primary-foreground/60">{headerAumLabel}</p>
                 <p className="font-serif text-2xl text-primary-foreground">{fmt(totalAum)}</p>
               </div>
-              {viewerRole === "head_of_family" && (
+              {viewerRole === "head_of_family" && !isSolo && (
                 <>
                   <div className="hidden sm:block">
                     <p className="text-[10px] uppercase tracking-wider text-primary-foreground/60">Households</p>
