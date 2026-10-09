@@ -66,7 +66,7 @@ import { SovereigntyCharterButton } from "@/modules/audit";
 import { GenerateCharterDraftButton } from "@/modules/audit";
 import { VaultView } from "@/modules/crm/pages/Vault";
 import { dialViaQuo } from "@/shared/lib/quo-dial";
-import { MEETING_BOOKING_LINKS } from "@/shared/lib/meetingBookingLinks";
+import { STAFF_MEETING_TYPES } from "@/shared/lib/staffMeetingTypes";
 import { SERVICE_TIER_LABEL, type ServiceTier } from "@/shared/lib/serviceTier";
 import { 
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
@@ -719,7 +719,7 @@ const ContactDetail = () => {
               </div>
             ) : (
               <div className="space-y-1.5">
-                {MEETING_BOOKING_LINKS.map((link) => (
+                {STAFF_MEETING_TYPES.map((link) => (
                   <button
                     key={link.url}
                     onClick={() => setEmbeddedBooking(link)}
@@ -916,6 +916,30 @@ const ContactDetail = () => {
                   <aside className="min-w-0 space-y-3">
                     <SidebarSection title="Meetings" defaultOpen>
                       <ContactCalendar contactEmail={contact.email} contactName={contact.full_name} />
+                    </SidebarSection>
+                    <SidebarSection title="Book a meeting" defaultOpen>
+                      <ul className="px-2 pb-2">
+                        {STAFF_MEETING_TYPES.map((m) => (
+                          <li key={m.url} className="flex items-center gap-1 border-b border-border/50 py-1.5 last:border-0">
+                            <button
+                              type="button"
+                              className="min-w-0 flex-1 text-left hover:text-accent"
+                              title={m.note ?? `Book a ${m.minutes}-minute ${m.label}`}
+                              onClick={() => { setEmbeddedBooking(m); setBookMeetingOpen(true); }}
+                            >
+                              <span className="block truncate text-sm font-medium">{m.label}</span>
+                              <span className="block text-[11px] text-muted-foreground">{m.minutes} min</span>
+                            </button>
+                            <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Copy booking link to send to the client"
+                              onClick={() => { navigator.clipboard?.writeText(m.url); toast.success(`${m.label} link copied`); }}>
+                              <Link2 className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button asChild variant="ghost" size="icon" className="h-7 w-7" title="Open the booking page in a new tab">
+                              <a href={m.url} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-3.5 w-3.5" /></a>
+                            </Button>
+                          </li>
+                        ))}
+                      </ul>
                     </SidebarSection>
                     <SidebarSection title="Audit trail">
                       <AuditTrail contactId={id!} />
