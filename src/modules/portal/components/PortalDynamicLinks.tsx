@@ -17,7 +17,7 @@ const LINK_ICONS: Record<string, any> = {
   Globe: ExternalLink,
 };
 
-export function PortalDynamicLinks() {
+export function PortalDynamicLinks({ layout = "stack" }: { contact?: unknown; layout?: "stack" | "grid" }) {
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
 
   const { data: links = [] } = useQuery({
@@ -75,7 +75,7 @@ export function PortalDynamicLinks() {
   const customUngrouped = ungrouped.filter((l: any) => !l.is_system);
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className={layout === "grid" ? "grid items-start gap-3 sm:grid-cols-2" : "flex flex-col gap-1.5"}>
       {systemUngrouped.map((link: any) => {
         const IconComp = LINK_ICONS[link.icon] || ExternalLink;
         return (

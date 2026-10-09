@@ -1167,7 +1167,6 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
     const dashboardSidebar = (
       <>
         {familyTile}
-        {isSelf && <PortalDynamicLinks contact={contact} />}
         {charterUrl ? <PortalCharter charterUrl={charterUrl} /> : null}
         {isSelf && (
           <Card>
@@ -1263,6 +1262,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
                   taskCounts={taskCounts}
                   onGo={setActiveTab}
                   sidebar={dashboardSidebar}
+                  links={isSelf ? <PortalDynamicLinks layout="grid" /> : null}
                 />
               </TabsContent>
             )}
