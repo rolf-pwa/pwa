@@ -8,6 +8,7 @@
 
 // deno-lint-ignore-file no-explicit-any
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { findPolicyRow, type PolicyRow } from "./insurance-match.ts";
 import { computeAvailability } from "./withdrawal-availability.ts";
 
 export const normalizeToken = (v: string | null | undefined) => (v || "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -205,14 +206,14 @@ export function planInvestmentApply(accounts: Record<string, any>[], ctx: Invest
 export interface InsuranceContext {
   members: Member[];
   corporations: Array<{ id: string; name: string }>;
-  policies: Array<{ id: string; carrier: string; policy_number: string | null; insured_name: string }>;
+  policies: PolicyRow[];
   vaultFolderId: string | null;
   fileName: string | null;
 }
 
 export function planInsuranceApply(policies: Record<string, any>[], ctx: InsuranceContext): PlannedWrite[] {
-  const byNumInsured = new Map(ctx.policies.filter((p) => p.policy_number).map((p) => [normalizeToken(`${p.policy_number}${p.insured_name}`), p]));
-  const byCarrierInsured = new Map(ctx.policies.map((p) => [normalizeToken(`${p.carrier}${p.insured_name}`), p]));
+  // Live rows plus the ones this same approval is about to insert, so a repeated line matches instead of duplicating.
+  const rows: PolicyRow[] = [...ctx.policies];
   const corpByName = new Map(ctx.corporations.map((c) => [normalizeToken(c.name), c]));
   const head = headOfHousehold(ctx.members);
   const writes: PlannedWrite[] = [];
@@ -223,9 +224,7 @@ export function planInsuranceApply(policies: Record<string, any>[], ctx: Insuran
     for (const f of ["coverage_amount", "cash_value", "premium_amount"] as const) if (typeof p[f] === "number") update[f] = p[f];
     for (const f of ["premium_frequency", "issue_date", "renewal_date"] as const) if (p[f]) update[f] = p[f];
 
-    const matched =
-      (p.policy_number && byNumInsured.get(normalizeToken(`${p.policy_number}${p.insured_name}`))) ||
-      byCarrierInsured.get(normalizeToken(`${p.carrier}${p.insured_name}`));
+    const matched = findPolicyRow(p, rows);
     if (matched) {
       if (matched.id !== "pending-insert" && Object.keys(update).length) writes.push({ op: "update", table: "insurance_policies", id: matched.id, values: update, label });
       continue;
@@ -242,9 +241,7 @@ export function planInsuranceApply(policies: Record<string, any>[], ctx: Insuran
         notes: `Created from approved V2 review of "${ctx.fileName ?? "document"}".`, vault_folder_id: ctx.vaultFolderId,
       },
     });
-    const stub = { id: "pending-insert", carrier: String(p.carrier ?? ""), policy_number: p.policy_number ?? null, insured_name: String(p.insured_name ?? "") };
-    if (stub.policy_number) byNumInsured.set(normalizeToken(`${stub.policy_number}${stub.insured_name}`), stub);
-    byCarrierInsured.set(normalizeToken(`${stub.carrier}${stub.insured_name}`), stub);
+    rows.push({ id: "pending-insert", carrier: String(p.carrier ?? ""), policy_number: p.policy_number ?? null, insured_name: String(p.insured_name ?? ""), policy_type: p.policy_type ?? null, renewal_date: p.renewal_date ?? null });
   }
   return writes;
 }

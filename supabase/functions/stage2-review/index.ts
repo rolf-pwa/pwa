@@ -140,7 +140,7 @@ Deno.serve(async (req) => {
         ? await admin.from("shareholders").select("corporation_id").in("contact_id", memberIds).eq("is_active", true) : { data: [] };
       const corpIds = [...new Set((shareholders ?? []).map((s: any) => s.corporation_id))];
       const { data: corporations } = corpIds.length ? await admin.from("corporations").select("id, name").in("id", corpIds) : { data: [] };
-      const { data: policies } = await admin.from("insurance_policies").select("id, carrier, policy_number, insured_name")
+      const { data: policies } = await admin.from("insurance_policies").select("id, carrier, policy_number, insured_name, policy_type, renewal_date")
         .or(`contact_id.in.(${memberIds.length ? memberIds.join(",") : "00000000-0000-0000-0000-000000000000"})${corpIds.length ? `,corporation_id.in.(${corpIds.join(",")})` : ""}`);
       plan = planInsuranceApply(corrected.extraction[listKey] ?? [], {
         members: members ?? [], corporations: corporations ?? [], policies: policies ?? [], vaultFolderId: null, fileName: source.file_name ?? null,

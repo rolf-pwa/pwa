@@ -19,6 +19,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
+import { findPolicyRow, type PolicyRow } from "../_shared/insurance-match.ts";
 import { driveListChildren, driveDownloadFile, matchVaultCategoryFolder } from "../_shared/vault-provisioning.ts";
 import { GEMINI_EXTRACT_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
 import { V2_PROVENANCE_PROMPT_SUFFIX } from "../_shared/provenance.ts";
@@ -570,20 +571,14 @@ Deno.serve(async (req) => {
 
     const { data: existingPolicies } = await admin
       .from("insurance_policies")
-      .select("id, contact_id, corporation_id, carrier, policy_number, insured_name")
+      .select("id, contact_id, corporation_id, carrier, policy_number, insured_name, policy_type, renewal_date")
       .or(`contact_id.in.(${memberIds.length ? memberIds.join(",") : "00000000-0000-0000-0000-000000000000"})${corpIds.length ? `,corporation_id.in.(${corpIds.join(",")})` : ""}`);
 
-    // Keyed on policy_number + insured_name together, not policy_number alone — a
-    // joint policy (e.g. a spousal term policy) can list two different insured
-    // lives under the SAME policy number, each needing its own row.
-    const policyByNumberAndInsured = new Map(
-      (existingPolicies ?? [])
-        .filter((p: any) => p.policy_number)
-        .map((p: any) => [normalizeToken(`${p.policy_number}${p.insured_name}`), p]),
-    );
-    const policyByCarrierInsured = new Map(
-      (existingPolicies ?? []).map((p: any) => [normalizeToken(`${p.carrier}${p.insured_name}`), p]),
-    );
+    // One policy number can carry several coverages (a UL base plus term riders), each its own row, and a
+    // joint policy can list two insured lives under the same number. Lines are matched on number + insured +
+    // coverage type (+ renewal date); see _shared/insurance-match.ts. Rows created during this run are added
+    // so a repeated line matches them instead of duplicating.
+    const policyRows: PolicyRow[] = [...((existingPolicies ?? []) as PolicyRow[])];
     const corpByName = new Map((corporations ?? []).map((c: any) => [normalizeToken(c.name), c]));
 
     let insurancePoliciesExtracted = 0;
@@ -614,11 +609,7 @@ Deno.serve(async (req) => {
 
         for (const policy of parsed.policies || []) {
           insurancePoliciesExtracted += 1;
-          const normalizedNumberInsured = normalizeToken(`${policy.policy_number}${policy.insured_name}`);
-          const normalizedCarrierInsured = normalizeToken(`${policy.carrier}${policy.insured_name}`);
-          const matched =
-            (policy.policy_number && policyByNumberAndInsured.get(normalizedNumberInsured)) ||
-            policyByCarrierInsured.get(normalizedCarrierInsured);
+          const matched = findPolicyRow(policy, policyRows);
 
           const update: Record<string, unknown> = {};
           if (typeof policy.coverage_amount === "number") update.coverage_amount = policy.coverage_amount;
@@ -656,16 +647,11 @@ Deno.serve(async (req) => {
               notes: `Created from Vault scan of "${file.name}".`,
               vault_folder_id: insuranceFolder?.id ?? null,
             })
-            .select("id, carrier, policy_number, insured_name")
+            .select("id, carrier, policy_number, insured_name, policy_type, renewal_date")
             .single();
           // Register it so a second entry for the SAME joint policy (or a later
           // file in this run) matches it instead of also duplicating.
-          if (newPolicyRow) {
-            if (newPolicyRow.policy_number) {
-              policyByNumberAndInsured.set(normalizeToken(`${newPolicyRow.policy_number}${newPolicyRow.insured_name}`), newPolicyRow);
-            }
-            policyByCarrierInsured.set(normalizeToken(`${newPolicyRow.carrier}${newPolicyRow.insured_name}`), newPolicyRow);
-          }
+          if (newPolicyRow) policyRows.push(newPolicyRow as PolicyRow);
           insurancePoliciesCreated += 1;
         }
       } catch (e) {
