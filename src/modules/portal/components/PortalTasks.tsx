@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { parseLocalDate } from "@/shared/lib/date-utils";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { CheckSquare, Clock, AlertCircle, ChevronRight, Loader2, Sparkles, RotateCw, X } from "lucide-react";
@@ -17,6 +18,8 @@ interface Props {
   portalToken: string;
   clientName?: string;
   contactId?: string;
+  /** When given, the Completed list renders there (the page sidebar) instead of under the active tasks. */
+  completedTarget?: HTMLElement | null;
 }
 
 type TaskCategory = "new" | "ongoing";
@@ -106,7 +109,7 @@ function TaskCard({ task, onClick, isExpanded }: { task: PmTask; onClick: () => 
   );
 }
 
-export function PortalTasks({ portalToken, clientName, contactId }: Props) {
+export function PortalTasks({ portalToken, clientName, contactId, completedTarget }: Props) {
   const [tasks, setTasks] = useState<PmTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -226,6 +229,42 @@ export function PortalTasks({ portalToken, clientName, contactId }: Props) {
     );
   };
 
+  const completedBlock = completedTasks.length > 0 ? (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <CheckSquare className="h-4 w-4 text-muted-foreground/50" />
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+              Completed ({completedTasks.length})
+            </p>
+          </div>
+          <ul className="space-y-1 pl-1">
+            {completedTasks.slice(0, 10).map((task) => (
+              <li key={task.id}>
+                <button
+                  onClick={() => handleTaskClick(task)}
+                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors text-left w-full group"
+                >
+                  <CheckSquare className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
+                  <span className="line-through truncate group-hover:no-underline">{task.title}</span>
+                  <ChevronRight className={cn("h-3 w-3 ml-auto shrink-0 text-muted-foreground/40 transition-transform", selectedTask?.id === task.id && "rotate-90")} />
+                </button>
+                {selectedTask?.id === task.id && (
+                  <div className="mt-1 mb-2 rounded-lg border border-border bg-background p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-sm font-semibold text-foreground font-serif">{task.title}</h4>
+                      <button onClick={() => setSelectedTask(null)} className="p-1 rounded hover:bg-muted">
+                        <X className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                    </div>
+                    <PortalTaskConversation taskId={task.id} portalToken={portalToken} clientName={clientName} readOnly />
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+  ) : null;
+
   return (
     <div className="space-y-8">
       {/* New Tasks */}
@@ -268,42 +307,9 @@ export function PortalTasks({ portalToken, clientName, contactId }: Props) {
         )}
       </div>
 
-      {/* Completed Tasks — compact link list */}
-      {completedTasks.length > 0 && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <CheckSquare className="h-4 w-4 text-muted-foreground/50" />
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-              Completed ({completedTasks.length})
-            </p>
-          </div>
-          <ul className="space-y-1 pl-1">
-            {completedTasks.slice(0, 10).map((task) => (
-              <li key={task.id}>
-                <button
-                  onClick={() => handleTaskClick(task)}
-                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors text-left w-full group"
-                >
-                  <CheckSquare className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
-                  <span className="line-through truncate group-hover:no-underline">{task.title}</span>
-                  <ChevronRight className={cn("h-3 w-3 ml-auto shrink-0 text-muted-foreground/40 transition-transform", selectedTask?.id === task.id && "rotate-90")} />
-                </button>
-                {selectedTask?.id === task.id && (
-                  <div className="mt-1 mb-2 rounded-lg border border-border bg-background p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="text-sm font-semibold text-foreground font-serif">{task.title}</h4>
-                      <button onClick={() => setSelectedTask(null)} className="p-1 rounded hover:bg-muted">
-                        <X className="h-4 w-4 text-muted-foreground" />
-                      </button>
-                    </div>
-                    <PortalTaskConversation taskId={task.id} portalToken={portalToken} clientName={clientName} readOnly />
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* Completed Tasks — inline, or in the page sidebar when a target is given */}
+      {!completedTarget && completedBlock}
+      {completedTarget && completedBlock && createPortal(completedBlock, completedTarget)}
     </div>
   );
 }
