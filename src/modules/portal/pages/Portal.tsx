@@ -617,8 +617,18 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
   const renderBreadcrumb = () => {
     if (drilldown.level === "family" && hierarchyLevel === "family") return null;
     
+    const awayFromSelf = drilldown.level === "household" || (drilldown.level === "individual" && !!currentMember);
     return (
       <div className="flex items-center gap-2 text-sm mb-4">
+        {awayFromSelf && (
+          <button
+            onClick={() => setDrilldown({ level: "individual", householdId: household?.id })}
+            className="flex items-center gap-1 text-primary hover:underline"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+            My portal
+          </button>
+        )}
         {hierarchyLevel === "family" && (drilldown.level === "household" || drilldown.level === "individual") && (
           <button
             onClick={() => setDrilldown({ level: "family" })}
@@ -667,9 +677,9 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
         });
       });
     } else if (level === "household") {
-      const members = householdId
-        ? (hierarchy?.households?.find((h: any) => h.id === householdId)?.members || [])
-        : (hierarchy?.members || []);
+      // A head of household has no list of households (only a family head does), so fall back to their own household's members.
+      const members = (householdId ? hierarchy?.households?.find((h: any) => h.id === householdId)?.members : null)
+        ?? hierarchy?.members ?? [];
       const selfInMembers = members.some((m: any) => m.id === contact.id);
       if (!selfInMembers) {
         allVineyard.push(...vineyard_accounts);
@@ -822,7 +832,10 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
   const renderHouseholdView = () => {
     const members = currentHousehold?.members || hierarchy?.members || [];
     const hhLabel = currentHousehold?.label || household?.label || "Household";
-    const viewingOwnHousehold = members.some((m: any) => m.id === contact.id);
+    // The server lists the OTHER members of the viewer's own household, so "is the viewer in the list" is not enough:
+    // the household being shown is the viewer's own unless a family head has drilled into a sibling household.
+    const viewingOwnHousehold = members.some((m: any) => m.id === contact.id) || !drilldown.householdId || drilldown.householdId === contact.household_id;
+    const memberCount = viewingOwnHousehold ? new Set([contact.id, ...members.map((m: any) => m.id)]).size : members.length;
     // Privacy firewall: when viewing a sibling household, only assets
     // explicitly scoped `family_shared` are visible. Household-internal
     // assets stay private to that household's members.
@@ -850,7 +863,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
                 <div>
                   <h2 className="text-lg font-semibold text-foreground font-serif">{hhLabel} Household</h2>
                   <p className="text-xs text-muted-foreground">
-                    {members.length + (viewingOwnHousehold ? 0 : 1)} member{members.length !== 0 ? "s" : ""}
+                    {memberCount} member{memberCount !== 1 ? "s" : ""}
                   </p>
                 </div>
               </div>
