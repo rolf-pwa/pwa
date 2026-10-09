@@ -79,15 +79,12 @@ function TaskCard({ task, onClick, isExpanded }: { task: PmTask; onClick: () => 
     <button
       onClick={onClick}
       className={cn(
-        "w-full flex items-center justify-between gap-3 rounded-lg bg-card border border-border p-4 hover:bg-muted/50 transition-colors text-left group",
-        isExpanded && "bg-muted/50 border-accent/30",
-        isNew && !isExpanded && "border-accent/40 shadow-[0_0_0_1px_hsl(var(--accent)/0.15)] bg-accent/5"
+        "w-full flex items-center justify-between gap-3 border-b border-border/60 py-2.5 text-left transition-colors hover:bg-muted/40 group",
+        isExpanded && "bg-muted/40"
       )}
     >
       <div className="flex items-center gap-3 min-w-0">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent/10 border border-accent/20">
-          <Clock className="h-4 w-4 text-accent" />
-        </div>
+        <Clock className={cn("h-4 w-4 shrink-0", isNew ? "text-accent" : "text-muted-foreground/60")} />
         <div className="min-w-0">
           <p className="text-sm font-medium text-foreground truncate">{task.title}</p>
           {task.due_date && (
@@ -216,7 +213,7 @@ export function PortalTasks({ portalToken, clientName, contactId, completedTarge
       <div key={task.id}>
         <TaskCard task={task} onClick={() => handleTaskClick(task)} isExpanded={isExpanded} />
         {isExpanded && (
-          <div className="mt-1 mb-2 rounded-lg border border-border bg-background p-4">
+          <div className="mb-2 mt-1 rounded-md border border-border bg-background p-4">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-sm font-semibold text-foreground font-serif">{task.title}</h4>
               <button onClick={() => setSelectedTask(null)} className="p-1 rounded hover:bg-muted">
@@ -267,46 +264,42 @@ export function PortalTasks({ portalToken, clientName, contactId, completedTarge
   ) : null;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       {/* New Tasks */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-accent" />
-          <h2 className="text-lg font-semibold text-foreground font-serif">New Actions</h2>
-          {newTasks.length > 0 && (
-            <span className="rounded-full bg-destructive/15 px-2.5 py-0.5 text-xs font-bold text-destructive animate-pulse">
-              {newTasks.length} new
-            </span>
-          )}
-        </div>
-        {newTasks.length === 0 ? (
-          <p className="text-sm text-muted-foreground pl-1">No new action items at this time.</p>
-        ) : (
-          <div className="space-y-2">
-            {newTasks.map(renderTaskWithExpansion)}
+      <Card>
+        <CardContent className="space-y-1 p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-accent" />
+            <h3 className="font-serif text-sm font-semibold text-foreground">New Actions</h3>
+            {newTasks.length > 0 && (
+              <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-[11px] font-bold text-destructive">{newTasks.length} new</span>
+            )}
           </div>
-        )}
-      </div>
+          {newTasks.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No new action items at this time.</p>
+          ) : (
+            <div>{newTasks.map(renderTaskWithExpansion)}</div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Ongoing Tasks */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <RotateCw className="h-5 w-5 text-accent" />
-          <h2 className="text-lg font-semibold text-foreground font-serif">Ongoing</h2>
-          {ongoingTasks.length > 0 && (
-            <span className="rounded-full bg-accent/20 px-2 py-0.5 text-xs font-semibold text-accent">
-              {ongoingTasks.length}
-            </span>
-          )}
-        </div>
-        {ongoingTasks.length === 0 ? (
-          <p className="text-sm text-muted-foreground pl-1">No ongoing items right now.</p>
-        ) : (
-          <div className="space-y-2">
-            {ongoingTasks.map(renderTaskWithExpansion)}
+      <Card>
+        <CardContent className="space-y-1 p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <RotateCw className="h-4 w-4 text-accent" />
+            <h3 className="font-serif text-sm font-semibold text-foreground">Ongoing</h3>
+            {ongoingTasks.length > 0 && (
+              <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[11px] font-semibold text-accent">{ongoingTasks.length}</span>
+            )}
           </div>
-        )}
-      </div>
+          {ongoingTasks.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No ongoing items right now.</p>
+          ) : (
+            <div>{ongoingTasks.map(renderTaskWithExpansion)}</div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Completed Tasks — inline, or in the page sidebar when a target is given */}
       {!completedTarget && completedBlock}
