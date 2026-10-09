@@ -17,7 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/shared/components/ui/badge";
 import { Shield, Plus, Pencil, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
-import { POLICY_TYPES } from "@/shared/lib/insurance";
+import { POLICY_TYPES, groupPolicies } from "@/shared/lib/insurance";
 
 type OwnerScope =
   | { kind: "contact"; contactId: string }
@@ -242,8 +242,11 @@ export function InsurancePanel({ scope, storehouses, onStorehousesChanged }: { s
           <p className="text-sm text-muted-foreground">No policies on file.</p>
         ) : (
           <div className="space-y-2">
-            {policies.map((p) => (
-              <div key={p.id} className="border rounded-md p-3 flex items-start justify-between gap-4">
+            {groupPolicies(policies).map((g) => {
+              const p = g.base;
+              return (
+              <div key={g.key} className="border rounded-md p-3">
+              <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium">{p.carrier}</span>
@@ -271,6 +274,9 @@ export function InsurancePanel({ scope, storehouses, onStorehousesChanged }: { s
                     {p.renewal_date && <div>Renewal: {p.renewal_date}</div>}
                     {p.paid_up_date && <div>Paid-Up: {p.paid_up_date}</div>}
                     {p.primary_beneficiary && <div className="col-span-2">Beneficiary: {p.primary_beneficiary}</div>}
+                    {g.riders.length > 0 && (
+                      <div className="col-span-2">Total with riders: <span className="text-foreground font-medium">{currency(g.totalCoverage)}</span></div>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
@@ -292,7 +298,43 @@ export function InsurancePanel({ scope, storehouses, onStorehousesChanged }: { s
                   </AlertDialog>
                 </div>
               </div>
-            ))}
+              {g.riders.length > 0 && (
+                <div className="mt-2 ml-2 space-y-1 border-l pl-3">
+                  {g.riders.map((r) => (
+                    <div key={r.id} className="flex items-center justify-between gap-3 text-xs">
+                      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-0.5 text-muted-foreground">
+                        <Badge variant="outline" className="text-[10px]">
+                          {POLICY_TYPES.find((t) => t.value === r.policy_type)?.label || r.policy_type} rider
+                        </Badge>
+                        <span>Coverage: <span className="font-medium text-foreground">{currency(r.coverage_amount)}</span></span>
+                        {r.renewal_date && <span>Renewal: {r.renewal_date}</span>}
+                        {r.premium_amount ? <span>Premium: {currency(r.premium_amount)} {r.premium_frequency || ""}</span> : null}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button size="icon" variant="ghost" className="h-7 w-7"><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete policy?</AlertDialogTitle>
+                        <AlertDialogDescription>This removes {r.carrier} rider {r.policy_number ? `#${r.policy_number}` : ""}. This cannot be undone.</AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => remove(r.id)}>Delete</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              </div>
+              );
+            })}
           </div>
         )}
       </CardContent>
