@@ -10,6 +10,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkOutboundPii } from "../_shared/pii-shield.ts";
 import { getValidGoogleAccessToken } from "../_shared/google-token.ts";
 import { buildRawEmail, base64UrlEncode } from "../_shared/gmail-mime.ts";
+import { signatureFor, alreadySigned } from "../_shared/email-signature.ts";
 
 const GATEWAY_URL = "https://gmail.googleapis.com/gmail/v1";
 
@@ -152,15 +153,19 @@ Deno.serve(async (req) => {
       matchIndex++;
       return `<a href="${trackBase}?action=click&l=${linkId}">${escapeHtml(url)}</a>`;
     });
+    // Gmail's API sends no signature of its own; append the sender's (unless the draft already carries it).
+    const sig = signatureFor(staffEmail);
+    const signed = sig && !alreadySigned(draft, sig) ? sig : null;
     const htmlBody =
       escapedWithLinks.replace(/\n/g, "<br>") +
+      (signed ? `<br><br>${signed.html}` : "") +
       `<img src="${trackBase}?action=pixel&t=${emailRow.tracking_token}" width="1" height="1" alt="" style="display:none;border:0" />`;
 
     const raw = buildRawEmail({
       from,
       to: [contact.email],
       subject,
-      text: draft,
+      text: signed ? `${draft}\n\n${signed.text}` : draft,
       html: htmlBody,
     });
     const rawEncoded = base64UrlEncode(raw);
