@@ -38,3 +38,10 @@ export const computeAum = (
     insuranceCashForStorehouses(insurance)
   );
 };
+
+/** "Smith" -> "Smith Household"; a label that already says Household (e.g. "Geneva Household") is left alone. */
+export const householdName = (label?: string | null) => {
+  const l = (label || "").trim();
+  if (!l) return "Household";
+  return /household$/i.test(l) ? l : `${l} Household`;
+};
