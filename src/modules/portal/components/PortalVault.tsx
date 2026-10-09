@@ -343,6 +343,7 @@ export function PortalVault({ portalToken, householdId }: Props) {
   }
 
   const isEmpty = folders.length === 0 && files.length === 0;
+  const inShoebox = !!shoeboxId && crumbs[crumbs.length - 1]?.id === shoeboxId;
 
   return (
     <div className="space-y-3">
@@ -366,7 +367,8 @@ export function PortalVault({ portalToken, householdId }: Props) {
       )}
 
       {/* Folder-level controls when client has elevated permission here */}
-      {(currentPerm === "upload" || currentPerm === "manage") && crumbs.length > 0 && (
+      {/* The Shoebox has its own uploader in the sidebar, so "Upload here" is not repeated inside it. */}
+      {(currentPerm === "manage" || (currentPerm === "upload" && !inShoebox)) && crumbs.length > 0 && (
         <Card>
           <CardContent className="p-3 flex items-center gap-2 flex-wrap">
             <span className="text-[11px] text-muted-foreground mr-1">In this folder:</span>
@@ -377,10 +379,12 @@ export function PortalVault({ portalToken, householdId }: Props) {
               className="hidden"
               onChange={(e) => handleHereUpload(e.target.files)}
             />
-            <Button size="sm" variant="outline" disabled={uploading} onClick={() => folderUploadRef.current?.click()} className="gap-1.5">
-              <Upload className="h-3.5 w-3.5" />
-              Upload here
-            </Button>
+            {!inShoebox && (
+              <Button size="sm" variant="outline" disabled={uploading} onClick={() => folderUploadRef.current?.click()} className="gap-1.5">
+                <Upload className="h-3.5 w-3.5" />
+                Upload here
+              </Button>
+            )}
             {currentPerm === "manage" && (
               <Button size="sm" variant="outline" onClick={newSubfolder} className="gap-1.5">
                 <FolderPlus className="h-3.5 w-3.5" />
