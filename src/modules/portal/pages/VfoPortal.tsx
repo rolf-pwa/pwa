@@ -907,12 +907,12 @@ const VfoPortal = () => {
       />
     );
 
-    const tabTrigger = "flex-1 gap-1.5 max-sm:flex-col max-sm:gap-0.5 max-sm:px-1 max-sm:text-[10px] data-[state=active]:bg-accent/10 data-[state=active]:text-accent";
+    const tabTrigger = "flex-1 gap-1.5 max-sm:flex-col max-sm:gap-0.5 max-sm:px-1 max-sm:text-[11px] data-[state=active]:bg-accent/10 data-[state=active]:text-accent";
     const sidebarTabs = isSelf && (effectiveTab === "tasks" || effectiveTab === "meetings" || effectiveTab === "financials" || effectiveTab === "vault");
 
     return (
       <Tabs value={effectiveTab} onValueChange={setTab} className="w-full space-y-4">
-        <TabsList className="w-full bg-muted/30 border border-accent/15 flex-wrap h-auto max-sm:grid max-sm:grid-cols-3">
+        <TabsList className="w-full bg-muted/30 border border-accent/15 flex-wrap h-auto">
           {isSelf && (
             <TabsTrigger value="dashboard" className={tabTrigger}><Home className="h-4 w-4" />Dashboard</TabsTrigger>
           )}
@@ -925,7 +925,7 @@ const VfoPortal = () => {
             <TabsTrigger value="vault" className={tabTrigger}><FolderLock className="h-4 w-4" />Documents</TabsTrigger>
           )}
           {professionals.length > 0 && (
-            <TabsTrigger value="team" className={tabTrigger}><Briefcase className="h-4 w-4" />Professionals</TabsTrigger>
+            <TabsTrigger value="team" className={`${tabTrigger} max-sm:hidden`}><Briefcase className="h-4 w-4" />Professionals</TabsTrigger>
           )}
         </TabsList>
 
