@@ -1430,20 +1430,22 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
           {/* Completed action items render here (PortalTasks portals its list into this element) */}
           <div ref={setCompletedEl} />
           {(portal_requests || []).some((r: any) => r.status === "resolved") && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <ClipboardList className="h-4 w-4 text-muted-foreground/50" />
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Completed requests</p>
-              </div>
-              <PortalRequests
-                show="resolved"
-                requests={portal_requests || []}
-                contactId={contact.id}
-                contactName={`${contact.first_name} ${contact.last_name || ""}`.trim()}
-                portalToken={portalToken}
-                onUpdate={() => refreshData(portalToken)}
-              />
-            </div>
+            <Card>
+              <CardContent className="space-y-2 p-4">
+                <div className="flex items-center gap-2">
+                  <ClipboardList className="h-4 w-4 text-accent" />
+                  <h3 className="font-serif text-sm font-semibold text-foreground">Completed requests</h3>
+                </div>
+                <PortalRequests
+                  show="resolved"
+                  requests={portal_requests || []}
+                  contactId={contact.id}
+                  contactName={`${contact.first_name} ${contact.last_name || ""}`.trim()}
+                  portalToken={portalToken}
+                  onUpdate={() => refreshData(portalToken)}
+                />
+              </CardContent>
+            </Card>
           )}
         </div>
         )}

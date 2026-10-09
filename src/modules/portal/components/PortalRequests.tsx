@@ -167,9 +167,11 @@ export function PortalRequests({ requests, contactId, contactName, portalToken, 
 
         {resolvedRequests.length > 0 && (
           <details className="group" open={show === "resolved"}>
-            <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors py-2">
-              Resolved ({resolvedRequests.length})
-            </summary>
+            {show !== "resolved" && (
+              <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors py-2">
+                Resolved ({resolvedRequests.length})
+              </summary>
+            )}
             <div className="space-y-2 mt-2">
               {resolvedRequests.map((req) => (
                 <button
