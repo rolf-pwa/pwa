@@ -672,7 +672,8 @@ function HoldingTankRow({
               <div className="text-[9px] uppercase tracking-wider text-muted-foreground">YTD Change</div>
               {(() => {
                 const h = snapshot.current_harvest != null ? Number(snapshot.current_harvest) : null;
-                const pct = snapshot.ytd_value != null ? Number(snapshot.ytd_value) : null;
+                const boy = snapshot.boy_value != null ? Number(snapshot.boy_value) : null;
+                const pct = h != null && boy != null && boy > 0 ? (h / boy) * 100 : null; // ytd_value is the current value in dollars, not a percentage
                 const pos = (h ?? 0) >= 0;
                 return (
                   <div className={`font-semibold tabular-nums ${pos ? "text-green-600" : "text-destructive"}`}>

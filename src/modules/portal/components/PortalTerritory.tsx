@@ -190,20 +190,17 @@ export function PortalTerritory({ vineyardAccounts, storehouses, contact, family
       {showVineyard && (
       <Card>
         <CardHeader className="cursor-pointer select-none" onClick={() => setVineyardOpen((o) => !o)}>
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-              <Grape className="h-5 w-5 text-primary" />
-            </div>
+          <div className="flex items-center gap-2">
+              <Grape className="h-4 w-4 text-primary" />
             <div>
-              <CardTitle className="text-lg font-serif">The Vineyard</CardTitle>
+              <CardTitle className="font-serif text-sm font-semibold">The Vineyard</CardTitle>
               <p className="text-xs text-muted-foreground">Total Asset Portfolio</p>
             </div>
             <div className="ml-auto flex items-center gap-3">
               <div className="text-right">
-                <p className="text-2xl font-bold text-primary">
+                <p className="font-serif text-lg font-semibold tabular-nums text-foreground">
                   {formatCurrency(totalVineyard)}
                 </p>
-                <p className="text-xs text-muted-foreground">Total Value</p>
               </div>
               {vineyardOpen ? (
                 <ChevronDown className="h-4 w-4 text-muted-foreground" />
@@ -311,22 +308,19 @@ export function PortalTerritory({ vineyardAccounts, storehouses, contact, family
       {showStorehouses && (
       <Card>
         <CardHeader className="cursor-pointer select-none" onClick={() => setStorehousesOpen((o) => !o)}>
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10">
-              <Landmark className="h-5 w-5 text-accent" />
-            </div>
+          <div className="flex items-center gap-2">
+              <Landmark className="h-4 w-4 text-accent" />
             <div>
-              <CardTitle className="text-lg font-serif">The Storehouses</CardTitle>
+              <CardTitle className="font-serif text-sm font-semibold">The Storehouses</CardTitle>
               <p className="text-xs text-muted-foreground">Strategic Asset Allocation</p>
             </div>
             <div className="ml-auto flex items-center gap-3">
               <div className="text-right">
-                <p className="text-2xl font-bold text-accent">
+                <p className="font-serif text-lg font-semibold tabular-nums text-foreground">
                   {formatCurrency(visibleStorehouses.reduce((sum: number, s: any) => sum + (Number(s.current_value) || 0), 0)
                     + insurancePolicies.reduce((sum: number, p: any) => sum + (Number(p.cash_value) || 0), 0)
                   )}
                 </p>
-                <p className="text-xs text-muted-foreground">Total Value</p>
               </div>
               {storehousesOpen ? (
                 <ChevronDown className="h-4 w-4 text-muted-foreground" />
