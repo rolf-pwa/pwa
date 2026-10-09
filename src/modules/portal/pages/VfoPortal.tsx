@@ -15,6 +15,7 @@ import {
 import { PortalTerritory } from "@/modules/portal/components/PortalTerritory";
 import { PortalHoldingTank } from "@/modules/portal/components/PortalHoldingTank";
 import { PortalInsurance } from "@/modules/portal/components/PortalInsurance";
+import { PortalDashboard } from "@/modules/portal/components/PortalDashboard";
 import { PortalRequests } from "@/modules/portal/components/PortalRequests";
 import { PortalMeetings } from "@/modules/portal/components/PortalMeetings";
 import { PortalCharter } from "@/modules/portal/components/PortalCharter";
@@ -190,7 +191,7 @@ const VfoPortal = () => {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("dashboard");
   const [drilldown, setDrilldown] = useState<DrilldownState>({ level: "individual" });
-  const [financialsFocus, setFinancialsFocus] = useState<"holding_tank" | "vineyard" | "storehouses" | null>(null);
+  const [completedEl, setCompletedEl] = useState<HTMLElement | null>(null);
   const [expandedCorps, setExpandedCorps] = useState<Set<string>>(new Set());
   const [georgiaOpen, setGeorgiaOpen] = useState(false);
   const [requestsOpen, setRequestsOpen] = useState(false);
@@ -206,7 +207,6 @@ const VfoPortal = () => {
   // whenever we navigate to a different person/household, so neither
   // carries over stale state.
   useEffect(() => {
-    setFinancialsFocus(null);
     if (skipEmbedResetRef.current) {
       skipEmbedResetRef.current = false;
     } else {
@@ -929,247 +929,219 @@ const VfoPortal = () => {
     const hasStorehouses = indAumStorehouses.length > 0 || storehousesTotal > 0;
 
 
+    // The viewer's own balance sheet for the dashboard: what they hold, less what they owe.
+    const dashTotals = (() => {
+      if (!isSelf || (!hasTerritory && !holding_tank.length)) return null;
+      const sum = (rows: any[]) => rows.reduce((a, r) => a + (Number(r.current_value) || 0), 0);
+      const cash = (ind.insurancePolicies || []).filter((p: any) => !p.cash_value_storehouse_id && p.cv_in_strategic !== false).reduce((a: number, p: any) => a + (Number(p.cash_value) || 0), 0);
+      return { assets: sum(ind.vineyardAccounts) + sum(ind.memberStorehouses) + sum(holding_tank) + cash, liabilities: Number(data.liabilities_total) || 0 };
+    })();
+    const effectiveTab = (!hasFinancials && tab === "financials") || (!isSelf && tab === "dashboard") ? "tasks" : tab;
+    const meetingTypes = (((data as any)?.meeting_types as { label: string; url: string; embedUrl: string }[] | undefined) ?? []);
+    const charterUrl = charter?.draft_status === "ratified" ? (contact.charter_url || family?.charter_document_url) : null;
+    const fullName = `${contact.first_name || ""} ${contact.last_name || ""}`.trim();
+
+    const dashboardSidebar = (
+      <>
+        {charterUrl ? <PortalCharter charterUrl={charterUrl} /> : null}
+        <Card>
+          <CardContent className="space-y-3 p-4">
+            <div className="flex items-center gap-2">
+              <ClipboardList className="h-4 w-4 text-accent" />
+              <h3 className="font-serif text-sm font-semibold text-foreground">Requests</h3>
+            </div>
+            <PortalRequests show="open" requests={portal_requests || []} contactId={contact.id} contactName={fullName} portalToken={portalToken} onUpdate={refreshData} />
+            <Button className="w-full gap-2 bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => setGeorgiaOpen(true)}>
+              <MessageCircle className="h-4 w-4" />
+              Ask Georgia for Help
+            </Button>
+          </CardContent>
+        </Card>
+        <PortalYourTeam professionals={professionals} engagements={engagements} onSelect={professionals.length > 0 ? () => setTab("team") : undefined} />
+      </>
+    );
+
+    const tabTrigger = "flex-1 gap-1.5 data-[state=active]:bg-accent/10 data-[state=active]:text-accent";
+    const sidebarTabs = isSelf && (effectiveTab === "tasks" || effectiveTab === "meetings" || effectiveTab === "financials" || effectiveTab === "vault");
+
     return (
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-4">
-          <Tabs value={tab} onValueChange={setTab}>
-            <TabsList className="w-full bg-muted/30 border border-accent/15 flex-wrap h-auto">
-              <TabsTrigger value="dashboard" className="flex-1 gap-1.5 data-[state=active]:bg-accent/10 data-[state=active]:text-accent">
-                <Home className="h-4 w-4" />Dashboard
-              </TabsTrigger>
-              <TabsTrigger value="tasks" className="flex-1 gap-1.5 data-[state=active]:bg-accent/10 data-[state=active]:text-accent">
-                <CheckSquare className="h-4 w-4" />Action Items
-              </TabsTrigger>
-              <TabsTrigger value="meetings" className="flex-1 gap-1.5 data-[state=active]:bg-accent/10 data-[state=active]:text-accent">
-                <Calendar className="h-4 w-4" />Meetings
-              </TabsTrigger>
-              {hasFinancials && (
-                <TabsTrigger value="financials" className="flex-1 gap-1.5 data-[state=active]:bg-accent/10 data-[state=active]:text-accent">
-                  <Landmark className="h-4 w-4" />Financials
-                </TabsTrigger>
-              )}
-              {isSelf && (
-                <TabsTrigger value="vault" className="flex-1 gap-1.5 data-[state=active]:bg-accent/10 data-[state=active]:text-accent">
-                  <FolderLock className="h-4 w-4" />Documents
-                </TabsTrigger>
-              )}
-              {professionals.length > 0 && (
-                <TabsTrigger value="team" className="flex-1 gap-1.5 data-[state=active]:bg-accent/10 data-[state=active]:text-accent">
-                  <Briefcase className="h-4 w-4" />Professionals
-                </TabsTrigger>
-              )}
-            </TabsList>
+      <Tabs value={effectiveTab} onValueChange={setTab} className="w-full space-y-4">
+        <TabsList className="w-full bg-muted/30 border border-accent/15 flex-wrap h-auto">
+          {isSelf && (
+            <TabsTrigger value="dashboard" className={tabTrigger}><Home className="h-4 w-4" />Dashboard</TabsTrigger>
+          )}
+          <TabsTrigger value="tasks" className={tabTrigger}><CheckSquare className="h-4 w-4" />Action Items</TabsTrigger>
+          <TabsTrigger value="meetings" className={tabTrigger}><Calendar className="h-4 w-4" />Meetings</TabsTrigger>
+          {hasFinancials && (
+            <TabsTrigger value="financials" className={tabTrigger}><Landmark className="h-4 w-4" />Financials</TabsTrigger>
+          )}
+          {isSelf && (
+            <TabsTrigger value="vault" className={tabTrigger}><FolderLock className="h-4 w-4" />Documents</TabsTrigger>
+          )}
+          {professionals.length > 0 && (
+            <TabsTrigger value="team" className={tabTrigger}><Briefcase className="h-4 w-4" />Professionals</TabsTrigger>
+          )}
+        </TabsList>
 
-            <TabsContent value="dashboard" className="mt-4 space-y-3">
-              {/* Financial cards always start their own row(s) — a separate
-                  grid from Tasks/Requests below, so the two groups
-                  never share a row regardless of how many financial cards
-                  are present (e.g. Holding Tank hidden when empty). */}
-              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
-                {hasHolding && (
-                  <DashboardCard
-                    icon={Anchor}
-                    label="Holding Tank"
-                    caption="Awaiting Ratification"
-                    value={fmt(holdingTankTotal)}
-                    layout="row"
-                    onClick={() => { setFinancialsFocus("holding_tank"); setTab("financials"); }}
-                  />
-                )}
-                <DashboardCard
-                  icon={Grape}
-                  label="Vineyard"
-                  caption="Total Asset Portfolio"
-                  value={hasVineyard ? fmt(vineyardTotal) : "No accounts yet"}
-                  muted={!hasVineyard}
-                  layout="row"
-                  onClick={() => { setFinancialsFocus("vineyard"); setTab("financials"); }}
-                />
-                <DashboardCard
-                  icon={Landmark}
-                  label="Storehouses"
-                  caption="Strategic Allocation"
-                  value={hasStorehouses ? fmt(storehousesTotal) : "No accounts yet"}
-                  muted={!hasStorehouses}
-                  layout="row"
-                  onClick={() => { setFinancialsFocus("storehouses"); setTab("financials"); }}
-                />
-              </div>
-              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
-                <DashboardCard
-                  icon={CheckSquare}
-                  label="Action Items"
-                  caption="Tasks & To-Dos"
-                  value={isSelf ? `${taskNewCount} New · ${taskOngoingCount} Ongoing` : "Self only"}
-                  muted={!isSelf || (taskNewCount === 0 && taskOngoingCount === 0)}
-                  valueSize="sm"
-                  onClick={() => setTab("tasks")}
-                />
-                <DashboardCard
-                  icon={ClipboardList}
-                  label="Requests"
-                  caption="Sent to Your Advisor"
-                  value={requestsOpenCount > 0 ? `${requestsNewCount} New · ${requestsOngoingCount} Ongoing` : "None open"}
-                  muted={requestsOpenCount === 0}
-                  valueSize="sm"
-                  onClick={() => setRequestsOpen(true)}
-                />
-              </div>
-            </TabsContent>
+        <div className={sidebarTabs ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]" : "grid gap-6"}>
+          <div className="min-w-0 space-y-4">
+            {isSelf && (
+              <TabsContent value="dashboard" className="mt-0">
+                <PortalDashboard
+                  totals={dashTotals}
+                  meetings={meetings}
+                  taskCounts={{ newCount: taskNewCount, ongoingCount: taskOngoingCount }}
+                  onGo={setTab}
+                  sidebar={dashboardSidebar}
+                  links={<PortalDynamicLinks layout="grid" />}
+                >
+                  <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
+                    {hasHolding && (
+                      <DashboardCard icon={Anchor} label="Holding Tank" caption="Awaiting Ratification" value={fmt(holdingTankTotal)} layout="row" onClick={() => setTab("financials")} />
+                    )}
+                    <DashboardCard icon={Grape} label="Vineyard" caption="Total Asset Portfolio" value={hasVineyard ? fmt(vineyardTotal) : "No accounts yet"} muted={!hasVineyard} layout="row" onClick={() => setTab("financials")} />
+                    <DashboardCard icon={Landmark} label="Storehouses" caption="Strategic Allocation" value={hasStorehouses ? fmt(storehousesTotal) : "No accounts yet"} muted={!hasStorehouses} layout="row" onClick={() => setTab("financials")} />
+                  </div>
+                </PortalDashboard>
+              </TabsContent>
+            )}
 
-            <TabsContent value="tasks" className="mt-4">
+            <TabsContent value="tasks" className="mt-0">
               {isSelf ? (
-                <PortalTasks portalToken={portalToken} clientName={ind.name} contactId={contact.id} />
+                <PortalTasks portalToken={portalToken} clientName={ind.name} contactId={contact.id} completedTarget={completedEl} />
               ) : (
-                <div className="rounded-lg border border-accent/15 bg-muted/20 p-8 text-center text-sm text-muted-foreground">
+                <div className="rounded-lg border border-border bg-muted/30 p-8 text-center text-sm text-muted-foreground">
                   Task view is only available on your own profile.
                 </div>
               )}
             </TabsContent>
 
-            <TabsContent value="meetings" className="mt-4">
-              {embeddedBooking ? (
+            <TabsContent value="meetings" className="mt-0">
+              {isSelf && embeddedBooking ? (
                 <div className="space-y-3">
-                  <button
-                    onClick={() => setEmbeddedBooking(null)}
-                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-accent transition-colors"
-                  >
+                  <button onClick={() => setEmbeddedBooking(null)} className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-accent">
                     <ChevronLeft className="h-3.5 w-3.5" />
                     Back to Meetings
                   </button>
-                  <div className="rounded-lg border border-accent/15 overflow-hidden bg-card">
-                    <div className="px-4 py-2.5 border-b border-accent/15 text-sm font-serif text-foreground">
-                      {embeddedBooking.label}
-                    </div>
-                    <iframe
-                      src={embeddedBooking.embedUrl}
-                      style={{ border: 0 }}
-                      width="100%"
-                      height={700}
-                      title={embeddedBooking.label}
-                    />
+                  <div className="overflow-hidden rounded-lg border border-border bg-card">
+                    <div className="border-b border-border px-4 py-2.5 font-serif text-sm text-foreground">{embeddedBooking.label}</div>
+                    <iframe src={embeddedBooking.embedUrl} style={{ border: 0 }} width="100%" height={700} title={embeddedBooking.label} />
                   </div>
                 </div>
-              ) : (
+              ) : isSelf ? (
                 <PortalMeetings meetings={meetings} />
+              ) : (
+                <div className="rounded-lg border border-border bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+                  Meeting schedule is only visible on your own view.
+                </div>
               )}
             </TabsContent>
 
             {hasFinancials && (
-              <TabsContent value="financials" className="mt-4 space-y-4">
-                {financialsFocus === null ? (
-                  <div className="flex flex-col gap-3">
-                    {hasHolding && (
-                      <DashboardCard
-                        icon={Anchor}
-                        label="Holding Tank"
-                        caption="Awaiting Ratification"
-                        value={fmt(holdingTankTotal)}
-                        layout="row"
-                        onClick={() => setFinancialsFocus("holding_tank")}
-                      />
-                    )}
-                    <DashboardCard
-                      icon={Grape}
-                      label="Vineyard"
-                      caption="Total Asset Portfolio"
-                      value={hasVineyard ? fmt(vineyardTotal) : "No accounts yet"}
-                      colorClass="text-primary"
-                      bgClass="bg-primary/10"
-                      muted={!hasVineyard}
-                      layout="row"
-                      onClick={() => setFinancialsFocus("vineyard")}
-                    />
-                    <DashboardCard
-                      icon={Landmark}
-                      label="Storehouses"
-                      caption="Strategic Allocation"
-                      value={hasStorehouses ? fmt(storehousesTotal) : "No accounts yet"}
-                      muted={!hasStorehouses}
-                      layout="row"
-                      onClick={() => setFinancialsFocus("storehouses")}
-                    />
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <button
-                      onClick={() => setFinancialsFocus(null)}
-                      className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-accent transition-colors"
-                    >
-                      <ChevronLeft className="h-3.5 w-3.5" />
-                      Back to Financials
-                    </button>
-                    {financialsFocus === "holding_tank" && (
-                      <PortalHoldingTank accounts={holding_tank} />
-                    )}
-                    {financialsFocus === "vineyard" && (
-                      <PortalTerritory
-                        vineyardAccounts={ind.vineyardAccounts}
-                        storehouses={ind.memberStorehouses}
-                        insurancePolicies={ind.insurancePolicies}
-                        contact={isSelf ? contact : currentMember}
-                        family={family}
-                        household={household}
-                        householdMembers={household_members}
-                        scopeLabel={isSelf ? "My Territory" : `${currentMember?.first_name || ""}'s Territory`}
-                        portalToken={portalToken}
-                        onScopeChange={refreshData}
-                        corporations={corporations}
-                        section="vineyard"
-                      />
-                    )}
-                    {financialsFocus === "storehouses" && (
-                      <PortalTerritory
-                        vineyardAccounts={ind.vineyardAccounts}
-                        storehouses={ind.memberStorehouses}
-                        insurancePolicies={ind.insurancePolicies}
-                        contact={isSelf ? contact : currentMember}
-                        family={family}
-                        household={household}
-                        householdMembers={household_members}
-                        scopeLabel={isSelf ? "My Territory" : `${currentMember?.first_name || ""}'s Territory`}
-                        portalToken={portalToken}
-                        onScopeChange={refreshData}
-                        corporations={corporations}
-                        section="storehouses"
-                      />
-                    )}
-                  </div>
+              <TabsContent value="financials" className="mt-0 space-y-6">
+                {hasHolding && <PortalHoldingTank accounts={holding_tank} />}
+                {hasTerritory && (
+                  <PortalTerritory
+                    vineyardAccounts={ind.vineyardAccounts}
+                    storehouses={ind.memberStorehouses}
+                    insurancePolicies={ind.insurancePolicies}
+                    contact={isSelf ? contact : currentMember}
+                    family={family}
+                    household={household}
+                    householdMembers={[]}
+                    scopeLabel={isSelf ? "My Territory" : `${currentMember?.first_name || ""}'s Territory`}
+                    portalToken={portalToken}
+                    onScopeChange={refreshData}
+                    corporations={corporations}
+                    section="all"
+                    defaultCollapsed
+                  />
                 )}
-                {hasInsurance && (
-                  <PortalInsurance policies={ind.insurancePolicies} defaultCollapsed />
-                )}
+                {hasInsurance && <PortalInsurance policies={ind.insurancePolicies} defaultCollapsed />}
               </TabsContent>
             )}
 
             {isSelf && (
-              <TabsContent value="vault" className="mt-4">
+              <TabsContent value="vault" className="mt-0">
                 <PortalVault portalToken={portalToken} householdId={household?.id} />
               </TabsContent>
             )}
 
-
             {professionals.length > 0 && (
-              <TabsContent value="team" className="mt-4">
+              <TabsContent value="team" className="mt-0">
                 <PortalProfessionals professionals={professionals} engagements={engagements} />
               </TabsContent>
             )}
-          </Tabs>
+          </div>
+
+          {/* Sidebar (Action Items): what is finished */}
+          {effectiveTab === "tasks" && isSelf && (
+            <div className="min-w-0 space-y-4">
+              <div ref={setCompletedEl} />
+              {(portal_requests || []).some((r: any) => r.status === "resolved") && (
+                <Card>
+                  <CardContent className="space-y-2 p-4">
+                    <div className="flex items-center gap-2">
+                      <ClipboardList className="h-4 w-4 text-accent" />
+                      <h3 className="font-serif text-sm font-semibold text-foreground">Completed requests</h3>
+                    </div>
+                    <PortalRequests show="resolved" requests={portal_requests || []} contactId={contact.id} contactName={fullName} portalToken={portalToken} onUpdate={refreshData} />
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {/* Sidebar (Meetings): book a meeting, from the types marked for clients */}
+          {effectiveTab === "meetings" && isSelf && meetingTypes.length > 0 && (
+            <div className="min-w-0 space-y-4">
+              <Card>
+                <CardContent className="space-y-1 p-4">
+                  <div className="mb-2 flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-accent" />
+                    <h3 className="font-serif text-sm font-semibold text-foreground">Book a meeting</h3>
+                  </div>
+                  {meetingTypes.map((m) => (
+                    <button
+                      key={m.url}
+                      onClick={() => (m.embedUrl && m.embedUrl !== m.url ? setEmbeddedBooking({ label: m.label, embedUrl: m.embedUrl }) : window.open(m.url, "_blank", "noopener,noreferrer"))}
+                      className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted/50"
+                    >
+                      {m.label}
+                      <ArrowRight className="h-3.5 w-3.5 text-accent" />
+                    </button>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Sidebar (Financials): My Accounts, always open */}
+          {effectiveTab === "financials" && isSelf && (
+            <div className="min-w-0 space-y-4">
+              <PortalDynamicLinks groupsOnly alwaysOpen />
+            </div>
+          )}
+
+          {/* Sidebar (Documents): send a document to the Shoebox */}
+          {effectiveTab === "vault" && isSelf && (
+            <div className="min-w-0 space-y-4">
+              <Card>
+                <CardContent className="space-y-3 p-4">
+                  <div className="flex items-center gap-2">
+                    <FolderLock className="h-4 w-4 text-accent" />
+                    <h3 className="font-serif text-sm font-semibold text-foreground">Send a document</h3>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Statements, tax slips, anything your Personal CFO should have. Files go to your Shoebox and are filed for you.
+                  </p>
+                  <PortalShoeboxUpload portalToken={portalToken} householdId={household?.id} />
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
-
-        <aside className="space-y-4">
-          {renderConciergeCard()}
-
-          {isSelf && <PortalDynamicLinks />}
-
-
-          <PortalYourTeam
-            professionals={professionals}
-            engagements={engagements}
-            onSelect={professionals.length > 0 ? () => setTab("team") : undefined}
-          />
-        </aside>
-      </div>
+      </Tabs>
     );
   };
 
