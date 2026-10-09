@@ -191,6 +191,7 @@ const VfoPortal = () => {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("dashboard");
   const [drilldown, setDrilldown] = useState<DrilldownState>({ level: "individual" });
+  const [openTotals, setOpenTotals] = useState<Set<string>>(new Set());
   const [completedEl, setCompletedEl] = useState<HTMLElement | null>(null);
   const [expandedCorps, setExpandedCorps] = useState<Set<string>>(new Set());
   const [georgiaOpen, setGeorgiaOpen] = useState(false);
@@ -944,21 +945,54 @@ const VfoPortal = () => {
     const dashboardSidebar = (
       <>
         {charterUrl ? <PortalCharter charterUrl={charterUrl} /> : null}
-        <Card>
-          <CardContent className="space-y-3 p-4">
-            <div className="flex items-center gap-2">
-              <ClipboardList className="h-4 w-4 text-accent" />
-              <h3 className="font-serif text-sm font-semibold text-foreground">Requests</h3>
-            </div>
-            <PortalRequests show="open" requests={portal_requests || []} contactId={contact.id} contactName={fullName} portalToken={portalToken} onUpdate={refreshData} />
-            <Button className="w-full gap-2 bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => setGeorgiaOpen(true)}>
-              <MessageCircle className="h-4 w-4" />
-              Ask Georgia for Help
-            </Button>
-          </CardContent>
-        </Card>
+        {renderConciergeCard()}
         <PortalYourTeam professionals={professionals} engagements={engagements} onSelect={professionals.length > 0 ? () => setTab("team") : undefined} />
       </>
+    );
+
+    // Financials sidebar: totals by category; each row opens to its accounts and balances.
+    const totalsRows = [
+      ...(isSelf ? [{ label: "Holding Tank", total: holdingTankTotal, items: (holding_tank || []).map((a: any) => ({ id: a.id, name: a.account_name, value: Number(a.current_value) || 0 })) }] : []),
+      { label: "Vineyard", total: vineyardTotal, items: indVineyardAccounts.map((a: any) => ({ id: a.id, name: a.account_name, value: Number(a.current_value) || 0 })) },
+      { label: "Storehouses", total: storehousesTotal, items: indAumStorehouses.map((a: any) => ({ id: a.id, name: a.label || a.asset_type || a.notes || "Account", value: Number(a.current_value) || 0 })) },
+    ].filter((r) => r.items.length > 0 || r.label !== "Holding Tank");
+    const totalsCard = (
+      <Card>
+        <CardContent className="p-0 divide-y divide-border">
+          <div className="px-4 py-3">
+            <h2 className="font-serif text-sm font-semibold text-foreground">Totals</h2>
+          </div>
+          {totalsRows.map((r) => {
+            const open = openTotals.has(r.label);
+            const expandable = r.items.length > 0;
+            return (
+              <div key={r.label}>
+                <button
+                  disabled={!expandable}
+                  onClick={() => setOpenTotals((prev) => { const n = new Set(prev); n.has(r.label) ? n.delete(r.label) : n.add(r.label); return n; })}
+                  className={`flex w-full items-center justify-between px-4 py-3 text-left transition-colors ${expandable ? "hover:bg-muted/40" : "cursor-default"}`}
+                >
+                  <span className="flex items-center gap-1.5 text-sm text-foreground">
+                    {expandable ? (open ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />) : <span className="w-4" />}
+                    {r.label}
+                  </span>
+                  <span className="font-serif text-sm font-semibold tabular-nums text-foreground">{fmt(r.total)}</span>
+                </button>
+                {open && (
+                  <div className="pb-2">
+                    {r.items.map((it: any) => (
+                      <div key={it.id} className="flex items-center justify-between pl-10 pr-4 py-1.5">
+                        <span className="text-xs text-muted-foreground">{it.name}</span>
+                        <span className="text-xs tabular-nums text-foreground">{fmt(it.value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
     );
 
     const tabTrigger = "flex-1 gap-1.5 data-[state=active]:bg-accent/10 data-[state=active]:text-accent";
@@ -994,15 +1028,7 @@ const VfoPortal = () => {
                   onGo={setTab}
                   sidebar={dashboardSidebar}
                   links={<PortalDynamicLinks layout="grid" />}
-                >
-                  <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
-                    {hasHolding && (
-                      <DashboardCard icon={Anchor} label="Holding Tank" caption="Awaiting Ratification" value={fmt(holdingTankTotal)} layout="row" onClick={() => setTab("financials")} />
-                    )}
-                    <DashboardCard icon={Grape} label="Vineyard" caption="Total Asset Portfolio" value={hasVineyard ? fmt(vineyardTotal) : "No accounts yet"} muted={!hasVineyard} layout="row" onClick={() => setTab("financials")} />
-                    <DashboardCard icon={Landmark} label="Storehouses" caption="Strategic Allocation" value={hasStorehouses ? fmt(storehousesTotal) : "No accounts yet"} muted={!hasStorehouses} layout="row" onClick={() => setTab("financials")} />
-                  </div>
-                </PortalDashboard>
+                />
               </TabsContent>
             )}
 
@@ -1119,6 +1145,7 @@ const VfoPortal = () => {
           {/* Sidebar (Financials): My Accounts, always open */}
           {effectiveTab === "financials" && isSelf && (
             <div className="min-w-0 space-y-4">
+              {totalsCard}
               <PortalDynamicLinks groupsOnly alwaysOpen />
             </div>
           )}

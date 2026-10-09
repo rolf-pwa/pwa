@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { Card, CardContent } from "@/shared/components/ui/card";
-import { Users, Scale, Calculator, Shield, ScrollText, HeartHandshake, Briefcase } from "lucide-react";
+import { Users, Scale, Calculator, Shield, ScrollText, HeartHandshake, Briefcase, ChevronDown, ChevronRight } from "lucide-react";
 
 const TYPE_META: Record<string, { label: string; Icon: any }> = {
   lawyer: { label: "Lawyer", Icon: Scale },
@@ -37,6 +38,7 @@ export function PortalYourTeam({
   engagements: Engagement[];
   onSelect?: () => void;
 }) {
+  const [open, setOpen] = useState(false);
   if (!professionals?.length) return null;
 
   const byPro = (id: string) => engagements.filter((e) => e.professional_id === id);
@@ -44,11 +46,13 @@ export function PortalYourTeam({
   return (
     <Card className="border-accent/15">
       <CardContent className="p-5 space-y-3">
-        <div className="flex items-center gap-2">
+        <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2 text-left">
           <Users className="h-4 w-4 text-accent" />
           <h3 className="font-serif text-sm text-foreground">Your Team</h3>
-        </div>
-        <ul className="space-y-2.5">
+          <span className="ml-auto text-xs text-muted-foreground">{professionals.length}</span>
+          {open ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+        </button>
+        {open && <ul className="space-y-2.5">
           {professionals.map((p) => {
             const meta = TYPE_META[p.professional_type] || TYPE_META.other;
             const open = byPro(p.id).filter((e) => e.status === "active" || e.status === "invited").length;
@@ -77,8 +81,8 @@ export function PortalYourTeam({
               </li>
             );
           })}
-        </ul>
-        {onSelect && (
+        </ul>}
+        {open && onSelect && (
           <button
             onClick={onSelect}
             className="w-full text-[11px] uppercase tracking-wider text-muted-foreground hover:text-accent transition-colors pt-1"
