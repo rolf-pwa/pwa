@@ -28,7 +28,7 @@ interface PortalRequest {
   messages?: Message[];
 }
 
-const TYPE_LABELS: Record<string, string> = {
+export const TYPE_LABELS: Record<string, string> = {
   banking_withdrawal: "Banking & Withdrawals",
   personal_info: "Personal Info",
   document_request: "Document Request",

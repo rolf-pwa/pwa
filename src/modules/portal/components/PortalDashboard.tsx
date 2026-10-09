@@ -1,12 +1,13 @@
 import { format, parseISO } from "date-fns";
 import { Calendar, CheckSquare, MessageSquare } from "lucide-react";
+import { TYPE_LABELS } from "./PortalRequests";
 
 const money = (n: number) => n.toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 });
 
 interface Props {
   totals: { assets: number; liabilities: number } | null;
   meetings: any[];
-  requests: { id: string; status: string; subject?: string | null; title?: string | null }[];
+  requests: { id: string; status: string; request_type?: string | null }[];
   taskCounts: { newCount: number; ongoingCount: number };
   onGo: (tab: string) => void;
 }
@@ -52,7 +53,7 @@ export function PortalDashboard({ totals, meetings, requests, taskCounts, onGo }
           note={taskCounts.newCount > 0 ? `${taskCounts.newCount} new` : undefined} />
         <Tile icon={<MessageSquare className="h-3.5 w-3.5" />} title="Requests" to="tasks"
           value={open.length === 0 ? "None open" : `${open.length} open`}
-          note={open[0] ? open[0].subject || open[0].title || undefined : undefined} />
+          note={open[0]?.request_type ? TYPE_LABELS[open[0].request_type] ?? open[0].request_type : undefined} />
       </div>
     </div>
   );
