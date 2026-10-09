@@ -232,6 +232,8 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
   const [loading, setLoading] = useState(!!token);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [completedEl, setCompletedEl] = useState<HTMLElement | null>(null);
+  const [embeddedBooking, setEmbeddedBooking] = useState<{ label: string; embedUrl: string } | null>(null);
+  useEffect(() => { if (activeTab !== "meetings") setEmbeddedBooking(null); }, [activeTab]);
   const taskCounts = useTaskCounts(token || (data as any)?.portal_token || "", data?.contact?.id);
 
   // Drill-down state
@@ -1200,9 +1202,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
     );
 
     return (
-      <div className={effectiveTab === "tasks" ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]" : "grid gap-6"}>
-        {/* Main Content: Tabbed Interface. The sidebar belongs to Action Items only; every other tab gets the full width. */}
-        <div className="min-w-0 space-y-4">
+      <div className="space-y-4">
           {/* Sovereignty Survey — auto-hides once the survey is complete */}
           {isSelf && (
             <PortalIntakeBanner
@@ -1213,7 +1213,8 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
 
 
           {/* Main Tabs */}
-          <Tabs value={effectiveTab} onValueChange={setActiveTab} className="w-full">
+          {/* Main Tabs: the bar spans the full width; the sidebar sits under it, beside the Action Items content. */}
+          <Tabs value={effectiveTab} onValueChange={setActiveTab} className="w-full space-y-4">
             <TabsList className="w-full bg-muted border border-border flex-wrap h-auto">
               {isSelf && (
                 <TabsTrigger value="dashboard" className="flex-1 gap-1.5">
@@ -1252,6 +1253,8 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
                   </TabsTrigger>
                 )}
             </TabsList>
+            <div className={effectiveTab === "tasks" || effectiveTab === "meetings" ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]" : "grid gap-6"}>
+        <div className="min-w-0 space-y-4">
 
             {/* Dashboard Tab */}
             {isSelf && (
@@ -1281,29 +1284,21 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
 
             {/* Meetings Tab (with Reviews) */}
             <TabsContent value="meetings" className="mt-4 space-y-6">
-              {isSelf && (
-                <div className="flex items-center justify-end gap-2">
-                  <a
-                    href="https://calendar.app.google/Fwsmx2LC8BjWf3Zh9"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors border border-primary/20"
+              {isSelf && embeddedBooking ? (
+                <div className="space-y-3">
+                  <button
+                    onClick={() => setEmbeddedBooking(null)}
+                    className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-accent"
                   >
-                    <MapPin className="h-3.5 w-3.5" />
-                    Survey — Personal
-                  </a>
-                  <a
-                    href="https://calendar.app.google/raxnRa2RFQGL7KnD9"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors border border-primary/20"
-                  >
-                    <Building2 className="h-3.5 w-3.5" />
-                    Survey — Corporate
-                  </a>
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    Back to Meetings
+                  </button>
+                  <div className="overflow-hidden rounded-lg border border-border bg-card">
+                    <div className="border-b border-border px-4 py-2.5 font-serif text-sm text-foreground">{embeddedBooking.label}</div>
+                    <iframe src={embeddedBooking.embedUrl} style={{ border: 0 }} width="100%" height={700} title={embeddedBooking.label} />
+                  </div>
                 </div>
-              )}
-              {isSelf ? (
+              ) : isSelf ? (
                 <PortalMeetings meetings={meetings} />
               ) : (
                 <div className="rounded-lg border border-border bg-muted/30 p-8 text-center">
@@ -1403,10 +1398,31 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
                   />
                 </TabsContent>
               )}
-
-          </Tabs>
-
         </div>
+
+        {/* Right Sidebar (Meetings tab): book a meeting, from the types marked for clients */}
+        {effectiveTab === "meetings" && isSelf && (((data as any).meeting_types ?? []) as { label: string; url: string; embedUrl: string }[]).length > 0 && (
+        <div className="min-w-0 space-y-4">
+          <Card>
+            <CardContent className="space-y-1 p-4">
+              <div className="mb-2 flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-accent" />
+                <h3 className="font-serif text-sm font-semibold text-foreground">Book a meeting</h3>
+              </div>
+              {(((data as any).meeting_types ?? []) as { label: string; url: string; embedUrl: string }[]).map((m) => (
+                <button
+                  key={m.url}
+                  onClick={() => (m.embedUrl && m.embedUrl !== m.url ? setEmbeddedBooking({ label: m.label, embedUrl: m.embedUrl }) : window.open(m.url, "_blank", "noopener,noreferrer"))}
+                  className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted/50"
+                >
+                  {m.label}
+                  <ArrowRight className="h-3.5 w-3.5 text-accent" />
+                </button>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+        )}
 
         {/* Right Sidebar (Action Items tab only): what is finished */}
         {effectiveTab === "tasks" && isSelf && (
@@ -1431,6 +1447,8 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
           )}
         </div>
         )}
+            </div>
+          </Tabs>
       </div>
     );
   };
