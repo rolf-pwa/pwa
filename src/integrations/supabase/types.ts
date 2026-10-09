@@ -4362,6 +4362,7 @@ export type Database = {
           avatar_url: string | null
           created_at: string
           email: string | null
+          email_signature: string | null
           full_name: string | null
           id: string
           updated_at: string
@@ -4371,6 +4372,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           email?: string | null
+          email_signature?: string | null
           full_name?: string | null
           id?: string
           updated_at?: string
@@ -4380,6 +4382,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           email?: string | null
+          email_signature?: string | null
           full_name?: string | null
           id?: string
           updated_at?: string
@@ -5340,6 +5343,7 @@ export type Database = {
           action_description: string
           action_type: string
           approved_at: string
+          client_visible: boolean
           contact_id: string
           created_at: string
           id: string
@@ -5350,6 +5354,7 @@ export type Database = {
           action_description: string
           action_type: string
           approved_at?: string
+          client_visible?: boolean
           contact_id: string
           created_at?: string
           id?: string
@@ -5360,6 +5365,7 @@ export type Database = {
           action_description?: string
           action_type?: string
           approved_at?: string
+          client_visible?: boolean
           contact_id?: string
           created_at?: string
           id?: string

@@ -105,7 +105,7 @@ Deno.serve(async (req) => {
 
     const { data: profile } = await db
       .from("profiles")
-      .select("full_name, email")
+      .select("full_name, email, email_signature")
       .eq("user_id", userId)
       .maybeSingle();
     const from =
