@@ -25,7 +25,7 @@ import { PortalVault } from "@/modules/portal/components/PortalVault";
 import { PortalGeorgiaChat } from "@/modules/portal/components/PortalGeorgiaChat";
 import { PortalYourTeam } from "@/modules/portal/components/PortalYourTeam";
 import { PortalProfessionals } from "@/modules/portal/components/PortalProfessionals";
-import { insuranceCashForStorehouses, sumValues, isAumStorehouse, formatCurrency } from "@/modules/portal/lib/portalAum";
+import { insuranceCashForStorehouses, sumValues, isAumStorehouse, formatCurrency, householdName } from "@/modules/portal/lib/portalAum";
 import { MEETING_BOOKING_LINKS } from "@/shared/lib/meetingBookingLinks";
 import { PortalDynamicLinks } from "@/modules/portal/components/PortalDynamicLinks";
 import { PortalShoeboxUpload } from "@/modules/portal/components/PortalShoeboxUpload";
@@ -517,7 +517,7 @@ const VfoPortal = () => {
     if (drilldown.level === "family") return "Family Overview";
     if (drilldown.level === "household") {
       const label = currentHousehold?.label || household?.label || "";
-      return label ? `${label} Household` : "Household";
+      return householdName(label);
     }
     const m = currentMember || contact;
     const name = `${m.first_name || ""} ${m.last_name || ""}`.trim();
@@ -537,7 +537,7 @@ const VfoPortal = () => {
       const label = currentHousehold?.label || household?.label;
       if (label) {
         crumbs.push({
-          label: `${label} Household`,
+          label: householdName(label),
           onClick: drilldown.level === "individual"
             ? () => setDrilldown({ level: "household", householdId: drilldown.householdId || household?.id })
             : undefined,
@@ -685,7 +685,7 @@ const VfoPortal = () => {
                     <Home className="h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-foreground">
-                        {hh.label} Household{p.own ? <span className="ml-1.5 text-xs font-normal text-accent">Yours</span> : null}
+                        {householdName(hh.label)}{p.own ? <span className="ml-1.5 text-xs font-normal text-accent">Yours</span> : null}
                       </p>
                       <p className="truncate text-xs text-muted-foreground">{members.map((m: any) => m.first_name).join(", ")}</p>
                     </div>
@@ -741,7 +741,7 @@ const VfoPortal = () => {
             <CardContent className="p-0 divide-y divide-border">
               <div className="flex items-center gap-2 px-4 py-3">
                 <Home className="h-4 w-4 text-accent" />
-                <h2 className="font-serif text-sm font-semibold text-foreground">{hhLabel} Household</h2>
+                <h2 className="font-serif text-sm font-semibold text-foreground">{householdName(hhLabel)}</h2>
                 <span className="ml-auto text-xs text-muted-foreground">
                   {orderedMembers.length} member{orderedMembers.length !== 1 ? "s" : ""}
                 </span>

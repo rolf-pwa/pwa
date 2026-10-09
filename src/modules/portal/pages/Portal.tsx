@@ -30,7 +30,7 @@ import { Grape, ScrollText, Clock, Calendar, FolderOpen, CheckSquare, ShieldChec
 import { getPortalSession, setPortalSession, clearPortalSession } from "@/modules/portal/lib/portalSession";
 import prosperwiseLogo from "@/assets/prosperwise-icon-paper.png";
 import { policyTypeLabel } from "@/shared/lib/insurance";
-import { insuranceCashForStorehouses, sumValues, isAumStorehouse, formatCurrency } from "@/modules/portal/lib/portalAum";
+import { insuranceCashForStorehouses, sumValues, isAumStorehouse, formatCurrency, householdName } from "@/modules/portal/lib/portalAum";
 
 interface PortalData {
   portal_token?: string;
@@ -657,7 +657,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <Home className="h-4 w-4 text-accent" />
-                    <h3 className="font-semibold text-foreground font-serif">{hh.label} Household</h3>
+                    <h3 className="font-semibold text-foreground font-serif">{householdName(hh.label)}</h3>
                   </div>
                   <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
@@ -731,7 +731,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
           <CardContent className="p-0 divide-y divide-border">
             <div className="flex items-center gap-2 px-4 py-3">
               <Home className="h-4 w-4 text-accent" />
-              <h2 className="font-serif text-sm font-semibold text-foreground">{hhLabel} Household</h2>
+              <h2 className="font-serif text-sm font-semibold text-foreground">{householdName(hhLabel)}</h2>
               <span className="ml-auto text-xs text-muted-foreground">{memberCount} member{memberCount !== 1 ? "s" : ""}</span>
             </div>
             {(!viewingOwnHousehold
@@ -1013,7 +1013,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
                   <div>
                     <p className="text-sm font-semibold text-foreground font-serif">{family.name}</p>
                     {household && (
-                      <p className="text-xs text-muted-foreground">{household.label} Household</p>
+                      <p className="text-xs text-muted-foreground">{householdName(household.label)}</p>
                     )}
                   </div>
                 </div>
@@ -1399,7 +1399,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
     if (drilldown.level === "family") return family?.name ? `${family.name} — Family Overview` : "Family Overview";
     if (drilldown.level === "household") {
       const label = currentHousehold?.label || household?.label || "";
-      return `${label} Household`;
+      return householdName(label);
     }
     if (currentMember) return `${currentMember.first_name} ${currentMember.last_name || ""}`;
     return family?.name ? `${family.name} — ${household?.label || ""}` : "Sovereign Financial Territory";
