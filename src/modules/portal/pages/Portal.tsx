@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { signInWithGoogle } from "@/shared/lib/auth";
 import { toast } from "sonner";
+import { useIsMobile } from "@/shared/hooks/use-mobile";
 import { PortalDynamicLinks } from "@/modules/portal/components/PortalDynamicLinks";
 import { PortalTerritory } from "@/modules/portal/components/PortalTerritory";
 import { PortalHoldingTank } from "@/modules/portal/components/PortalHoldingTank";
@@ -95,6 +96,9 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(!!token);
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [familyOpen, setFamilyOpen] = useState(false);
+  const [completedReqOpen, setCompletedReqOpen] = useState(false);
+  const isMobile = useIsMobile();
   const [openTotals, setOpenTotals] = useState<Set<string>>(new Set());
   const [completedEl, setCompletedEl] = useState<HTMLElement | null>(null);
   const [embeddedBooking, setEmbeddedBooking] = useState<{ label: string; embedUrl: string } | null>(null);
@@ -1006,18 +1010,19 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
     const familyTile = family ? (
             <Card>
               <CardContent className="p-4 space-y-3">
-                <div className="flex items-center gap-3">
+                <button type="button" onClick={() => setFamilyOpen((o) => !o)} className="flex w-full items-center gap-3 text-left">
                   <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/10">
                     <Home className="h-5 w-5 text-accent" />
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-foreground font-serif">{family.name}</p>
                     {household && (
                       <p className="text-xs text-muted-foreground">{householdName(household.label)}</p>
                     )}
                   </div>
-                </div>
-                {household_members.length > 0 && (
+                  {familyOpen ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                </button>
+                {familyOpen && household_members.length > 0 && (
                   <div className="border-t border-border pt-3">
                     <div className="flex items-center gap-2 mb-2">
                       <Users className="h-3.5 w-3.5 text-muted-foreground" />
@@ -1036,7 +1041,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
                   </div>
                 )}
                 {/* Navigate to household view for HoH/spouse roles */}
-                {(hierarchyLevel === "household" || hierarchyLevel === "family") && isSelf && (
+                {familyOpen && (hierarchyLevel === "household" || hierarchyLevel === "family") && isSelf && (
                   <div className="border-t border-border pt-3">
                     <button
                       onClick={() => {
@@ -1167,7 +1172,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
             {/* Action Items Tab */}
             <TabsContent value="tasks" className="mt-0">
               {isSelf ? (
-                <PortalTasks portalToken={portalToken} clientName={`${contact.first_name} ${contact.last_name || ""}`.trim()} contactId={contact.id} completedTarget={completedEl} />
+                <PortalTasks portalToken={portalToken} clientName={`${contact.first_name} ${contact.last_name || ""}`.trim()} contactId={contact.id} completedTarget={completedEl} completedCollapsed />
               ) : (
                 <div className="rounded-lg border border-border bg-muted/30 p-8 text-center">
                   <CheckSquare className="mx-auto h-8 w-8 text-muted-foreground mb-3" />
@@ -1249,7 +1254,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
             {hasFinancials && (
               <TabsContent value="financials" className="mt-0 space-y-6">
                 {isSelf && holding_tank.length > 0 && (
-                  <PortalHoldingTank accounts={holding_tank} />
+                  <PortalHoldingTank key={isMobile ? "m" : "d"} accounts={holding_tank} defaultCollapsed={isMobile} />
                 )}
                 {hasTerritory && (
                   <PortalTerritory
@@ -1351,18 +1356,21 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
           {(portal_requests || []).some((r: any) => r.status === "resolved") && (
             <Card>
               <CardContent className="space-y-2 p-4">
-                <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setCompletedReqOpen((o) => !o)} className="flex w-full items-center gap-2 text-left">
                   <ClipboardList className="h-4 w-4 text-accent" />
                   <h3 className="font-serif text-sm font-semibold text-foreground">Completed requests</h3>
-                </div>
-                <PortalRequests
-                  show="resolved"
-                  requests={portal_requests || []}
-                  contactId={contact.id}
-                  contactName={`${contact.first_name} ${contact.last_name || ""}`.trim()}
-                  portalToken={portalToken}
-                  onUpdate={() => refreshData(portalToken)}
-                />
+                  <ChevronRight className={`ml-auto h-4 w-4 text-muted-foreground transition-transform ${completedReqOpen ? "rotate-90" : ""}`} />
+                </button>
+                {completedReqOpen && (
+                  <PortalRequests
+                    show="resolved"
+                    requests={portal_requests || []}
+                    contactId={contact.id}
+                    contactName={`${contact.first_name} ${contact.last_name || ""}`.trim()}
+                    portalToken={portalToken}
+                    onUpdate={() => refreshData(portalToken)}
+                  />
+                )}
               </CardContent>
             </Card>
           )}
