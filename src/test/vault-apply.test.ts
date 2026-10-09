@@ -105,6 +105,36 @@ describe("planInsuranceApply", () => {
   });
 });
 
+describe("planInsuranceApply: one policy number, several coverages", () => {
+  const herman = [{ id: "h1", first_name: "Herman", last_name: "Peters", family_role: "Head of Household" }];
+  const lines = [
+    { carrier: "iA", policy_number: "9571792203", insured_name: "HERMAN PETERS", policy_type: "universal_life", coverage_amount: 170000, cash_value: 4091.41, renewal_date: null },
+    { carrier: "iA", policy_number: "9571792203", insured_name: "HERMAN PETERS", policy_type: "term", coverage_amount: 545000, renewal_date: "2052-02-08" },
+    { carrier: "iA", policy_number: "9571792203", insured_name: "HERMAN PETERS", policy_type: "term", coverage_amount: 370500, renewal_date: "2042-02-08" },
+    { carrier: "iA", policy_number: "9571792203", insured_name: "HERMAN PETERS", policy_type: "term", coverage_amount: 182500, renewal_date: "2032-02-08" },
+  ];
+  const base = { members: herman, corporations: [], vaultFolderId: null, fileName: "s.pdf" };
+  it("creates a row for the base and every rider on a first statement", () => {
+    const plan = planInsuranceApply(lines, { ...base, policies: [] }) as any[];
+    expect(plan.filter((w) => w.op === "insert").map((w) => w.values.coverage_amount)).toEqual([170000, 545000, 370500, 182500]);
+  });
+  it("updates the existing base and adds only the missing riders", () => {
+    const plan = planInsuranceApply(lines, { ...base, policies: [{ id: "p1", carrier: "iA", policy_number: "9571792203", insured_name: "HERMAN PETERS", policy_type: "universal_life", renewal_date: null }] }) as any[];
+    expect(plan.filter((w) => w.op === "update")).toHaveLength(1);
+    expect(plan.filter((w) => w.op === "insert").map((w) => w.values.coverage_amount)).toEqual([545000, 370500, 182500]);
+  });
+  it("matches every coverage on a later statement instead of duplicating", () => {
+    const existing = lines.map((l, i) => ({ id: `p${i}`, carrier: "iA", policy_number: "9571792203", insured_name: "HERMAN PETERS", policy_type: l.policy_type, renewal_date: l.renewal_date }));
+    const plan = planInsuranceApply(lines, { ...base, policies: existing }) as any[];
+    expect(plan.filter((w) => w.op === "insert")).toHaveLength(0);
+    expect(plan.map((w) => w.id).sort()).toEqual(["p0", "p1", "p2", "p3"]);
+  });
+  it("does not collapse a repeated line within one approval", () => {
+    const plan = planInsuranceApply([lines[1], lines[1]], { ...base, policies: [] }) as any[];
+    expect(plan.filter((w) => w.op === "insert")).toHaveLength(1);
+  });
+});
+
 describe("applyCorrections", () => {
   const ex = { accounts: [{ account_number: "A1", current_value: 100, book_value: 90 }] };
   it("records an override per real change and leaves the original untouched", () => {
