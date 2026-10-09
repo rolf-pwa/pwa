@@ -295,7 +295,8 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
       supabase.from("contacts").select("*").eq("id", contactId).maybeSingle(),
       supabase.from("vineyard_accounts").select("*").eq("contact_id", contactId).order("created_at"),
       supabase.from("storehouses").select("*").eq("contact_id", contactId).order("storehouse_number"),
-      supabase.from("sovereignty_audit_trail").select("*").eq("contact_id", contactId).order("created_at", { ascending: false }).limit(50),
+      // Clients only ever receive entries marked client-visible; the rest are internal system records.
+      supabase.from("sovereignty_audit_trail").select("*").eq("contact_id", contactId).eq("client_visible", true).order("created_at", { ascending: false }).limit(50),
       supabase.from("portal_requests").select("*, messages:portal_request_messages(*)").eq("contact_id", contactId).order("created_at", { ascending: false }),
       supabase.from("holding_tank").select("*").eq("contact_id", contactId).eq("status", "holding").order("created_at"),
       supabase.from("sovereignty_charters").select("id, title, draft_status, ratified_at, last_generated_at").eq("contact_id", contactId).maybeSingle(),
