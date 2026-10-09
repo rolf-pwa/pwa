@@ -34,7 +34,7 @@ export function PortalAccountSnapshot({ snapshot }: { snapshot: Snapshot | null 
     ["1 Yr", snapshot.ror_1y],
     ["3 Yr", snapshot.ror_3y],
     ["5 Yr", snapshot.ror_5y],
-    ["Since Inception", snapshot.ror_since_inception],
+    ["Inception", snapshot.ror_since_inception],
   ] as const;
   const hasRor = rors.some(([, v]) => v != null);
 
@@ -67,7 +67,7 @@ export function PortalAccountSnapshot({ snapshot }: { snapshot: Snapshot | null 
             <thead>
               <tr className="text-muted-foreground border-b border-border/50">
                 {rors.map(([label]) => (
-                  <th key={label} className="text-right py-0.5 px-1 font-medium">{label}</th>
+                  <th key={label} className="text-right py-0.5 px-1 font-medium whitespace-nowrap">{label}</th>
                 ))}
               </tr>
             </thead>

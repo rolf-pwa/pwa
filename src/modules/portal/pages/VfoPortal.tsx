@@ -905,7 +905,7 @@ const VfoPortal = () => {
       />
     );
 
-    const tabTrigger = "flex-1 gap-1.5 data-[state=active]:bg-accent/10 data-[state=active]:text-accent";
+    const tabTrigger = "flex-1 gap-1.5 max-sm:flex-col max-sm:gap-0.5 max-sm:px-1 max-sm:text-[10px] data-[state=active]:bg-accent/10 data-[state=active]:text-accent";
     const sidebarTabs = isSelf && (effectiveTab === "tasks" || effectiveTab === "meetings" || effectiveTab === "financials" || effectiveTab === "vault");
 
     return (
