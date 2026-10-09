@@ -6,6 +6,7 @@ import {
   ChevronDown, ChevronRight,
 } from "lucide-react";
 
+// ─── Dynamic Portal Links Component ───
 const LINK_ICONS: Record<string, any> = {
   ExternalLink,
   FolderOpen,
@@ -17,7 +18,7 @@ const LINK_ICONS: Record<string, any> = {
   Globe: ExternalLink,
 };
 
-export function PortalDynamicLinks() {
+export function PortalDynamicLinks({ layout = "stack", groupsOnly = false, alwaysOpen = false }: { contact?: any; layout?: "stack" | "grid"; groupsOnly?: boolean; alwaysOpen?: boolean }) {
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
 
   const { data: links = [] } = useQuery({
@@ -36,6 +37,7 @@ export function PortalDynamicLinks() {
 
   if (links.length === 0) return null;
 
+  // Split into ungrouped and grouped
   const ungrouped = links.filter((l: any) => !l.group_label);
   const grouped = links
     .filter((l: any) => l.group_label)
@@ -56,10 +58,12 @@ export function PortalDynamicLinks() {
 
   const renderLink = (link: any) => {
     const IconComp = LINK_ICONS[link.icon] || ExternalLink;
+    const href = link.url;
+
     return (
       <a
         key={link.id}
-        href={link.url}
+        href={href}
         target="_blank"
         rel="noopener noreferrer"
         className="flex items-center gap-2 rounded px-3 py-2 text-sm transition-colors text-foreground hover:bg-muted/50"
@@ -75,13 +79,16 @@ export function PortalDynamicLinks() {
   const customUngrouped = ungrouped.filter((l: any) => !l.is_system);
 
   return (
-    <div className="flex flex-col gap-1.5">
-      {systemUngrouped.map((link: any) => {
+    <div className={layout === "grid" ? "grid items-start gap-3 sm:grid-cols-2" : "flex flex-col gap-1.5"}>
+      {/* System ungrouped links first */}
+      {!groupsOnly && systemUngrouped.map((link: any) => {
         const IconComp = LINK_ICONS[link.icon] || ExternalLink;
+        const href = link.url;
+
         return (
           <a
             key={link.id}
-            href={link.url}
+            href={href}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 rounded-md border border-border px-3 py-2.5 text-sm font-medium transition-colors text-foreground hover:bg-muted/50"
@@ -93,18 +100,19 @@ export function PortalDynamicLinks() {
         );
       })}
 
+      {/* Grouped links (e.g. My Accounts) */}
       {Object.entries(grouped).map(([groupName, groupLinks]) => {
-        const isOpen = openGroups.has(groupName);
+        const isOpen = alwaysOpen || openGroups.has(groupName);
         return (
           <div key={groupName} className="rounded-md border border-border">
             <button
               type="button"
-              onClick={() => toggleGroup(groupName)}
+              onClick={() => !alwaysOpen && toggleGroup(groupName)}
               className="flex w-full items-center gap-2 px-3 py-2.5 text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
             >
               <Landmark className="h-4 w-4" />
               {groupName}
-              {isOpen ? (
+              {alwaysOpen ? null : isOpen ? (
                 <ChevronDown className="ml-auto h-3.5 w-3.5 opacity-60" />
               ) : (
                 <ChevronRight className="ml-auto h-3.5 w-3.5 opacity-60" />
@@ -118,8 +126,8 @@ export function PortalDynamicLinks() {
           </div>
         );
       })}
-
-      {customUngrouped.map((link: any) => {
+      {/* Custom user-created links after groups */}
+      {!groupsOnly && customUngrouped.map((link: any) => {
         const IconComp = LINK_ICONS[link.icon] || ExternalLink;
         return (
           <a

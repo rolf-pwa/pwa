@@ -12,12 +12,14 @@ interface Props {
   sidebar?: React.ReactNode;
   /** Placed under the summary tiles: the client's links (My Accounts, Family CFO Updates). */
   links?: React.ReactNode;
+  /** Extra content between the tiles and the links (the Family Office puts its asset cards here). */
+  children?: React.ReactNode;
 }
 
 const startOf = (e: any): Date | null => (e?.start?.dateTime ? parseISO(e.start.dateTime) : e?.start?.date ? parseISO(e.start.date) : null);
 
 /** A client's landing page: where they stand, what is coming up, and what needs them. Summary only; detail lives in the other tabs. */
-export function PortalDashboard({ totals, meetings, taskCounts, onGo, sidebar, links }: Props) {
+export function PortalDashboard({ totals, meetings, taskCounts, onGo, sidebar, links, children }: Props) {
   const now = new Date();
   const next = (meetings ?? [])
     .filter((e) => e.status !== "cancelled" && (startOf(e)?.getTime() ?? 0) >= now.getTime())
@@ -54,6 +56,7 @@ export function PortalDashboard({ totals, meetings, taskCounts, onGo, sidebar, l
           value={actions === 0 ? "All caught up" : `${actions} open`}
           note={taskCounts.newCount > 0 ? `${taskCounts.newCount} new` : undefined} />
       </div>
+      {children}
       {links}
     </div>
     {sidebar && <div className="min-w-0 space-y-4">{sidebar}</div>}
