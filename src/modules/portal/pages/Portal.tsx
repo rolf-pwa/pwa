@@ -1025,8 +1025,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
               { label: "Vineyard", total: sumValues(hhAssets.vineyard), count: hhAssets.vineyard.length },
               { label: "Storehouses", total: sumValues(hhAssets.storehouses.filter((a: any) => isAumStorehouse(a))) + insuranceCashForStorehouses(visibleInsurance), count: hhAssets.storehouses.length + visibleInsurance.length },
               { label: "Insurance", total: visibleInsurance.reduce((n: number, p: any) => n + (p.coverage_amount || 0), 0), count: visibleInsurance.length, suffix: "coverage" },
-            ].filter((r) => r.count > 0);
-            if (rows.length === 0) return null;
+            ].filter((r) => r.count > 0 || r.label === "Vineyard" || r.label === "Storehouses");
             return (
               <Card>
                 <CardContent className="p-0 divide-y divide-border">
