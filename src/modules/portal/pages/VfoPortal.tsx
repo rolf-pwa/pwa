@@ -16,6 +16,7 @@ import { PortalTerritory } from "@/modules/portal/components/PortalTerritory";
 import { PortalHoldingTank } from "@/modules/portal/components/PortalHoldingTank";
 import { PortalInsurance } from "@/modules/portal/components/PortalInsurance";
 import { PortalTotalsCard, type TotalsRow } from "@/modules/portal/components/PortalTotalsCard";
+import { useIsMobile } from "@/shared/hooks/use-mobile";
 import { PortalDashboard } from "@/modules/portal/components/PortalDashboard";
 import { PortalRequests } from "@/modules/portal/components/PortalRequests";
 import { PortalMeetings } from "@/modules/portal/components/PortalMeetings";
@@ -198,6 +199,7 @@ const VfoPortal = () => {
   const [georgiaOpen, setGeorgiaOpen] = useState(false);
   const [requestsOpen, setRequestsOpen] = useState(false);
   const [bookMeetingOpen, setBookMeetingOpen] = useState(false);
+  const isMobile = useIsMobile();
   const [messagesOpen, setMessagesOpen] = useState(false);
   const [completedReqOpen, setCompletedReqOpen] = useState(false);
   const [embeddedBooking, setEmbeddedBooking] = useState<{ label: string; embedUrl: string } | null>(null);
@@ -975,7 +977,7 @@ const VfoPortal = () => {
 
             {hasFinancials && (
               <TabsContent value="financials" className="mt-0 space-y-6">
-                {hasHolding && <PortalHoldingTank accounts={holding_tank} />}
+                {hasHolding && <PortalHoldingTank key={isMobile ? "m" : "d"} accounts={holding_tank} defaultCollapsed={isMobile} />}
                 {hasTerritory && (
                   <PortalTerritory
                     vineyardAccounts={ind.vineyardAccounts}
