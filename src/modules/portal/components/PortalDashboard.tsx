@@ -10,12 +10,14 @@ interface Props {
   requests: { id: string; status: string; request_type?: string | null }[];
   taskCounts: { newCount: number; ongoingCount: number };
   onGo: (tab: string) => void;
+  /** Ask Georgia and the household overview, shown beside the summary. */
+  sidebar?: React.ReactNode;
 }
 
 const startOf = (e: any): Date | null => (e?.start?.dateTime ? parseISO(e.start.dateTime) : e?.start?.date ? parseISO(e.start.date) : null);
 
 /** A client's landing page: where they stand, what is coming up, and what needs them. Summary only; detail lives in the other tabs. */
-export function PortalDashboard({ totals, meetings, requests, taskCounts, onGo }: Props) {
+export function PortalDashboard({ totals, meetings, requests, taskCounts, onGo, sidebar }: Props) {
   const now = new Date();
   const next = (meetings ?? [])
     .filter((e) => e.status !== "cancelled" && (startOf(e)?.getTime() ?? 0) >= now.getTime())
@@ -33,7 +35,8 @@ export function PortalDashboard({ totals, meetings, requests, taskCounts, onGo }
   );
 
   return (
-    <div className="space-y-4">
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+    <div className="min-w-0 space-y-4">
       {totals && (
         <div className="grid grid-cols-3 gap-4 rounded-lg border border-border bg-card px-5 py-4">
           {([["Total Assets", totals.assets, ""], ["Liabilities", totals.liabilities, "text-destructive"], ["Net Worth", totals.assets - totals.liabilities, ""]] as const).map(([label, value, tone]) => (
@@ -55,6 +58,8 @@ export function PortalDashboard({ totals, meetings, requests, taskCounts, onGo }
           value={open.length === 0 ? "None open" : `${open.length} open`}
           note={open[0]?.request_type ? TYPE_LABELS[open[0].request_type] ?? open[0].request_type : undefined} />
       </div>
+    </div>
+    {sidebar && <div className="min-w-0 space-y-4">{sidebar}</div>}
     </div>
   );
 }

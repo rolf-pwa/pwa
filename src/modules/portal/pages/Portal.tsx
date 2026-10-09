@@ -1106,6 +1106,61 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
 
 
 
+    const familyTile = family ? (
+            <Card>
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/10">
+                    <Home className="h-5 w-5 text-accent" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground font-serif">{family.name}</p>
+                    {household && (
+                      <p className="text-xs text-muted-foreground">{household.label} Household</p>
+                    )}
+                  </div>
+                </div>
+                {household_members.length > 0 && (
+                  <div className="border-t border-border pt-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-[11px] font-medium text-muted-foreground">Members</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[...household_members].sort((a: any, b: any) => {
+                        const order: Record<string, number> = { head_of_family: 0, head_of_household: 1, spouse: 2, beneficiary: 3, minor: 4 };
+                        return (order[a.family_role] ?? 4) - (order[b.family_role] ?? 4);
+                      }).map((m: any) => (
+                        <span key={m.id} className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] text-muted-foreground border border-border">
+                          {m.first_name} {m.last_name || ""}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Navigate to household view for HoH/spouse roles */}
+                {(hierarchyLevel === "household" || hierarchyLevel === "family") && isSelf && (
+                  <div className="border-t border-border pt-3">
+                    <button
+                      onClick={() => {
+                        if (hierarchyLevel === "family") {
+                          setDrilldown({ level: "family" });
+                        } else {
+                          setDrilldown({ level: "household", householdId: contact.household_id });
+                        }
+                      }}
+                      className="w-full flex items-center justify-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
+                    >
+                      <Users className="h-3.5 w-3.5" />
+                      {hierarchyLevel === "family" ? "View Family Overview" : "View Household"}
+                    </button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          
+    ) : null;
+
     return (
       <div className={effectiveTab === "tasks" ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]" : "grid gap-6"}>
         {/* Main Content: Tabbed Interface. The sidebar belongs to Action Items only; every other tab gets the full width. */}
@@ -1118,9 +1173,6 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
             />
           )}
 
-          {/* Ask Georgia for Help — below the lg breakpoint the sidebar stacks under the tabs and
-              their content, so keep the button at the top there; on desktop it lives in the sidebar. */}
-          {askGeorgiaButton("lg:hidden")}
 
           {/* Main Tabs */}
           <Tabs value={effectiveTab} onValueChange={setActiveTab} className="w-full">
@@ -1172,6 +1224,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
                   requests={portal_requests || []}
                   taskCounts={taskCounts}
                   onGo={setActiveTab}
+                  sidebar={<>{askGeorgiaButton("")}{familyTile}</>}
                 />
               </TabsContent>
             )}
@@ -1320,64 +1373,6 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
         {/* Right Sidebar (Action Items tab only) */}
         {effectiveTab === "tasks" && (
         <div className="min-w-0 space-y-4">
-          {/* Ask Georgia for Help — top of the sidebar on desktop */}
-          {askGeorgiaButton("hidden lg:inline-flex")}
-
-          {/* Family Tile — top of sidebar */}
-          {family && (
-            <Card>
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/10">
-                    <Home className="h-5 w-5 text-accent" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground font-serif">{family.name}</p>
-                    {household && (
-                      <p className="text-xs text-muted-foreground">{household.label} Household</p>
-                    )}
-                  </div>
-                </div>
-                {household_members.length > 0 && (
-                  <div className="border-t border-border pt-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-[11px] font-medium text-muted-foreground">Members</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {[...household_members].sort((a: any, b: any) => {
-                        const order: Record<string, number> = { head_of_family: 0, head_of_household: 1, spouse: 2, beneficiary: 3, minor: 4 };
-                        return (order[a.family_role] ?? 4) - (order[b.family_role] ?? 4);
-                      }).map((m: any) => (
-                        <span key={m.id} className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] text-muted-foreground border border-border">
-                          {m.first_name} {m.last_name || ""}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {/* Navigate to household view for HoH/spouse roles */}
-                {(hierarchyLevel === "household" || hierarchyLevel === "family") && isSelf && (
-                  <div className="border-t border-border pt-3">
-                    <button
-                      onClick={() => {
-                        if (hierarchyLevel === "family") {
-                          setDrilldown({ level: "family" });
-                        } else {
-                          setDrilldown({ level: "household", householdId: contact.household_id });
-                        }
-                      }}
-                      className="w-full flex items-center justify-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
-                    >
-                      <Users className="h-3.5 w-3.5" />
-                      {hierarchyLevel === "family" ? "View Family Overview" : "View Household"}
-                    </button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
           {/* Dynamic Quick Links (My Accounts, Empathy, etc.) — pinned below Household */}
           {isSelf && <PortalDynamicLinks contact={contact} />}
 
