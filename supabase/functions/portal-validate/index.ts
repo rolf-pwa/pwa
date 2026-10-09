@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { makeVisibilityFilter } from "../_shared/portal-visibility.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -376,6 +377,22 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
       }
     }
 
+    // Apply the privacy firewall to everyone else's accounts before anything is sent or enriched.
+    const householdOf = new Map<string, string | null>();
+    householdOf.set(contactId, householdId ?? null);
+    (householdMembers || []).forEach((m: any) => householdOf.set(m.id, householdId ?? null));
+    if (Array.isArray(hierarchy?.households)) hierarchy.households.forEach((hh: any) => (hh.members || []).forEach((m: any) => householdOf.set(m.id, hh.id)));
+    if (Array.isArray(hierarchy?.members)) hierarchy.members.forEach((m: any) => householdOf.set(m.id, householdId ?? null));
+    const visibleToViewer = makeVisibilityFilter(contactId, householdId ?? null, householdOf);
+    const filterMembers = (members: any[]) => (members || []).forEach((m: any) => {
+      m.vineyard_accounts = (m.vineyard_accounts || []).filter(visibleToViewer);
+      m.storehouses = (m.storehouses || []).filter(visibleToViewer);
+    });
+    if (Array.isArray(hierarchy?.households)) hierarchy.households.forEach((hh: any) => filterMembers(hh.members));
+    if (Array.isArray(hierarchy?.members)) filterMembers(hierarchy.members);
+    householdHoldingTank = householdHoldingTank.filter(visibleToViewer);
+    familyHoldingTank = familyHoldingTank.filter(visibleToViewer);
+
     // Fetch corporations via shareholders for all household members + self
     let corporations: any[] = [];
     const allMemberIds = [contactId, ...householdMembers.map((m: any) => m.id)];
@@ -531,7 +548,7 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
           : Promise.resolve({ data: [] }),
       ]);
       const seen = new Set<string>();
-      insurance_policies = [...(insByContact.data || []), ...(insByCorp.data || [])].filter((p: any) => {
+      insurance_policies = [...(insByContact.data || []), ...(insByCorp.data || [])].filter(visibleToViewer).filter((p: any) => {
         if (seen.has(p.id)) return false;
         seen.add(p.id);
         return true;
