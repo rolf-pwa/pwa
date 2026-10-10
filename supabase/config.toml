@@ -175,3 +175,6 @@ verify_jwt = false
 
 [functions.georgia2-analyze]
 verify_jwt = false
+
+[functions.veem-webhook]
+verify_jwt = false

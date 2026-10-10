@@ -4,7 +4,9 @@
  * touching components.
  */
 import { supabase } from "@/shared/integrations/supabase/client";
-import type { IInvoiceAgentProvider, InvoiceDraftResult } from "../types";
+import type { IInvoiceAgentProvider, InvoiceDraftResult, VeemPayerState } from "../types";
+
+const serviceFor = (paymentMethod?: string | null) => (paymentMethod === "veem" ? "veem-service" : "square-service");
 
 async function invoke<T>(fn: string, body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke(fn, { body });
@@ -34,17 +36,29 @@ export const edgeInvoiceAgent: IInvoiceAgentProvider = {
     return data;
   },
 
-  async sendInvoice(invoiceId: string) {
+  async sendInvoice(invoiceId: string, paymentMethod?: string | null) {
     const data = await invoke<{ ok: boolean; error?: string; publicUrl?: string; status?: string }>(
-      "square-service",
+      serviceFor(paymentMethod),
       { action: "sendInvoice", invoiceId },
     );
-    if (!data?.ok) throw new Error(data?.error || "Square rejected this invoice.");
+    if (!data?.ok) throw new Error(data?.error || (paymentMethod === "veem" ? "Veem rejected this invoice." : "Square rejected this invoice."));
     return data;
   },
 
-  async refreshInvoice(invoiceId: string) {
-    const data = await invoke<{ ok: boolean; error?: string; status?: string }>("square-service", {
+  async getVeemPayer(contactId: string) {
+    const data = await invoke<VeemPayerState & { error?: string }>("veem-service", { action: "getPayer", contactId });
+    if (!data?.ok) throw new Error(data?.error || "Could not read the client's Veem details.");
+    return data;
+  },
+
+  async saveVeemPayer(contactId: string, details: Record<string, string>) {
+    const data = await invoke<VeemPayerState & { error?: string }>("veem-service", { action: "savePayer", contactId, details });
+    if (!data?.ok) throw new Error(data?.error || "Could not save the client's Veem details.");
+    return data;
+  },
+
+  async refreshInvoice(invoiceId: string, paymentMethod?: string | null) {
+    const data = await invoke<{ ok: boolean; error?: string; status?: string }>(serviceFor(paymentMethod), {
       action: "refreshInvoice",
       invoiceId,
     });
@@ -52,8 +66,8 @@ export const edgeInvoiceAgent: IInvoiceAgentProvider = {
     return data;
   },
 
-  async cancelInvoice(invoiceId: string) {
-    const data = await invoke<{ ok: boolean; error?: string }>("square-service", {
+  async cancelInvoice(invoiceId: string, paymentMethod?: string | null) {
+    const data = await invoke<{ ok: boolean; error?: string }>(serviceFor(paymentMethod), {
       action: "cancelInvoice",
       invoiceId,
     });
@@ -81,7 +95,12 @@ export const edgeInvoiceAgent: IInvoiceAgentProvider = {
   },
 
 
-  async deleteInvoice(invoiceId: string) {
+  async deleteInvoice(invoiceId: string, paymentMethod?: string | null, status?: string | null) {
+    // A Veem invoice already sent is canceled in Veem first, so the payer can no longer claim it; then our records go.
+    if (paymentMethod === "veem" && status === "sent") {
+      const c = await invoke<{ ok: boolean; error?: string }>("veem-service", { action: "cancelInvoice", invoiceId });
+      if (!c?.ok) throw new Error(c?.error || "Could not cancel this invoice in Veem.");
+    }
     const data = await invoke<{ ok: boolean; error?: string }>("square-service", {
       action: "deleteInvoice",
       invoiceId,
