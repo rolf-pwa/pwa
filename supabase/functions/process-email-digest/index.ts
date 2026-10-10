@@ -8,7 +8,7 @@ import { mintMagicLink, plainPortalUrl } from "../_shared/portal-magic-link.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-digest-cron-secret",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-digest-cron-secret, x-region",
 };
 
 const CRON_SECRET = Deno.env.get("DIGEST_CRON_SECRET");
@@ -50,7 +50,7 @@ async function sendViaGmail(to: string, subject: string, text: string) {
   try {
     const res = await fetch(`${supabaseUrl}/functions/v1/send-admin-email`, {
       method: "POST",
-      headers: {
+      headers: { "x-region": "ca-central-1",
         "Content-Type": "application/json",
         Authorization: `Bearer ${serviceKey}`,
         "x-internal-secret": Deno.env.get("INTERNAL_FUNCTION_SECRET") ?? "",

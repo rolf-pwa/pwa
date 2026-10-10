@@ -16,7 +16,7 @@ function getCorsHeaders(req: Request) {
   return {
     "Access-Control-Allow-Origin": allowed,
     "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type, x-pro-session",
+      "authorization, x-client-info, apikey, content-type, x-pro-session, x-region",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
   };
 }
@@ -29,7 +29,7 @@ async function notifyViaGmail(opts: { to: string; subject: string; text: string 
   try {
     const res = await fetch(`${SUPABASE_URL}/functions/v1/send-admin-email`, {
       method: "POST",
-      headers: {
+      headers: { "x-region": "ca-central-1",
         "Content-Type": "application/json",
         Authorization: `Bearer ${SERVICE_KEY}`,
         "x-internal-secret": Deno.env.get("INTERNAL_FUNCTION_SECRET") ?? "",

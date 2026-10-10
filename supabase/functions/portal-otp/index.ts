@@ -16,7 +16,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 async function fetchFullPortalData(token: string): Promise<Record<string, unknown>> {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/portal-validate`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "x-region": "ca-central-1", "Content-Type": "application/json" },
     body: JSON.stringify({ token }),
   });
   const data = await res.json();
@@ -53,7 +53,7 @@ function getCorsHeaders(req: Request) {
   } catch { /* ignore */ }
   return {
     "Access-Control-Allow-Origin": allowed,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-region",
     "Vary": "Origin",
   };
 }
@@ -240,7 +240,7 @@ serve(async (req) => {
             const text = `Hi ${contact.first_name || "there"},\n\nYour one-time sign-in code is:\n\n${otp}\n\nThis code expires in 10 minutes. If you didn't request it, you can ignore this email.\n\nThank you,\nProsperWise Team`;
             const gmRes = await fetch(`${supabaseUrl}/functions/v1/send-admin-email`, {
               method: "POST",
-              headers: {
+              headers: { "x-region": "ca-central-1",
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${serviceKey}`,
                 "x-internal-secret": Deno.env.get("INTERNAL_FUNCTION_SECRET") ?? "",

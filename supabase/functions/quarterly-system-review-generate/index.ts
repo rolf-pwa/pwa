@@ -40,7 +40,7 @@ function getCorsHeaders(req: Request) {
   const origin = req.headers.get("Origin") || "";
   return {
     "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0],
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-region",
   };
 }
 
@@ -202,7 +202,7 @@ async function kickOffVaultScan(
       const timer = setTimeout(() => ctrl.abort(), SCAN_TIMEOUT_MS);
       const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/vault-statement-scan`, {
         method: "POST", signal: ctrl.signal,
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}`, apikey: Deno.env.get("SUPABASE_ANON_KEY") ?? "" },
+        headers: { "x-region": "ca-central-1", "Content-Type": "application/json", Authorization: `Bearer ${jwt}`, apikey: Deno.env.get("SUPABASE_ANON_KEY") ?? "" },
         body: JSON.stringify({ householdId, skipReviewed: true }),
       });
       clearTimeout(timer);

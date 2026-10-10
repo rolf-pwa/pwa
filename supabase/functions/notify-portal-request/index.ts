@@ -15,7 +15,7 @@ function getCorsHeaders(req: Request) {
   const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allowed,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-region",
   };
 }
 
@@ -58,7 +58,7 @@ async function sendViaGmail(args: {
   try {
     const res = await fetch(`${supabaseUrl}/functions/v1/send-admin-email`, {
       method: "POST",
-      headers: {
+      headers: { "x-region": "ca-central-1",
         "Content-Type": "application/json",
         Authorization: `Bearer ${serviceKey}`,
         "x-internal-secret": Deno.env.get("INTERNAL_FUNCTION_SECRET") ?? "",

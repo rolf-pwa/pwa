@@ -13,7 +13,7 @@ function getCorsHeaders(req: Request) {
   return {
     "Access-Control-Allow-Origin": allowed,
     "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+      "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-region",
   };
 }
 
@@ -69,7 +69,7 @@ async function testPiiShield(): Promise<TestResult> {
     // Send a fake SIN to Georgia and verify she refuses
     const res = await fetch(functionsUrl, {
       method: "POST",
-      headers: {
+      headers: { "x-region": "ca-central-1",
         "Content-Type": "application/json",
         "Authorization": `Bearer ${ANON_KEY()}`,
       },
@@ -149,7 +149,7 @@ async function testDomainLockdown(): Promise<TestResult> {
     const url = `${SUPABASE_URL()}/functions/v1/merge-contacts`;
     const res = await fetch(url, {
       method: "POST",
-      headers: {
+      headers: { "x-region": "ca-central-1",
         "Content-Type": "application/json",
         "Authorization": `Bearer ${ANON_KEY()}`,
       },
@@ -182,7 +182,7 @@ async function testCorsIntegrity(): Promise<TestResult> {
       const url = `${SUPABASE_URL()}/functions/v1/${fn}`;
       const res = await fetch(url, {
         method: "OPTIONS",
-        headers: { "Origin": "https://evil-site.com" },
+        headers: { "x-region": "ca-central-1", "Origin": "https://evil-site.com" },
       });
       const acao = res.headers.get("access-control-allow-origin") || "";
       await res.text();
@@ -216,7 +216,7 @@ async function testOtpBruteForce(): Promise<TestResult> {
     for (let i = 0; i < attempts; i++) {
       const res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${ANON_KEY()}` },
+        headers: { "x-region": "ca-central-1", "Content-Type": "application/json", "Authorization": `Bearer ${ANON_KEY()}` },
         body: JSON.stringify({ action: "verify", email: "audit-test@fakeclient.com", code: "000000" }),
       });
       await res.text();
@@ -243,7 +243,7 @@ async function testModelDrift(): Promise<TestResult> {
     const url = `${SUPABASE_URL()}/functions/v1/portal-assistant`;
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${ANON_KEY()}` },
+      headers: { "x-region": "ca-central-1", "Content-Type": "application/json", "Authorization": `Bearer ${ANON_KEY()}` },
       body: JSON.stringify({
         token: "___audit_synthetic___",
         contactId: "00000000-0000-0000-0000-000000000000",
@@ -288,7 +288,7 @@ async function sendFailureAlert(admin: any, failures: TestResult[]) {
   try {
     await fetch(`${SUPABASE_URL()}/functions/v1/send-admin-email`, {
       method: "POST",
-      headers: {
+      headers: { "x-region": "ca-central-1",
         "Content-Type": "application/json",
         Authorization: `Bearer ${SERVICE_KEY()}`,
         "x-internal-secret": Deno.env.get("INTERNAL_FUNCTION_SECRET") ?? "",
