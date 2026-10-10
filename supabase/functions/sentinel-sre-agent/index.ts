@@ -85,7 +85,7 @@ async function replay(row: HealthLogRow): Promise<boolean> {
   try {
     const res = await fetch(`${SUPABASE_URL}/functions/v1/${row.function_name}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_KEY}` },
+      headers: { "x-region": "ca-central-1", "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_KEY}` },
       body: JSON.stringify(row.input_payload ?? {}),
     });
     await res.body?.cancel();

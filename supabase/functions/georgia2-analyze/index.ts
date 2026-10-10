@@ -29,7 +29,7 @@ function getCorsHeaders(req: Request) {
     !origin || allowedSuffixes.some((s) => origin.endsWith(s) || origin.includes(s)) ? origin || "*" : "*";
   return {
     "Access-Control-Allow-Origin": allow,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-region",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     Vary: "Origin",
   };

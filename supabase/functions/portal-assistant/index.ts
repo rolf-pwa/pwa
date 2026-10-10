@@ -16,7 +16,7 @@ function getCorsHeaders(req: Request) {
   return {
     "Access-Control-Allow-Origin": allowed,
     "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+      "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-region",
   };
 }
 
@@ -176,7 +176,7 @@ serve(async (req) => {
       EdgeRuntime.waitUntil(
         fetch(`${supabaseUrl}/functions/v1/notify-portal-request`, {
           method: "POST",
-          headers: {
+          headers: { "x-region": "ca-central-1",
             "Content-Type": "application/json",
             "Authorization": `Bearer ${serviceKey}`,
           },
