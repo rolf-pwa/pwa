@@ -132,6 +132,13 @@ Category-level summary (not exhaustive column list) — see `supabase/migrations
 - `merge-contacts` removes duplicate records after transferring their data to the surviving record.
 - **No client-facing "delete my data" / data export mechanism exists in the portal today.**
 
+### Vault audit log integrity (added 2026-10-10)
+
+- `vault_audit_log` is **append-only and hash-chained** (migration `20261014120000`). UPDATE, DELETE and TRUNCATE are refused by privileges (revoked from `service_role`, `authenticated`, `anon`, `PUBLIC`) and by triggers; only the database owner could disable the triggers.
+- Each row carries `seq` (gapless), `prev_hash` and `row_hash` = SHA-256 over the previous hash and the row's contents. `select * from verify_vault_audit_chain()` recomputes the chain and reports an altered row, a missing row (sequence gap), or a broken link. Tested on the sandbox by editing and deleting rows with the triggers disabled; both were detected.
+- What is recorded (`vault-service` `audit()`): household, actor (id and email for staff and collaborators, label for clients/links/professionals), IP, user agent, action, the file's name at the time, and details: rename old/new name, delete (name, trashed), upload (size, MIME type, SHA-256 of the stored bytes, parent folder), share and grant events. A failed audit write is retried once, then logged to `system_health_logs` as `VAULT_AUDIT_WRITE_FAILED`.
+- **Limits:** history before this change has `household_id` set for 327 of 1,210 rows (folder-listing events could not be tied to a household and the chain is now sealed). Edits made directly in Google Drive, outside the app, are not captured. The owner of the database could disable the triggers and rewrite the chain from the first altered row, which `verify_vault_audit_chain()` would flag only if a trusted copy of a recent `row_hash` is kept elsewhere.
+
 ## 15. Data residency
 
 - **Confirmed 2026-08-10 via Supabase dashboard:** the production database (`rpxevcovasrgmrzkpknu`) runs in `ca-central-1` (Canada Central), status healthy. Not declared in repository code/config (`supabase/config.toml` only declares the project ID) — this is a platform-level (dashboard) setting, confirmed directly rather than inferred from code.
