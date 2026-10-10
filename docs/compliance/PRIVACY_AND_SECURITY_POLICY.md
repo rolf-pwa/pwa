@@ -106,6 +106,7 @@ We keep the core of your information in Canada:
 
 - **Your records** (contact details, household and account information, and our working notes) are stored in our production database, which runs in the **Canada Central** data center region.
 - **AI-assisted drafting and document reading** is processed in Google Cloud's **Montréal** region. Our AI requests are pinned to that region and are not sent to a global endpoint.
+- **Our application servers**, which handle your requests and run our AI features, are pinned to the **Canada Central** region, alongside our database.
 
 Some of the providers we rely on operate outside Canada or do not guarantee Canadian-only processing, so we do not claim that every piece of information stays in Canada. In particular:
 
@@ -113,6 +114,7 @@ Some of the providers we rely on operate outside Canada or do not guarantee Cana
 - Our **telephony/SMS provider** (calls, recordings and text messages) uses infrastructure in the United States.
 - **Payment processing** (Square) is operated by a global provider; we have not committed it to Canadian-only processing.
 - Our application is delivered through a global content network, which carries pages and files you request but is not where your records are kept.
+- Notifications that other services send to us (for example payment and telephone provider updates) and email open or click tracking are handled at the location nearest the sender, and are then recorded in our Canadian database.
 
 Information handled by a provider outside Canada may be subject to the laws of the country where it is processed, including lawful access by that country's authorities. We limit what each provider receives to what it needs for its function, and we apply the safeguards described above, including filtering of sensitive identifiers before anything is sent to an outside service. If you have questions about where a particular kind of information is handled, please ask your advisor.
 
