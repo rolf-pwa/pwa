@@ -25,6 +25,7 @@ import { planBulkStatement, normalizeContract, isIsoDate, type AccountHit, type 
 import { autoFileBlocker, isSignedCopy, uniqueFilename } from "../_shared/vault-shoebox-naming.ts";
 import { driveDownloadFile, matchVaultCategoryFolder } from "../_shared/vault-provisioning.ts";
 import { logActionEvent } from "../_shared/action-brain.ts";
+import { logSystemHealth } from "../_shared/system-health.ts";
 
 const APP_BASE_URL = "https://app.prosperwise.ca";
 
@@ -585,6 +586,9 @@ async function logShoeboxDecision(admin: any, userId: string | null | undefined,
   }
 }
 
+// Append-only, hash-chained log (see migration 20261014120000). The database refuses edits and deletes; every
+// row is tied to the one before it. We fill in everything a regulator would ask for: which household, who
+// (id and email for staff), and what the document was called at the time.
 async function audit(
   actor: Actor | null,
   action: string,
@@ -594,8 +598,44 @@ async function audit(
   req: Request,
   metadata: Record<string, unknown> = {},
 ) {
-  await supabaseAdmin.from("vault_audit_log").insert({
+  let householdId: string | null = typeof metadata.household_id === "string" ? metadata.household_id : null;
+  let name = driveName;
+  try {
+    if (!householdId && (actor?.kind === "client" || actor?.kind === "share_link")) householdId = actor.householdId ?? null;
+    if (driveId && (!householdId || !name)) {
+      const { data: f } = await supabaseAdmin.from("vault_files").select("household_id, name, ancestor_folder_ids").eq("drive_id", driveId).maybeSingle();
+      if (f) {
+        name = name ?? f.name ?? null;
+        householdId = householdId ?? f.household_id ?? null;
+        const chain = [driveId, ...((f.ancestor_folder_ids as string[] | null) ?? [])];
+        if (!householdId && chain.length) {
+          const { data: h } = await supabaseAdmin.from("households").select("id").in("vault_root_folder_id", chain).limit(1).maybeSingle();
+          householdId = h?.id ?? null;
+        }
+      }
+    }
+    if (!householdId && driveId) {
+      const { data: h } = await supabaseAdmin.from("households").select("id").eq("vault_root_folder_id", driveId).maybeSingle();
+      householdId = h?.id ?? null;
+    }
+    if (!householdId && contactId) {
+      const { data: c } = await supabaseAdmin.from("contacts").select("household_id").eq("id", contactId).maybeSingle();
+      householdId = c?.household_id ?? null;
+    }
+  } catch (e) {
+    console.error("[vault-service] audit context lookup failed:", e instanceof Error ? e.message : String(e));
+  }
+  let actorEmail: string | null = null;
+  if (actor?.kind === "staff") {
+    const { data: p } = await supabaseAdmin.from("profiles").select("email").eq("user_id", actor.userId).maybeSingle();
+    actorEmail = p?.email ?? null;
+  } else if (actor?.kind === "collaborator") {
+    const { data: c } = await supabaseAdmin.from("vault_collaborators").select("email").eq("id", actor.collaboratorId).maybeSingle();
+    actorEmail = c?.email ?? null;
+  }
+  const row = {
     contact_id: contactId,
+    household_id: householdId,
     actor_type: actor?.kind ?? "anonymous",
     actor_id:
       actor?.kind === "staff"
@@ -615,12 +655,25 @@ async function audit(
           : actor?.kind === "professional"
             ? `professional:${actor.professionalId}`
             : actor?.kind ?? "anonymous",
+    actor_email: actorEmail,
     action,
     drive_id: driveId,
-    drive_name: driveName,
+    drive_name: name,
     ip: req.headers.get("x-forwarded-for"),
     user_agent: req.headers.get("user-agent"),
     metadata,
+  };
+  // The record must not vanish silently: retry once, then make the failure visible in system health.
+  let lastError: string | null = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { error } = await supabaseAdmin.from("vault_audit_log").insert(row);
+    if (!error) return;
+    lastError = error.message;
+  }
+  console.error(`[vault-service] AUDIT WRITE FAILED for ${action}: ${lastError}`);
+  await logSystemHealth(supabaseAdmin as any, {
+    function_name: "vault-service", severity: "ERROR", error_code: "VAULT_AUDIT_WRITE_FAILED", household_id: householdId,
+    error_message: `audit write failed for "${action}": ${lastError}`.slice(0, 900),
   });
 }
 
@@ -1670,7 +1723,9 @@ serve(async (req) => {
           .update({ use_count: (cur?.use_count ?? 0) + 1, last_accessed_at: new Date().toISOString() })
           .eq("id", actor.linkId);
       }
-      await audit(actor, "upload", uploaderContactId ?? null, created.id, fileName, req, { uploader: actor.kind });
+      // A fingerprint of exactly what was stored, so the file's content can later be proven unchanged.
+      const sha256 = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", binary))).map((b) => b.toString(16).padStart(2, "0")).join("");
+      await audit(actor, "upload", uploaderContactId ?? null, created.id, fileName, req, { uploader: actor.kind, size_bytes: binary.length, mime_type: mimeType, sha256, parent_folder_id: folderId });
 
       // Notify staff whenever a client drops a file into their own Shoebox
       // (not every vault upload -- staff already know when they upload
@@ -1946,6 +2001,8 @@ serve(async (req) => {
         await audit(actor, "firewall_block", null, driveId, newName, req, { reason: access.reason, op: "rename" });
         return new Response(JSON.stringify({ error: "forbidden", reason: access.reason }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
       }
+      const before = await fetch(`https://www.googleapis.com/drive/v3/files/${driveId}?fields=name,mimeType`, { headers: { Authorization: `Bearer ${accessToken}` } });
+      const beforeMeta = before.ok ? await before.json() : {};
       const r = await fetch(`https://www.googleapis.com/drive/v3/files/${driveId}`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
@@ -1953,7 +2010,7 @@ serve(async (req) => {
       });
       if (!r.ok) throw new Error(`rename_failed: ${await r.text()}`);
       await supabaseAdmin.from("vault_files").update({ name: newName }).eq("drive_id", driveId);
-      await audit(actor, "rename", null, driveId, newName, req);
+      await audit(actor, "rename", null, driveId, newName, req, { old_name: beforeMeta.name ?? null, new_name: newName, mime_type: beforeMeta.mimeType ?? null });
       return new Response(JSON.stringify({ ok: true }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
 
@@ -1967,13 +2024,15 @@ serve(async (req) => {
         return new Response(JSON.stringify({ error: "forbidden", reason: access.reason }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
       }
       // Trash (recoverable) instead of hard delete
+      const before = await fetch(`https://www.googleapis.com/drive/v3/files/${driveId}?fields=name,mimeType`, { headers: { Authorization: `Bearer ${accessToken}` } });
+      const beforeMeta = before.ok ? await before.json() : {};
       const r = await fetch(`https://www.googleapis.com/drive/v3/files/${driveId}`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
         body: JSON.stringify({ trashed: true }),
       });
       if (!r.ok) throw new Error(`delete_failed: ${await r.text()}`);
-      await audit(actor, "delete", null, driveId, null, req);
+      await audit(actor, "delete", null, driveId, beforeMeta.name ?? null, req, { trashed: true, mime_type: beforeMeta.mimeType ?? null });
       return new Response(JSON.stringify({ ok: true }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
 
@@ -1987,7 +2046,7 @@ serve(async (req) => {
         return new Response(JSON.stringify({ error: "forbidden", reason: access.reason }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
       }
       const created = await driveCreateFolder(name, parentFolderId, accessToken);
-      await audit(actor, "create_folder", null, created.id, name, req);
+      await audit(actor, "create_folder", null, created.id, name, req, { parent_folder_id: parentFolderId });
       return new Response(JSON.stringify({ ok: true, folderId: created.id, name: created.name }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
 
