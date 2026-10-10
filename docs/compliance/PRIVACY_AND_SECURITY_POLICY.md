@@ -109,7 +109,7 @@ We keep the core of your information in Canada:
 
 Some of the providers we rely on operate outside Canada or do not guarantee Canadian-only processing, so we do not claim that every piece of information stays in Canada. In particular:
 
-- Our **documents, email and calendar** (Google Workspace) are stored in Google's **United States** data region. Google offers only a United States or European region for Workspace, not a Canadian one, so these are not stored in Canada.
+- Our **documents, email and calendar** (Google Workspace) are stored at rest in Google's **United States** data region. Google offers only a United States or European region for Workspace, not a Canadian one, so these are not stored in Canada. When a document is read by our AI features, that processing happens in Google Cloud's Montréal region (see above).
 - Our **telephony/SMS provider** (calls, recordings and text messages) uses infrastructure in the United States.
 - **Payment processing** (Square) is operated by a global provider; we have not committed it to Canadian-only processing.
 - Our application is delivered through a global content network, which carries pages and files you request but is not where your records are kept.
