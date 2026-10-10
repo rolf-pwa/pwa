@@ -87,7 +87,7 @@ We are committed to protecting your personal information in accordance with PIPE
 
 We work with the following categories of service providers, each of whom processes a limited scope of information necessary for their function:
 
-- **Google Workspace** — email, calendar, document storage, and spreadsheet tools used by staff in serving your account (data region set to Canada)
+- **Google Workspace** — email, calendar, document storage, and spreadsheet tools used by staff in serving your account (stored in Google's United States data region; Google does not offer a Canadian region for Workspace)
 - **Google Cloud (Vertex AI)** — used to draft certain internal planning documents (such as a household's Sovereignty Survey and governance materials) from data already on file, processed in Google's Montréal region. A staff member reviews and can edit anything AI-assisted before it's used or shared with you.
 - **Supabase** — our core database and application backend, where your records are stored (Canada Central region)
 - **Square** — payment processing for invoicing (Square handles card details directly; ProsperWise's own systems do not store card numbers)
@@ -105,11 +105,11 @@ ProsperWise retains client records for **7 years from the end of the advisory re
 We keep the core of your information in Canada:
 
 - **Your records** (contact details, household and account information, and our working notes) are stored in our production database, which runs in the **Canada Central** data center region.
-- **Documents, email and calendar** (Google Workspace) are stored in Canada: our Workspace data region is set to Canada.
 - **AI-assisted drafting and document reading** is processed in Google Cloud's **Montréal** region. Our AI requests are pinned to that region and are not sent to a global endpoint.
 
 Some of the providers we rely on operate outside Canada or do not guarantee Canadian-only processing, so we do not claim that every piece of information stays in Canada. In particular:
 
+- Our **documents, email and calendar** (Google Workspace) are stored at rest in Google's **United States** data region. Google offers only a United States or European region for Workspace, not a Canadian one, so these are not stored in Canada. When a document is read by our AI features, that processing happens in Google Cloud's Montréal region (see above).
 - Our **telephony/SMS provider** (calls, recordings and text messages) uses infrastructure in the United States.
 - **Payment processing** (Square) is operated by a global provider; we have not committed it to Canadian-only processing.
 - Our application is delivered through a global content network, which carries pages and files you request but is not where your records are kept.

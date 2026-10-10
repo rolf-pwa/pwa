@@ -136,6 +136,7 @@ Category-level summary (not exhaustive column list) — see `supabase/migrations
 
 - **Confirmed 2026-08-10 via Supabase dashboard:** the production database (`rpxevcovasrgmrzkpknu`) runs in `ca-central-1` (Canada Central), status healthy. Not declared in repository code/config (`supabase/config.toml` only declares the project ID) — this is a platform-level (dashboard) setting, confirmed directly rather than inferred from code.
 - One legacy cron migration references a different, older Supabase project ref (`skcgdoiestzqxsooaxur`) in a `net.http_post` call — this is a stale reference from before the Lovable-to-self-owned-infrastructure migration and should be reconciled or removed.
+- **Google Workspace (Drive/Vault documents, Gmail, Calendar): data region is the United States** — confirmed in the Google Admin console by Rolf, 2026-10-09. Google offers only US, EU or "No preference" for Workspace data regions (support.google.com/a/answer/7630496); Canada is not an option. The Vault (Google Drive) therefore does not meet a Canadian-residency commitment. The privacy policy previously said the Workspace region was Canada (commit 401cf12, 2026-10-03) and was corrected 2026-10-09. Options to restore Canadian residency for client documents: move the Vault to Canadian object storage (Google Cloud Storage `northamerica-northeast1` or Supabase Storage `ca-central-1`).
 - Firebase Hosting (serving the frontend) does not declare a region in `firebase.json`; Firebase Hosting's CDN is global by default.
 
 ## 16. Backups
