@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { InvoiceDialog } from "../components/InvoiceDialog";
+import { VeemPayerDialog } from "../components/VeemPayerDialog";
 import { formatMoney, INVOICE_STATUS_COLORS, INVOICE_STATUS_LABELS } from "../lib/money";
 
 interface InvoiceRow {
@@ -54,6 +55,7 @@ export default function Invoices() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [squareReady, setSquareReady] = useState<boolean | null>(null);
+  const [veemFor, setVeemFor] = useState<InvoiceRow | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -121,8 +123,18 @@ export default function Invoices() {
       if (invoice.payment_method === "e_transfer") {
         await getInvoiceAgent().markSentManually(invoice.id);
         toast.success("Invoice issued — send your e-Transfer request to the client.");
+      } else if (invoice.payment_method === "veem") {
+        // Veem needs details about the payer; ask for any that are missing before sending.
+        const payer = await getInvoiceAgent().getVeemPayer(invoice.contact.id);
+        if (payer.missing.length) {
+          setVeemFor(invoice);
+          return;
+        }
+        const result = await getInvoiceAgent().sendInvoice(invoice.id, "veem");
+        toast.success("Invoice sent through Veem — the client has an email with a link to pay.");
+        if (result.publicUrl) window.open(result.publicUrl, "_blank", "noopener");
       } else {
-        const result = await getInvoiceAgent().sendInvoice(invoice.id);
+        const result = await getInvoiceAgent().sendInvoice(invoice.id, invoice.payment_method);
         toast.success("Invoice sent through Square");
         if (result.publicUrl) window.open(result.publicUrl, "_blank", "noopener");
       }
@@ -152,7 +164,7 @@ export default function Invoices() {
   const refresh = async (invoice: InvoiceRow) => {
     setBusyId(invoice.id);
     try {
-      await getInvoiceAgent().refreshInvoice(invoice.id);
+      await getInvoiceAgent().refreshInvoice(invoice.id, invoice.payment_method);
       toast.success("Status refreshed");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Refresh failed");
@@ -166,7 +178,7 @@ export default function Invoices() {
     if (!window.confirm("Cancel this invoice? The client will no longer be able to pay it.")) return;
     setBusyId(invoice.id);
     try {
-      await getInvoiceAgent().cancelInvoice(invoice.id);
+      await getInvoiceAgent().cancelInvoice(invoice.id, invoice.payment_method);
       toast.success("Invoice canceled");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Cancel failed");
@@ -179,13 +191,13 @@ export default function Invoices() {
   const remove = async (invoice: InvoiceRow) => {
     if (
       !window.confirm(
-        "Delete this invoice permanently? It will be canceled in Square and removed from your records. This can't be undone.",
+        "Delete this invoice permanently? It will be canceled with the payment platform and removed from your records. This can't be undone.",
       )
     )
       return;
     setBusyId(invoice.id);
     try {
-      await getInvoiceAgent().deleteInvoice(invoice.id);
+      await getInvoiceAgent().deleteInvoice(invoice.id, invoice.payment_method, invoice.status);
       toast.success("Invoice deleted");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Delete failed");
@@ -328,6 +340,7 @@ export default function Invoices() {
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {inv.invoice_number || inv.id.slice(0, 8)}
+                        {inv.payment_method === "veem" && <Badge variant="outline" className="ml-2 text-[10px]">Veem</Badge>}
                         <div className="text-xs">{inv.issue_date}</div>
                       </TableCell>
                       <TableCell>
@@ -430,7 +443,17 @@ export default function Invoices() {
         </Card>
       </div>
 
-      <InvoiceDialog
+      <VeemPayerDialog
+          contactId={veemFor?.contact?.id ?? null}
+          open={!!veemFor}
+          onClose={() => setVeemFor(null)}
+          onSaved={() => {
+            const inv = veemFor;
+            setVeemFor(null);
+            if (inv) send(inv);
+          }}
+        />
+        <InvoiceDialog
         key={activeId || "new"}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
