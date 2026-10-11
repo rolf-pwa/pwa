@@ -1037,11 +1037,13 @@ function DrawersPanel({ householdId }: { householdId: string }) {
   );
 }
 
-export function VaultView({ forcedHouseholdId, embedded = false, sidebarTools }: { forcedHouseholdId?: string; embedded?: boolean; sidebarTools?: React.ReactNode }) {
+export function VaultView({ forcedHouseholdId, familyTreeId, embedded = false, sidebarTools }: { forcedHouseholdId?: string; /** Show a whole family's Drive tree (Family Docs and every Household Vault). */ familyTreeId?: string; embedded?: boolean; sidebarTools?: React.ReactNode }) {
   const params = useParams<{ householdId?: string; contactId?: string; kind?: string; id?: string }>();
   const drawerKind = params.kind === "family" || params.kind === "personal" ? params.kind : null;
   const drawerId = drawerKind ? params.id ?? null : null;
-  const [drawerInfo, setDrawerInfo] = useState<{ title: string; subtitle: string; backTo: string | null; scope: Record<string, unknown> } | null>(null);
+  const [drawerInfo, setDrawerInfo] = useState<{ title: string; subtitle: string; backTo: string | null; scope: Record<string, unknown> | null; tree?: boolean } | null>(null);
+  const [treeHouseholds, setTreeHouseholds] = useState<Array<{ id: string; label: string }>>([]);
+  const [treeFamilyDocsId, setTreeFamilyDocsId] = useState<string | null>(null);
   const [searchParams] = useSearchParams();
   const deepLinkProfessionalId = searchParams.get("shareProfessionalId");
   const [householdId, setHouseholdId] = useState<string | null>(null);
@@ -1062,6 +1064,19 @@ export function VaultView({ forcedHouseholdId, embedded = false, sidebarTools }:
   // Resolve household: from URL, or from a contactId (legacy URL → redirect)
   useEffect(() => {
     (async () => {
+      // A whole family's tree (Family Docs and every Household Vault), shown on the Family page.
+      if (familyTreeId) {
+        const { data: fam } = await supabase.from("families").select("id, name").eq("id", familyTreeId).maybeSingle();
+        const { data: hhs } = await supabase.from("households").select("id, label").eq("family_id", familyTreeId).not("vault_root_folder_id", "is", null).order("label");
+        setTreeHouseholds((hhs ?? []) as any);
+        setDrawerInfo({ title: "Family Vault", subtitle: fam?.name ?? "", backTo: null, scope: null, tree: true });
+        try {
+          const nav = await callVault("getFamilyNav", { familyId: familyTreeId });
+          setTreeFamilyDocsId(nav.familyDocsId ?? null);
+          if (nav.navRootId) { setRootId(nav.navRootId); setInput(nav.navRootId); }
+        } catch { /* shows the not-created message */ }
+        return;
+      }
       // A Family Vault or personal drawer, opened from /vault/drawer/:kind/:id.
       if (drawerKind && drawerId) {
         if (drawerKind === "family") {
@@ -1125,7 +1140,7 @@ export function VaultView({ forcedHouseholdId, embedded = false, sidebarTools }:
         if (driveUrl) setInput(driveUrl);
       }
     })();
-  }, [params.householdId, params.contactId, params.kind, params.id, forcedHouseholdId]);
+  }, [params.householdId, params.contactId, params.kind, params.id, forcedHouseholdId, familyTreeId]);
 
   // Label this page's requests with its drawer for the audit log (a label only; the server decides access).
   useEffect(() => {
@@ -1212,7 +1227,7 @@ export function VaultView({ forcedHouseholdId, embedded = false, sidebarTools }:
   }, [preview]);
 
   const heading = drawerInfo
-    ? drawerInfo.subtitle
+    ? drawerInfo.tree ? `${drawerInfo.subtitle} Family Vault` : drawerInfo.subtitle
     : familyName
       ? `${familyName}${householdLabel && householdLabel !== "Primary" ? ` — ${householdLabel}` : ""}`
       : "Household Vault";
@@ -1236,8 +1251,8 @@ export function VaultView({ forcedHouseholdId, embedded = false, sidebarTools }:
       {!rootId && drawerInfo && (
         <Card>
           <CardContent className="space-y-2 pt-6 text-sm text-muted-foreground">
-            <p>This {drawerInfo.title.toLowerCase()} has not been created yet.</p>
-            <p>Create it from the household's Vault page, in the Drawers panel.</p>
+            <p>This {drawerInfo.title.toLowerCase()} has not been created in Drive yet.</p>
+            <p>Create it from a household's Vault page: Drawers, then Complete structure.</p>
             {drawerInfo.backTo && <Button asChild variant="outline" size="sm"><Link to={drawerInfo.backTo}>Back to the household Vault</Link></Button>}
           </CardContent>
         </Card>
@@ -1295,9 +1310,23 @@ export function VaultView({ forcedHouseholdId, embedded = false, sidebarTools }:
                 />
               </CardContent>
             </Card>
-            {drawerInfo && (
+            {drawerInfo?.tree && (
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Open:</span>
+                  {treeFamilyDocsId && <Button asChild size="sm" variant="outline" className="h-7 text-xs"><Link to={`/vault/drawer/family/${familyTreeId}`}>Family Docs</Link></Button>}
+                  {treeHouseholds.map((h) => (
+                    <Button key={h.id} asChild size="sm" variant="outline" className="h-7 text-xs"><Link to={`/vault/household/${h.id}`}>{h.label} Vault</Link></Button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  The whole Family Vault as it is in Drive. Browse, rename and add here; the sharing and client-visibility tools are on each household's Vault page. Every view and change is recorded in the Vault audit log.
+                </p>
+              </div>
+            )}
+            {drawerInfo && !drawerInfo.tree && (
               <p className="text-xs text-muted-foreground">
-                {drawerInfo.scope.kind === "personal"
+                {drawerInfo.scope?.kind === "personal"
                   ? "A personal drawer: only its owner and ProsperWise staff can open it. It is not part of the household Vault and is never fed to the Second Brain."
                   : "The Family Vault: shared by the family by role (head of family manages, household heads upload, spouses and beneficiaries view, minors none unless named). It is separate from every household Vault."}
                 {" "}Every view and change is recorded in the Vault audit log.

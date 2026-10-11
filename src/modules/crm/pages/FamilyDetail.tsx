@@ -7,6 +7,7 @@ import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import { PageBreadcrumbs } from "@/shared/components/PageBreadcrumbs";
+import { VaultView } from "@/modules/crm/pages/Vault";
 import { toast } from "sonner";
 import {
   SERVICE_TIER_LABEL,
@@ -22,6 +23,7 @@ import {
 } from "@/shared/components/ui/collapsible";
 import {
   TreesIcon,
+  ShieldCheck,
   Home,
   User,
   Crown,
@@ -679,7 +681,7 @@ const FamilyDetail = () => {
           </div>
 
           {/* Main column — Households & Members */}
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 space-y-6">
             <Card>
               <CardHeader className="pb-4 flex flex-row items-center justify-between">
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -783,7 +785,20 @@ const FamilyDetail = () => {
               </CardContent>
             </Card>
 
-            <div className="mt-4">
+            {/* The whole family's Drive tree: Family Docs and every Household Vault. */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-sanctuary-bronze" />
+                  Family Vault
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <VaultView familyTreeId={family.id} embedded />
+              </CardContent>
+            </Card>
+
+            <div>
               <FamilyTaskRollup familyId={family.id} members={contacts} />
             </div>
           </div>

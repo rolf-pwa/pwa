@@ -2106,6 +2106,38 @@ serve(async (req) => {
       return new Response(JSON.stringify({ ok: true }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
 
+    // ─── WHERE STAFF START TO SEE A WHOLE FAMILY (staff) ───
+    // The "{Family} Family Vault" folder: holds Family Docs and each Household Vault. Navigation only.
+    if (action === "getFamilyNav") {
+      if (actor.kind !== "staff")
+        return new Response(JSON.stringify({ error: "staff_only" }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
+      const { familyId } = body;
+      const { data: fam } = await supabaseAdmin.from("families").select("id, vault_folder_id, vault_root_folder_id").eq("id", familyId).maybeSingle();
+      if (!fam) return new Response(JSON.stringify({ navRootId: null }), { headers: { ...cors, "Content-Type": "application/json" } });
+      const nameOf = async (id: string) => {
+        const r = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?supportsAllDrives=true&fields=name,trashed,parents`, { headers: { Authorization: `Bearer ${accessToken}` } });
+        return r.ok ? await r.json() : null;
+      };
+      let top: { id: string; name: string } | null = null;
+      if (fam.vault_folder_id) {
+        const m = await nameOf(fam.vault_folder_id);
+        if (m && !m.trashed) top = { id: fam.vault_folder_id, name: m.name };
+      }
+      if (!top) {
+        // Older families: the folder two levels above a household Vault root (Family > Household > Vault).
+        const { data: hhs } = await supabaseAdmin.from("households").select("vault_root_folder_id").eq("family_id", familyId).not("vault_root_folder_id", "is", null);
+        for (const h of hhs ?? []) {
+          const root = await nameOf(h.vault_root_folder_id);
+          const hhFolder = root?.parents?.[0] ? await nameOf(root.parents[0]) : null;
+          const famId: string | undefined = hhFolder?.parents?.[0];
+          const famFolder = famId ? await nameOf(famId) : null;
+          if (famId && famFolder && /family|vault/i.test(famFolder.name ?? "")) { top = { id: famId, name: famFolder.name }; break; }
+        }
+        if (top) await supabaseAdmin.from("families").update({ vault_folder_id: top.id }).eq("id", familyId);
+      }
+      return new Response(JSON.stringify({ navRootId: top?.id ?? null, navName: top?.name ?? null, familyDocsId: fam.vault_root_folder_id ?? null }), { headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
     // ─── WHERE STAFF START TO SEE A HOUSEHOLD (staff) ───
     // The Household Vault folder: parent of the Vault root (Household Docs). Navigation only; access still stops at
     // the root, so Personal Docs and Advisor Files stay out of reach of the household's members.
