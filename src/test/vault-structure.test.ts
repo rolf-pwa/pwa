@@ -51,4 +51,25 @@ describe("vault structure", () => {
     expect(ops.some((o) => o.op === "create" || o.op === "move")).toBe(false);
     expect(ops.map((o) => o.op)).toEqual(["rename", "rename", "rename"]);
   });
+  it("repoints a Family Vault whose root is the Family folder itself (it would reach into the household Vaults)", () => {
+    const state = base({
+      familyName: "Demo",
+      familyFolder: { id: "top", name: "Family Docs" }, familyDocs: { id: "top", name: "Family Docs" },
+      familyDocsCandidate: { id: "fdocs", name: "1. Family Documents" },
+      households: [{ householdId: "h1", folder: { id: "hf", name: "Demo Household Vault" }, root: { id: "hr", name: "Household Docs" }, personalDocs: { id: "pd", name: "Personal Docs" }, drawers: [] }],
+    });
+    const ops = planRestructure(state);
+    expect(ops.map((o) => o.op)).toEqual(["repoint", "rename", "rename"]);
+    expect(ops[0]).toMatchObject({ op: "repoint", from: "top", to: "fdocs" });
+    expect(ops[1]).toMatchObject({ id: "fdocs", from: "1. Family Documents", to: "Family Docs" });
+    expect(ops[2]).toMatchObject({ id: "top", to: "Demo Family Vault" });
+  });
+  it("creates Family Docs when a misrooted family has none", () => {
+    const ops = planRestructure(base({
+      familyName: "Demo", familyFolder: { id: "top", name: "Demo Family" }, familyDocs: { id: "top", name: "Demo Family" }, familyDocsCandidate: null,
+      households: [],
+    }));
+    expect(ops.map((o) => o.op)).toEqual(["create", "repoint", "rename"]);
+    expect(ops[1]).toMatchObject({ toKey: "family-docs" });
+  });
 });

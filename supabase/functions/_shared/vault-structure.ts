@@ -20,7 +20,11 @@ export const PERSONAL_DOCS = "Personal Docs";
 export const withVaultSuffix = (name: string) => (/\bvault$/i.test(name.trim()) ? name.trim() : `${name.trim()} Vault`);
 
 export interface StructureState {
+  familyName?: string;
   familyFolder: { id: string; name: string } | null;
+  /** When the Family Vault root was set to the Family folder itself (so it also contains the household Vaults): the
+   * child folder that holds the family's shared documents, if there is exactly one. */
+  familyDocsCandidate?: { id: string; name: string } | null;
   /** Family Docs, when the family has a Family Vault. */
   familyDocs: { id: string; name: string } | null;
   households: Array<{
@@ -37,16 +41,33 @@ export interface StructureState {
 export type StructureOp =
   | { op: "rename"; id: string; from: string; to: string; what: string }
   | { op: "create"; key: string; name: string; parent: string; what: string }
+  /** Point the family's Vault root (families.vault_root_folder_id) at a different folder. */
+  | { op: "repoint"; from: string; to: string; toKey?: string; what: string }
   | { op: "move"; id: string; name: string; fromParent: string | null; toParent: string; toParentKey?: string; what: string };
 
 /** Everything needed to reach the structure above; empty when the family is already there. */
 export function planRestructure(s: StructureState): StructureOp[] {
   const ops: StructureOp[] = [];
-  if (s.familyFolder) {
+  // The Family Vault root must be Family Docs, never the Family folder that also holds the household Vaults:
+  // access to the family's shared documents must not reach into any household. Fix that first.
+  const misrooted = !!(s.familyDocs && s.familyFolder && s.familyDocs.id === s.familyFolder.id);
+  if (misrooted) {
+    const top = s.familyFolder!;
+    const topTarget = withVaultSuffix(`${s.familyName ?? "Family"} Family`);
+    if (s.familyDocsCandidate) {
+      ops.push({ op: "repoint", from: top.id, to: s.familyDocsCandidate.id, what: "Family Vault root" });
+      if (s.familyDocsCandidate.name !== FAMILY_DOCS) ops.push({ op: "rename", id: s.familyDocsCandidate.id, from: s.familyDocsCandidate.name, to: FAMILY_DOCS, what: "Family Docs folder" });
+    } else {
+      ops.push({ op: "create", key: "family-docs", name: FAMILY_DOCS, parent: top.id, what: "Family Docs folder" });
+      ops.push({ op: "repoint", from: top.id, to: "", toKey: "family-docs", what: "Family Vault root" });
+    }
+    if (top.name !== topTarget) ops.push({ op: "rename", id: top.id, from: top.name, to: topTarget, what: "Family folder" });
+  }
+  if (s.familyFolder && !misrooted) {
     const to = withVaultSuffix(s.familyFolder.name);
     if (to !== s.familyFolder.name) ops.push({ op: "rename", id: s.familyFolder.id, from: s.familyFolder.name, to, what: "Family folder" });
   }
-  if (s.familyDocs && s.familyDocs.name !== FAMILY_DOCS) ops.push({ op: "rename", id: s.familyDocs.id, from: s.familyDocs.name, to: FAMILY_DOCS, what: "Family Vault root" });
+  if (s.familyDocs && !misrooted && s.familyDocs.name !== FAMILY_DOCS) ops.push({ op: "rename", id: s.familyDocs.id, from: s.familyDocs.name, to: FAMILY_DOCS, what: "Family Vault root" });
   for (const h of s.households) {
     const to = withVaultSuffix(h.folder.name);
     if (to !== h.folder.name) ops.push({ op: "rename", id: h.folder.id, from: h.folder.name, to, what: "Household folder" });
@@ -70,4 +91,5 @@ export function planRestructure(s: StructureState): StructureOp[] {
 export const describeOp = (o: StructureOp): string =>
   o.op === "rename" ? `Rename ${o.what}: “${o.from}” → “${o.to}”`
   : o.op === "create" ? `Create “${o.name}”`
+  : o.op === "repoint" ? `Point the Family Vault at ${o.toKey ? "the new Family Docs folder" : "its Family Docs folder"} (it must not contain the household Vaults)`
   : `Move ${o.what} into Personal Docs`;

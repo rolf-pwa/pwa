@@ -68,3 +68,29 @@ describe("self-service sharing", () => {
     expect(clampSelfSharePermission(undefined)).toBe("view");
   });
 });
+
+import { pickDrawer } from "../../supabase/functions/_shared/vault-drawers";
+describe("pickDrawer: a Family Vault root that sits above household folders", () => {
+  const household: Drawer = { kind: "household", rootId: "hdocs" };
+  const fam: Drawer = { kind: "family", rootId: "top", familyId: "f1" };
+  const mine: Drawer = { kind: "personal", rootId: "me", ownerContactId: "herman" };
+  const drawers = [household, fam, mine];
+  const protectedRoots = ["hdocs", "me", "other-household", "someone-elses-drawer"];
+  it("judges household files as household files, even though the family root is above them", () => {
+    expect(pickDrawer(drawers, ["file", "hdocs", "hvault", "top"], protectedRoots)).toBe(household);
+  });
+  it("judges my personal drawer as mine", () => {
+    expect(pickDrawer(drawers, ["file", "me", "pdocs", "hvault", "top"], protectedRoots)).toBe(mine);
+  });
+  it("gives the family drawer nothing inside another household or someone else's personal drawer", () => {
+    expect(pickDrawer(drawers, ["file", "other-household", "hvault2", "top"], protectedRoots)).toBeNull();
+    expect(pickDrawer(drawers, ["file", "someone-elses-drawer", "pdocs", "hvault", "top"], protectedRoots)).toBeNull();
+  });
+  it("still serves real Family Docs content, and the family root itself", () => {
+    expect(pickDrawer(drawers, ["file", "cat", "top"], protectedRoots)).toBe(fam);
+    expect(pickDrawer(drawers, ["top"], protectedRoots)).toBe(fam);
+  });
+  it("is null for items outside every drawer", () => {
+    expect(pickDrawer(drawers, ["x", "y"], protectedRoots)).toBeNull();
+  });
+});

@@ -87,3 +87,15 @@ export function clampSelfShareExpiry(requested: string | null | undefined, now: 
 
 /** Outsiders invited by a client can view or upload, never manage. */
 export const clampSelfSharePermission = (p: string | null | undefined): "view" | "upload" => (p === "upload" ? "upload" : "view");
+
+/**
+ * Which drawer owns an item? The nearest root above it wins (so a household Vault inside a bigger folder is
+ * judged as the household Vault), and the Family Vault never reaches into a household Vault or a personal drawer
+ * even if its root folder happens to sit above them in Drive: those roots are protected. Returns null when none applies.
+ */
+export function pickDrawer(drawers: Drawer[], chain: string[], protectedRoots: string[]): Drawer | null {
+  const passesProtected = chain.some((id) => protectedRoots.includes(id));
+  const candidates = drawers.filter((d) => chain.includes(d.rootId) && !(d.kind === "family" && passesProtected));
+  if (candidates.length === 0) return null;
+  return candidates.reduce((best, d) => (chain.indexOf(d.rootId) < chain.indexOf(best.rootId) ? d : best));
+}
