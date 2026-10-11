@@ -17,6 +17,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useToast } from "@/shared/hooks/use-toast";
+import { ShoeboxNotice } from "./ShoeboxNotice";
 
 const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
@@ -424,6 +425,19 @@ export function PortalVault({ portalToken, householdId }: Props) {
         </div>
       )}
 
+      {inShoebox && (
+        <Card className="border-amber-200 bg-amber-50/60">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-3">
+            <ShoeboxNotice hasPersonal={drawers.some((d) => d.kind === "personal")} className="text-xs" />
+            {drawers.some((d) => d.kind === "personal") && (
+              <Button size="sm" variant="outline" onClick={() => { const p = drawers.find((d) => d.kind === "personal"); if (p) selectDrawer(p); }}>
+                Go to Personal Docs
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Folder-level controls when client has elevated permission here */}
       {/* The Shoebox has its own uploader in the sidebar, so "Upload here" is not repeated inside it. */}
       {(currentPerm === "manage" || (currentPerm === "upload" && !inShoebox)) && crumbs.length > 0 && (
@@ -491,6 +505,7 @@ export function PortalVault({ portalToken, householdId }: Props) {
                   )}
                   <span className="text-sm flex-1 truncate">
                     {f.name}
+                    {isShoebox && activeKind === "household" && <span className="ml-2 text-[11px] text-amber-800">Shared with your household</span>}
                   </span>
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 </button>
