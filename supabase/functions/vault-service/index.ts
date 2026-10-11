@@ -27,6 +27,7 @@ import { driveDownloadFile, matchVaultCategoryFolder } from "../_shared/vault-pr
 import { logActionEvent } from "../_shared/action-brain.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
 import { buildItemAccess } from "../_shared/vault-access.ts";
+import { FAMILY_DOCS, HOUSEHOLD_DOCS, PERSONAL_DOCS, withVaultSuffix, planRestructure, describeOp, type StructureState, type StructureOp } from "../_shared/vault-structure.ts";
 import { drawerCapability, mayShareFromDrawer, FAMILY_VAULT_CATEGORIES, hasPersonalDrawerRole, type Drawer } from "../_shared/vault-drawers.ts";
 
 const APP_BASE_URL = "https://app.prosperwise.ca";
@@ -2041,7 +2042,7 @@ serve(async (req) => {
           if (!cap) continue;
           out.push({
             kind: d.kind, rootId: d.rootId, name: await metaName(d.rootId), capability: cap, canShare: mayShareFromDrawer(d.kind, cap as any),
-            label: d.kind === "household" ? "Household" : d.kind === "family" ? "Family Vault" : "Personal",
+            label: d.kind === "household" ? HOUSEHOLD_DOCS : d.kind === "family" ? FAMILY_DOCS : PERSONAL_DOCS,
           });
         }
         return new Response(JSON.stringify({ drawers: out }), { headers: { ...cors, "Content-Type": "application/json" } });
@@ -2091,7 +2092,14 @@ serve(async (req) => {
       }
       if (!familyFolderId)
         return new Response(JSON.stringify({ error: "family_folder_not_found", detail: "No household Vault with a Family folder above it; pass parentFolderId." }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
-      const root = await driveCreateFolder(`Family Vault — ${fam.name}`, familyFolderId, accessToken);
+      // The Family folder becomes "{Family} Family Vault"; the family's shared documents live in "Family Docs" inside it.
+      const ffMeta = await fetch(`https://www.googleapis.com/drive/v3/files/${familyFolderId}?supportsAllDrives=true&fields=name`, { headers: { Authorization: `Bearer ${accessToken}` } });
+      const ffName: string | null = ffMeta.ok ? (await ffMeta.json()).name : null;
+      if (ffName && withVaultSuffix(ffName) !== ffName) {
+        const rn = await fetch(`https://www.googleapis.com/drive/v3/files/${familyFolderId}?supportsAllDrives=true`, { method: "PATCH", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ name: withVaultSuffix(ffName) }) });
+        if (rn.ok) await audit(actor, "rename", null, familyFolderId, withVaultSuffix(ffName), req, { old_name: ffName, new_name: withVaultSuffix(ffName), via: "family_vault" });
+      }
+      const root = await driveCreateFolder(FAMILY_DOCS, familyFolderId, accessToken);
       for (const c of FAMILY_VAULT_CATEGORIES) await driveCreateFolder(c, root.id, accessToken);
       await supabaseAdmin.from("families").update({ vault_root_folder_id: root.id, vault_root_provisioned_at: new Date().toISOString() }).eq("id", familyId);
       (actor as any).lastDrawer = { kind: "family", rootId: root.id, familyId };
@@ -2118,11 +2126,98 @@ serve(async (req) => {
       const householdFolderId: string | null = pr.ok ? ((await pr.json()).parents?.[0] ?? null) : null;
       if (!householdFolderId) return new Response(JSON.stringify({ error: "household_folder_not_found" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
       const fullName = `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "Member";
-      const folder = await driveCreateFolder(`Personal — ${fullName}`, householdFolderId, accessToken);
+      // "Personal Docs" sits in the Household Vault folder beside Household Docs; each adult's drawer is inside it.
+      const siblings = await driveListChildren(householdFolderId, accessToken);
+      const personalDocs = siblings.find((f: any) => f.mimeType === "application/vnd.google-apps.folder" && /^personal docs$/i.test((f.name ?? "").trim()))
+        ?? await driveCreateFolder(PERSONAL_DOCS, householdFolderId, accessToken);
+      const folder = await driveCreateFolder(`Personal — ${fullName}`, personalDocs.id, accessToken);
       await supabaseAdmin.from("contacts").update({ personal_vault_folder_id: folder.id }).eq("id", contactId);
       (actor as any).lastDrawer = { kind: "personal", rootId: folder.id, familyId: c.family_id ?? null, ownerContactId: contactId };
       await audit(actor, "provision", contactId, folder.id, folder.name, req, { household_id: c.household_id, family_id: c.family_id, drawer: "personal", owner_contact_id: contactId });
       return new Response(JSON.stringify({ ok: true, folderId: folder.id, name: folder.name }), { headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    // ─── TIDY A FAMILY'S DRIVE FOLDERS INTO THE FAMILY VAULT LAYOUT (staff) ───
+    // See _shared/vault-structure.ts. Renames, one new Personal Docs folder per household, and personal drawers
+    // moved one level down. Drive IDs never change, so nothing in the database needs updating. apply:false only
+    // reports the plan.
+    if (action === "restructureVault") {
+      if (actor.kind !== "staff")
+        return new Response(JSON.stringify({ error: "staff_only" }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
+      const { familyId, apply } = body;
+      if (!familyId) return new Response(JSON.stringify({ error: "familyId required" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      const { data: fam } = await supabaseAdmin.from("families").select("id, name, vfo_enabled, vault_root_folder_id").eq("id", familyId).maybeSingle();
+      if (!fam) return new Response(JSON.stringify({ error: "family_not_found" }), { status: 404, headers: { ...cors, "Content-Type": "application/json" } });
+      const meta = async (id: string): Promise<{ id: string; name: string; parent: string | null } | null> => {
+        try {
+          const r = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?supportsAllDrives=true&fields=id,name,parents`, { headers: { Authorization: `Bearer ${accessToken}` } });
+          if (!r.ok) return null;
+          const j = await r.json();
+          return { id: j.id, name: j.name, parent: j.parents?.[0] ?? null };
+        } catch { return null; }
+      };
+      const { data: hhs } = await supabaseAdmin.from("households").select("id, label, vault_root_folder_id").eq("family_id", familyId).not("vault_root_folder_id", "is", null);
+      const state: StructureState = { vfo: !!fam.vfo_enabled, familyFolder: null, familyDocs: null, households: [] };
+      const warnings: string[] = [];
+      for (const h of hhs ?? []) {
+        const root = await meta(h.vault_root_folder_id);
+        const folder = root?.parent ? await meta(root.parent) : null;
+        if (!root || !folder) { warnings.push(`${h.label}: couldn't read the Vault folders in Drive`); continue; }
+        const famFolder = folder.parent ? await meta(folder.parent) : null;
+        if (famFolder) {
+          if (!state.familyFolder) state.familyFolder = { id: famFolder.id, name: famFolder.name };
+          else if (state.familyFolder.id !== famFolder.id) { warnings.push(`${h.label}: sits in a different Family folder, left alone`); continue; }
+        }
+        const kids = await driveListChildren(folder.id, accessToken);
+        const pd = kids.find((f: any) => f.mimeType === "application/vnd.google-apps.folder" && /^personal docs$/i.test((f.name ?? "").trim()));
+        const { data: people } = await supabaseAdmin.from("contacts").select("id, first_name, last_name, personal_vault_folder_id").eq("household_id", h.id).not("personal_vault_folder_id", "is", null);
+        const drawers: StructureState["households"][number]["drawers"] = [];
+        for (const c of people ?? []) {
+          const dm = await meta(c.personal_vault_folder_id);
+          if (dm) drawers.push({ contactId: c.id, person: `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim(), id: dm.id, name: dm.name, parentId: dm.parent });
+        }
+        state.households.push({ householdId: h.id, folder: { id: folder.id, name: folder.name }, root: { id: root.id, name: root.name }, personalDocs: pd ? { id: pd.id, name: pd.name } : null, drawers });
+      }
+      if (fam.vault_root_folder_id) {
+        const fd = await meta(fam.vault_root_folder_id);
+        if (fd) state.familyDocs = { id: fd.id, name: fd.name };
+        if (!state.familyFolder && fd?.parent) { const ff = await meta(fd.parent); if (ff) state.familyFolder = { id: ff.id, name: ff.name }; }
+      }
+      const ops = planRestructure(state);
+      const plan = ops.map((o) => ({ ...o, description: describeOp(o) }));
+      if (apply !== true) return new Response(JSON.stringify({ ok: true, applied: false, plan, warnings }), { headers: { ...cors, "Content-Type": "application/json" } });
+
+      const created = new Map<string, string>();
+      const patch = async (id: string, qs: string, bodyObj: Record<string, unknown>) => {
+        const r = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?supportsAllDrives=true${qs}`, { method: "PATCH", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(bodyObj) });
+        if (!r.ok) throw new Error(`drive_${r.status}: ${(await r.text()).slice(0, 200)}`);
+      };
+      const done: string[] = [];
+      try {
+        for (const op of ops as StructureOp[]) {
+          if (op.op === "rename") {
+            await patch(op.id, "", { name: op.to });
+            await supabaseAdmin.from("vault_files").update({ name: op.to }).eq("drive_id", op.id);
+            await audit(actor, "rename", null, op.id, op.to, req, { old_name: op.from, new_name: op.to, via: "restructure_vault", what: op.what, family_id: familyId });
+          } else if (op.op === "create") {
+            const f = await driveCreateFolder(op.name, op.parent, accessToken);
+            created.set(op.key, f.id);
+            await audit(actor, "create_folder", null, f.id, op.name, req, { parent_folder_id: op.parent, via: "restructure_vault", family_id: familyId });
+          } else {
+            const to = op.toParent || created.get(op.toParentKey ?? "") || "";
+            if (!to) throw new Error("missing_target_folder");
+            await patch(op.id, `&addParents=${encodeURIComponent(to)}${op.fromParent ? `&removeParents=${encodeURIComponent(op.fromParent)}` : ""}`, {});
+            await audit(actor, "move", null, op.id, op.name, req, { from_parent: op.fromParent, to_parent: to, via: "restructure_vault", family_id: familyId });
+          }
+          done.push(describeOp(op));
+        }
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        await audit(actor, "restructure_vault", null, null, null, req, { family_id: familyId, completed: done, failed_with: message });
+        return new Response(JSON.stringify({ ok: false, error: message, completed: done }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
+      }
+      await audit(actor, "restructure_vault", null, null, null, req, { family_id: familyId, operations: done.length, completed: done });
+      return new Response(JSON.stringify({ ok: true, applied: true, completed: done, warnings }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
 
     // ─── WHO CAN OPEN THIS FILE OR FOLDER (staff) ───

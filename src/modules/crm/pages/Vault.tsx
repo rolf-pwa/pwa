@@ -971,18 +971,35 @@ function DrawersPanel({ householdId }: { householdId: string }) {
       )}
     </div>
   );
+  const tidy = async () => {
+    setBusy("tidy");
+    try {
+      const preview = await callVault("restructureVault", { familyId: data.family.id, apply: false });
+      const steps: string[] = (preview.plan ?? []).map((p: any) => p.description);
+      if (steps.length === 0) { toast.success("The Drive folders already follow the Family Vault layout"); return; }
+      const warn = (preview.warnings ?? []).length ? `\n\nNot changed:\n- ${preview.warnings.join("\n- ")}` : "";
+      if (!window.confirm(`Tidy this family's Drive folders into the Family Vault layout?\n\n- ${steps.join("\n- ")}${warn}\n\nFolders keep their Drive IDs, so nothing else changes. Every step is recorded in the audit log.`)) return;
+      const res = await callVault("restructureVault", { familyId: data.family.id, apply: true });
+      toast.success(`Done: ${res.completed?.length ?? 0} changes`);
+      await load();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setBusy(null); }
+  };
   return (
     <div className="space-y-2">
+      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" disabled={busy === "tidy"} onClick={tidy}>
+        {busy === "tidy" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}Tidy Drive folders
+      </Button>
       {data.family.vfoEnabled && (
         <Row
-          label="Family Vault" sub={`${data.family.name} · shared by the family, access by role`} busyKey="family"
+          label="Family Docs" sub={`${data.family.name} · shared by the family, access by role`} busyKey="family"
           to={data.family.rootId ? `/vault/drawer/family/${data.family.id}` : null}
           create={() => create("family", "provisionFamilyVault", { familyId: data.family.id }, "Family Vault created")}
         />
       )}
       {(data.personal ?? []).map((p: any) => (
         <Row
-          key={p.contactId} label={`Personal — ${p.name}`} sub="Private: only this person and staff" busyKey={p.contactId}
+          key={p.contactId} label={`Personal Docs — ${p.name}`} sub="Private: only this person and staff" busyKey={p.contactId}
           to={p.rootId ? `/vault/drawer/personal/${p.contactId}` : null}
           create={() => create(p.contactId, "provisionPersonalDrawer", { contactId: p.contactId }, "Personal drawer created")}
         />
