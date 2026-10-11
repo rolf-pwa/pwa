@@ -22,7 +22,7 @@ describe("vault structure", () => {
     const ops = planRestructure(base());
     expect(ops.map((o) => describeOp(o))).toEqual([
       "Rename Family folder: “Demo Family” → “Demo Family Vault”",
-      "Rename Family Vault root: “Family Vault — Demo” → “Family Docs”",
+      "Rename Family Vault root: “Family Vault — Demo” → “1. Family Docs”",
       "Rename Household folder: “Demo Household” → “Demo Household Vault”",
       "Rename Household Vault root: “1. ProsperWise Vault — Demo Family (Demo Household)” → “Household Docs”",
       "Create “Personal Docs”",
@@ -34,7 +34,7 @@ describe("vault structure", () => {
   });
   it("does nothing for a family that is already in shape", () => {
     const done = base({
-      familyFolder: { id: "ff", name: "Demo Family Vault" }, familyDocs: { id: "fd", name: "Family Docs" },
+      familyFolder: { id: "ff", name: "Demo Family Vault" }, familyDocs: { id: "fd", name: "1. Family Docs" },
       households: [{ householdId: "h1", folder: { id: "hf", name: "Demo Household Vault" }, root: { id: "hr", name: "Household Docs" }, personalDocs: { id: "pd", name: "Personal Docs" }, drawers: [{ contactId: "c1", person: "Demo Contact", id: "d1", name: "Personal — Demo Contact", parentId: "pd" }] }],
     });
     expect(planRestructure(done)).toEqual([]);
@@ -54,14 +54,14 @@ describe("vault structure", () => {
   it("repoints a Family Vault whose root is the Family folder itself (it would reach into the household Vaults)", () => {
     const state = base({
       familyName: "Demo",
-      familyFolder: { id: "top", name: "Family Docs" }, familyDocs: { id: "top", name: "Family Docs" },
+      familyFolder: { id: "top", name: "1. Family Docs" }, familyDocs: { id: "top", name: "1. Family Docs" },
       familyDocsCandidate: { id: "fdocs", name: "1. Family Documents" },
       households: [{ householdId: "h1", folder: { id: "hf", name: "Demo Household Vault" }, root: { id: "hr", name: "Household Docs" }, personalDocs: { id: "pd", name: "Personal Docs" }, drawers: [] }],
     });
     const ops = planRestructure(state);
     expect(ops.map((o) => o.op)).toEqual(["repoint", "rename", "rename"]);
     expect(ops[0]).toMatchObject({ op: "repoint", from: "top", to: "fdocs" });
-    expect(ops[1]).toMatchObject({ id: "fdocs", from: "1. Family Documents", to: "Family Docs" });
+    expect(ops[1]).toMatchObject({ id: "fdocs", from: "1. Family Documents", to: "1. Family Docs" });
     expect(ops[2]).toMatchObject({ id: "top", to: "Demo Family Vault" });
   });
   it("creates Family Docs when a misrooted family has none", () => {
@@ -74,9 +74,18 @@ describe("vault structure", () => {
   });
   it("renames a household folder that was mistakenly called Household Docs", () => {
     const state = base({
-      familyName: "Demo", familyFolder: { id: "ff", name: "Demo Family Vault" }, familyDocs: { id: "fd", name: "Family Docs" },
+      familyName: "Demo", familyFolder: { id: "ff", name: "Demo Family Vault" }, familyDocs: { id: "fd", name: "1. Family Docs" },
       households: [{ householdId: "h1", folder: { id: "hf", name: "Household Docs" }, root: { id: "hr", name: "Household Docs" }, personalDocs: { id: "pd", name: "Personal Docs" }, drawers: [] }],
     });
     expect(planRestructure(state).map((o) => describeOp(o))).toEqual(["Rename Household folder: “Household Docs” → “Demo Household Vault”"]);
+  });
+  it("numbers an existing Family Docs folder so it sorts to the top, and shows people the plain name", async () => {
+    const state = base({
+      familyFolder: { id: "ff", name: "Demo Family Vault" }, familyDocs: { id: "fd", name: "Family Docs" },
+      households: [{ householdId: "h1", folder: { id: "hf", name: "Demo Household Vault" }, root: { id: "hr", name: "Household Docs" }, personalDocs: { id: "pd", name: "Personal Docs" }, drawers: [] }],
+    });
+    expect(planRestructure(state).map((o) => describeOp(o))).toEqual(["Rename Family Vault root: “Family Docs” → “1. Family Docs”"]);
+    const { FAMILY_DOCS, FAMILY_DOCS_LABEL } = await import("../../supabase/functions/_shared/vault-structure");
+    expect([FAMILY_DOCS, FAMILY_DOCS_LABEL]).toEqual(["1. Family Docs", "Family Docs"]);
   });
 });

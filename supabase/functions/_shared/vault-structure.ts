@@ -2,7 +2,7 @@
 // can be unit-tested; vault-service gathers the current state from Drive and applies the steps.
 //
 //   {Family} Family Vault                  (the Family folder)
-//     Family Docs                          (families.vault_root_folder_id; VFO families)
+//     1. Family Docs                       (families.vault_root_folder_id; numbered so it sorts first)
 //     {Household} Household Vault          (the Household folder)
 //       Household Docs                     (households.vault_root_folder_id; the household's Vault)
 //       Personal Docs
@@ -12,12 +12,14 @@
 // Nothing here changes a folder's Drive ID, so every database reference keeps working: folders are renamed,
 // one new folder is created per household, and personal drawers move one level down into Personal Docs.
 
-export const FAMILY_DOCS = "Family Docs";
+/** The Drive folder is numbered so it sorts to the top of the family's tree; people are shown the plain label. */
+export const FAMILY_DOCS = "1. Family Docs";
+export const FAMILY_DOCS_LABEL = "Family Docs";
 export const HOUSEHOLD_DOCS = "Household Docs";
 export const PERSONAL_DOCS = "Personal Docs";
 
 /** "Peters Family" -> "Peters Family Vault"; already-suffixed names are left alone. */
-const RESERVED = new Set([FAMILY_DOCS, HOUSEHOLD_DOCS, PERSONAL_DOCS].map((n) => n.toLowerCase()));
+const RESERVED = new Set([FAMILY_DOCS, FAMILY_DOCS_LABEL, HOUSEHOLD_DOCS, PERSONAL_DOCS].map((n) => n.toLowerCase()));
 /** A household folder that was renamed to one of the three inner names by mistake gets a proper name again. */
 export const isReservedName = (name: string) => RESERVED.has(name.trim().toLowerCase());
 
