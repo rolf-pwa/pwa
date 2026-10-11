@@ -106,6 +106,7 @@ export default function VaultAudit() {
     return c ? `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() : "";
   };
   const actorName = (r: AuditRow) => {
+    if (r.actor_type === "drive_external") return r.actor_email ?? r.actor_label?.replace(/^drive:/, "") ?? "Unknown Drive user";
     if (r.actor_email) return r.actor_email;
     if (r.actor_type === "staff") return staff.data?.find((p) => p.user_id === r.actor_id)?.email ?? "Staff (unknown)";
     if (r.actor_type === "client") { const m = /^client:(.+)$/.exec(r.actor_label ?? ""); return `${contactName(m?.[1] ?? null) || "Client"} (client)`; }
@@ -274,7 +275,7 @@ export default function VaultAudit() {
                         <TableCell className="w-8 pr-0">{isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}</TableCell>
                         <TableCell className="whitespace-nowrap text-xs">{format(new Date(r.created_at), "MMM d, yyyy h:mm:ss a")}</TableCell>
                         <TableCell className="text-sm">{hhName(r.household_id)}</TableCell>
-                        <TableCell className="max-w-[14rem] truncate text-sm">{actorName(r)}</TableCell>
+                        <TableCell className="max-w-[14rem] truncate text-sm">{actorName(r)}{r.actor_type === "drive_external" && <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-800">in Drive</span>}</TableCell>
                         <TableCell>
                           <Badge variant={grp === "blocked" ? "destructive" : "outline"} className="whitespace-nowrap text-[11px] font-normal">{actionLabel(r.action)}</Badge>
                         </TableCell>

@@ -20,6 +20,13 @@ describe("vault audit helpers", () => {
     expect(describeDetails(row({ action: "firewall_block", metadata: { reason: "shoebox_only", op: "delete" } }))).toBe("Refused: shoebox_only (delete)");
     expect(describeDetails(row({ action: "upload", metadata: { size_bytes: 2048, mime_type: "application/pdf", sha256: "a".repeat(64) } }))).toBe("2.0 KB · application/pdf · sha256 aaaaaaaaaaaa…");
   });
+  it("describes edits made in Google Drive", () => {
+    expect(describeDetails(row({ action: "drive_external_rename", metadata: { old_name: "a.pdf", new_name: "b.pdf" } }))).toBe("“a.pdf” → “b.pdf”");
+    expect(describeDetails(row({ action: "drive_external_sharing_change", metadata: { added: ["anyone:reader"], removed: [], public_link: true } }))).toBe("PUBLIC LINK ON · added anyone:reader");
+    expect(groupOf("drive_external_trash")).toBe("changes");
+    expect(groupOf("drive_external_sharing_change")).toBe("sharing");
+    expect(actionLabel("drive_external_modify")).toBe("Edited in Google Drive");
+  });
   it("groups known actions and leaves unknown ones as other", () => {
     expect(groupOf("download")).toBe("reads");
     expect(groupOf("firewall_block")).toBe("blocked");

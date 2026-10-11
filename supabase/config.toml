@@ -175,3 +175,6 @@ verify_jwt = false
 
 [functions.georgia2-analyze]
 verify_jwt = false
+
+[functions.vault-drive-watch]
+verify_jwt = false
