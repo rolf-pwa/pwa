@@ -25,12 +25,12 @@ export type ActionGroup = "reads" | "changes" | "sharing" | "blocked" | "system"
 export const ACTION_GROUPS: Record<ActionGroup, { label: string; hint: string; actions: string[] }> = {
   reads: { label: "Viewing", hint: "Folder listings, previews, downloads", actions: ["list", "preview", "download"] },
   changes: {
-    label: "Changes", hint: "Uploads, renames, deletes, filing, visibility",
-    actions: ["upload", "rename", "delete", "create_folder", "make_visible", "hide", "shoebox_file_filed", "shoebox_auto_filed", "shoebox_auto_file_undone", "bulk_statement_filed", "bulk_statements_revealed", "provision", "reprovision", "set_root"],
+    label: "Changes", hint: "Uploads, renames, deletes, filing, visibility, and edits made in Google Drive",
+    actions: ["drive_external_create", "drive_external_modify", "drive_external_rename", "drive_external_move", "drive_external_trash", "drive_external_restore", "drive_external_removed", "upload", "rename", "delete", "create_folder", "make_visible", "hide", "shoebox_file_filed", "shoebox_auto_filed", "shoebox_auto_file_undone", "bulk_statement_filed", "bulk_statements_revealed", "provision", "reprovision", "set_root"],
   },
   sharing: {
-    label: "Sharing & access", hint: "Links, invitations, grants, roles",
-    actions: ["share_link_created", "share_link_revoked", "share_link_redeemed", "share_link_email_sent", "share_link_email_failed", "invite_collaborator", "revoke_collaborator", "vault_invite_email_sent", "vault_invite_email_failed", "vault_collaborator_otp_sent", "vault_collaborator_otp_failed", "add_grant", "update_grant", "reissue_guest_token", "share_with_professional", "set_contact_role", "set_contact_grant", "revoke_contact_grant"],
+    label: "Sharing & access", hint: "Links, invitations, grants, roles, and sharing changed in Google Drive",
+    actions: ["drive_external_sharing_change", "share_link_created", "share_link_revoked", "share_link_redeemed", "share_link_email_sent", "share_link_email_failed", "invite_collaborator", "revoke_collaborator", "vault_invite_email_sent", "vault_invite_email_failed", "vault_collaborator_otp_sent", "vault_collaborator_otp_failed", "add_grant", "update_grant", "reissue_guest_token", "share_with_professional", "set_contact_role", "set_contact_grant", "revoke_contact_grant"],
   },
   blocked: { label: "Blocked", hint: "Attempts the Vault refused", actions: ["firewall_block"] },
   system: { label: "System", hint: "Scans and reads of this log", actions: ["shoebox_scan", "audit_log_csv_export", "audit_log_integrity_check"] },
@@ -52,6 +52,8 @@ const LABELS: Record<string, string> = {
   invite_collaborator: "Invited collaborator", revoke_collaborator: "Revoked collaborator", vault_invite_email_sent: "Emailed Vault invitation", vault_invite_email_failed: "Vault invitation email failed",
   vault_collaborator_otp_sent: "Sent unlock code", vault_collaborator_otp_failed: "Unlock code email failed", add_grant: "Granted access", update_grant: "Changed access", reissue_guest_token: "Re-issued guest access",
   share_with_professional: "Shared with professional", set_contact_role: "Set client role", set_contact_grant: "Granted client access", revoke_contact_grant: "Revoked client access",
+  drive_external_create: "Created in Google Drive", drive_external_modify: "Edited in Google Drive", drive_external_rename: "Renamed in Google Drive", drive_external_move: "Moved in Google Drive",
+  drive_external_trash: "Trashed in Google Drive", drive_external_restore: "Restored in Google Drive", drive_external_removed: "Removed from Google Drive", drive_external_sharing_change: "Sharing changed in Google Drive",
   firewall_block: "Blocked by Vault", shoebox_scan: "Scanned Shoebox", audit_log_csv_export: "Exported audit log", audit_log_integrity_check: "Checked audit log integrity",
 };
 export const actionLabel = (action: string) => LABELS[action] ?? action.replace(/_/g, " ");
@@ -67,6 +69,13 @@ export function describeDetails(row: Pick<AuditRow, "action" | "metadata">): str
   const m = (row.metadata ?? {}) as Record<string, unknown>;
   const s = (k: string) => (m[k] == null ? "" : String(m[k]));
   switch (row.action) {
+    case "drive_external_rename": return `“${s("old_name")}” → “${s("new_name")}”`;
+    case "drive_external_modify": return s("note") || (s("old_md5") ? "File contents changed" : "");
+    case "drive_external_move": return `Moved between folders (${(m.from_folder_ids as unknown[] | undefined)?.length ?? 0} out, ${(m.to_folder_ids as unknown[] | undefined)?.length ?? 0} in)`;
+    case "drive_external_sharing_change": {
+      const a = (m.added as string[] | undefined) ?? []; const r = (m.removed as string[] | undefined) ?? [];
+      return [m.public_link ? "PUBLIC LINK ON" : "", a.length ? `added ${a.join(", ")}` : "", r.length ? `removed ${r.join(", ")}` : ""].filter(Boolean).join(" · ");
+    }
     case "rename": return s("old_name") || s("new_name") ? `“${s("old_name") || "?"}” → “${s("new_name")}”` : "";
     case "delete": return m.trashed ? "Moved to Drive trash (recoverable)" : "";
     case "upload": return [size(m.size_bytes), s("mime_type"), s("sha256") ? `sha256 ${s("sha256").slice(0, 12)}…` : ""].filter(Boolean).join(" · ");
