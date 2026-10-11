@@ -51,6 +51,9 @@ export function deriveDriveEvents(
     if (created >= 0 && created <= NEW_FILE_WINDOW_MS) {
       return [{ action: "drive_external_create", metadata: { name: next.name, mime_type: next.mimeType, size: next.size, md5: next.md5, parent_ids: next.parentIds } }];
     }
+    // A folder we have never seen is only baselined: its version also moves whenever a file is added inside it,
+    // so reporting it would log every filing as an edit to the folder.
+    if (next.isFolder) return [];
     // We have no earlier picture of this file, so say so rather than guess what changed.
     return [{ action: next.trashed ? "drive_external_trash" : "drive_external_modify", metadata: { name: next.name, note: "first seen by the Drive watcher; earlier state unknown", md5: next.md5, version: next.version } }];
   }
