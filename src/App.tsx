@@ -171,6 +171,7 @@ const App = () => (
               <Route path="/vault/household/:householdId" element={<ProtectedRoute><Vault /></ProtectedRoute>} />
               <Route path="/vault/:contactId" element={<ProtectedRoute><Vault /></ProtectedRoute>} />
               <Route path="/vault-audit" element={<ProtectedRoute><VaultAudit /></ProtectedRoute>} />
+              <Route path="/vault/drawer/:kind/:id" element={<ProtectedRoute><Vault /></ProtectedRoute>} />
               <Route path="/vault/guest/:token" element={<VaultGuest />} />
               <Route path="/vault/share/:token" element={<VaultGuest />} />
               <Route path="/knowledge-base" element={<ProtectedRoute><KnowledgeBase /></ProtectedRoute>} />

@@ -766,6 +766,7 @@ export type Database = {
           last_name: string | null
           lawyer_firm: string | null
           lawyer_name: string | null
+          personal_vault_folder_id: string | null
           phone: string | null
           poa_firm: string | null
           poa_name: string | null
@@ -802,6 +803,7 @@ export type Database = {
           last_name?: string | null
           lawyer_firm?: string | null
           lawyer_name?: string | null
+          personal_vault_folder_id?: string | null
           phone?: string | null
           poa_firm?: string | null
           poa_name?: string | null
@@ -838,6 +840,7 @@ export type Database = {
           last_name?: string | null
           lawyer_firm?: string | null
           lawyer_name?: string | null
+          personal_vault_folder_id?: string | null
           phone?: string | null
           poa_firm?: string | null
           poa_name?: string | null
@@ -1517,6 +1520,8 @@ export type Database = {
           service_tier_source: string
           total_family_assets: number
           updated_at: string
+          vault_root_folder_id: string | null
+          vault_root_provisioned_at: string | null
           vfo_enabled: boolean
           vfo_enrolled_at: string | null
         }
@@ -1538,6 +1543,8 @@ export type Database = {
           service_tier_source?: string
           total_family_assets?: number
           updated_at?: string
+          vault_root_folder_id?: string | null
+          vault_root_provisioned_at?: string | null
           vfo_enabled?: boolean
           vfo_enrolled_at?: string | null
         }
@@ -1559,6 +1566,8 @@ export type Database = {
           service_tier_source?: string
           total_family_assets?: number
           updated_at?: string
+          vault_root_folder_id?: string | null
+          vault_root_provisioned_at?: string | null
           vfo_enabled?: boolean
           vfo_enrolled_at?: string | null
         }
@@ -6519,6 +6528,101 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["vault_contact_role"]
           updated_at?: string
+        }
+        Relationships: []
+      }
+      vault_drive_folder_map: {
+        Row: {
+          checked_at: string
+          folder_id: string
+          household_id: string | null
+        }
+        Insert: {
+          checked_at?: string
+          folder_id: string
+          household_id?: string | null
+        }
+        Update: {
+          checked_at?: string
+          folder_id?: string
+          household_id?: string | null
+        }
+        Relationships: []
+      }
+      vault_drive_state: {
+        Row: {
+          drive_id: string
+          household_id: string | null
+          is_folder: boolean
+          md5: string | null
+          mime_type: string | null
+          name: string
+          parent_ids: string[]
+          permissions: string[]
+          seen_at: string
+          size: string | null
+          trashed: boolean
+          version: string | null
+        }
+        Insert: {
+          drive_id: string
+          household_id?: string | null
+          is_folder?: boolean
+          md5?: string | null
+          mime_type?: string | null
+          name: string
+          parent_ids?: string[]
+          permissions?: string[]
+          seen_at?: string
+          size?: string | null
+          trashed?: boolean
+          version?: string | null
+        }
+        Update: {
+          drive_id?: string
+          household_id?: string | null
+          is_folder?: boolean
+          md5?: string | null
+          mime_type?: string | null
+          name?: string
+          parent_ids?: string[]
+          permissions?: string[]
+          seen_at?: string
+          size?: string | null
+          trashed?: boolean
+          version?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vault_drive_state_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vault_drive_watch: {
+        Row: {
+          baseline_at: string | null
+          id: number
+          last_error: string | null
+          last_run_at: string | null
+          page_token: string | null
+        }
+        Insert: {
+          baseline_at?: string | null
+          id: number
+          last_error?: string | null
+          last_run_at?: string | null
+          page_token?: string | null
+        }
+        Update: {
+          baseline_at?: string | null
+          id?: number
+          last_error?: string | null
+          last_run_at?: string | null
+          page_token?: string | null
         }
         Relationships: []
       }
