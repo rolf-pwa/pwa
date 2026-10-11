@@ -84,6 +84,8 @@ function FolderNode({
   onShare,
   onAccess,
   drawer,
+  accessRootId,
+  inAccess = true,
 }: {
   folderId: string;
   name: string;
@@ -94,7 +96,13 @@ function FolderNode({
   onAccess: (target: ShareTarget) => void;
   /** Inside a Family Vault or personal drawer: no household-only tools (links, sharing, client visibility). */
   drawer?: boolean;
+  /** When the tree starts above the household's Vault (the Household Vault folder), the Vault root inside it. Only items
+   * under that root get the household tools; the rest (Personal Docs, Advisor Files) are browse/rename/add only. */
+  accessRootId?: string;
+  inAccess?: boolean;
 }) {
+  const here = inAccess || folderId === accessRootId;
+  const limited = !!drawer || (accessRootId !== undefined && !here);
   const [open, setOpen] = useState(depth === 0);
   const [loading, setLoading] = useState(false);
   const [folders, setFolders] = useState<DriveFolder[]>([]);
@@ -250,7 +258,7 @@ function FolderNode({
             <Button size="sm" variant="ghost" className="h-7 px-1.5" title="Rename folder" onClick={() => renameItem(folderId, name, true)}>
               <span className="text-[10px] font-mono">Aa</span>
             </Button>
-            {!drawer && (
+            {!limited && (
               <>
                 <Button size="sm" variant="ghost" className="h-7 px-1.5" title="Copy Vault link" onClick={() => copyVaultLink(folderId, true)}>
                   <Copy className="h-3.5 w-3.5" />
@@ -284,6 +292,8 @@ function FolderNode({
               onShare={onShare}
               onAccess={onAccess}
               drawer={drawer}
+              accessRootId={accessRootId}
+              inAccess={here}
             />
           ))}
           {files.map((f) => {
@@ -293,7 +303,7 @@ function FolderNode({
                 <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1 break-words" title={f.name}>{f.name}</span>
                 <div className="flex shrink-0 items-center gap-1">
-                  {householdId && !drawer && (
+                  {householdId && !limited && (
                     <span className="mr-1 flex items-center gap-1.5" title="Visible to client">
                       <ShieldCheck className={`h-3.5 w-3.5 ${visible ? "text-accent" : "text-muted-foreground/40"}`} />
                       <Switch checked={visible} onCheckedChange={(v) => toggleVisibility(f, v)} />
@@ -314,7 +324,7 @@ function FolderNode({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       {/* Private and family documents are never fed to the Second Brain. */}
-                      {!drawer && (
+                      {!limited && (
                         <DropdownMenuItem disabled={brainBusyId === f.id} onClick={() => addToBrain(f)}>
                           <Brain className="mr-2 h-3.5 w-3.5" /> Add to Second Brain
                         </DropdownMenuItem>
@@ -324,7 +334,7 @@ function FolderNode({
                           <DropdownMenuItem onClick={() => renameItem(f.id, f.name, false)}>
                             <span className="mr-2 w-3.5 text-center font-mono text-[10px]">Aa</span> Rename
                           </DropdownMenuItem>
-                          {!drawer && (
+                          {!limited && (
                             <>
                               <DropdownMenuItem onClick={() => copyVaultLink(f.id, false)}>
                                 <Copy className="mr-2 h-3.5 w-3.5" /> Copy Vault link
@@ -1020,6 +1030,8 @@ export function VaultView({ forcedHouseholdId, embedded = false, sidebarTools }:
   const [familyName, setFamilyName] = useState<string>("");
   const [memberNames, setMemberNames] = useState<string[]>([]);
   const [rootId, setRootId] = useState<string>("");
+  // Where staff start: the Household Vault folder above the Vault root (Household Docs). Navigation only.
+  const [navRoot, setNavRoot] = useState<{ id: string; name: string | null } | null>(null);
   const [input, setInput] = useState<string>("");
   const [preview, setPreview] = useState<{ file: DriveFile; url: string } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -1085,6 +1097,7 @@ export function VaultView({ forcedHouseholdId, embedded = false, sidebarTools }:
       if (id) {
         setRootId(id);
         setInput(id);
+        callVault("getNavRoot", { householdId: hh }).then((r) => { if (r?.navRootId) setNavRoot({ id: r.navRootId, name: r.navName ?? null }); }).catch(() => {});
       } else {
         // Pre-populate from any household member's Google Drive URL
         const driveUrl = (members ?? [])
@@ -1250,8 +1263,10 @@ export function VaultView({ forcedHouseholdId, embedded = false, sidebarTools }:
             <Card>
               <CardContent className="pt-6">
                 <FolderNode
-                  folderId={rootId}
-                  name={heading}
+                  folderId={navRoot && !drawerInfo ? navRoot.id : rootId}
+                  name={navRoot && !drawerInfo ? navRoot.name ?? heading : heading}
+                  accessRootId={navRoot && !drawerInfo ? rootId : undefined}
+                  inAccess={!(navRoot && !drawerInfo)}
                   depth={0}
                   householdId={householdId ?? undefined}
                   onPreview={openPreview}

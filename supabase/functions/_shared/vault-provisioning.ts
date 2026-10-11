@@ -162,7 +162,7 @@ export async function provisionClientFolderTree(admin: any, householdId: string,
       await driveCreateFolder(sub, advisorFolder.id, accessToken);
     }
 
-    await admin.from("households").update({ vault_root_folder_id: vaultFolder.id }).eq("id", householdId);
+    await admin.from("households").update({ vault_root_folder_id: vaultFolder.id, vault_folder_id: householdFolder.id }).eq("id", householdId);
 
     // One audit entry for the Vault being created (not one per folder): the start of the household's audit file.
     // Logging must never undo or fail an enrolment that otherwise worked.
