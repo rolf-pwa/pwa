@@ -28,7 +28,7 @@ import { logActionEvent } from "../_shared/action-brain.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
 import { provisionClientFolderTree } from "../_shared/vault-provisioning.ts";
 import { buildItemAccess } from "../_shared/vault-access.ts";
-import { FAMILY_DOCS, HOUSEHOLD_DOCS, PERSONAL_DOCS, withVaultSuffix, planRestructure, describeOp, type StructureState, type StructureOp } from "../_shared/vault-structure.ts";
+import { FAMILY_DOCS, FAMILY_DOCS_LABEL, HOUSEHOLD_DOCS, PERSONAL_DOCS, withVaultSuffix, planRestructure, describeOp, type StructureState, type StructureOp } from "../_shared/vault-structure.ts";
 import { drawerCapability, pickDrawer, mayShareFromDrawer, FAMILY_VAULT_CATEGORIES, hasPersonalDrawerRole, type Drawer } from "../_shared/vault-drawers.ts";
 
 const APP_BASE_URL = "https://app.prosperwise.ca";
@@ -2154,7 +2154,7 @@ serve(async (req) => {
           if (!cap) continue;
           out.push({
             kind: d.kind, rootId: d.rootId, name: await metaName(d.rootId), capability: cap, canShare: mayShareFromDrawer(d.kind, cap as any),
-            label: d.kind === "household" ? HOUSEHOLD_DOCS : d.kind === "family" ? FAMILY_DOCS : PERSONAL_DOCS,
+            label: d.kind === "household" ? HOUSEHOLD_DOCS : d.kind === "family" ? FAMILY_DOCS_LABEL : PERSONAL_DOCS,
           });
         }
         return new Response(JSON.stringify({ drawers: out }), { headers: { ...cors, "Content-Type": "application/json" } });
