@@ -26,7 +26,7 @@ export const ACTION_GROUPS: Record<ActionGroup, { label: string; hint: string; a
   reads: { label: "Viewing", hint: "Folder listings, previews, downloads", actions: ["list", "preview", "download"] },
   changes: {
     label: "Changes", hint: "Uploads, renames, deletes, filing, visibility, and edits made in Google Drive",
-    actions: ["drive_external_create", "drive_external_modify", "drive_external_rename", "drive_external_move", "drive_external_trash", "drive_external_restore", "drive_external_removed", "upload", "rename", "delete", "create_folder", "make_visible", "hide", "shoebox_file_filed", "shoebox_auto_filed", "shoebox_auto_file_undone", "bulk_statement_filed", "bulk_statements_revealed", "provision", "reprovision", "set_root"],
+    actions: ["move", "restructure_vault", "drive_external_create", "drive_external_modify", "drive_external_rename", "drive_external_move", "drive_external_trash", "drive_external_restore", "drive_external_removed", "upload", "rename", "delete", "create_folder", "make_visible", "hide", "shoebox_file_filed", "shoebox_auto_filed", "shoebox_auto_file_undone", "bulk_statement_filed", "bulk_statements_revealed", "provision", "reprovision", "set_root"],
   },
   sharing: {
     label: "Sharing & access", hint: "Links, invitations, grants, roles, and sharing changed in Google Drive",
@@ -54,6 +54,7 @@ const LABELS: Record<string, string> = {
   share_with_professional: "Shared with professional", set_contact_role: "Set client role", set_contact_grant: "Granted client access", revoke_contact_grant: "Revoked client access",
   drive_external_create: "Created in Google Drive", drive_external_modify: "Edited in Google Drive", drive_external_rename: "Renamed in Google Drive", drive_external_move: "Moved in Google Drive",
   drive_external_trash: "Trashed in Google Drive", drive_external_restore: "Restored in Google Drive", drive_external_removed: "Removed from Google Drive", drive_external_sharing_change: "Sharing changed in Google Drive",
+  move: "Moved folder", restructure_vault: "Tidied Drive folders",
   firewall_block: "Blocked by Vault", shoebox_scan: "Scanned Shoebox", audit_log_csv_export: "Exported audit log", audit_log_integrity_check: "Checked audit log integrity",
 };
 export const actionLabel = (action: string) => LABELS[action] ?? action.replace(/_/g, " ");
@@ -82,6 +83,8 @@ export function describeDetails(row: Pick<AuditRow, "action" | "metadata">): str
     case "firewall_block": return `Refused: ${s("reason") || "no reason recorded"}${s("op") ? ` (${s("op")})` : ""}`;
     case "share_link_created": return [s("link_type"), s("permission")].filter(Boolean).join(", ");
     case "add_grant": case "set_contact_grant": return [s("scope_type"), s("permission")].filter(Boolean).join(", ");
+    case "restructure_vault": return m.failed_with ? `Stopped: ${s("failed_with")}` : `${s("operations")} changes`;
+    case "move": return "Moved to another folder";
     case "invite_collaborator": return s("email");
     case "list": return m.count != null ? `${s("count")} items` : "";
     case "audit_log_csv_export": return `${s("row_count")} rows`;

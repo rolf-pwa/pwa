@@ -2,18 +2,22 @@
 // Autonomous Drive folder-tree creation for a brand-new paid household —
 // no external agent, no staff click. Builds:
 //
-//   [LastName] Family
-//     [LastName] Household
-//       1. ProsperWise Vault — [LastName] (First & First)   <- vault_root_folder_id
+//   [LastName] Family Vault
+//     [LastName] Household Vault
+//       Household Docs                                      <- vault_root_folder_id
 //         00 Shoebox (Client Uploads) ... 99 From Collaborators  (from vault_folder_templates)
+//       Personal Docs                                       (VFO personal drawers go in here)
 //       Advisor Files
 //         Insurance / Investment / Meeting Notes / Working Files
+//
+// (Family Docs, the VFO Family Vault root, is added beside the households when a family becomes VFO.)
 //
 // Requires CLIENT_VAULT_ROOT_FOLDER_ID (the Drive folder every "[LastName]
 // Family" folder is created directly inside) and a connected Google account
 // in `google_tokens` (see _shared/google-token.ts).
 
 import { buildVaultCreatedRow } from "./vault-audit-events.ts";
+import { HOUSEHOLD_DOCS, PERSONAL_DOCS, withVaultSuffix } from "./vault-structure.ts";
 import { getServiceGoogleAccessToken } from "./google-token.ts";
 
 const CLIENT_ROOT_FOLDER_ID = Deno.env.get("CLIENT_VAULT_ROOT_FOLDER_ID");
@@ -127,8 +131,6 @@ export async function provisionClientFolderTree(admin: any, householdId: string,
     household.label?.replace(/\s+Household$/i, "").trim() ||
     "Client";
 
-  const firstNames = adults.map((c: any) => c.first_name?.trim()).filter(Boolean);
-  const peopleLabel = firstNames.length ? firstNames.join(" & ") : lastName;
 
   let accessToken: string;
   try {
@@ -138,14 +140,13 @@ export async function provisionClientFolderTree(admin: any, householdId: string,
   }
 
   try {
-    const familyFolder = await driveCreateFolder(`${lastName} Family`, CLIENT_ROOT_FOLDER_ID, accessToken);
-    const householdFolder = await driveCreateFolder(`${lastName} Household`, familyFolder.id, accessToken);
+    // {Family} Family Vault > {Household} Household Vault > Household Docs (the Vault) + Personal Docs + Advisor Files.
+    // See _shared/vault-structure.ts for the full layout.
+    const familyFolder = await driveCreateFolder(withVaultSuffix(`${lastName} Family`), CLIENT_ROOT_FOLDER_ID, accessToken);
+    const householdFolder = await driveCreateFolder(withVaultSuffix(`${lastName} Household`), familyFolder.id, accessToken);
 
-    const vaultFolder = await driveCreateFolder(
-      `1. ProsperWise Vault — ${lastName} (${peopleLabel})`,
-      householdFolder.id,
-      accessToken,
-    );
+    const vaultFolder = await driveCreateFolder(HOUSEHOLD_DOCS, householdFolder.id, accessToken);
+    await driveCreateFolder(PERSONAL_DOCS, householdFolder.id, accessToken);
 
     const { data: templates } = await admin
       .from("vault_folder_templates")
