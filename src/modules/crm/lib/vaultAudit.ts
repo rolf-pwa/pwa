@@ -70,7 +70,7 @@ export function describeDetails(row: Pick<AuditRow, "action" | "metadata">): str
   const s = (k: string) => (m[k] == null ? "" : String(m[k]));
   switch (row.action) {
     case "drive_external_rename": return `“${s("old_name")}” → “${s("new_name")}”`;
-    case "drive_external_modify": return s("note") || (s("old_md5") ? "File contents changed" : "");
+    case "drive_external_modify": return s("note") || (s("old_md5") && s("new_md5") ? "File contents changed" : "Edited (Google Doc, Sheet or similar)");
     case "drive_external_move": return `Moved between folders (${(m.from_folder_ids as unknown[] | undefined)?.length ?? 0} out, ${(m.to_folder_ids as unknown[] | undefined)?.length ?? 0} in)`;
     case "drive_external_sharing_change": {
       const a = (m.added as string[] | undefined) ?? []; const r = (m.removed as string[] | undefined) ?? [];

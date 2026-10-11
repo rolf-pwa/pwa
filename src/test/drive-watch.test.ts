@@ -31,6 +31,12 @@ describe("deriveDriveEvents", () => {
     expect(e.action).toBe("drive_external_modify");
     expect(e.metadata.note).toMatch(/earlier state unknown/);
   });
+  it("only baselines a folder it has never seen (adding a file bumps the folder's version)", () => {
+    expect(deriveDriveEvents(null, snap({ isFolder: true, mimeType: "application/vnd.google-apps.folder" }), ctx)).toEqual([]);
+    // ...but a brand-new folder, or a rename of a known one, is still reported.
+    expect(deriveDriveEvents(null, snap({ isFolder: true }), { changeTime: "2026-10-11T12:00:00Z", createdTime: "2026-10-11T11:59:00Z" })[0].action).toBe("drive_external_create");
+    expect(deriveDriveEvents(snap({ isFolder: true }), snap({ isFolder: true, name: "new name", version: "9" }), ctx)[0].action).toBe("drive_external_rename");
+  });
   it("uses version when Google-native files have no checksum", () => {
     const e = deriveDriveEvents(snap({ md5: null, version: "5" }), snap({ md5: null, version: "6" }), ctx);
     expect(e.map((x) => x.action)).toEqual(["drive_external_modify"]);
