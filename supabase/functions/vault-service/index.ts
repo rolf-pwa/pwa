@@ -28,7 +28,7 @@ import { logActionEvent } from "../_shared/action-brain.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
 import { buildItemAccess } from "../_shared/vault-access.ts";
 import { FAMILY_DOCS, HOUSEHOLD_DOCS, PERSONAL_DOCS, withVaultSuffix, planRestructure, describeOp, type StructureState, type StructureOp } from "../_shared/vault-structure.ts";
-import { drawerCapability, mayShareFromDrawer, FAMILY_VAULT_CATEGORIES, hasPersonalDrawerRole, type Drawer } from "../_shared/vault-drawers.ts";
+import { drawerCapability, pickDrawer, mayShareFromDrawer, FAMILY_VAULT_CATEGORIES, hasPersonalDrawerRole, type Drawer } from "../_shared/vault-drawers.ts";
 
 const APP_BASE_URL = "https://app.prosperwise.ca";
 
@@ -156,7 +156,7 @@ function googleExportMime(mime: string) {
 // ───── Actor resolution ─────
 type Actor =
   | { kind: "staff"; userId: string }
-  | { kind: "client"; contactId: string; householdId: string | null; vaultRootId: string; shoeboxOnly: boolean; familyId: string | null; familyRole: string | null; isMinor: boolean; drawers: Drawer[]; lastDrawer?: Drawer | null }
+  | { kind: "client"; contactId: string; householdId: string | null; vaultRootId: string; shoeboxOnly: boolean; familyId: string | null; familyRole: string | null; isMinor: boolean; drawers: Drawer[]; protectedRoots: string[]; lastDrawer?: Drawer | null }
   | {
       kind: "collaborator";
       collaboratorId: string;
@@ -296,9 +296,15 @@ async function resolveActor(req: Request): Promise<Actor | null> {
     // Drawers beyond the household Vault: the Family Vault (VFO families) and the client's own personal drawer.
     // Looked up defensively: a failure here must never take the household Vault away from a client.
     const drawers: Drawer[] = [{ kind: "household", rootId: vaultRootId }];
+    // Roots the Family Vault must never reach into: every household Vault and every personal drawer in the family.
+    const protectedRoots: string[] = [vaultRootId];
     try {
       const c: any = contact;
       if (c?.family_id) {
+        const { data: hhRoots } = await supabaseAdmin.from("households").select("vault_root_folder_id").eq("family_id", c.family_id).not("vault_root_folder_id", "is", null);
+        const { data: pdRoots } = await supabaseAdmin.from("contacts").select("personal_vault_folder_id").eq("family_id", c.family_id).not("personal_vault_folder_id", "is", null);
+        for (const r of hhRoots ?? []) protectedRoots.push(r.vault_root_folder_id);
+        for (const r of pdRoots ?? []) protectedRoots.push(r.personal_vault_folder_id);
         const { data: fam } = await supabaseAdmin.from("families").select("vfo_enabled, vault_root_folder_id").eq("id", c.family_id).maybeSingle();
         if (fam?.vfo_enabled && fam.vault_root_folder_id) drawers.push({ kind: "family", rootId: fam.vault_root_folder_id, familyId: c.family_id });
       }
@@ -308,7 +314,7 @@ async function resolveActor(req: Request): Promise<Actor | null> {
     }
     return {
       kind: "client", contactId: tok.contact_id, householdId: contact?.household_id ?? null, vaultRootId, shoeboxOnly: !!(contact as any)?.vault_shoebox_only,
-      familyId: (contact as any)?.family_id ?? null, familyRole: (contact as any)?.family_role ?? null, isMinor: !!(contact as any)?.is_minor, drawers,
+      familyId: (contact as any)?.family_id ?? null, familyRole: (contact as any)?.family_role ?? null, isMinor: !!(contact as any)?.is_minor, drawers, protectedRoots,
     };
   }
 
@@ -522,8 +528,8 @@ async function ensureAccess(
 
   if (actor.kind === "client") {
     // Family Vault / personal drawer: separate roots outside the household Vault, with their own rules.
-    const drawer = actor.drawers.find((d) => d.kind !== "household" && chain.includes(d.rootId));
-    if (drawer) return await ensureDrawerAccess(actor, drawer, chain, driveId, need);
+    const drawer = pickDrawer(actor.drawers, chain, actor.protectedRoots);
+    if (drawer && drawer.kind !== "household") return await ensureDrawerAccess(actor, drawer, chain, driveId, need);
     if (!chain.includes(actor.vaultRootId)) return { ok: false, reason: "outside_vault_root" };
 
     // Shoebox-only firewall: client may only see/touch items inside the Shoebox subtree
@@ -2157,7 +2163,7 @@ serve(async (req) => {
         } catch { return null; }
       };
       const { data: hhs } = await supabaseAdmin.from("households").select("id, label, vault_root_folder_id").eq("family_id", familyId).not("vault_root_folder_id", "is", null);
-      const state: StructureState = { vfo: !!fam.vfo_enabled, familyFolder: null, familyDocs: null, households: [] };
+      const state: StructureState = { vfo: !!fam.vfo_enabled, familyName: fam.name, familyFolder: null, familyDocs: null, familyDocsCandidate: null, households: [] };
       const warnings: string[] = [];
       for (const h of hhs ?? []) {
         const root = await meta(h.vault_root_folder_id);
@@ -2183,6 +2189,15 @@ serve(async (req) => {
         if (fd) state.familyDocs = { id: fd.id, name: fd.name };
         if (!state.familyFolder && fd?.parent) { const ff = await meta(fd.parent); if (ff) state.familyFolder = { id: ff.id, name: ff.name }; }
       }
+      // A Family Vault root that is the Family folder itself would also contain the household Vaults. Look for the
+      // folder inside it that holds the family's shared documents.
+      if (state.familyDocs && state.familyFolder && state.familyDocs.id === state.familyFolder.id) {
+        const householdFolders = new Set(state.households.map((h) => h.folder.id));
+        const inside = (await driveListChildren(state.familyFolder.id, accessToken)).filter((f: any) => f.mimeType === "application/vnd.google-apps.folder" && !householdFolders.has(f.id));
+        const matches = inside.filter((f: any) => /famil/i.test(f.name ?? "") && /(docs|documents)/i.test(f.name ?? ""));
+        if (matches.length === 1) state.familyDocsCandidate = { id: matches[0].id, name: matches[0].name };
+        else warnings.push(matches.length > 1 ? "More than one folder looks like the family's documents; a new Family Docs folder will be created" : "No Family Docs folder found inside; a new one will be created");
+      }
       const ops = planRestructure(state);
       const plan = ops.map((o) => ({ ...o, description: describeOp(o) }));
       if (apply !== true) return new Response(JSON.stringify({ ok: true, applied: false, plan, warnings }), { headers: { ...cors, "Content-Type": "application/json" } });
@@ -2199,6 +2214,11 @@ serve(async (req) => {
             await patch(op.id, "", { name: op.to });
             await supabaseAdmin.from("vault_files").update({ name: op.to }).eq("drive_id", op.id);
             await audit(actor, "rename", null, op.id, op.to, req, { old_name: op.from, new_name: op.to, via: "restructure_vault", what: op.what, family_id: familyId });
+          } else if (op.op === "repoint") {
+            const to = op.to || created.get(op.toKey ?? "") || "";
+            if (!to) throw new Error("missing_target_folder");
+            await supabaseAdmin.from("families").update({ vault_root_folder_id: to }).eq("id", familyId);
+            await audit(actor, "set_root", null, to, null, req, { family_id: familyId, drawer: "family", previous_root: op.from, via: "restructure_vault" });
           } else if (op.op === "create") {
             const f = await driveCreateFolder(op.name, op.parent, accessToken);
             created.set(op.key, f.id);
