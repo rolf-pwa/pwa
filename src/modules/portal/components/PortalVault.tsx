@@ -41,6 +41,10 @@ interface Drawer {
   capability: string;
 }
 
+// Broadest to most private: Family, Household, Personal.
+const DRAWER_ORDER: Drawer["kind"][] = ["family", "household", "personal"];
+export const sortDrawers = (list: Drawer[]) => [...list].sort((a, b) => DRAWER_ORDER.indexOf(a.kind) - DRAWER_ORDER.indexOf(b.kind));
+
 const DRAWER_BLURB: Record<Drawer["kind"], string> = {
   household: "Shared with your household",
   family: "Shared with your family, by role",
@@ -143,7 +147,7 @@ export function PortalVault({ portalToken, householdId }: Props) {
           const dRes = await callVault("getDrawers");
           if (dRes.ok) {
             const dj = await dRes.json();
-            if (!cancelled) setDrawers((dj.drawers ?? []) as Drawer[]);
+            if (!cancelled) setDrawers(sortDrawers((dj.drawers ?? []) as Drawer[]));
           }
         } catch {
           /* the household Vault still works without the picker */

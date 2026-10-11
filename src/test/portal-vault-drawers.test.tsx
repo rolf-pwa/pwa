@@ -39,6 +39,8 @@ describe("PortalVault drawer picker", () => {
     const calls = stubVault(all);
     render(<PortalVault portalToken="t" householdId="h1" />);
     await waitFor(() => expect(screen.getByText("03 Tax")).toBeTruthy());
+    // Buttons run broadest to most private, whatever order the server returns them in.
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Family Docs", "Household Docs", "Personal Docs"]);
     expect(screen.getByRole("tab", { name: "Household Docs" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByText("Shared with your household")).toBeTruthy();
 
