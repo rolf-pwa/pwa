@@ -26,6 +26,7 @@ import { autoFileBlocker, isSignedCopy, uniqueFilename } from "../_shared/vault-
 import { driveDownloadFile, matchVaultCategoryFolder } from "../_shared/vault-provisioning.ts";
 import { logActionEvent } from "../_shared/action-brain.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
+import { buildItemAccess } from "../_shared/vault-access.ts";
 
 const APP_BASE_URL = "https://app.prosperwise.ca";
 
@@ -1829,8 +1830,12 @@ serve(async (req) => {
       if (revoke === false) patch.revoked_at = null;
       if (expires_at !== undefined) patch.expires_at = expires_at; // null = no expiry
       if (permission) patch.permission = permission;
+      const { data: before } = await supabaseAdmin.from("vault_collaborator_grants").select("drive_id, permission, expires_at, revoked_at, collaborator:vault_collaborators(email, full_name)").eq("id", grantId).maybeSingle();
       await supabaseAdmin.from("vault_collaborator_grants").update(patch).eq("id", grantId);
-      await audit(actor, "update_grant", null, null, null, req, { grantId, patch });
+      await audit(actor, "update_grant", null, before?.drive_id ?? null, null, req, {
+        grantId, patch, before: before ? { permission: before.permission, expires_at: before.expires_at, revoked_at: before.revoked_at } : null,
+        person: (before as any)?.collaborator?.email ?? null,
+      });
       return new Response(JSON.stringify({ ok: true }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
 
@@ -1944,6 +1949,47 @@ serve(async (req) => {
         .upsert({ contact_id: contactId, household_id: householdId, role, granted_by: actor.userId }, { onConflict: "contact_id" });
       await audit(actor, "set_contact_role", contactId, null, null, req, { role, household_id: householdId });
       return new Response(JSON.stringify({ ok: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    // ─── WHO CAN OPEN THIS FILE OR FOLDER (staff) ───
+    if (action === "getItemAccess") {
+      if (actor.kind !== "staff")
+        return new Response(JSON.stringify({ error: "staff_only" }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
+      const { householdId, driveId } = body;
+      if (!householdId || !driveId)
+        return new Response(JSON.stringify({ error: "missing_fields" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      const { data: hh } = await supabaseAdmin.from("households").select("vault_root_folder_id, vault_shoebox_folder_id").eq("id", householdId).maybeSingle();
+      if (!hh?.vault_root_folder_id)
+        return new Response(JSON.stringify({ error: "household_no_vault" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      const ancestors = await getAncestors(driveId, accessToken);
+      const fullChain = [driveId, ...ancestors];
+      const rootAt = fullChain.indexOf(hh.vault_root_folder_id);
+      if (rootAt < 0)
+        return new Response(JSON.stringify({ error: "scope_outside_household" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      const chain = fullChain.slice(0, rootAt + 1);
+      const metas = await Promise.all(chain.map(async (id) => {
+        try {
+          const r = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?supportsAllDrives=true&fields=id,name,mimeType`, { headers: { Authorization: `Bearer ${accessToken}` } });
+          return r.ok ? await r.json() : null;
+        } catch { return null; }
+      }));
+      const chainNames: Record<string, string> = {};
+      chain.forEach((id, n) => { chainNames[id] = metas[n]?.name ?? id; });
+      const [members, roles, contactGrants, collabGrants, links, fileRow] = await Promise.all([
+        supabaseAdmin.from("contacts").select("id, first_name, last_name, family_role, vault_shoebox_only").eq("household_id", householdId),
+        supabaseAdmin.from("vault_contact_roles").select("contact_id, role").eq("household_id", householdId),
+        supabaseAdmin.from("vault_contact_grants").select("id, contact_id, drive_id, permission, expires_at, revoked_at").eq("household_id", householdId).in("drive_id", chain).is("revoked_at", null),
+        supabaseAdmin.from("vault_collaborator_grants").select("id, drive_id, permission, expires_at, revoked_at, collaborator:vault_collaborators(id, email, full_name, professional_id, revoked_at)").in("drive_id", chain).is("revoked_at", null),
+        supabaseAdmin.from("vault_share_links").select("id, link_type, permission, drive_id, expires_at, max_uses, use_count, revoked_at, name").eq("household_id", householdId).in("drive_id", chain).is("revoked_at", null),
+        supabaseAdmin.from("vault_files").select("client_visible").eq("drive_id", driveId).maybeSingle(),
+      ]);
+      const access = buildItemAccess({
+        itemId: driveId, chain, chainNames, isFolder: metas[0]?.mimeType === "application/vnd.google-apps.folder",
+        clientVisible: fileRow.data ? fileRow.data.client_visible : null, shoeboxFolderId: hh.vault_shoebox_folder_id ?? null, now: new Date(),
+        members: members.data ?? [], roles: roles.data ?? [], contactGrants: contactGrants.data ?? [],
+        collaboratorGrants: (collabGrants.data ?? []) as any, links: (links.data ?? []) as any,
+      });
+      return new Response(JSON.stringify({ item: { id: driveId, name: chainNames[driveId], isFolder: metas[0]?.mimeType === "application/vnd.google-apps.folder" }, access }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
 
     // ─── Set per-folder/file grant for a portal contact (staff) ───

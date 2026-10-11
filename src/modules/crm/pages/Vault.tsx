@@ -29,9 +29,11 @@ import {
   KeyRound,
   Brain,
   ExternalLink,
+  Users,
 } from "lucide-react";
 import { indexVaultFile } from "@/shared/lib/brain";
 import ShoeboxReviewPanel from "@/modules/crm/components/vault/ShoeboxReviewPanel";
+import { VaultAccessSheet, type AccessTarget } from "@/modules/crm/components/vault/VaultAccessSheet";
 import { toast } from "sonner";
 
 type DriveFolder = { id: string; name: string; modifiedTime?: string };
@@ -75,6 +77,7 @@ function FolderNode({
   householdId,
   onPreview,
   onShare,
+  onAccess,
 }: {
   folderId: string;
   name: string;
@@ -82,6 +85,7 @@ function FolderNode({
   householdId?: string;
   onPreview: (file: DriveFile) => void;
   onShare: (target: ShareTarget) => void;
+  onAccess: (target: ShareTarget) => void;
 }) {
   const [open, setOpen] = useState(depth === 0);
   const [loading, setLoading] = useState(false);
@@ -241,6 +245,9 @@ function FolderNode({
             <Button size="sm" variant="ghost" className="h-7 px-1.5" title="Copy Vault link" onClick={() => copyVaultLink(folderId, true)}>
               <Copy className="h-3.5 w-3.5" />
             </Button>
+            <Button size="sm" variant="ghost" className="h-7 px-1.5" title="Who has access" onClick={() => onAccess({ driveId: folderId, name, isFolder: true })}>
+              <Users className="h-3.5 w-3.5" />
+            </Button>
             <Button size="sm" variant="ghost" className="h-7 px-1.5" title="Share with collaborator" onClick={() => onShare({ driveId: folderId, name, isFolder: true })}>
               <Share2 className="h-3.5 w-3.5" />
             </Button>
@@ -263,6 +270,7 @@ function FolderNode({
               householdId={householdId}
               onPreview={onPreview}
               onShare={onShare}
+              onAccess={onAccess}
             />
           ))}
           {files.map((f) => {
@@ -302,6 +310,9 @@ function FolderNode({
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => copyVaultLink(f.id, false)}>
                             <Copy className="mr-2 h-3.5 w-3.5" /> Copy Vault link
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => onAccess({ driveId: f.id, name: f.name, isFolder: false })}>
+                            <Users className="mr-2 h-3.5 w-3.5" /> Who has access
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => onShare({ driveId: f.id, name: f.name, isFolder: false })}>
                             <Share2 className="mr-2 h-3.5 w-3.5" /> Share with collaborator
@@ -927,6 +938,7 @@ export function VaultView({ forcedHouseholdId, embedded = false, sidebarTools }:
   const [preview, setPreview] = useState<{ file: DriveFile; url: string } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [shareTarget, setShareTarget] = useState<ShareTarget | null>(null);
+  const [accessTarget, setAccessTarget] = useState<AccessTarget | null>(null);
   const [redirectTo, setRedirectTo] = useState<string | null>(null);
   const [provisioning, setProvisioning] = useState(false);
 
@@ -1123,11 +1135,22 @@ export function VaultView({ forcedHouseholdId, embedded = false, sidebarTools }:
                   householdId={householdId ?? undefined}
                   onPreview={openPreview}
                   onShare={setShareTarget}
+                  onAccess={setAccessTarget}
                 />
               </CardContent>
             </Card>
 
           </div>
+
+          {householdId && (
+            <VaultAccessSheet
+              open={!!accessTarget}
+              onOpenChange={(o) => { if (!o) setAccessTarget(null); }}
+              householdId={householdId}
+              target={accessTarget}
+              onInvite={(t) => setShareTarget(t)}
+            />
+          )}
 
           {householdId && (
             <aside className="space-y-3 min-w-0">
