@@ -995,12 +995,31 @@ function DrawersPanel({ householdId }: { householdId: string }) {
     } catch (e: any) { toast.error(e.message); }
     finally { setBusy(null); }
   };
+  // Fills in whatever is missing (personal drawers, Family Docs); with `fresh` builds a brand-new structure for this household.
+  const provisionStructure = async (fresh: boolean) => {
+    if (fresh && !window.confirm("Build a BRAND-NEW family structure for this household?\n\nThis creates a new Family Vault, Household Vault, Personal Docs and Family Docs in Drive and points the system at them. The existing folders stay in Drive but are no longer linked, and anything filed in them is no longer shown in the portal.\n\nContinue?")) return;
+    setBusy(fresh ? "fresh" : "complete");
+    try {
+      const res = await callVault("provisionFamilyStructure", { householdId, force: fresh });
+      toast.success(fresh ? "New structure created" : `Structure complete${res.personalDrawers ? `: ${res.personalDrawers} personal drawer${res.personalDrawers === 1 ? "" : "s"} added` : ""}`);
+      await load();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setBusy(null); }
+  };
   return (
     <div className="space-y-2">
-      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" disabled={busy === "tidy"} onClick={tidy}>
-        {busy === "tidy" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}Tidy Drive folders
-      </Button>
-      {data.family.vfoEnabled && (
+      <div className="flex flex-wrap gap-1">
+        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" disabled={busy === "complete"} onClick={() => provisionStructure(false)}>
+          {busy === "complete" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}Complete structure
+        </Button>
+        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" disabled={busy === "tidy"} onClick={tidy}>
+          {busy === "tidy" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}Tidy Drive folders
+        </Button>
+        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-destructive" disabled={busy === "fresh"} onClick={() => provisionStructure(true)}>
+          {busy === "fresh" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}New structure…
+        </Button>
+      </div>
+      {(data.family.vfoEnabled || data.family.rootId) && (
         <Row
           label="Family Docs" sub={`${data.family.name} · shared by the family, access by role`} busyKey="family"
           to={data.family.rootId ? `/vault/drawer/family/${data.family.id}` : null}
