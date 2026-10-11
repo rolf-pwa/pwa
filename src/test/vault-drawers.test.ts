@@ -94,3 +94,13 @@ describe("pickDrawer: a Family Vault root that sits above household folders", ()
     expect(pickDrawer(drawers, ["x", "y"], protectedRoots)).toBeNull();
   });
 });
+
+describe("pickDrawer: Advisor Files and Personal Docs sit under the Household Vault folder", () => {
+  const fam: Drawer = { kind: "family", rootId: "top", familyId: "f1" };
+  const household: Drawer = { kind: "household", rootId: "hdocs" };
+  it("never serves Advisor Files through the Family Vault, even when its root is above them", () => {
+    const protectedRoots = ["hdocs", "hvault"]; // the Household Docs root and the Household Vault folder
+    expect(pickDrawer([household, fam], ["file", "advisor-files", "hvault", "top"], protectedRoots)).toBeNull();
+    expect(pickDrawer([household, fam], ["file", "pdocs", "hvault", "top"], protectedRoots)).toBeNull();
+  });
+});

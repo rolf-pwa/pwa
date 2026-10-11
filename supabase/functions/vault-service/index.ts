@@ -301,9 +301,25 @@ async function resolveActor(req: Request): Promise<Actor | null> {
     try {
       const c: any = contact;
       if (c?.family_id) {
-        const { data: hhRoots } = await supabaseAdmin.from("households").select("vault_root_folder_id").eq("family_id", c.family_id).not("vault_root_folder_id", "is", null);
+        const { data: hhRoots } = await supabaseAdmin.from("households").select("id, vault_root_folder_id, vault_folder_id").eq("family_id", c.family_id).not("vault_root_folder_id", "is", null);
         const { data: pdRoots } = await supabaseAdmin.from("contacts").select("personal_vault_folder_id").eq("family_id", c.family_id).not("personal_vault_folder_id", "is", null);
-        for (const r of hhRoots ?? []) protectedRoots.push(r.vault_root_folder_id);
+        for (const r of hhRoots ?? []) {
+          protectedRoots.push(r.vault_root_folder_id);
+          // The Household Vault folder above each Vault root holds Personal Docs and Advisor Files (staff only), so the
+          // Family Vault must not apply anywhere beneath it. Learn it from Drive the first time if it is not recorded yet.
+          let folderId: string | null = r.vault_folder_id ?? null;
+          if (!folderId) {
+            const token = await getValidGoogleToken();
+            if (token) {
+              try {
+                const pr = await fetch(`https://www.googleapis.com/drive/v3/files/${r.vault_root_folder_id}?supportsAllDrives=true&fields=parents`, { headers: { Authorization: `Bearer ${token}` } });
+                folderId = pr.ok ? ((await pr.json()).parents?.[0] ?? null) : null;
+                if (folderId) await supabaseAdmin.from("households").update({ vault_folder_id: folderId }).eq("id", r.id);
+              } catch { /* leave unset */ }
+            }
+          }
+          if (folderId) protectedRoots.push(folderId);
+        }
         for (const r of pdRoots ?? []) protectedRoots.push(r.personal_vault_folder_id);
         const { data: fam } = await supabaseAdmin.from("families").select("vfo_enabled, vault_root_folder_id").eq("id", c.family_id).maybeSingle();
         if (fam?.vfo_enabled && fam.vault_root_folder_id) drawers.push({ kind: "family", rootId: fam.vault_root_folder_id, familyId: c.family_id });
