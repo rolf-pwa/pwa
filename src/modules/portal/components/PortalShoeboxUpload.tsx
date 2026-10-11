@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/shared/components/ui/button";
 import { Inbox, Loader2 } from "lucide-react";
 import { useToast } from "@/shared/hooks/use-toast";
+import { ShoeboxNotice } from "./ShoeboxNotice";
 
 const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
@@ -21,6 +22,7 @@ export function PortalShoeboxUpload({ portalToken, householdId, row }: Props) {
   const { toast } = useToast();
   const [shoeboxId, setShoeboxId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [hasPersonal, setHasPersonal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -39,6 +41,17 @@ export function PortalShoeboxUpload({ portalToken, householdId, row }: Props) {
         }
       } catch {
         /* best-effort */
+      }
+      // Does this person have a personal drawer? Then the notice can point to it for private files.
+      try {
+        const dr = await fetch(`${FUNCTIONS_URL}/vault-service`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-portal-token": portalToken },
+          body: JSON.stringify({ action: "getDrawers" }),
+        });
+        if (dr.ok && !cancelled) setHasPersonal(((await dr.json()).drawers ?? []).some((d: any) => d.kind === "personal"));
+      } catch {
+        /* the notice still says who can see the files */
       }
     })();
     return () => { cancelled = true; };
@@ -109,15 +122,18 @@ export function PortalShoeboxUpload({ portalToken, householdId, row }: Props) {
         accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.doc,.docx,.xls,.xlsx,.txt,.csv"
       />
       {row ? (
-        <button
-          type="button"
-          disabled={uploading || !shoeboxId}
-          onClick={() => fileInputRef.current?.click()}
-          className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-muted/40 disabled:opacity-50"
-        >
-          {uploading ? <Loader2 className="h-4 w-4 animate-spin text-accent" /> : <Inbox className="h-4 w-4 text-accent" />}
-          {uploading ? "Uploading…" : "Send to Shoebox"}
-        </button>
+        <div>
+          <button
+            type="button"
+            disabled={uploading || !shoeboxId}
+            onClick={() => fileInputRef.current?.click()}
+            className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-muted/40 disabled:opacity-50"
+          >
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin text-accent" /> : <Inbox className="h-4 w-4 text-accent" />}
+            {uploading ? "Uploading…" : "Send to Shoebox"}
+          </button>
+          <ShoeboxNotice hasPersonal={hasPersonal} className="px-4 pb-3" />
+        </div>
       ) : (
       <Button
         variant="outline"
@@ -129,6 +145,7 @@ export function PortalShoeboxUpload({ portalToken, householdId, row }: Props) {
         {uploading ? "Uploading…" : "Send to Shoebox"}
       </Button>
       )}
+      {!row && <ShoeboxNotice hasPersonal={hasPersonal} className="mt-2" />}
     </>
   );
 }
