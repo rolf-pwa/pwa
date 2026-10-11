@@ -93,6 +93,7 @@ const GROUPS = [
       { to: "/review-queue", label: "Review Queue", icon: ClipboardCheck, badgeKey: "review" },
       { to: "/glass-box-review", label: "Glass-Box Review", icon: ShieldCheck },
       { to: "/bulk-statement-import", label: "Bulk Statement Import", icon: FileUp },
+      { to: "/vault-audit", label: "Vault Audit Log", icon: ShieldCheck },
       { to: "/knowledge-base", label: "Bot Knowledge", icon: BookOpen },
     ],
   },

@@ -6236,6 +6236,7 @@ export type Database = {
       vault_audit_log: {
         Row: {
           action: string
+          actor_email: string | null
           actor_id: string | null
           actor_label: string | null
           actor_type: string
@@ -6247,10 +6248,14 @@ export type Database = {
           id: string
           ip: string | null
           metadata: Json | null
+          prev_hash: string | null
+          row_hash: string
+          seq: number
           user_agent: string | null
         }
         Insert: {
           action: string
+          actor_email?: string | null
           actor_id?: string | null
           actor_label?: string | null
           actor_type: string
@@ -6262,10 +6267,14 @@ export type Database = {
           id?: string
           ip?: string | null
           metadata?: Json | null
+          prev_hash?: string | null
+          row_hash: string
+          seq: number
           user_agent?: string | null
         }
         Update: {
           action?: string
+          actor_email?: string | null
           actor_id?: string | null
           actor_label?: string | null
           actor_type?: string
@@ -6277,6 +6286,9 @@ export type Database = {
           id?: string
           ip?: string | null
           metadata?: Json | null
+          prev_hash?: string | null
+          row_hash?: string
+          seq?: number
           user_agent?: string | null
         }
         Relationships: []
@@ -7005,6 +7017,26 @@ export type Database = {
       pgp_armor_headers: {
         Args: { "": string }
         Returns: Record<string, unknown>[]
+      }
+      record_vault_audit_export: {
+        Args: { p_filters: Json; p_kind?: string; p_row_count: number }
+        Returns: undefined
+      }
+      vault_audit_row_hash: {
+        Args: {
+          prev: string
+          r: Database["public"]["Tables"]["vault_audit_log"]["Row"]
+        }
+        Returns: string
+      }
+      verify_vault_audit_chain: {
+        Args: never
+        Returns: {
+          detail: string
+          first_bad_seq: number
+          ok: boolean
+          rows_checked: number
+        }[]
       }
     }
     Enums: {

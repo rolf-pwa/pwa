@@ -47,6 +47,7 @@ const PropertyDetail = lazy(() => import("@/modules/crm/pages/PropertyDetail"));
 const Workbench = lazy(() => import("@/modules/audit/pages/Workbench"));
 const Pipeline = lazy(() => import("@/modules/crm/pages/Pipeline"));
 const Vault = lazy(() => import("@/modules/crm/pages/Vault"));
+const VaultAudit = lazy(() => import("@/modules/crm/pages/VaultAudit"));
 const VaultGuest = lazy(() => import("@/modules/portal/pages/VaultGuest"));
 const KnowledgeBase = lazy(() => import("@/modules/crm/pages/KnowledgeBase"));
 const HoldingTankPage = lazy(() => import("@/modules/crm/pages/HoldingTankPage"));
@@ -169,6 +170,7 @@ const App = () => (
               <Route path="/vault" element={<ProtectedRoute><Vault /></ProtectedRoute>} />
               <Route path="/vault/household/:householdId" element={<ProtectedRoute><Vault /></ProtectedRoute>} />
               <Route path="/vault/:contactId" element={<ProtectedRoute><Vault /></ProtectedRoute>} />
+              <Route path="/vault-audit" element={<ProtectedRoute><VaultAudit /></ProtectedRoute>} />
               <Route path="/vault/guest/:token" element={<VaultGuest />} />
               <Route path="/vault/share/:token" element={<VaultGuest />} />
               <Route path="/knowledge-base" element={<ProtectedRoute><KnowledgeBase /></ProtectedRoute>} />
