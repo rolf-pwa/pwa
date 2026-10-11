@@ -13,6 +13,7 @@
 // Family" folder is created directly inside) and a connected Google account
 // in `google_tokens` (see _shared/google-token.ts).
 
+import { buildVaultCreatedRow } from "./vault-audit-events.ts";
 import { getServiceGoogleAccessToken } from "./google-token.ts";
 
 const CLIENT_ROOT_FOLDER_ID = Deno.env.get("CLIENT_VAULT_ROOT_FOLDER_ID");
@@ -96,7 +97,7 @@ export interface ProvisionResult {
  * Idempotent: no-ops (ok: true) if the household is already provisioned.
  */
 // deno-lint-ignore no-explicit-any
-export async function provisionClientFolderTree(admin: any, householdId: string): Promise<ProvisionResult> {
+export async function provisionClientFolderTree(admin: any, householdId: string, source = "automatic"): Promise<ProvisionResult> {
   if (!CLIENT_ROOT_FOLDER_ID) {
     return { ok: false, error: "CLIENT_VAULT_ROOT_FOLDER_ID is not configured" };
   }
@@ -161,6 +162,17 @@ export async function provisionClientFolderTree(admin: any, householdId: string)
     }
 
     await admin.from("households").update({ vault_root_folder_id: vaultFolder.id }).eq("id", householdId);
+
+    // One audit entry for the Vault being created (not one per folder): the start of the household's audit file.
+    // Logging must never undo or fail an enrolment that otherwise worked.
+    try {
+      const { error: auditErr } = await admin.from("vault_audit_log").insert(buildVaultCreatedRow({
+        householdId, rootFolderId: vaultFolder.id, rootFolderName: vaultFolder.name ?? null, categoryFolders: (templates ?? []).length, source,
+      }));
+      if (auditErr) console.error("[vault-provisioning] could not log Vault creation:", auditErr.message);
+    } catch (e) {
+      console.error("[vault-provisioning] could not log Vault creation:", e instanceof Error ? e.message : String(e));
+    }
 
     return { ok: true, vaultRootFolderId: vaultFolder.id };
   } catch (e) {

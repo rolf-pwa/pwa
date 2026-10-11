@@ -44,3 +44,12 @@ describe("vault audit helpers", () => {
     expect(lines[2].endsWith(",abc,def")).toBe(true);
   });
 });
+
+import { buildVaultCreatedRow } from "../../supabase/functions/_shared/vault-audit-events";
+describe("vault created entry", () => {
+  it("is one system entry for the household with the root folder and source", () => {
+    const row = buildVaultCreatedRow({ householdId: "h1", rootFolderId: "r1", rootFolderName: "1. ProsperWise Vault — Peters", categoryFolders: 9, source: "paid_booking" });
+    expect(row).toMatchObject({ household_id: "h1", actor_type: "system", action: "provision", drive_id: "r1", drive_name: "1. ProsperWise Vault — Peters" });
+    expect(row.metadata).toEqual({ household_id: "h1", auto: true, source: "paid_booking", category_folders: 9 });
+  });
+});

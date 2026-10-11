@@ -372,7 +372,7 @@ export async function enrollPaidBooking(
   let vaultProvisioning: EnrollmentResult["vaultProvisioning"] = "skipped";
   if (householdId) {
     try {
-      const result = await provisionClientFolderTree(client, householdId);
+      const result = await provisionClientFolderTree(client, householdId, "paid_booking");
       vaultProvisioning = result.ok ? "provisioned" : "failed";
       if (!result.ok) console.error("[enrollPaidBooking] autonomous vault provisioning failed:", result.error);
     } catch (e) {
