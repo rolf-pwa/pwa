@@ -178,3 +178,6 @@ verify_jwt = false
 
 [functions.vault-drive-watch]
 verify_jwt = false
+
+[functions.vault-reconcile]
+verify_jwt = false

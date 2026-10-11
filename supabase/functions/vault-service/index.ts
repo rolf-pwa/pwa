@@ -26,6 +26,7 @@ import { autoFileBlocker, isSignedCopy, uniqueFilename } from "../_shared/vault-
 import { driveDownloadFile, matchVaultCategoryFolder } from "../_shared/vault-provisioning.ts";
 import { logActionEvent } from "../_shared/action-brain.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
+import { provisionClientFolderTree } from "../_shared/vault-provisioning.ts";
 import { buildItemAccess } from "../_shared/vault-access.ts";
 import { FAMILY_DOCS, HOUSEHOLD_DOCS, PERSONAL_DOCS, withVaultSuffix, planRestructure, describeOp, type StructureState, type StructureOp } from "../_shared/vault-structure.ts";
 import { drawerCapability, pickDrawer, mayShareFromDrawer, FAMILY_VAULT_CATEGORIES, hasPersonalDrawerRole, type Drawer } from "../_shared/vault-drawers.ts";
@@ -2168,11 +2169,25 @@ serve(async (req) => {
       return new Response(JSON.stringify({
         household: { id: hh?.id, label: hh?.label, rootId: hh?.vault_root_folder_id ?? null },
         family: fam ? { id: fam.id, name: fam.name, vfoEnabled: !!fam.vfo_enabled, rootId: fam.vault_root_folder_id ?? null } : null,
-        // Personal drawers are part of the VFO offering.
-        personal: (people ?? []).filter((c: any) => fam?.vfo_enabled && hasPersonalDrawerRole(c.family_role, c.is_minor)).map((c: any) => ({
+        personal: (people ?? []).filter((c: any) => hasPersonalDrawerRole(c.family_role, c.is_minor)).map((c: any) => ({
           contactId: c.id, name: `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim(), role: c.family_role, rootId: c.personal_vault_folder_id ?? null,
         })),
       }), { headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    // ─── PROVISION A HOUSEHOLD'S WHOLE STRUCTURE (staff) ───
+    // Family Vault > Family Docs + Household Vault > Household Docs, Personal Docs (one drawer per adult), Advisor Files.
+    // Without `force` it only fills in what is missing; with `force` it builds a brand-new structure and points the
+    // system at it (the old folders stay in Drive, unlinked).
+    if (action === "provisionFamilyStructure") {
+      if (actor.kind !== "staff")
+        return new Response(JSON.stringify({ error: "staff_only" }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
+      const { householdId, force } = body;
+      if (!householdId) return new Response(JSON.stringify({ error: "householdId required" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      const { data: p } = await supabaseAdmin.from("profiles").select("email").eq("user_id", actor.userId).maybeSingle();
+      const result = await provisionClientFolderTree(supabaseAdmin, householdId, "staff", { force: force === true, requestedBy: { id: actor.userId, email: p?.email ?? null } });
+      if (!result.ok) return new Response(JSON.stringify({ error: result.error }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ ok: true, vaultRootFolderId: result.vaultRootFolderId, personalDrawers: result.personalDrawers ?? 0 }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
 
     // ─── PROVISION THE FAMILY VAULT (staff, VFO families) ───
@@ -2185,7 +2200,6 @@ serve(async (req) => {
       if (!familyId) return new Response(JSON.stringify({ error: "familyId required" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
       const { data: fam } = await supabaseAdmin.from("families").select("id, name, vfo_enabled, vault_root_folder_id").eq("id", familyId).maybeSingle();
       if (!fam) return new Response(JSON.stringify({ error: "family_not_found" }), { status: 404, headers: { ...cors, "Content-Type": "application/json" } });
-      if (!fam.vfo_enabled) return new Response(JSON.stringify({ error: "family_not_vfo" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
       if (fam.vault_root_folder_id) return new Response(JSON.stringify({ ok: true, folderId: fam.vault_root_folder_id, alreadyExists: true }), { headers: { ...cors, "Content-Type": "application/json" } });
       // The Family folder is two levels above a household Vault root: Family > Household > Vault.
       const parentOf = async (id: string): Promise<string | null> => {
@@ -2228,8 +2242,6 @@ serve(async (req) => {
       const { data: c } = await supabaseAdmin.from("contacts").select("id, first_name, last_name, family_role, is_minor, household_id, family_id, personal_vault_folder_id").eq("id", contactId).maybeSingle();
       if (!c) return new Response(JSON.stringify({ error: "contact_not_found" }), { status: 404, headers: { ...cors, "Content-Type": "application/json" } });
       if (!hasPersonalDrawerRole(c.family_role, c.is_minor)) return new Response(JSON.stringify({ error: "not_an_adult_member" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
-      const { data: pf } = c.family_id ? await supabaseAdmin.from("families").select("vfo_enabled").eq("id", c.family_id).maybeSingle() : { data: null };
-      if (!pf?.vfo_enabled) return new Response(JSON.stringify({ error: "family_not_vfo" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
       if (c.personal_vault_folder_id) return new Response(JSON.stringify({ ok: true, folderId: c.personal_vault_folder_id, alreadyExists: true }), { headers: { ...cors, "Content-Type": "application/json" } });
       const { data: hh } = c.household_id ? await supabaseAdmin.from("households").select("vault_root_folder_id").eq("id", c.household_id).maybeSingle() : { data: null };
       if (!hh?.vault_root_folder_id) return new Response(JSON.stringify({ error: "household_no_vault" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
