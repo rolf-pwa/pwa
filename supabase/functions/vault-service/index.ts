@@ -1423,6 +1423,19 @@ serve(async (req) => {
       if (meta.mimeType !== "application/vnd.google-apps.folder" || meta.trashed) {
         return new Response(JSON.stringify({ error: "not_a_folder" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
       }
+      // The Vault root is what a household's members can open. A folder that also holds Personal Docs or Advisor Files
+      // (the Household Vault folder) would hand them everyone's personal drawers and the staff-only files, so refuse it
+      // and point at the right folder.
+      const kids = await driveListChildren(folderId, accessToken);
+      const folderKids = (kids ?? []).filter((f: any) => f.mimeType === "application/vnd.google-apps.folder");
+      if (folderKids.some((f: any) => /^(advisor files|personal docs)$/i.test((f.name ?? "").trim()))) {
+        const docs = folderKids.find((f: any) => /^household docs$/i.test((f.name ?? "").trim()));
+        return new Response(JSON.stringify({
+          error: "looks_like_household_vault_folder",
+          detail: `"${meta.name}" also holds Personal Docs or Advisor Files, which clients must never be able to open. Use the "Household Docs" folder inside it${docs ? ` (id ${docs.id})` : ""} as the Vault root. Staff still start at the Household Vault folder automatically.`,
+          householdDocsFolderId: docs?.id ?? null,
+        }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      }
       const { data: hh } = await supabaseAdmin.from("households").select("vault_root_folder_id").eq("id", householdId).maybeSingle();
       const previousRoot = hh?.vault_root_folder_id ?? null;
       await supabaseAdmin.from("households").update({ vault_root_folder_id: folderId }).eq("id", householdId);
@@ -1455,6 +1468,24 @@ serve(async (req) => {
       }
       if (!rootFolderId) {
         return new Response(JSON.stringify({ error: "vault_not_provisioned" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      }
+      // Reuse the Shoebox already recorded for this household (it may hold client uploads) rather than searching for or
+      // creating another one under whatever root is set now.
+      const recordedFor = actor.kind === "client" ? actor.householdId : body.householdId;
+      if (recordedFor) {
+        const { data: rec } = await supabaseAdmin.from("households").select("vault_shoebox_folder_id").eq("id", recordedFor).maybeSingle();
+        if (rec?.vault_shoebox_folder_id) {
+          const mr = await fetch(`https://www.googleapis.com/drive/v3/files/${rec.vault_shoebox_folder_id}?supportsAllDrives=true&fields=id,name,trashed,parents`, { headers: { Authorization: `Bearer ${accessToken}` } });
+          if (mr.ok) {
+            const m = await mr.json();
+            if (!m.trashed) {
+              const anc = await getAncestors(m.id, accessToken);
+              if ([m.id, ...anc].includes(rootFolderId)) {
+                return new Response(JSON.stringify({ folderId: m.id, name: m.name }), { headers: { ...cors, "Content-Type": "application/json" } });
+              }
+            }
+          }
+        }
       }
       const SHOEBOX_NAME = "00 Shoebox (Client Uploads)";
       const children = await driveListChildren(rootFolderId, accessToken);
@@ -2084,9 +2115,10 @@ serve(async (req) => {
       const { householdId } = body;
       const { data: hh } = await supabaseAdmin.from("households").select("vault_root_folder_id, vault_folder_id").eq("id", householdId).maybeSingle();
       if (!hh?.vault_root_folder_id) return new Response(JSON.stringify({ navRootId: null }), { headers: { ...cors, "Content-Type": "application/json" } });
-      let folderId: string | null = hh.vault_folder_id ?? null;
+      let folderId: string | null = null;
       let name: string | null = null;
-      if (!folderId) {
+      // Checked against Drive each time (one call): a recorded value can go stale if folders are moved or the root changes.
+      {
         const r = await fetch(`https://www.googleapis.com/drive/v3/files/${hh.vault_root_folder_id}?supportsAllDrives=true&fields=parents`, { headers: { Authorization: `Bearer ${accessToken}` } });
         const parent: string | null = r.ok ? ((await r.json()).parents?.[0] ?? null) : null;
         if (parent) {
@@ -2095,7 +2127,7 @@ serve(async (req) => {
           // Only a folder that is plainly this household's own (not a shared client root) is used.
           if (name && /household|vault/i.test(name)) {
             folderId = parent;
-            await supabaseAdmin.from("households").update({ vault_folder_id: parent }).eq("id", householdId);
+            if (hh.vault_folder_id !== parent) await supabaseAdmin.from("households").update({ vault_folder_id: parent }).eq("id", householdId);
           }
         }
       }
