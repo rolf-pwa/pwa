@@ -655,6 +655,8 @@ async function logShoeboxDecision(admin: any, userId: string | null | undefined,
 // Append-only, hash-chained log (see migration 20261014120000). The database refuses edits and deletes; every
 // row is tied to the one before it. We fill in everything a regulator would ask for: which household, who
 // (id and email for staff), and what the document was called at the time.
+const chainScopeCache = new Map<string, { t: number; householdId: string | null; personalFamilyId: string | null | undefined }>();
+
 async function audit(
   actor: Actor | null,
   action: string,
@@ -693,6 +695,26 @@ async function audit(
     if (!householdId && contactId) {
       const { data: c } = await supabaseAdmin.from("contacts").select("household_id").eq("id", contactId).maybeSingle();
       householdId = c?.household_id ?? null;
+    }
+    // Still unknown (a personal drawer, Advisor Files, a folder we never indexed): walk up the Drive folders and match them
+    // against the households' Vault roots and Household Vault folders and the personal drawers.
+    if (!householdId && driveId) {
+      // Remembered per instance for 10 minutes so a busy folder is walked once, not on every listing.
+      let hit = chainScopeCache.get(driveId);
+      if (!hit || Date.now() - hit.t > 600_000) {
+        hit = { t: Date.now(), householdId: null, personalFamilyId: undefined };
+        const token = await getValidGoogleToken();
+        if (token) {
+          const chain = [driveId, ...(await getAncestors(driveId, token))];
+          const { data: hh } = await supabaseAdmin.from("households").select("id").or(`vault_root_folder_id.in.(${chain.join(",")}),vault_folder_id.in.(${chain.join(",")})`).limit(1).maybeSingle();
+          hit.householdId = hh?.id ?? null;
+          const { data: pd } = await supabaseAdmin.from("contacts").select("household_id, family_id").in("personal_vault_folder_id", chain).limit(1).maybeSingle();
+          if (pd) { hit.householdId = hit.householdId ?? pd.household_id ?? null; hit.personalFamilyId = pd.family_id ?? null; }
+        }
+        chainScopeCache.set(driveId, hit);
+      }
+      householdId = hit.householdId;
+      if (hit.personalFamilyId !== undefined) metadata = { ...metadata, drawer: "personal", ...(hit.personalFamilyId ? { family_id: hit.personalFamilyId } : {}) };
     }
   } catch (e) {
     console.error("[vault-service] audit context lookup failed:", e instanceof Error ? e.message : String(e));
@@ -2028,6 +2050,33 @@ serve(async (req) => {
       return new Response(JSON.stringify({ ok: true }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
 
+    // ─── WHERE STAFF START TO SEE A HOUSEHOLD (staff) ───
+    // The Household Vault folder: parent of the Vault root (Household Docs). Navigation only; access still stops at
+    // the root, so Personal Docs and Advisor Files stay out of reach of the household's members.
+    if (action === "getNavRoot") {
+      if (actor.kind !== "staff")
+        return new Response(JSON.stringify({ error: "staff_only" }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
+      const { householdId } = body;
+      const { data: hh } = await supabaseAdmin.from("households").select("vault_root_folder_id, vault_folder_id").eq("id", householdId).maybeSingle();
+      if (!hh?.vault_root_folder_id) return new Response(JSON.stringify({ navRootId: null }), { headers: { ...cors, "Content-Type": "application/json" } });
+      let folderId: string | null = hh.vault_folder_id ?? null;
+      let name: string | null = null;
+      if (!folderId) {
+        const r = await fetch(`https://www.googleapis.com/drive/v3/files/${hh.vault_root_folder_id}?supportsAllDrives=true&fields=parents`, { headers: { Authorization: `Bearer ${accessToken}` } });
+        const parent: string | null = r.ok ? ((await r.json()).parents?.[0] ?? null) : null;
+        if (parent) {
+          const pr = await fetch(`https://www.googleapis.com/drive/v3/files/${parent}?supportsAllDrives=true&fields=name`, { headers: { Authorization: `Bearer ${accessToken}` } });
+          name = pr.ok ? (await pr.json()).name : null;
+          // Only a folder that is plainly this household's own (not a shared client root) is used.
+          if (name && /household|vault/i.test(name)) {
+            folderId = parent;
+            await supabaseAdmin.from("households").update({ vault_folder_id: parent }).eq("id", householdId);
+          }
+        }
+      }
+      return new Response(JSON.stringify({ navRootId: folderId, navName: name, accessRootId: hh.vault_root_folder_id }), { headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
     // ─── DRAWERS: the Vault spaces a person can open (client), or a household's drawers (staff) ───
     if (action === "getDrawers") {
       const metaName = async (id: string) => {
@@ -2236,6 +2285,7 @@ serve(async (req) => {
         await audit(actor, "restructure_vault", null, null, null, req, { family_id: familyId, completed: done, failed_with: message });
         return new Response(JSON.stringify({ ok: false, error: message, completed: done }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
       }
+      for (const h of state.households) await supabaseAdmin.from("households").update({ vault_folder_id: h.folder.id }).eq("id", h.householdId);
       await audit(actor, "restructure_vault", null, null, null, req, { family_id: familyId, operations: done.length, completed: done });
       return new Response(JSON.stringify({ ok: true, applied: true, completed: done, warnings }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
