@@ -33,6 +33,20 @@ interface Crumb {
   name: string;
 }
 
+/** A Vault space the person can open: the household's, the family's (VFO), or their own private one. */
+interface Drawer {
+  kind: "household" | "family" | "personal";
+  rootId: string;
+  label: string;
+  capability: string;
+}
+
+const DRAWER_BLURB: Record<Drawer["kind"], string> = {
+  household: "Shared with your household",
+  family: "Shared with your family, by role",
+  personal: "Private to you. Other members of your family cannot see it",
+};
+
 interface Props {
   portalToken: string;
   householdId: string | null;
@@ -58,6 +72,8 @@ export function PortalVault({ portalToken, householdId }: Props) {
   const [uploading, setUploading] = useState(false);
   const [shoeboxId, setShoeboxId] = useState<string | null>(null);
   const [currentPerm, setCurrentPerm] = useState<"none" | "view" | "upload" | "manage">("view");
+  const [drawers, setDrawers] = useState<Drawer[]>([]);
+  const [activeKind, setActiveKind] = useState<Drawer["kind"]>("household");
   const folderUploadRef = useRef<HTMLInputElement | null>(null);
 
   const callVault = useCallback(
@@ -122,6 +138,16 @@ export function PortalVault({ portalToken, householdId }: Props) {
         const root = await rootRes.json();
         if (cancelled) return;
         const rootCrumb: Crumb = { id: root.rootFolderId, name: root.rootName || "Vault" };
+        // Other spaces this person can open (Family Docs and a personal drawer, for VFO members).
+        try {
+          const dRes = await callVault("getDrawers");
+          if (dRes.ok) {
+            const dj = await dRes.json();
+            if (!cancelled) setDrawers((dj.drawers ?? []) as Drawer[]);
+          }
+        } catch {
+          /* the household Vault still works without the picker */
+        }
         await loadFolder(rootCrumb, [rootCrumb]);
         // Resolve (or create) the shoebox so uploads always have a target
         try {
@@ -143,6 +169,13 @@ export function PortalVault({ portalToken, householdId }: Props) {
       cancelled = true;
     };
   }, [callVault, loadFolder, householdId]);
+
+  const selectDrawer = (d: Drawer) => {
+    if (d.kind === activeKind) return;
+    setActiveKind(d.kind);
+    const rootCrumb: Crumb = { id: d.rootId, name: d.label };
+    loadFolder(rootCrumb, [rootCrumb]);
+  };
 
   const enterFolder = (folder: VaultEntry) => {
     const next = [...crumbs, { id: folder.id, name: folder.name }];
@@ -343,14 +376,35 @@ export function PortalVault({ portalToken, householdId }: Props) {
   }
 
   const isEmpty = folders.length === 0 && files.length === 0;
-  const inShoebox = !!shoeboxId && crumbs[crumbs.length - 1]?.id === shoeboxId;
+  const inShoebox = activeKind === "household" && !!shoeboxId && crumbs[crumbs.length - 1]?.id === shoeboxId;
+  const activeDrawer = drawers.find((d) => d.kind === activeKind);
+  const homeLabel = activeKind === "household" ? "Documents" : activeDrawer?.label ?? "Documents";
 
   return (
     <div className="space-y-3">
+      {drawers.length > 1 && (
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Document spaces">
+            {drawers.map((d) => (
+              <button
+                key={d.kind}
+                role="tab"
+                aria-selected={d.kind === activeKind}
+                onClick={() => selectDrawer(d)}
+                className={`rounded-full border px-3.5 py-1.5 text-sm transition-colors ${d.kind === activeKind ? "border-accent bg-accent/10 text-accent" : "border-border text-muted-foreground hover:bg-muted/50"}`}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+          <p className="px-1 text-xs text-muted-foreground">{DRAWER_BLURB[activeKind]}</p>
+        </div>
+      )}
+
       {crumbs.length > 1 && (
         <div className="flex flex-wrap items-center gap-2 px-1 text-sm">
           <button onClick={() => goToCrumb(0)} className="flex items-center gap-1 text-muted-foreground transition-colors hover:text-accent">
-            <Home className="h-3.5 w-3.5" /> Documents
+            <Home className="h-3.5 w-3.5" /> {homeLabel}
           </button>
           {crumbs.slice(1).map((c, i) => (
             <div key={c.id} className="flex items-center gap-2">
@@ -401,7 +455,11 @@ export function PortalVault({ portalToken, householdId }: Props) {
             <Folder className="mx-auto h-8 w-8 text-muted-foreground mb-3" />
             <p className="text-sm text-muted-foreground">
               {crumbs.length === 1
-                ? "Your Personal CFO has not shared any documents yet."
+                ? activeKind === "personal"
+                  ? "Your personal drawer is empty. Anything you add here stays private to you."
+                  : activeKind === "family"
+                    ? "There are no family documents here yet."
+                    : "Your Personal CFO has not shared any documents yet."
                 : "This folder is empty."}
             </p>
           </CardContent>
@@ -411,7 +469,7 @@ export function PortalVault({ portalToken, householdId }: Props) {
           <CardContent className="p-0 divide-y divide-border">
             <div className="flex items-center gap-2 px-4 py-3">
               <Folder className="h-4 w-4 text-accent" />
-              <h3 className="font-serif text-sm font-semibold text-foreground">{crumbs.length > 1 ? crumbs[crumbs.length - 1].name : "Documents"}</h3>
+              <h3 className="font-serif text-sm font-semibold text-foreground">{crumbs.length > 1 ? crumbs[crumbs.length - 1].name : homeLabel}</h3>
               {crumbs.length <= 1 && loading && <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin text-muted-foreground" />}
             </div>
             {folders.map((f) => {
