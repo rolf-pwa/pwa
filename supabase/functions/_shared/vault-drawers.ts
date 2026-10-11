@@ -1,0 +1,89 @@
+// Drawers: the three kinds of Vault space a client can have.
+//   household  the existing household Vault (role + grants; handled by vault-service as before)
+//   family     the Family Vault, shared by a VFO family; access by family role, plus named grants
+//   personal   one adult's private drawer; only its owner (and staff) can open it, unless the owner invites someone
+// Pure (no I/O) so it can be unit-tested.
+
+export type Capability = "view" | "upload" | "manage";
+export type DrawerKind = "household" | "family" | "personal";
+
+export interface Drawer {
+  kind: DrawerKind;
+  rootId: string;
+  ownerContactId?: string | null;
+  familyId?: string | null;
+}
+
+const RANK: Record<Capability, number> = { view: 0, upload: 1, manage: 2 };
+
+/** Folders created inside a new Family Vault. */
+export const FAMILY_VAULT_CATEGORIES = [
+  "01 Family Charter & Governance",
+  "02 Estate & Trusts",
+  "03 Corporate & Holdings",
+  "04 Insurance",
+  "05 Family Meetings",
+  "06 Education & Legacy",
+];
+
+// Default access to the Family Vault by family role. Minors see nothing unless named in a grant.
+const FAMILY_ROLE_CAP: Record<string, Capability> = {
+  head_of_family: "manage",
+  head_of_household: "upload",
+  spouse: "view",
+  beneficiary: "view",
+};
+export const familyRoleCap = (role: string | null | undefined): Capability | null => FAMILY_ROLE_CAP[role ?? ""] ?? null;
+
+/** Who gets a personal drawer: adults in a family. */
+export const hasPersonalDrawerRole = (role: string | null | undefined, isMinor?: boolean | null) =>
+  !isMinor && ["head_of_family", "head_of_household", "spouse", "beneficiary"].includes(role ?? "");
+
+export interface DrawerGrant { drive_id: string; permission: string; expires_at: string | null; revoked_at: string | null }
+
+export function drawerCapability(a: {
+  drawer: Drawer;
+  actorContactId: string;
+  familyRole: string | null;
+  isMinor: boolean;
+  shoeboxOnly: boolean;
+  grants: DrawerGrant[];
+  chain: string[];
+  now: Date;
+}): { cap: Capability | null; reason: string | null } {
+  if (a.drawer.kind === "personal") {
+    return a.drawer.ownerContactId === a.actorContactId ? { cap: "manage", reason: null } : { cap: null, reason: "personal_drawer_private" };
+  }
+  if (a.drawer.kind !== "family") return { cap: null, reason: "not_a_drawer" };
+  // A limited ("Shoebox only") client does not get the Family Vault.
+  if (a.shoeboxOnly) return { cap: null, reason: "shoebox_only" };
+  const live = a.grants.filter((g) => g.revoked_at === null && (!g.expires_at || new Date(g.expires_at) > a.now) && a.chain.includes(g.drive_id));
+  let cap: Capability | null = a.isMinor ? null : familyRoleCap(a.familyRole);
+  // The nearest grant in the chain can open the Vault to someone with no role and can raise anyone's access, never lower it.
+  for (const id of a.chain) {
+    const hit = live.find((g) => g.drive_id === id);
+    if (hit) {
+      const p = hit.permission as Capability;
+      if (cap === null || RANK[p] > RANK[cap]) cap = p;
+      break;
+    }
+  }
+  return cap ? { cap, reason: null } : { cap: null, reason: "family_vault_no_role" };
+}
+
+/** Clients may invite outsiders only into a drawer where they can manage, and never into the household Vault. */
+export const mayShareFromDrawer = (kind: DrawerKind, cap: Capability | null) => kind !== "household" && cap === "manage";
+
+export const SELF_SHARE_DEFAULT_DAYS = 30;
+export const SELF_SHARE_MAX_DAYS = 365;
+
+/** Self-service access always expires: the requested date, capped at a year; 30 days if none is given. */
+export function clampSelfShareExpiry(requested: string | null | undefined, now: Date): string {
+  const max = now.getTime() + SELF_SHARE_MAX_DAYS * 86_400_000;
+  const asked = requested ? Date.parse(requested) : NaN;
+  const t = Number.isFinite(asked) ? asked : now.getTime() + SELF_SHARE_DEFAULT_DAYS * 86_400_000;
+  return new Date(Math.min(Math.max(t, now.getTime() + 3_600_000), max)).toISOString();
+}
+
+/** Outsiders invited by a client can view or upload, never manage. */
+export const clampSelfSharePermission = (p: string | null | undefined): "view" | "upload" => (p === "upload" ? "upload" : "view");

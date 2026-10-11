@@ -27,6 +27,7 @@ import { driveDownloadFile, matchVaultCategoryFolder } from "../_shared/vault-pr
 import { logActionEvent } from "../_shared/action-brain.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
 import { buildItemAccess } from "../_shared/vault-access.ts";
+import { drawerCapability, mayShareFromDrawer, FAMILY_VAULT_CATEGORIES, hasPersonalDrawerRole, type Drawer } from "../_shared/vault-drawers.ts";
 
 const APP_BASE_URL = "https://app.prosperwise.ca";
 
@@ -154,7 +155,7 @@ function googleExportMime(mime: string) {
 // ───── Actor resolution ─────
 type Actor =
   | { kind: "staff"; userId: string }
-  | { kind: "client"; contactId: string; householdId: string | null; vaultRootId: string; shoeboxOnly: boolean }
+  | { kind: "client"; contactId: string; householdId: string | null; vaultRootId: string; shoeboxOnly: boolean; familyId: string | null; familyRole: string | null; isMinor: boolean; drawers: Drawer[]; lastDrawer?: Drawer | null }
   | {
       kind: "collaborator";
       collaboratorId: string;
@@ -286,12 +287,28 @@ async function resolveActor(req: Request): Promise<Actor | null> {
     if (!tok || tok.revoked || new Date(tok.expires_at) <= new Date()) return null;
     const { data: contact } = await supabaseAdmin
       .from("contacts")
-      .select("household_id, vault_root_folder_id, vault_shoebox_only, households(vault_root_folder_id)")
+      .select("household_id, vault_root_folder_id, vault_shoebox_only, family_id, family_role, is_minor, personal_vault_folder_id, households(vault_root_folder_id)")
       .eq("id", tok.contact_id)
       .maybeSingle();
     const vaultRootId = (contact as any)?.households?.vault_root_folder_id ?? contact?.vault_root_folder_id;
     if (!vaultRootId) return null;
-    return { kind: "client", contactId: tok.contact_id, householdId: contact?.household_id ?? null, vaultRootId, shoeboxOnly: !!(contact as any)?.vault_shoebox_only };
+    // Drawers beyond the household Vault: the Family Vault (VFO families) and the client's own personal drawer.
+    // Looked up defensively: a failure here must never take the household Vault away from a client.
+    const drawers: Drawer[] = [{ kind: "household", rootId: vaultRootId }];
+    try {
+      const c: any = contact;
+      if (c?.family_id) {
+        const { data: fam } = await supabaseAdmin.from("families").select("vfo_enabled, vault_root_folder_id").eq("id", c.family_id).maybeSingle();
+        if (fam?.vfo_enabled && fam.vault_root_folder_id) drawers.push({ kind: "family", rootId: fam.vault_root_folder_id, familyId: c.family_id });
+      }
+      if (c?.personal_vault_folder_id) drawers.push({ kind: "personal", rootId: c.personal_vault_folder_id, ownerContactId: tok.contact_id, familyId: c.family_id ?? null });
+    } catch (e) {
+      console.error("[vault-service] drawer lookup failed:", e instanceof Error ? e.message : String(e));
+    }
+    return {
+      kind: "client", contactId: tok.contact_id, householdId: contact?.household_id ?? null, vaultRootId, shoeboxOnly: !!(contact as any)?.vault_shoebox_only,
+      familyId: (contact as any)?.family_id ?? null, familyRole: (contact as any)?.family_role ?? null, isMinor: !!(contact as any)?.is_minor, drawers,
+    };
   }
 
   // 4. Pro Portal session (x-pro-session = pro_portal_tokens, validated the
@@ -453,6 +470,44 @@ async function getShoeboxFolderId(
 
 type Need = false | "upload" | "rename" | "delete" | "create_folder";
 
+// Access for a client inside the Family Vault or their personal drawer. Mirrors the household rules for
+// visibility (a file hidden from clients stays hidden unless named in a grant) and for who may change what.
+async function ensureDrawerAccess(
+  actor: Extract<Actor, { kind: "client" }>,
+  drawer: Drawer,
+  chain: string[],
+  driveId: string,
+  need: Need,
+): Promise<{ ok: boolean; reason?: string; cap?: string }> {
+  const { data: grants } = await supabaseAdmin
+    .from("vault_contact_grants")
+    .select("drive_id, permission, expires_at, revoked_at")
+    .eq("contact_id", actor.contactId)
+    .in("drive_id", chain.length ? chain : ["__none__"]);
+  const { cap, reason } = drawerCapability({
+    drawer, actorContactId: actor.contactId, familyRole: actor.familyRole, isMinor: actor.isMinor, shoeboxOnly: actor.shoeboxOnly,
+    grants: (grants ?? []) as any, chain, now: new Date(),
+  });
+  if (!cap) return { ok: false, reason: reason ?? "no_access" };
+  actor.lastDrawer = drawer;
+  if (!need) {
+    if (drawer.kind === "family") {
+      const { data: row } = await supabaseAdmin.from("vault_files").select("client_visible, is_folder").eq("drive_id", driveId).maybeSingle();
+      if (row && row.is_folder === false && row.client_visible === false && !(grants ?? []).some((g: any) => !g.revoked_at)) return { ok: false, reason: "not_client_visible" };
+    }
+    return { ok: true, cap };
+  }
+  if (need === "upload") return rank(cap) >= 1 ? { ok: true, cap } : { ok: false, reason: "client_no_upload" };
+  if (need === "create_folder") return cap === "manage" ? { ok: true, cap } : { ok: false, reason: "client_no_create_folder" };
+  if (need === "rename" || need === "delete") {
+    if (cap === "manage") return { ok: true, cap };
+    const { data: f } = await supabaseAdmin.from("vault_files").select("uploaded_by_contact_id").eq("drive_id", driveId).maybeSingle();
+    if (cap === "upload" && f?.uploaded_by_contact_id === actor.contactId) return { ok: true, cap };
+    return { ok: false, reason: "client_can_modify_own_only" };
+  }
+  return { ok: false, reason: "unknown_need" };
+}
+
 async function ensureAccess(
   actor: Actor,
   driveId: string,
@@ -465,6 +520,9 @@ async function ensureAccess(
   const chain = [driveId, ...ancestors];
 
   if (actor.kind === "client") {
+    // Family Vault / personal drawer: separate roots outside the household Vault, with their own rules.
+    const drawer = actor.drawers.find((d) => d.kind !== "household" && chain.includes(d.rootId));
+    if (drawer) return await ensureDrawerAccess(actor, drawer, chain, driveId, need);
     if (!chain.includes(actor.vaultRootId)) return { ok: false, reason: "outside_vault_root" };
 
     // Shoebox-only firewall: client may only see/touch items inside the Shoebox subtree
@@ -601,6 +659,12 @@ async function audit(
 ) {
   let householdId: string | null = typeof metadata.household_id === "string" ? metadata.household_id : null;
   let name = driveName;
+  // Which drawer the action happened in: a client's request sets it while access is checked; a staff request names it in `scope`.
+  const drawerCtx = (actor as any)?.lastDrawer as (Drawer & { householdId?: string | null }) | null | undefined;
+  if (drawerCtx && drawerCtx.kind !== "household") {
+    metadata = { ...metadata, drawer: drawerCtx.kind, ...(drawerCtx.familyId ? { family_id: drawerCtx.familyId } : {}) };
+    if (drawerCtx.kind === "personal" && !householdId) householdId = (actor as any)?.householdId ?? (actor as any)?.scopeHouseholdId ?? null;
+  }
   try {
     if (!householdId && (actor?.kind === "client" || actor?.kind === "share_link")) householdId = actor.householdId ?? null;
     if (driveId && (!householdId || !name)) {
@@ -1213,6 +1277,12 @@ serve(async (req) => {
       status: 401,
       headers: { ...cors, "Content-Type": "application/json" },
     });
+  }
+
+  if (actor.kind === "staff" && body?.scope && typeof body.scope === "object" && ["family", "personal"].includes(body.scope.kind)) {
+    // Labels the audit entries for this request (family or personal drawer); it grants nothing.
+    (actor as any).lastDrawer = { kind: body.scope.kind, rootId: "", familyId: body.scope.familyId ?? null, ownerContactId: body.scope.contactId ?? null };
+    (actor as any).scopeHouseholdId = body.scope.householdId ?? null;
   }
 
   const accessToken = await getValidGoogleToken();
@@ -1949,6 +2019,110 @@ serve(async (req) => {
         .upsert({ contact_id: contactId, household_id: householdId, role, granted_by: actor.userId }, { onConflict: "contact_id" });
       await audit(actor, "set_contact_role", contactId, null, null, req, { role, household_id: householdId });
       return new Response(JSON.stringify({ ok: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    // ─── DRAWERS: the Vault spaces a person can open (client), or a household's drawers (staff) ───
+    if (action === "getDrawers") {
+      const metaName = async (id: string) => {
+        try {
+          const r = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?supportsAllDrives=true&fields=name`, { headers: { Authorization: `Bearer ${accessToken}` } });
+          return r.ok ? (await r.json()).name as string : null;
+        } catch { return null; }
+      };
+      if (actor.kind === "client") {
+        const out: Array<{ kind: string; rootId: string; name: string | null; capability: string; canShare: boolean; label: string }> = [];
+        for (const d of actor.drawers) {
+          let cap: string | null = null;
+          if (d.kind === "household") cap = await effectiveClientPermission(actor.contactId, [d.rootId]);
+          else {
+            const { data: grants } = await supabaseAdmin.from("vault_contact_grants").select("drive_id, permission, expires_at, revoked_at").eq("contact_id", actor.contactId).eq("drive_id", d.rootId);
+            cap = drawerCapability({ drawer: d, actorContactId: actor.contactId, familyRole: actor.familyRole, isMinor: actor.isMinor, shoeboxOnly: actor.shoeboxOnly, grants: (grants ?? []) as any, chain: [d.rootId], now: new Date() }).cap;
+          }
+          if (!cap) continue;
+          out.push({
+            kind: d.kind, rootId: d.rootId, name: await metaName(d.rootId), capability: cap, canShare: mayShareFromDrawer(d.kind, cap as any),
+            label: d.kind === "household" ? "Household" : d.kind === "family" ? "Family Vault" : "Personal",
+          });
+        }
+        return new Response(JSON.stringify({ drawers: out }), { headers: { ...cors, "Content-Type": "application/json" } });
+      }
+      if (actor.kind !== "staff")
+        return new Response(JSON.stringify({ error: "forbidden" }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
+      const { householdId } = body;
+      if (!householdId) return new Response(JSON.stringify({ error: "householdId required" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      const { data: hh } = await supabaseAdmin.from("households").select("id, label, vault_root_folder_id, family_id").eq("id", householdId).maybeSingle();
+      const { data: fam } = hh?.family_id ? await supabaseAdmin.from("families").select("id, name, vfo_enabled, vault_root_folder_id").eq("id", hh.family_id).maybeSingle() : { data: null };
+      const { data: people } = await supabaseAdmin.from("contacts").select("id, first_name, last_name, family_role, is_minor, personal_vault_folder_id").eq("household_id", householdId);
+      return new Response(JSON.stringify({
+        household: { id: hh?.id, label: hh?.label, rootId: hh?.vault_root_folder_id ?? null },
+        family: fam ? { id: fam.id, name: fam.name, vfoEnabled: !!fam.vfo_enabled, rootId: fam.vault_root_folder_id ?? null } : null,
+        // Personal drawers are part of the VFO offering.
+        personal: (people ?? []).filter((c: any) => fam?.vfo_enabled && hasPersonalDrawerRole(c.family_role, c.is_minor)).map((c: any) => ({
+          contactId: c.id, name: `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim(), role: c.family_role, rootId: c.personal_vault_folder_id ?? null,
+        })),
+      }), { headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    // ─── PROVISION THE FAMILY VAULT (staff, VFO families) ───
+    // A folder beside the household Vaults, inside the Family folder. Household members cannot reach it through
+    // their household access; it has its own roots and rules.
+    if (action === "provisionFamilyVault") {
+      if (actor.kind !== "staff")
+        return new Response(JSON.stringify({ error: "staff_only" }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
+      const { familyId } = body;
+      if (!familyId) return new Response(JSON.stringify({ error: "familyId required" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      const { data: fam } = await supabaseAdmin.from("families").select("id, name, vfo_enabled, vault_root_folder_id").eq("id", familyId).maybeSingle();
+      if (!fam) return new Response(JSON.stringify({ error: "family_not_found" }), { status: 404, headers: { ...cors, "Content-Type": "application/json" } });
+      if (!fam.vfo_enabled) return new Response(JSON.stringify({ error: "family_not_vfo" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      if (fam.vault_root_folder_id) return new Response(JSON.stringify({ ok: true, folderId: fam.vault_root_folder_id, alreadyExists: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+      // The Family folder is two levels above a household Vault root: Family > Household > Vault.
+      const parentOf = async (id: string): Promise<string | null> => {
+        const r = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?supportsAllDrives=true&fields=parents`, { headers: { Authorization: `Bearer ${accessToken}` } });
+        return r.ok ? ((await r.json()).parents?.[0] ?? null) : null;
+      };
+      let familyFolderId: string | null = body.parentFolderId ?? null;
+      if (!familyFolderId) {
+        const { data: hhs } = await supabaseAdmin.from("households").select("vault_root_folder_id").eq("family_id", familyId).not("vault_root_folder_id", "is", null);
+        for (const h of hhs ?? []) {
+          const hhFolder = await parentOf(h.vault_root_folder_id);
+          const famFolder = hhFolder ? await parentOf(hhFolder) : null;
+          if (famFolder) { familyFolderId = famFolder; break; }
+        }
+      }
+      if (!familyFolderId)
+        return new Response(JSON.stringify({ error: "family_folder_not_found", detail: "No household Vault with a Family folder above it; pass parentFolderId." }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      const root = await driveCreateFolder(`Family Vault — ${fam.name}`, familyFolderId, accessToken);
+      for (const c of FAMILY_VAULT_CATEGORIES) await driveCreateFolder(c, root.id, accessToken);
+      await supabaseAdmin.from("families").update({ vault_root_folder_id: root.id, vault_root_provisioned_at: new Date().toISOString() }).eq("id", familyId);
+      (actor as any).lastDrawer = { kind: "family", rootId: root.id, familyId };
+      await audit(actor, "provision", null, root.id, root.name, req, { family_id: familyId, drawer: "family", category_folders: FAMILY_VAULT_CATEGORIES.length, family_folder_id: familyFolderId });
+      return new Response(JSON.stringify({ ok: true, folderId: root.id, name: root.name }), { headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    // ─── PROVISION A PERSONAL DRAWER (staff) ───
+    // Sits in the person's Household folder but OUTSIDE the household Vault root, so household access never reaches it.
+    if (action === "provisionPersonalDrawer") {
+      if (actor.kind !== "staff")
+        return new Response(JSON.stringify({ error: "staff_only" }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
+      const { contactId } = body;
+      if (!contactId) return new Response(JSON.stringify({ error: "contactId required" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      const { data: c } = await supabaseAdmin.from("contacts").select("id, first_name, last_name, family_role, is_minor, household_id, family_id, personal_vault_folder_id").eq("id", contactId).maybeSingle();
+      if (!c) return new Response(JSON.stringify({ error: "contact_not_found" }), { status: 404, headers: { ...cors, "Content-Type": "application/json" } });
+      if (!hasPersonalDrawerRole(c.family_role, c.is_minor)) return new Response(JSON.stringify({ error: "not_an_adult_member" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      const { data: pf } = c.family_id ? await supabaseAdmin.from("families").select("vfo_enabled").eq("id", c.family_id).maybeSingle() : { data: null };
+      if (!pf?.vfo_enabled) return new Response(JSON.stringify({ error: "family_not_vfo" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      if (c.personal_vault_folder_id) return new Response(JSON.stringify({ ok: true, folderId: c.personal_vault_folder_id, alreadyExists: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+      const { data: hh } = c.household_id ? await supabaseAdmin.from("households").select("vault_root_folder_id").eq("id", c.household_id).maybeSingle() : { data: null };
+      if (!hh?.vault_root_folder_id) return new Response(JSON.stringify({ error: "household_no_vault" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      const pr = await fetch(`https://www.googleapis.com/drive/v3/files/${hh.vault_root_folder_id}?supportsAllDrives=true&fields=parents`, { headers: { Authorization: `Bearer ${accessToken}` } });
+      const householdFolderId: string | null = pr.ok ? ((await pr.json()).parents?.[0] ?? null) : null;
+      if (!householdFolderId) return new Response(JSON.stringify({ error: "household_folder_not_found" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      const fullName = `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "Member";
+      const folder = await driveCreateFolder(`Personal — ${fullName}`, householdFolderId, accessToken);
+      await supabaseAdmin.from("contacts").update({ personal_vault_folder_id: folder.id }).eq("id", contactId);
+      (actor as any).lastDrawer = { kind: "personal", rootId: folder.id, familyId: c.family_id ?? null, ownerContactId: contactId };
+      await audit(actor, "provision", contactId, folder.id, folder.name, req, { household_id: c.household_id, family_id: c.family_id, drawer: "personal", owner_contact_id: contactId });
+      return new Response(JSON.stringify({ ok: true, folderId: folder.id, name: folder.name }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
 
     // ─── WHO CAN OPEN THIS FILE OR FOLDER (staff) ───

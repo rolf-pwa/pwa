@@ -55,6 +55,11 @@ function formatSize(n: number | null) {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
+// When a staff page is working inside a family or personal drawer, every request names it, so the audit log can
+// tell which drawer an action happened in. It labels only; access is still decided by the server.
+let vaultScope: Record<string, unknown> | null = null;
+export function setVaultScope(scope: Record<string, unknown> | null) { vaultScope = scope; }
+
 async function callVault(action: string, payload: Record<string, unknown> = {}) {
   const { data: sess } = await supabase.auth.getSession();
   const res = await fetch(FUNCTIONS_URL, {
@@ -63,7 +68,7 @@ async function callVault(action: string, payload: Record<string, unknown> = {}) 
       "Content-Type": "application/json",
       Authorization: `Bearer ${sess.session?.access_token ?? ""}`,
     },
-    body: JSON.stringify({ action, ...payload }),
+    body: JSON.stringify({ action, ...(vaultScope ? { scope: vaultScope } : {}), ...payload }),
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
@@ -78,6 +83,7 @@ function FolderNode({
   onPreview,
   onShare,
   onAccess,
+  drawer,
 }: {
   folderId: string;
   name: string;
@@ -86,6 +92,8 @@ function FolderNode({
   onPreview: (file: DriveFile) => void;
   onShare: (target: ShareTarget) => void;
   onAccess: (target: ShareTarget) => void;
+  /** Inside a Family Vault or personal drawer: no household-only tools (links, sharing, client visibility). */
+  drawer?: boolean;
 }) {
   const [open, setOpen] = useState(depth === 0);
   const [loading, setLoading] = useState(false);
@@ -234,7 +242,7 @@ function FolderNode({
           )}
           {loading && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
         </button>
-        {householdId && (
+        {(householdId || drawer) && (
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
             <Button size="sm" variant="ghost" className="h-7 px-1.5" title="New subfolder" onClick={newSubfolder}>
               <Plus className="h-3.5 w-3.5" />
@@ -242,15 +250,19 @@ function FolderNode({
             <Button size="sm" variant="ghost" className="h-7 px-1.5" title="Rename folder" onClick={() => renameItem(folderId, name, true)}>
               <span className="text-[10px] font-mono">Aa</span>
             </Button>
-            <Button size="sm" variant="ghost" className="h-7 px-1.5" title="Copy Vault link" onClick={() => copyVaultLink(folderId, true)}>
-              <Copy className="h-3.5 w-3.5" />
-            </Button>
-            <Button size="sm" variant="ghost" className="h-7 px-1.5" title="Who has access" onClick={() => onAccess({ driveId: folderId, name, isFolder: true })}>
-              <Users className="h-3.5 w-3.5" />
-            </Button>
-            <Button size="sm" variant="ghost" className="h-7 px-1.5" title="Share with collaborator" onClick={() => onShare({ driveId: folderId, name, isFolder: true })}>
-              <Share2 className="h-3.5 w-3.5" />
-            </Button>
+            {!drawer && (
+              <>
+                <Button size="sm" variant="ghost" className="h-7 px-1.5" title="Copy Vault link" onClick={() => copyVaultLink(folderId, true)}>
+                  <Copy className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 px-1.5" title="Who has access" onClick={() => onAccess({ driveId: folderId, name, isFolder: true })}>
+                  <Users className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 px-1.5" title="Share with collaborator" onClick={() => onShare({ driveId: folderId, name, isFolder: true })}>
+                  <Share2 className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            )}
             {depth > 0 && (
               <Button size="sm" variant="ghost" className="h-7 px-1.5 text-destructive" title="Move to trash" onClick={() => deleteItem(folderId, true)}>
                 <Trash2 className="h-3.5 w-3.5" />
@@ -271,6 +283,7 @@ function FolderNode({
               onPreview={onPreview}
               onShare={onShare}
               onAccess={onAccess}
+              drawer={drawer}
             />
           ))}
           {files.map((f) => {
@@ -280,7 +293,7 @@ function FolderNode({
                 <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1 break-words" title={f.name}>{f.name}</span>
                 <div className="flex shrink-0 items-center gap-1">
-                  {householdId && (
+                  {householdId && !drawer && (
                     <span className="mr-1 flex items-center gap-1.5" title="Visible to client">
                       <ShieldCheck className={`h-3.5 w-3.5 ${visible ? "text-accent" : "text-muted-foreground/40"}`} />
                       <Switch checked={visible} onCheckedChange={(v) => toggleVisibility(f, v)} />
@@ -300,23 +313,30 @@ function FolderNode({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem disabled={brainBusyId === f.id} onClick={() => addToBrain(f)}>
-                        <Brain className="mr-2 h-3.5 w-3.5" /> Add to Second Brain
-                      </DropdownMenuItem>
-                      {householdId && (
+                      {/* Private and family documents are never fed to the Second Brain. */}
+                      {!drawer && (
+                        <DropdownMenuItem disabled={brainBusyId === f.id} onClick={() => addToBrain(f)}>
+                          <Brain className="mr-2 h-3.5 w-3.5" /> Add to Second Brain
+                        </DropdownMenuItem>
+                      )}
+                      {(householdId || drawer) && (
                         <>
                           <DropdownMenuItem onClick={() => renameItem(f.id, f.name, false)}>
                             <span className="mr-2 w-3.5 text-center font-mono text-[10px]">Aa</span> Rename
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => copyVaultLink(f.id, false)}>
-                            <Copy className="mr-2 h-3.5 w-3.5" /> Copy Vault link
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => onAccess({ driveId: f.id, name: f.name, isFolder: false })}>
-                            <Users className="mr-2 h-3.5 w-3.5" /> Who has access
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => onShare({ driveId: f.id, name: f.name, isFolder: false })}>
-                            <Share2 className="mr-2 h-3.5 w-3.5" /> Share with collaborator
-                          </DropdownMenuItem>
+                          {!drawer && (
+                            <>
+                              <DropdownMenuItem onClick={() => copyVaultLink(f.id, false)}>
+                                <Copy className="mr-2 h-3.5 w-3.5" /> Copy Vault link
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => onAccess({ driveId: f.id, name: f.name, isFolder: false })}>
+                                <Users className="mr-2 h-3.5 w-3.5" /> Who has access
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => onShare({ driveId: f.id, name: f.name, isFolder: false })}>
+                                <Share2 className="mr-2 h-3.5 w-3.5" /> Share with collaborator
+                              </DropdownMenuItem>
+                            </>
+                          )}
                           <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteItem(f.id, false)}>
                             <Trash2 className="mr-2 h-3.5 w-3.5" /> Move to trash
                           </DropdownMenuItem>
@@ -925,8 +945,57 @@ function VaultLinksPanel({ householdId }: { householdId: string }) {
   );
 }
 
+// Staff view of a household's other Vault spaces: the Family Vault (VFO families) and each adult's personal drawer.
+function DrawersPanel({ householdId }: { householdId: string }) {
+  const [data, setData] = useState<any | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const load = async () => { try { setData(await callVault("getDrawers", { householdId })); } catch { setData(null); } };
+  useEffect(() => { load(); }, [householdId]);
+  if (!data?.family) return null;
+  const create = async (key: string, action: string, payload: Record<string, unknown>, done: string) => {
+    setBusy(key);
+    try { await callVault(action, payload); toast.success(done); await load(); }
+    catch (e: any) { toast.error(e.message); }
+    finally { setBusy(null); }
+  };
+  const Row = ({ label, sub, to, create: onCreate, busyKey }: { label: string; sub: string; to: string | null; create: () => void; busyKey: string }) => (
+    <div className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2">
+      <div className="min-w-0">
+        <p className="truncate text-sm text-foreground">{label}</p>
+        <p className="text-[11px] text-muted-foreground">{sub}</p>
+      </div>
+      {to ? (
+        <Button asChild size="sm" variant="outline"><Link to={to}>Open</Link></Button>
+      ) : (
+        <Button size="sm" variant="outline" disabled={busy === busyKey} onClick={onCreate}>{busy === busyKey ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Create"}</Button>
+      )}
+    </div>
+  );
+  return (
+    <div className="space-y-2">
+      {data.family.vfoEnabled && (
+        <Row
+          label="Family Vault" sub={`${data.family.name} · shared by the family, access by role`} busyKey="family"
+          to={data.family.rootId ? `/vault/drawer/family/${data.family.id}` : null}
+          create={() => create("family", "provisionFamilyVault", { familyId: data.family.id }, "Family Vault created")}
+        />
+      )}
+      {(data.personal ?? []).map((p: any) => (
+        <Row
+          key={p.contactId} label={`Personal — ${p.name}`} sub="Private: only this person and staff" busyKey={p.contactId}
+          to={p.rootId ? `/vault/drawer/personal/${p.contactId}` : null}
+          create={() => create(p.contactId, "provisionPersonalDrawer", { contactId: p.contactId }, "Personal drawer created")}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function VaultView({ forcedHouseholdId, embedded = false, sidebarTools }: { forcedHouseholdId?: string; embedded?: boolean; sidebarTools?: React.ReactNode }) {
-  const params = useParams<{ householdId?: string; contactId?: string }>();
+  const params = useParams<{ householdId?: string; contactId?: string; kind?: string; id?: string }>();
+  const drawerKind = params.kind === "family" || params.kind === "personal" ? params.kind : null;
+  const drawerId = drawerKind ? params.id ?? null : null;
+  const [drawerInfo, setDrawerInfo] = useState<{ title: string; subtitle: string; backTo: string | null; scope: Record<string, unknown> } | null>(null);
   const [searchParams] = useSearchParams();
   const deepLinkProfessionalId = searchParams.get("shareProfessionalId");
   const [householdId, setHouseholdId] = useState<string | null>(null);
@@ -945,6 +1014,23 @@ export function VaultView({ forcedHouseholdId, embedded = false, sidebarTools }:
   // Resolve household: from URL, or from a contactId (legacy URL → redirect)
   useEffect(() => {
     (async () => {
+      // A Family Vault or personal drawer, opened from /vault/drawer/:kind/:id.
+      if (drawerKind && drawerId) {
+        if (drawerKind === "family") {
+          const { data: fam } = await supabase.from("families").select("id, name, vault_root_folder_id").eq("id", drawerId).maybeSingle();
+          setDrawerInfo({ title: "Family Vault", subtitle: fam?.name ?? "", backTo: null, scope: { kind: "family", familyId: drawerId } });
+          if (fam?.vault_root_folder_id) { setRootId(fam.vault_root_folder_id); setInput(fam.vault_root_folder_id); }
+        } else {
+          const { data: c } = await supabase.from("contacts").select("id, first_name, last_name, household_id, family_id, personal_vault_folder_id").eq("id", drawerId).maybeSingle();
+          setDrawerInfo({
+            title: "Personal drawer", subtitle: `${c?.first_name ?? ""} ${c?.last_name ?? ""}`.trim(),
+            backTo: c?.household_id ? `/vault/household/${c.household_id}` : null,
+            scope: { kind: "personal", contactId: drawerId, familyId: c?.family_id ?? null, householdId: c?.household_id ?? null },
+          });
+          if (c?.personal_vault_folder_id) { setRootId(c.personal_vault_folder_id); setInput(c.personal_vault_folder_id); }
+        }
+        return;
+      }
       const hh = forcedHouseholdId ?? params.householdId;
       if (!hh && params.contactId) {
         const { data: c } = await supabase
@@ -990,7 +1076,13 @@ export function VaultView({ forcedHouseholdId, embedded = false, sidebarTools }:
         if (driveUrl) setInput(driveUrl);
       }
     })();
-  }, [params.householdId, params.contactId, forcedHouseholdId]);
+  }, [params.householdId, params.contactId, params.kind, params.id, forcedHouseholdId]);
+
+  // Label this page's requests with its drawer for the audit log (a label only; the server decides access).
+  useEffect(() => {
+    setVaultScope(drawerInfo?.scope ?? null);
+    return () => setVaultScope(null);
+  }, [drawerInfo]);
 
   
 
@@ -1070,9 +1162,11 @@ export function VaultView({ forcedHouseholdId, embedded = false, sidebarTools }:
     );
   }, [preview]);
 
-  const heading = familyName
-    ? `${familyName}${householdLabel && householdLabel !== "Primary" ? ` — ${householdLabel}` : ""}`
-    : "Household Vault";
+  const heading = drawerInfo
+    ? drawerInfo.subtitle
+    : familyName
+      ? `${familyName}${householdLabel && householdLabel !== "Primary" ? ` — ${householdLabel}` : ""}`
+      : "Household Vault";
 
   if (redirectTo) return <Navigate to={redirectTo} replace />;
 
@@ -1080,7 +1174,7 @@ export function VaultView({ forcedHouseholdId, embedded = false, sidebarTools }:
     <div className={embedded ? "space-y-6" : "container max-w-5xl mx-auto py-8 space-y-6"}>
       {!embedded && (
         <div>
-          <h1 className="text-3xl font-serif">The Vault</h1>
+          <h1 className="text-3xl font-serif">{drawerInfo ? drawerInfo.title : "The Vault"}</h1>
           <p className="text-muted-foreground">
             {heading}
             {memberNames.length > 0 && (
@@ -1090,7 +1184,17 @@ export function VaultView({ forcedHouseholdId, embedded = false, sidebarTools }:
         </div>
       )}
 
-      {!rootId && (
+      {!rootId && drawerInfo && (
+        <Card>
+          <CardContent className="space-y-2 pt-6 text-sm text-muted-foreground">
+            <p>This {drawerInfo.title.toLowerCase()} has not been created yet.</p>
+            <p>Create it from the household's Vault page, in the Drawers panel.</p>
+            {drawerInfo.backTo && <Button asChild variant="outline" size="sm"><Link to={drawerInfo.backTo}>Back to the household Vault</Link></Button>}
+          </CardContent>
+        </Card>
+      )}
+
+      {!rootId && !drawerInfo && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Vault root folder</CardTitle>
@@ -1136,9 +1240,18 @@ export function VaultView({ forcedHouseholdId, embedded = false, sidebarTools }:
                   onPreview={openPreview}
                   onShare={setShareTarget}
                   onAccess={setAccessTarget}
+                  drawer={!!drawerInfo}
                 />
               </CardContent>
             </Card>
+            {drawerInfo && (
+              <p className="text-xs text-muted-foreground">
+                {drawerInfo.scope.kind === "personal"
+                  ? "A personal drawer: only its owner and ProsperWise staff can open it. It is not part of the household Vault and is never fed to the Second Brain."
+                  : "The Family Vault: shared by the family by role (head of family manages, household heads upload, spouses and beneficiaries view, minors none unless named). It is separate from every household Vault."}
+                {" "}Every view and change is recorded in the Vault audit log.
+              </p>
+            )}
 
           </div>
 
@@ -1170,6 +1283,9 @@ export function VaultView({ forcedHouseholdId, embedded = false, sidebarTools }:
                   onShareHandled={() => setShareTarget(null)}
                   deepLinkProfessionalId={deepLinkProfessionalId}
                 />
+              </SidebarSection>
+              <SidebarSection title="Drawers">
+                <DrawersPanel householdId={householdId} />
               </SidebarSection>
               <SidebarSection title="Member roles">
                 <MemberRolesPanel householdId={householdId} />
