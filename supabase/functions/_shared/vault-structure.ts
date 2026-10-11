@@ -17,6 +17,10 @@ export const HOUSEHOLD_DOCS = "Household Docs";
 export const PERSONAL_DOCS = "Personal Docs";
 
 /** "Peters Family" -> "Peters Family Vault"; already-suffixed names are left alone. */
+const RESERVED = new Set([FAMILY_DOCS, HOUSEHOLD_DOCS, PERSONAL_DOCS].map((n) => n.toLowerCase()));
+/** A household folder that was renamed to one of the three inner names by mistake gets a proper name again. */
+export const isReservedName = (name: string) => RESERVED.has(name.trim().toLowerCase());
+
 export const withVaultSuffix = (name: string) => (/\bvault$/i.test(name.trim()) ? name.trim() : `${name.trim()} Vault`);
 
 export interface StructureState {
@@ -69,7 +73,7 @@ export function planRestructure(s: StructureState): StructureOp[] {
   }
   if (s.familyDocs && !misrooted && s.familyDocs.name !== FAMILY_DOCS) ops.push({ op: "rename", id: s.familyDocs.id, from: s.familyDocs.name, to: FAMILY_DOCS, what: "Family Vault root" });
   for (const h of s.households) {
-    const to = withVaultSuffix(h.folder.name);
+    const to = withVaultSuffix(isReservedName(h.folder.name) ? `${s.familyName ?? "Household"} Household` : h.folder.name);
     if (to !== h.folder.name) ops.push({ op: "rename", id: h.folder.id, from: h.folder.name, to, what: "Household folder" });
     if (h.root.name !== HOUSEHOLD_DOCS) ops.push({ op: "rename", id: h.root.id, from: h.root.name, to: HOUSEHOLD_DOCS, what: "Household Vault root" });
     if (s.vfo) {

@@ -72,4 +72,11 @@ describe("vault structure", () => {
     expect(ops.map((o) => o.op)).toEqual(["create", "repoint", "rename"]);
     expect(ops[1]).toMatchObject({ toKey: "family-docs" });
   });
+  it("renames a household folder that was mistakenly called Household Docs", () => {
+    const state = base({
+      familyName: "Demo", familyFolder: { id: "ff", name: "Demo Family Vault" }, familyDocs: { id: "fd", name: "Family Docs" },
+      households: [{ householdId: "h1", folder: { id: "hf", name: "Household Docs" }, root: { id: "hr", name: "Household Docs" }, personalDocs: { id: "pd", name: "Personal Docs" }, drawers: [] }],
+    });
+    expect(planRestructure(state).map((o) => describeOp(o))).toEqual(["Rename Household folder: “Household Docs” → “Demo Household Vault”"]);
+  });
 });
