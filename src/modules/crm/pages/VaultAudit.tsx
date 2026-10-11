@@ -106,6 +106,7 @@ export default function VaultAudit() {
     return c ? `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() : "";
   };
   const actorName = (r: AuditRow) => {
+    if (r.actor_type === "system") return "System (automatic)";
     if (r.actor_type === "drive_external") return r.actor_email ?? r.actor_label?.replace(/^drive:/, "") ?? "Unknown Drive user";
     if (r.actor_email) return r.actor_email;
     if (r.actor_type === "staff") return staff.data?.find((p) => p.user_id === r.actor_id)?.email ?? "Staff (unknown)";

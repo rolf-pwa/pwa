@@ -40,7 +40,7 @@ serve(async (req) => {
 
     // Idempotent: no-ops (success, vaultRootFolderId of the existing vault)
     // if this household is already provisioned — safe to click more than once.
-    const result = await provisionClientFolderTree(admin, householdId);
+    const result = await provisionClientFolderTree(admin, householdId, "crm_intake_push");
     if (!result.ok) return json({ error: result.error }, 500);
 
     return json({ success: true, vaultRootFolderId: result.vaultRootFolderId });
