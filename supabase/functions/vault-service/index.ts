@@ -1814,8 +1814,9 @@ serve(async (req) => {
       await supabaseAdmin.from("vault_files").insert({
         drive_id: created.id,
         contact_id: uploaderContactId,
+        // Family Docs files belong to the family, not to the uploader's household.
         household_id:
-          actor.kind === "client" ? actor.householdId :
+          actor.kind === "client" ? ((actor as any).lastDrawer?.kind === "family" ? null : actor.householdId) :
           actor.kind === "share_link" ? actor.householdId : null,
         parent_folder_id: folderId,
         ancestor_folder_ids: ancestorChain,
@@ -2030,6 +2031,13 @@ serve(async (req) => {
       if (actor.kind === "client") {
         const ancestors = await getAncestors(driveId, accessToken);
         const chain = [driveId, ...ancestors];
+        // Family Vault / personal drawer: their own rules.
+        const picked = pickDrawer(actor.drawers, chain, actor.protectedRoots);
+        if (picked && picked.kind !== "household") {
+          const { data: dg } = await supabaseAdmin.from("vault_contact_grants").select("drive_id, permission, expires_at, revoked_at").eq("contact_id", actor.contactId).in("drive_id", chain);
+          const dc = drawerCapability({ drawer: picked, actorContactId: actor.contactId, familyRole: actor.familyRole, isMinor: actor.isMinor, shoeboxOnly: actor.shoeboxOnly, grants: (dg ?? []) as any, chain, now: new Date() });
+          return new Response(JSON.stringify({ cap: dc.cap ?? "none" }), { headers: { ...cors, "Content-Type": "application/json" } });
+        }
         if (!chain.includes(actor.vaultRootId))
           return new Response(JSON.stringify({ cap: "none" }), { headers: { ...cors, "Content-Type": "application/json" } });
         let cap = await effectiveClientPermission(actor.contactId, chain);
