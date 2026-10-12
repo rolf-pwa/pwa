@@ -17,4 +17,10 @@ describe("describeEvent", () => {
   it("falls back to a readable label for unknown events", () => {
     expect(describeEvent({ kind: "something_new", detail: {} })).toBe("something new");
   });
+  it("describes replies", () => {
+    expect(describeEvent({ kind: "reply_received", detail: { summary: "Thanks, will do." } })).toBe("Client replied: Thanks, will do.");
+    expect(describeEvent({ kind: "reply_snoozed", detail: { waitDays: 3 } })).toBe("Client acknowledged the reminder: Georgia will wait 3 days");
+    expect(describeEvent({ kind: "staff_replied", detail: { waitDays: 7 } })).toBe("A person replied to the client: Georgia will wait 7 days");
+    expect(describeEvent({ kind: "escalated", detail: { reason: "asked_to_stop" } })).toBe("Handed to a person: the client asked us to stop emailing");
+  });
 });

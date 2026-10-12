@@ -13,10 +13,13 @@ export function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-export async function sendServiceEmail(
+export interface SendResult { ok: boolean; messageId?: string; threadId?: string }
+
+/** Like sendServiceEmail, but also returns the Gmail message and thread ids so replies can be found later. */
+export async function sendServiceEmailDetailed(
   client: any,
   opts: { to: string; subject: string; html: string; from?: string },
-): Promise<boolean> {
+): Promise<SendResult> {
   try {
     const raw = buildRawEmail({
       from: opts.from ?? SERVICE_SENDER,
@@ -32,11 +35,19 @@ export async function sendServiceEmail(
     });
     if (!res.ok) {
       console.error(`[service-email] send failed [${res.status}]: ${await res.text()}`);
-      return false;
+      return { ok: false };
     }
-    return true;
+    const sent = await res.json().catch(() => ({}));
+    return { ok: true, messageId: sent?.id, threadId: sent?.threadId };
   } catch (e) {
     console.error("[service-email] send threw:", e);
-    return false;
+    return { ok: false };
   }
+}
+
+export async function sendServiceEmail(
+  client: any,
+  opts: { to: string; subject: string; html: string; from?: string },
+): Promise<boolean> {
+  return (await sendServiceEmailDetailed(client, opts)).ok;
 }

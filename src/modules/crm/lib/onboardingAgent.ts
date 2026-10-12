@@ -31,7 +31,7 @@ export const setMode = (mode: AgentMode, confirm = false) => call<{ ok: true; mo
 export const setCasePaused = (caseId: string, paused: boolean) => call<{ ok: true }>("setCasePaused", { caseId, paused });
 
 const STEP = (s: string) => (s === "survey" ? "book the Survey Session" : "add documents");
-const REASON: Record<string, string> = { no_response: "no response to reminders", vault_failed: "the Vault could not be built", no_email: "no email address on file" };
+const REASON: Record<string, string> = { no_response: "no response to reminders", vault_failed: "the Vault could not be built", no_email: "no email address on file", client_replied: "the client replied", asked_to_stop: "the client asked us to stop emailing" };
 
 /** A sentence for an event in the log. */
 export function describeEvent(e: Pick<AgentEvent, "kind" | "detail">): string {
@@ -47,6 +47,9 @@ export function describeEvent(e: Pick<AgentEvent, "kind" | "detail">): string {
     case "escalated": return `Handed to a person: ${REASON[d.reason] ?? d.reason}`;
     case "would_escalate": return `Would hand to a person: ${REASON[d.reason] ?? d.reason}`;
     case "complete": return "Onboarding complete: Survey Session booked and documents received";
+    case "reply_received": return d.summary ? `Client replied: ${d.summary}` : "Client replied to a reminder";
+    case "reply_snoozed": return `Client acknowledged the reminder: Georgia will wait ${d.waitDays ?? 3} days`;
+    case "staff_replied": return `A person replied to the client: Georgia will wait ${d.waitDays ?? 7} days`;
     case "paused": return `Paused by ${d.by ?? "staff"}`;
     case "resumed": return `Resumed by ${d.by ?? "staff"}`;
     case "mode_changed": return `Mode changed from ${d.from ?? "?"} to ${d.to} by ${d.by ?? "staff"}`;

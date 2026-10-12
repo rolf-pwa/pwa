@@ -6,7 +6,12 @@
 // Only households that enrolled after config.since get a case, so existing clients are never contacted by it.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendServiceEmail } from "../_shared/service-email.ts";
+import { sendServiceEmailDetailed } from "../_shared/service-email.ts";
+import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
+import { fetchThread } from "../_shared/gmail-read.ts";
+import { SNOOZE_DAYS_STAFF, classifierPrompt, cleanReply, inboundReplies, parseClassification, replyAction } from "../_shared/onboarding-replies.ts";
+import { scrubText } from "../_shared/pii-scrub.ts";
+import { GEMINI_EXTRACT_MODEL, extractJson, generateVertexContent, parseServiceAccountKey, withThinking } from "../_shared/vertex-ai.ts";
 import { provisionClientFolderTree } from "../_shared/vault-provisioning.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
 import { CHECKLIST, COMPLETE_COMMENT, CONCIERGE_KEY, ESCALATED_COMMENT, NUDGE_COMMENT, newlyDone, parentTitle, progressFrom, type ChecklistKey } from "../_shared/onboarding-checklist.ts";
@@ -88,13 +93,18 @@ async function work(k: any, mode: "shadow" | "live", cfg: AgentConfig, summary: 
     now, status: k.status, enrolledAt: Date.parse(hh.created_at), openedAt: Date.parse(k.opened_at),
     surveyBooked: !!hh.audit_booked_at, docsReceived: clientFiles.length > 0, vaultProvisioned: !!hh.vault_root_folder_id, vaultRetries: k.vault_retries,
     hasEmail: !!lead?.email, openPortalRequest: (openRequests ?? 0) > 0, lastClientActivityAt: activity || null,
-    nudgeCount: k.nudge_count, lastNudgeAt: ms(k.last_nudge_at),
+    nudgeCount: k.nudge_count, lastNudgeAt: ms(k.last_nudge_at), snoozedUntil: ms(k.snoozed_until),
   };
   // Live cases keep their checklist up to date, whatever the decision is.
   let ids: Record<string, string> = (k.checklist ?? {}) as Record<string, string>;
   if (mode === "live") {
     ids = await ensureChecklist(k, hh, lead?.id ?? null);
     await syncChecklist(k, ids, facts);
+  }
+  // Has the client (or a person at the firm) answered a reminder? Georgia never writes back: she pauses, or hands it to a person.
+  if (mode === "live" && (k.thread_ids ?? []).length) {
+    const handled = await handleReplies(k, hh, lead, facts, ids, summary);
+    if (handled) return;
   }
   const d: Decision = decideNext(facts, cfg);
   summary.evaluated++;
@@ -117,8 +127,14 @@ async function work(k: any, mode: "shadow" | "live", cfg: AgentConfig, summary: 
   if (d.kind === "nudge") {
     if (mode === "live") {
       const { subject, html } = nudgeEmail(lead?.first_name || "there", d.step);
-      const ok = await sendServiceEmail(db, { to: lead!.email, subject, html, from: AGENT_SENDER });
-      if (!ok) { await event(hh.id, k.id, mode, "nudge_failed", { step: d.step }); summary.errors.push(`${hh.id}: email failed`); return; }
+      const sent = await sendServiceEmailDetailed(db, { to: lead!.email, subject, html, from: AGENT_SENDER });
+      if (!sent.ok) { await event(hh.id, k.id, mode, "nudge_failed", { step: d.step }); summary.errors.push(`${hh.id}: email failed`); return; }
+      if (sent.threadId) {
+        await touch({
+          thread_ids: [...new Set([...(k.thread_ids ?? []), sent.threadId])].slice(-6),
+          sent_message_ids: [...(k.sent_message_ids ?? []), ...(sent.messageId ? [sent.messageId] : [])].slice(-20),
+        });
+      }
     }
     await touch({ nudge_count: nextNudgeCount(facts), last_nudge_at: new Date().toISOString() });
     await event(hh.id, k.id, mode, mode === "live" ? "nudge_sent" : "nudge_would_send", { step: d.step, ...snapshot });
@@ -138,6 +154,13 @@ async function work(k: any, mode: "shadow" | "live", cfg: AgentConfig, summary: 
   }
 
   // escalate
+  await escalateCase(k, hh, lead, facts, mode, ids, d.reason, d.detail, undefined);
+  summary.escalations++;
+}
+
+/** Hands a case to a person: a task for Rolf and a notification (live), and Georgia stops. */
+async function escalateCase(k: any, hh: any, lead: any, facts: CaseFacts, mode: "shadow" | "live", ids: Record<string, string>, reason: any, detail: string, replyPreview: string | undefined) {
+  const snapshot = { surveyBooked: facts.surveyBooked, docsReceived: facts.docsReceived, nudgesSent: k.nudge_count };
   let taskId: string | null = null;
   if (mode === "live") {
     const { data: rolf } = await db.from("profiles").select("user_id").eq("email", ESCALATION_ASSIGNEE_EMAIL).maybeSingle();
@@ -145,18 +168,66 @@ async function work(k: any, mode: "shadow" | "live", cfg: AgentConfig, summary: 
       const { data: task } = await db.from("pm_tasks").insert({
         title: ESCALATION_TITLE(hh.label ?? "household"), status: "open", client_visible: false, assignee_id: rolf.user_id, created_by: rolf.user_id,
         household_id: hh.id, family_id: hh.family_id ?? null, contact_id: lead?.id ?? null,
-        description: escalationBody({ reason: d.reason, detail: d.detail, label: hh.label ?? "household", surveyBooked: facts.surveyBooked, docsReceived: facts.docsReceived, nudges: k.nudge_count, enrolledAt: facts.enrolledAt, now }),
+        description: escalationBody({ reason, detail, label: hh.label ?? "household", surveyBooked: facts.surveyBooked, docsReceived: facts.docsReceived, nudges: k.nudge_count, enrolledAt: facts.enrolledAt, now: Date.now(), replyPreview }),
       }).select("id").maybeSingle();
       taskId = task?.id ?? null;
     }
     await db.from("staff_notifications").insert({
-      title: ESCALATION_TITLE(hh.label ?? "household"), body: d.detail, link: `/households/${hh.id}`, contact_id: lead?.id ?? null, source_type: "onboarding_agent",
+      title: ESCALATION_TITLE(hh.label ?? "household"), body: detail, link: `/households/${hh.id}`, contact_id: lead?.id ?? null, source_type: "onboarding_agent",
     });
   }
-  await touch({ status: "escalated", escalated_at: new Date().toISOString(), escalation_reason: d.reason, escalation_task_id: taskId });
-  await event(hh.id, k.id, mode, mode === "live" ? "escalated" : "would_escalate", { reason: d.reason, detail: d.detail, taskId, ...snapshot });
-  if (mode === "live") await comment(ids.parent, ESCALATED_COMMENT(d.detail));
+  await db.from("onboarding_cases").update({ status: "escalated", escalated_at: new Date().toISOString(), escalation_reason: reason, escalation_task_id: taskId, updated_at: new Date().toISOString() }).eq("id", k.id);
+  await event(hh.id, k.id, mode, mode === "live" ? "escalated" : "would_escalate", { reason, detail, taskId, ...snapshot });
+  if (mode === "live") await comment(ids.parent, ESCALATED_COMMENT(detail));
+}
+
+/** Looks for replies in the case's Gmail threads. Returns true when it acted (so the normal decision is skipped this tick). */
+async function handleReplies(k: any, hh: any, lead: any, facts: CaseFacts, ids: Record<string, string>, summary: Record<string, number> & { errors: string[] }): Promise<boolean> {
+  const token = await getServiceGoogleAccessToken(db);
+  const messages = (await Promise.all((k.thread_ids as string[]).map((t) => fetchThread(token, t)))).flat();
+  const { client, staff } = inboundReplies(messages, { sentIds: k.sent_message_ids ?? [], handledIds: k.handled_message_ids ?? [] });
+  const touch = (patch: Record<string, unknown>) => db.from("onboarding_cases").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", k.id);
+  const handledIds = [...(k.handled_message_ids ?? [])];
+
+  // A person at the firm replied to the client in the thread: they are on it, so Georgia waits.
+  if (staff.length && !client.length) {
+    await touch({ handled_message_ids: [...handledIds, ...staff.map((m) => m.id)].slice(-50), snoozed_until: new Date(Date.now() + SNOOZE_DAYS_STAFF * 86_400_000).toISOString() });
+    await event(hh.id, k.id, "live", "staff_replied", { waitDays: SNOOZE_DAYS_STAFF });
+    summary.waiting++;
+    return true;
+  }
+  if (!client.length) return false;
+
+  const reply = client[0];
+  const text = cleanReply(reply.text);
+  const names = [lead?.first_name, hh.label].filter(Boolean) as string[];
+  let intent: string = "other";
+  let blurb = "";
+  try {
+    const sa = await parseServiceAccountKey(Deno.env.get("GCP_SERVICE_ACCOUNT_KEY"));
+    const out = await generateVertexContent(sa, GEMINI_EXTRACT_MODEL, [{ role: "user", parts: [{ text: classifierPrompt(scrubText(text, { names })) }] }], withThinking(GEMINI_EXTRACT_MODEL, { temperature: 0, maxOutputTokens: 512 }, "low"));
+    // deno-lint-ignore no-explicit-any
+    const raw = (out.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? "").join("");
+    const parsed = parseClassification(extractJson(raw));
+    intent = parsed.intent;
+    blurb = parsed.summary;
+  } catch (e) {
+    // If the reply cannot be read automatically it goes to a person.
+    summary.errors.push(`${hh.id}: reply classification failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  const action = replyAction(intent as any, text);
+  await event(hh.id, k.id, "live", "reply_received", { intent, summary: blurb, messageId: reply.id });
+  await touch({ handled_message_ids: [...handledIds, reply.id].slice(-50) });
+  if (action.kind === "snooze") {
+    await touch({ snoozed_until: new Date(Date.now() + action.days * 86_400_000).toISOString() });
+    await event(hh.id, k.id, "live", "reply_snoozed", { waitDays: action.days });
+    summary.waiting++;
+    return true;
+  }
+  const detail = action.reason === "asked_to_stop" ? "The client asked us to stop emailing them." : `The client replied to a reminder${blurb ? `: ${blurb}` : "."}`;
+  await escalateCase(k, hh, lead, facts, "live", ids, action.reason, detail, text || "(no readable text)");
   summary.escalations++;
+  return true;
 }
 
 

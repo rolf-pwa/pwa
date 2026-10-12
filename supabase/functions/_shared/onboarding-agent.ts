@@ -46,6 +46,8 @@ export interface CaseFacts {
   lastClientActivityAt: number | null;
   nudgeCount: number;
   lastNudgeAt: number | null;
+  /** Georgia is waiting until then (the client acknowledged, or a person replied to them). */
+  snoozedUntil?: number | null;
 }
 
 export type Decision =
@@ -55,7 +57,7 @@ export type Decision =
   | { kind: "nudge"; step: NudgeStep }
   | { kind: "escalate"; reason: EscalationReason; detail: string };
 
-export type EscalationReason = "no_response" | "vault_failed" | "no_email";
+export type EscalationReason = "no_response" | "vault_failed" | "no_email" | "client_replied" | "asked_to_stop";
 
 const HOUR = 3_600_000;
 
@@ -92,6 +94,7 @@ export function decideNext(f: CaseFacts, cfg: AgentConfig = DEFAULT_CONFIG): Dec
   if (!f.hasEmail) return { kind: "escalate", reason: "no_email", detail: "The head of household has no email address on file, so no one can be reached." };
 
   if (f.openPortalRequest) return { kind: "wait", reason: "client_message_open" };
+  if (f.snoozedUntil && f.now < f.snoozedUntil) return { kind: "wait", reason: "snoozed" };
 
   const sent = nudgesSinceActivity(f);
   const lastTouch = Math.max(f.openedAt, f.lastNudgeAt ?? 0, f.lastClientActivityAt ?? 0);
@@ -134,15 +137,18 @@ export function nudgeEmail(firstName: string, step: NudgeStep): { subject: strin
 
 export const ESCALATION_TITLE = (label: string) => `Onboarding needs a person: ${label}`;
 
-export function escalationBody(i: { reason: EscalationReason; detail: string; label: string; surveyBooked: boolean; docsReceived: boolean; nudges: number; enrolledAt: number; now: number }): string {
+export function escalationBody(i: { reason: EscalationReason; detail: string; label: string; surveyBooked: boolean; docsReceived: boolean; nudges: number; enrolledAt: number; now: number; replyPreview?: string }): string {
   const days = Math.max(0, Math.floor((i.now - i.enrolledAt) / 86_400_000));
   const next: Record<EscalationReason, string> = {
     no_response: "Call or text the client. The reminders have not worked.",
     vault_failed: "Open the household's Vault page and use Provision structure, then check the Vault is reachable.",
     no_email: "Find a way to reach the client and add their email to the contact record.",
+    client_replied: "Read the client's reply (it is in your inbox) and answer them.",
+    asked_to_stop: "The client asked us to stop emailing. Honour that, and check with them how they would like to continue.",
   };
   return [
     i.detail,
+    ...(i.replyPreview ? ["", "What the client wrote:", `"${i.replyPreview}"`] : []),
     "",
     `Household: ${i.label} (enrolled ${days} day${days === 1 ? "" : "s"} ago)`,
     `Survey Session booked: ${i.surveyBooked ? "yes" : "no"}. Documents received: ${i.docsReceived ? "yes" : "no"}. Reminders sent: ${i.nudges}.`,
