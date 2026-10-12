@@ -32,6 +32,7 @@ import {
   Users,
 } from "lucide-react";
 import { indexVaultFile } from "@/shared/lib/brain";
+import { SECOND_BRAIN_ENABLED } from "@/shared/lib/featureFlags";
 import ShoeboxReviewPanel from "@/modules/crm/components/vault/ShoeboxReviewPanel";
 import { VaultAccessSheet, type AccessTarget } from "@/modules/crm/components/vault/VaultAccessSheet";
 import { toast } from "sonner";
@@ -324,7 +325,7 @@ function FolderNode({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       {/* Private and family documents are never fed to the Second Brain. */}
-                      {!limited && (
+                      {SECOND_BRAIN_ENABLED && !limited && (
                         <DropdownMenuItem disabled={brainBusyId === f.id} onClick={() => addToBrain(f)}>
                           <Brain className="mr-2 h-3.5 w-3.5" /> Add to Second Brain
                         </DropdownMenuItem>

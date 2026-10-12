@@ -1,4 +1,5 @@
 import { lazy, Suspense } from "react";
+import { SECOND_BRAIN_ENABLED } from "@/shared/lib/featureFlags";
 import { Toaster } from "@/shared/components/ui/toaster";
 import { Toaster as Sonner } from "@/shared/components/ui/sonner";
 import { TooltipProvider } from "@/shared/components/ui/tooltip";
@@ -177,8 +178,8 @@ const App = () => (
               <Route path="/vault/guest/:token" element={<VaultGuest />} />
               <Route path="/vault/share/:token" element={<VaultGuest />} />
               <Route path="/knowledge-base" element={<ProtectedRoute><KnowledgeBase /></ProtectedRoute>} />
-              <Route path="/brain" element={<ProtectedRoute><Brain /></ProtectedRoute>} />
-              <Route path="/brain/:id" element={<ProtectedRoute><BrainDocument /></ProtectedRoute>} />
+              {SECOND_BRAIN_ENABLED && <Route path="/brain" element={<ProtectedRoute><Brain /></ProtectedRoute>} />}
+              {SECOND_BRAIN_ENABLED && <Route path="/brain/:id" element={<ProtectedRoute><BrainDocument /></ProtectedRoute>} />}
               <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
               <Route path="/stabilization-map/lead/:leadId" element={<ProtectedRoute><StabilizationMapResolver /></ProtectedRoute>} />
               <Route path="/stabilization-map/contact/:contactId" element={<ProtectedRoute><StabilizationMapResolver /></ProtectedRoute>} />

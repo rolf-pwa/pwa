@@ -58,6 +58,8 @@ export function useSidebarCollapse() {
   return { collapsed: false, toggle: () => {} };
 }
 
+import { SECOND_BRAIN_ENABLED } from "@/shared/lib/featureFlags";
+
 const GROUPS = [
   {
     key: "work",
@@ -90,7 +92,7 @@ const GROUPS = [
     label: "Agents",
     icon: Brain,
     items: [
-      { to: "/brain", label: "Second Brain", icon: Brain },
+      ...(SECOND_BRAIN_ENABLED ? [{ to: "/brain", label: "Second Brain", icon: Brain }] : []),
       { to: "/workbench", label: "Workbench", icon: Cpu },
       { to: "/review-queue", label: "Review Queue", icon: ClipboardCheck, badgeKey: "review" },
       { to: "/glass-box-review", label: "Glass-Box Review", icon: ShieldCheck },

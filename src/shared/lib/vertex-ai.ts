@@ -31,7 +31,7 @@ export async function askAssistant(
   contactContext?: Record<string, any>,
   documentData?: { mimeType: string; base64: string },
   model?: string,
-  useBrain = true,
+  useBrain = false,
 ): Promise<AssistantResponse> {
   const headers = await getAuthHeaders();
   const res = await fetch(`${FUNCTIONS_URL}/vertex-ai`, {

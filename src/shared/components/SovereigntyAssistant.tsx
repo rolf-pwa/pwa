@@ -18,6 +18,7 @@ import {
 import ReactMarkdown from "react-markdown";
 import { askAssistant, type Message, type FunctionCall, type AssistantResponse } from "@/shared/lib/vertex-ai";
 import { type BrainCitation } from "@/shared/lib/brain";
+import { SECOND_BRAIN_ENABLED } from "@/shared/lib/featureFlags";
 import { CitationList } from "@/shared/components/CitationList";
 import { ProposedUpdateCard } from "./ProposedUpdateCard";
 import { toast } from "sonner";
@@ -47,7 +48,7 @@ export function SovereigntyAssistant({
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [attachedFile, setAttachedFile] = useState<{ name: string; mimeType: string; base64: string } | null>(null);
-  const [useBrain, setUseBrain] = useState(true);
+  const [useBrain, setUseBrain] = useState(SECOND_BRAIN_ENABLED);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -172,11 +173,13 @@ export function SovereigntyAssistant({
             {contactContext.type ? ` (${contactContext.type})` : ""}
           </p>
         )}
-        <label className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
-          <Switch checked={useBrain} onCheckedChange={setUseBrain} className="scale-75" />
-          <Brain className="h-3 w-3" />
-          Use Second Brain
-        </label>
+        {SECOND_BRAIN_ENABLED && (
+          <label className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
+            <Switch checked={useBrain} onCheckedChange={setUseBrain} className="scale-75" />
+            <Brain className="h-3 w-3" />
+            Use Second Brain
+          </label>
+        )}
       </CardHeader>
 
       <Separator />

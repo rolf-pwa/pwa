@@ -426,7 +426,7 @@ serve(async (req) => {
       });
     }
 
-    const { messages, model, contactContext, documentData, useBrain = true } = await req.json();
+    const { messages, model, contactContext, documentData, useBrain = false } = await req.json();
     if (!messages || !Array.isArray(messages)) {
       return new Response(JSON.stringify({ error: "messages array is required" }), {
         status: 400,
@@ -457,7 +457,7 @@ serve(async (req) => {
     // knowledge layer. Best-effort: a retrieval failure must never break the
     // assistant, so it's caught and logged rather than surfaced to the user.
     let brainCitations: unknown[] = [];
-    if (useBrain !== false) {
+    if (useBrain === true) {
       const lastUserMessage = [...messages].reverse().find((m: any) => m.role === "user" && m.content);
       if (lastUserMessage?.content) {
         try {

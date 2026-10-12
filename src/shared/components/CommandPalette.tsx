@@ -23,10 +23,10 @@ import {
 } from "lucide-react";
 import { searchBrain } from "@/shared/lib/brain";
 import { QuickCapture } from "@/shared/components/QuickCapture";
+import { SECOND_BRAIN_ENABLED } from "@/shared/lib/featureFlags";
 
 const NAV_ITEMS = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/brain", label: "Second Brain", icon: Brain },
   { to: "/contacts", label: "CRM", icon: Users },
   { to: "/vault", label: "Vault", icon: FolderOpen },
   { to: "/invoices", label: "Invoices", icon: Receipt },
@@ -55,7 +55,7 @@ export function CommandPalette() {
       const isK = e.key.toLowerCase() === "k";
       if ((e.metaKey || e.ctrlKey) && isK) {
         e.preventDefault();
-        setMode(e.shiftKey ? "capture" : "search");
+        setMode(e.shiftKey && SECOND_BRAIN_ENABLED ? "capture" : "search");
         setOpen((prev) => (e.shiftKey ? true : !prev));
       }
     };
@@ -73,7 +73,7 @@ export function CommandPalette() {
   const resultsQuery = useQuery({
     queryKey: ["command-palette-brain-search", debouncedQuery],
     queryFn: () => searchBrain(debouncedQuery),
-    enabled: open && mode === "search" && debouncedQuery.trim().length >= 2,
+    enabled: SECOND_BRAIN_ENABLED && open && mode === "search" && debouncedQuery.trim().length >= 2,
   });
 
   const go = (to: string) => {
@@ -93,13 +93,13 @@ export function CommandPalette() {
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen}>
-      <CommandInput placeholder="Search the Second Brain, or jump to a page…" value={query} onValueChange={setQuery} />
+      <CommandInput placeholder={SECOND_BRAIN_ENABLED ? "Search the Second Brain, or jump to a page…" : "Jump to a page…"} value={query} onValueChange={setQuery} />
       <CommandList>
         <CommandEmpty>
           {resultsQuery.isFetching ? "Searching…" : "No results."}
         </CommandEmpty>
 
-        {query.trim().length > 0 && (
+        {SECOND_BRAIN_ENABLED && query.trim().length > 0 && (
           <CommandGroup heading="Ask">
             <CommandItem onSelect={() => go(`/brain?ask=${encodeURIComponent(query.trim())}`)}>
               <Sparkles /> Ask the brain: "{query.trim()}"
