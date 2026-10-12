@@ -60,7 +60,7 @@ function formatSize(n: number | null) {
 let vaultScope: Record<string, unknown> | null = null;
 export function setVaultScope(scope: Record<string, unknown> | null) { vaultScope = scope; }
 
-async function callVault(action: string, payload: Record<string, unknown> = {}) {
+export async function callVault(action: string, payload: Record<string, unknown> = {}) {
   const { data: sess } = await supabase.auth.getSession();
   const res = await fetch(FUNCTIONS_URL, {
     method: "POST",
@@ -1039,7 +1039,7 @@ function DrawersPanel({ householdId }: { householdId: string }) {
 
 export function VaultView({ forcedHouseholdId, familyTreeId, embedded = false, sidebarTools }: { forcedHouseholdId?: string; /** Show a whole family's Drive tree (Family Docs and every Household Vault). */ familyTreeId?: string; embedded?: boolean; sidebarTools?: React.ReactNode }) {
   const params = useParams<{ householdId?: string; contactId?: string; kind?: string; id?: string }>();
-  const drawerKind = params.kind === "family" || params.kind === "personal" ? params.kind : null;
+  const drawerKind = params.kind === "family" || params.kind === "personal" || params.kind === "entity" ? params.kind : null;
   const drawerId = drawerKind ? params.id ?? null : null;
   const [drawerInfo, setDrawerInfo] = useState<{ title: string; subtitle: string; backTo: string | null; scope: Record<string, unknown> | null; tree?: boolean } | null>(null);
   const [treeHouseholds, setTreeHouseholds] = useState<Array<{ id: string; label: string }>>([]);
@@ -1083,6 +1083,13 @@ export function VaultView({ forcedHouseholdId, familyTreeId, embedded = false, s
           const { data: fam } = await supabase.from("families").select("id, name, vault_root_folder_id").eq("id", drawerId).maybeSingle();
           setDrawerInfo({ title: "Family Vault", subtitle: fam?.name ?? "", backTo: null, scope: { kind: "family", familyId: drawerId } });
           if (fam?.vault_root_folder_id) { setRootId(fam.vault_root_folder_id); setInput(fam.vault_root_folder_id); }
+        } else if (drawerKind === "entity") {
+          const { data: corp } = await (supabase.from("corporations" as any) as any).select("id, name, vault_root_folder_id, home_household_id").eq("id", drawerId).maybeSingle();
+          setDrawerInfo({
+            title: "Corporate Vault", subtitle: corp?.name ?? "", backTo: `/corporations/${drawerId}`,
+            scope: { kind: "entity", entityId: drawerId, householdId: corp?.home_household_id ?? null },
+          });
+          if (corp?.vault_root_folder_id) { setRootId(corp.vault_root_folder_id); setInput(corp.vault_root_folder_id); }
         } else {
           const { data: c } = await supabase.from("contacts").select("id, first_name, last_name, household_id, family_id, personal_vault_folder_id").eq("id", drawerId).maybeSingle();
           setDrawerInfo({
