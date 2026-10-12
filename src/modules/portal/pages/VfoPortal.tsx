@@ -34,6 +34,7 @@ import { PortalShoeboxUpload } from "@/modules/portal/components/PortalShoeboxUp
 import { getPortalSession, setPortalSession, clearPortalSession } from "@/modules/portal/lib/portalSession";
 import prosperwiseLogo from "@/assets/prosperwise-logo.png";
 import prosperwiseIconPaper from "@/assets/prosperwise-icon-paper.png";
+import { familyTitle } from "@/shared/lib/utils";
 
 const CORP_TYPE_LABELS: Record<string, string> = { opco: "Operating Co", holdco: "Holding Co", trust: "Trust", partnership: "Partnership", other: "Entity" };
 
@@ -668,7 +669,7 @@ const VfoPortal = () => {
             <CardContent className="p-0 divide-y divide-border">
               <div className="flex items-center gap-2 px-4 py-3">
                 <Crown className="h-4 w-4 text-accent" />
-                <h2 className="font-serif text-sm font-semibold text-foreground">{familyName} Family</h2>
+                <h2 className="font-serif text-sm font-semibold text-foreground">{familyTitle(familyName)}</h2>
                 <span className="ml-auto shrink-0 whitespace-nowrap text-xs text-muted-foreground">
                   {households.length} household{households.length !== 1 ? "s" : ""}<span className="hidden sm:inline"> · {memberCount} members</span>
                 </span>

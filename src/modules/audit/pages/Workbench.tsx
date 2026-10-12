@@ -18,6 +18,7 @@ import { Label } from "@/shared/components/ui/label";
 import { BarChart3, Loader2, Cpu, FileSpreadsheet, Scale } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/shared/components/ui/button";
+import { familyTitle } from "@/shared/lib/utils";
 
 const Workbench = () => {
   const [searchParams] = useSearchParams();
@@ -104,7 +105,7 @@ const Workbench = () => {
                   <SelectContent>
                     {households.map((h) => (
                       <SelectItem key={h.id} value={h.id}>
-                        {h.label} — {(h.families as any)?.name || "Unknown"} Family
+                        {h.label} — {familyTitle((h.families as any)?.name || "Unknown")}
                       </SelectItem>
                     ))}
                   </SelectContent>

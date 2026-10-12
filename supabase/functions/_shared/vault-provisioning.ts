@@ -212,7 +212,7 @@ export async function provisionClientFolderTree(
     let familyTopId: string | null = opts.force ? null : family?.vault_folder_id ?? null;
     let familyDocsCreated = false;
     if (!familyTopId) {
-      const top = await driveCreateFolder(withVaultSuffix(`${family?.name?.trim() || lastName} Family`), CLIENT_ROOT_FOLDER_ID, accessToken);
+      const top = await driveCreateFolder(withVaultSuffix(/\bfamily$/i.test(family?.name?.trim() ?? "") ? family!.name!.trim() : `${family?.name?.trim() || lastName} Family`), CLIENT_ROOT_FOLDER_ID, accessToken);
       familyTopId = top.id;
     }
     if (family && (opts.force || !family.vault_root_folder_id)) {

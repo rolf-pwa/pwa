@@ -275,7 +275,7 @@ Deno.serve(async (req) => {
       if (!familyId) {
         const { data: fam, error: fe } = await supabase
           .from("families")
-          .insert({ name: `${hh.label} Family`, created_by: user.id })
+          .insert({ name: hh.label, created_by: user.id })
           .select("id").single();
         if (fe) throw fe;
         familyId = fam.id;

@@ -287,7 +287,7 @@ export async function enrollPaidBooking(
 
     const { data: family, error: famErr } = await client
       .from("families")
-      .insert({ name: `${last} Family`, created_by: createdBy })
+      .insert({ name: last, created_by: createdBy })
       .select("id")
       .maybeSingle();
     if (famErr || !family?.id) {

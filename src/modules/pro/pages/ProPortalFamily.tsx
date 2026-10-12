@@ -6,6 +6,7 @@ import { Users, Crown, Home, ChevronRight, ChevronDown } from "lucide-react";
 import ProPortalShell, { FN, proFetch } from "@/modules/pro/components/ProPortalShell";
 import ProTasksPanel from "@/modules/pro/components/ProTasksPanel";
 import { toast } from "sonner";
+import { familyTitle } from "@/shared/lib/utils";
 
 const PRO_TYPE_LABELS: Record<string, string> = {
   lawyer: "Legal Counsel", accountant: "Tax & Accounting", insurance: "Insurance",
@@ -49,7 +50,7 @@ export default function ProPortalFamily() {
   const totalContacts = (family?.loose_contacts.length || 0)
     + (family?.households.reduce((s, h) => s + h.contacts.length, 0) || 0);
 
-  const firmTitle = family?.name ? `${family.name} Family` : "Family Workspace";
+  const firmTitle = family?.name ? familyTitle(family.name) : "Family Workspace";
   const subtitle = profile ? `${profile.full_name}${profile.professional_type ? ` · ${PRO_TYPE_LABELS[profile.professional_type] || profile.professional_type}` : ""}` : "Concierge Workspace";
 
   return (
