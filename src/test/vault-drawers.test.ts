@@ -104,3 +104,30 @@ describe("pickDrawer: Advisor Files and Personal Docs sit under the Household Va
     expect(pickDrawer([household, fam], ["file", "pdocs", "hvault", "top"], protectedRoots)).toBeNull();
   });
 });
+
+describe("Entity (corporation) vault access", () => {
+  const entity = (entityCap?: any): Drawer => ({ kind: "entity", rootId: "cd", entityId: "c1", entityCap });
+  const eargs = (o: any = {}) => ({ drawer: entity("upload"), actorContactId: "herman", familyRole: "head_of_family", isMinor: false, shoeboxOnly: false, grants: [], chain: ["file", "cat", "cd"], now, ...o });
+  it("opens only for people named on the entity, whatever their family role", () => {
+    expect(drawerCapability(eargs()).cap).toBe("upload");
+    expect(drawerCapability(eargs({ drawer: entity("manage") })).cap).toBe("manage");
+    // The head of family is not automatically named.
+    expect(drawerCapability(eargs({ drawer: entity(null) }))).toEqual({ cap: null, reason: "entity_vault_not_named" });
+    expect(drawerCapability(eargs({ drawer: entity(undefined), familyRole: "head_of_family" })).cap).toBeNull();
+  });
+  it("never opens for minors or limited clients, even when named", () => {
+    expect(drawerCapability(eargs({ isMinor: true })).cap).toBeNull();
+    expect(drawerCapability(eargs({ shoeboxOnly: true })).cap).toBeNull();
+  });
+  it("lets a live named grant open or raise access, but never lower it", () => {
+    const g = (permission: string, over: any = {}) => ({ drive_id: "cat", permission, expires_at: null, revoked_at: null, ...over });
+    expect(drawerCapability(eargs({ drawer: entity(null), grants: [g("view")] })).cap).toBe("view");
+    expect(drawerCapability(eargs({ drawer: entity("view"), grants: [g("upload")] })).cap).toBe("upload");
+    expect(drawerCapability(eargs({ drawer: entity("manage"), grants: [g("view")] })).cap).toBe("manage");
+    expect(drawerCapability(eargs({ drawer: entity(null), grants: [g("view", { revoked_at: "2026-10-01T00:00:00Z" })] })).cap).toBeNull();
+  });
+  it("lets only a manager share from it", () => {
+    expect(mayShareFromDrawer("entity", "manage")).toBe(true);
+    expect(mayShareFromDrawer("entity", "upload")).toBe(false);
+  });
+});

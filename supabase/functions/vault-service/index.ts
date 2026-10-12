@@ -28,6 +28,7 @@ import { logActionEvent } from "../_shared/action-brain.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
 import { provisionClientFolderTree } from "../_shared/vault-provisioning.ts";
 import { buildItemAccess } from "../_shared/vault-access.ts";
+import { provisionEntityVault } from "../_shared/vault-provisioning.ts";
 import { FAMILY_DOCS, FAMILY_DOCS_LABEL, HOUSEHOLD_DOCS, PERSONAL_DOCS, withVaultSuffix, planRestructure, describeOp, type StructureState, type StructureOp } from "../_shared/vault-structure.ts";
 import { drawerCapability, pickDrawer, mayShareFromDrawer, FAMILY_VAULT_CATEGORIES, hasPersonalDrawerRole, type Drawer } from "../_shared/vault-drawers.ts";
 
@@ -326,6 +327,12 @@ async function resolveActor(req: Request): Promise<Actor | null> {
         if (fam?.vfo_enabled && fam.vault_root_folder_id) drawers.push({ kind: "family", rootId: fam.vault_root_folder_id, familyId: c.family_id });
       }
       if (c?.personal_vault_folder_id) drawers.push({ kind: "personal", rootId: c.personal_vault_folder_id, ownerContactId: tok.contact_id, familyId: c.family_id ?? null });
+      // Entity (corporation) vaults: only those this person is explicitly named on.
+      const { data: ents } = await supabaseAdmin.from("entity_vault_access").select("corporation_id, capability, corporations(vault_root_folder_id)").eq("contact_id", tok.contact_id).is("revoked_at", null);
+      for (const e of (ents ?? []) as any[]) {
+        const root = e.corporations?.vault_root_folder_id;
+        if (root) drawers.push({ kind: "entity", rootId: root, entityId: e.corporation_id, entityCap: e.capability, ownerContactId: null, familyId: c?.family_id ?? null });
+      }
     } catch (e) {
       console.error("[vault-service] drawer lookup failed:", e instanceof Error ? e.message : String(e));
     }
@@ -672,7 +679,7 @@ async function logShoeboxDecision(admin: any, userId: string | null | undefined,
 // Append-only, hash-chained log (see migration 20261014120000). The database refuses edits and deletes; every
 // row is tied to the one before it. We fill in everything a regulator would ask for: which household, who
 // (id and email for staff), and what the document was called at the time.
-const chainScopeCache = new Map<string, { t: number; householdId: string | null; personalFamilyId: string | null | undefined }>();
+const chainScopeCache = new Map<string, { t: number; householdId: string | null; personalFamilyId: string | null | undefined; entityId?: string }>();
 
 async function audit(
   actor: Actor | null,
@@ -688,7 +695,7 @@ async function audit(
   // Which drawer the action happened in: a client's request sets it while access is checked; a staff request names it in `scope`.
   const drawerCtx = (actor as any)?.lastDrawer as (Drawer & { householdId?: string | null }) | null | undefined;
   if (drawerCtx && drawerCtx.kind !== "household") {
-    metadata = { ...metadata, drawer: drawerCtx.kind, ...(drawerCtx.familyId ? { family_id: drawerCtx.familyId } : {}) };
+    metadata = { ...metadata, drawer: drawerCtx.kind, ...(drawerCtx.familyId ? { family_id: drawerCtx.familyId } : {}), ...(drawerCtx.entityId ? { entity_id: drawerCtx.entityId } : {}) };
     if (drawerCtx.kind === "personal" && !householdId) householdId = (actor as any)?.householdId ?? (actor as any)?.scopeHouseholdId ?? null;
   }
   try {
@@ -719,18 +726,23 @@ async function audit(
       // Remembered per instance for 10 minutes so a busy folder is walked once, not on every listing.
       let hit = chainScopeCache.get(driveId);
       if (!hit || Date.now() - hit.t > 600_000) {
-        hit = { t: Date.now(), householdId: null, personalFamilyId: undefined };
+        hit = { t: Date.now(), householdId: null, personalFamilyId: undefined, entityId: undefined };
         const token = await getValidGoogleToken();
         if (token) {
           const chain = [driveId, ...(await getAncestors(driveId, token))];
           const { data: hh } = await supabaseAdmin.from("households").select("id").or(`vault_root_folder_id.in.(${chain.join(",")}),vault_folder_id.in.(${chain.join(",")})`).limit(1).maybeSingle();
           hit.householdId = hh?.id ?? null;
+          if (!hit.householdId) {
+            const { data: ent } = await supabaseAdmin.from("corporations").select("id, home_household_id").or(`vault_root_folder_id.in.(${chain.join(",")}),vault_folder_id.in.(${chain.join(",")})`).limit(1).maybeSingle();
+            if (ent) { hit.householdId = ent.home_household_id ?? null; hit.entityId = ent.id; }
+          }
           const { data: pd } = await supabaseAdmin.from("contacts").select("household_id, family_id").in("personal_vault_folder_id", chain).limit(1).maybeSingle();
           if (pd) { hit.householdId = hit.householdId ?? pd.household_id ?? null; hit.personalFamilyId = pd.family_id ?? null; }
         }
         chainScopeCache.set(driveId, hit);
       }
       householdId = hit.householdId;
+      if (hit.entityId) metadata = { ...metadata, drawer: "entity", entity_id: hit.entityId };
       if (hit.personalFamilyId !== undefined) metadata = { ...metadata, drawer: "personal", ...(hit.personalFamilyId ? { family_id: hit.personalFamilyId } : {}) };
     }
   } catch (e) {
@@ -2175,7 +2187,13 @@ serve(async (req) => {
         } catch { return null; }
       };
       if (actor.kind === "client") {
-        const out: Array<{ kind: string; rootId: string; name: string | null; capability: string; canShare: boolean; label: string }> = [];
+        const out: Array<{ kind: string; rootId: string; name: string | null; capability: string; canShare: boolean; label: string; entityId?: string }> = [];
+        const entityIds = actor.drawers.filter((d) => d.kind === "entity").map((d) => d.entityId as string);
+        const entityNames = new Map<string, string>();
+        if (entityIds.length) {
+          const { data: cs } = await supabaseAdmin.from("corporations").select("id, name").in("id", entityIds);
+          for (const c of cs ?? []) entityNames.set(c.id, c.name);
+        }
         for (const d of actor.drawers) {
           let cap: string | null = null;
           if (d.kind === "household") cap = await effectiveClientPermission(actor.contactId, [d.rootId]);
@@ -2186,7 +2204,8 @@ serve(async (req) => {
           if (!cap) continue;
           out.push({
             kind: d.kind, rootId: d.rootId, name: await metaName(d.rootId), capability: cap, canShare: mayShareFromDrawer(d.kind, cap as any),
-            label: d.kind === "household" ? HOUSEHOLD_DOCS : d.kind === "family" ? FAMILY_DOCS_LABEL : PERSONAL_DOCS,
+            label: d.kind === "household" ? HOUSEHOLD_DOCS : d.kind === "family" ? FAMILY_DOCS_LABEL : d.kind === "entity" ? (entityNames.get(d.entityId ?? "") ?? "Corporate Docs") : PERSONAL_DOCS,
+            ...(d.kind === "entity" ? { entityId: d.entityId } : {}),
           });
         }
         return new Response(JSON.stringify({ drawers: out }), { headers: { ...cors, "Content-Type": "application/json" } });
@@ -2220,6 +2239,35 @@ serve(async (req) => {
       const result = await provisionClientFolderTree(supabaseAdmin, householdId, "staff", { force: force === true, requestedBy: { id: actor.userId, email: p?.email ?? null } });
       if (!result.ok) return new Response(JSON.stringify({ error: result.error }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
       return new Response(JSON.stringify({ ok: true, vaultRootFolderId: result.vaultRootFolderId, personalDrawers: result.personalDrawers ?? 0 }), { headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    // ─── ENTITY (CORPORATION) VAULTS (staff) ───
+    // provisionEntityVault: builds "{Corp} Vault" > Corporate Docs inside the home household's Entity Vaults folder.
+    // getEntityAccess / setEntityAccess: who is named on an entity's vault. Access is explicit; ownership never grants it.
+    if (action === "provisionEntityVault" || action === "getEntityAccess" || action === "setEntityAccess") {
+      if (actor.kind !== "staff")
+        return new Response(JSON.stringify({ error: "staff_only" }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
+      const { corporationId } = body;
+      if (!corporationId) return new Response(JSON.stringify({ error: "corporationId required" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { ...cors, "Content-Type": "application/json" } });
+      if (action === "provisionEntityVault") {
+        const { data: p } = await supabaseAdmin.from("profiles").select("email").eq("user_id", actor.userId).maybeSingle();
+        const r = await provisionEntityVault(supabaseAdmin, corporationId, "staff", { requestedBy: { id: actor.userId, email: p?.email ?? null } });
+        return r.ok ? json({ ok: true, folderId: r.vaultRootFolderId, alreadyExists: !!r.alreadyExists }) : json({ error: r.error }, r.error === "no_home_household" || r.error === "household_no_vault" ? 400 : 500);
+      }
+      if (action === "getEntityAccess") {
+        const { data: rows } = await supabaseAdmin.from("entity_vault_access").select("id, contact_id, role, capability, created_at, contacts(first_name, last_name, household_id)").eq("corporation_id", corporationId).is("revoked_at", null);
+        return json({ access: (rows ?? []).map((r: any) => ({ id: r.id, contactId: r.contact_id, name: `${r.contacts?.first_name ?? ""} ${r.contacts?.last_name ?? ""}`.trim(), role: r.role, capability: r.capability })) });
+      }
+      const { contactId, role, capability, revoke } = body;
+      if (!contactId) return json({ error: "contactId required" }, 400);
+      const { data: corp } = await supabaseAdmin.from("corporations").select("id, name, vault_root_folder_id").eq("id", corporationId).maybeSingle();
+      if (!corp) return json({ error: "corporation_not_found" }, 404);
+      const cap = ["view", "upload", "manage"].includes(capability) ? capability : "upload";
+      if (revoke) await supabaseAdmin.from("entity_vault_access").update({ revoked_at: new Date().toISOString() }).eq("corporation_id", corporationId).eq("contact_id", contactId).is("revoked_at", null);
+      else await supabaseAdmin.from("entity_vault_access").upsert({ corporation_id: corporationId, contact_id: contactId, role: typeof role === "string" && role ? role : "shareholder", capability: cap, created_by: actor.userId, revoked_at: null }, { onConflict: "corporation_id,contact_id" });
+      if (corp.vault_root_folder_id) await audit(actor, revoke ? "revoke_contact_grant" : "set_contact_grant", contactId, corp.vault_root_folder_id, corp.name, req, { drawer: "entity", entity_id: corporationId, capability: revoke ? null : cap, role: role ?? null });
+      return json({ ok: true });
     }
 
     // ─── PROVISION THE FAMILY VAULT (staff, VFO families) ───
