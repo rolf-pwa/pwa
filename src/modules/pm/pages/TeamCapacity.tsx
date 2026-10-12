@@ -4,7 +4,7 @@ import { ListRowStatic } from "@/shared/components/ListRow";
 import { TaskDetailPanel } from "@/modules/pm/components/TaskDetailPanel";
 import { getTaskAgent } from "@/shared/lib/agents";
 import type { PmTask } from "@/shared/lib/agents";
-import { AI_TEAMMATE_LABEL, type AiTeammateKey } from "@/shared/lib/aiTeammates";
+import { AI_TEAMMATE_LABEL, AUTONOMOUS_AGENT_LABEL, type AiTeammateKey } from "@/shared/lib/aiTeammates";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { parseLocalDate } from "@/shared/lib/date-utils";
 import { addDays, isBefore, startOfDay } from "date-fns";
@@ -113,7 +113,7 @@ export default function TeamCapacity() {
       result.push({ key: id, label: `Staff (${id.slice(0, 8)})`, kind: "staff", tasks: list, ...bucket(list) });
     }
     for (const [key, list] of byAgent) {
-      result.push({ key: `agent:${key}`, label: AI_TEAMMATE_LABEL[key as AiTeammateKey] || key, kind: "agent", tasks: list, ...bucket(list) });
+      result.push({ key: `agent:${key}`, label: AI_TEAMMATE_LABEL[key as AiTeammateKey] || AUTONOMOUS_AGENT_LABEL[key] || key, kind: "agent", tasks: list, ...bucket(list) });
     }
     if (unassigned.length > 0) {
       result.push({ key: "unassigned", label: "Unassigned", kind: "unassigned", tasks: unassigned, ...bucket(unassigned) });

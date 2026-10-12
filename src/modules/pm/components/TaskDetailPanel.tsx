@@ -12,7 +12,7 @@ import { StaffAssigneePicker } from "./StaffAssigneePicker";
 import { ProfessionalPicker } from "./ProfessionalPicker";
 import { HouseholdMemberPicker } from "./HouseholdMemberPicker";
 import { AiTeammateStepper } from "./AiTeammateStepper";
-import { AI_TEAMMATE_DESCRIPTION, AI_TEAMMATE_LABEL, type AiTeammateKey } from "@/shared/lib/aiTeammates";
+import { AI_TEAMMATE_DESCRIPTION, AI_TEAMMATE_LABEL, AUTONOMOUS_AGENT_LABEL, isAutonomousAgent, type AiTeammateKey } from "@/shared/lib/aiTeammates";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { cn } from "@/shared/lib/utils";
 
@@ -285,13 +285,13 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
             <div className="flex items-center gap-2">
               <Bot className="h-4 w-4 text-primary" />
               <div>
-                <p className="text-sm font-medium">{AI_TEAMMATE_LABEL[task.assigned_agent_key as AiTeammateKey] || task.assigned_agent_key}</p>
+                <p className="text-sm font-medium">{AI_TEAMMATE_LABEL[task.assigned_agent_key as AiTeammateKey] || AUTONOMOUS_AGENT_LABEL[task.assigned_agent_key] || task.assigned_agent_key}</p>
                 <p className="text-xs text-muted-foreground">
-                  {AI_TEAMMATE_DESCRIPTION[task.assigned_agent_key as AiTeammateKey] || "Assigned to an AI Teammate."}
+                  {isAutonomousAgent(task.assigned_agent_key) ? "Works on this on its own and hands it to a person only if something needs one." : AI_TEAMMATE_DESCRIPTION[task.assigned_agent_key as AiTeammateKey] || "Assigned to an AI Teammate."}
                 </p>
               </div>
             </div>
-            {!showAgentStepper && (
+            {!showAgentStepper && !isAutonomousAgent(task.assigned_agent_key) && (
               <Button size="sm" variant="outline" onClick={runAiTeammate} disabled={agentCallInFlight}>
                 <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
                 Run{subtasks.length > 0 ? " again" : ""}
@@ -426,7 +426,7 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
               <div key={c.id} className="rounded-md bg-muted/50 p-2 text-sm">
                 <div className="mb-0.5 text-xs font-medium text-muted-foreground">
                   {c.author_agent_key
-                    ? `🤖 ${AI_TEAMMATE_LABEL[c.author_agent_key as AiTeammateKey] || c.author_agent_key}`
+                    ? `🤖 ${AI_TEAMMATE_LABEL[c.author_agent_key as AiTeammateKey] || AUTONOMOUS_AGENT_LABEL[c.author_agent_key] || c.author_agent_key}`
                     : authorNames[c.author_id] || "Staff"}{" "}
                   · {new Date(c.created_at).toLocaleString()}
                 </div>

@@ -30,6 +30,7 @@ import {
   ListTodo,
   MoreHorizontal,
   Gauge,
+  Bot,
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { useEffect, useState, createContext, useContext } from "react";
@@ -68,6 +69,7 @@ const GROUPS = [
       { to: "/inbox", label: "Inbox", icon: InboxIcon, badgeKey: "inbox" },
       { to: "/projects", label: "Projects", icon: ListTodo },
       { to: "/team-capacity", label: "Team Capacity", icon: Gauge },
+      { to: "/onboarding-agent", label: "Georgia Onboarding", icon: Bot },
       { to: "/invoices", label: "Invoices", icon: Receipt },
       { to: "/services", label: "Services", icon: ConciergeBell },
     ],

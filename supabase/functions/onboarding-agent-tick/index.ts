@@ -9,6 +9,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendServiceEmail } from "../_shared/service-email.ts";
 import { provisionClientFolderTree } from "../_shared/vault-provisioning.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
+import { CHECKLIST, COMPLETE_COMMENT, CONCIERGE_KEY, ESCALATED_COMMENT, NUDGE_COMMENT, newlyDone, parentTitle, progressFrom, type ChecklistKey } from "../_shared/onboarding-checklist.ts";
 import {
   AGENT_SENDER, DEFAULT_CONFIG, ESCALATION_TITLE, decideNext, escalationBody, nextNudgeCount, nudgeEmail,
   type AgentConfig, type CaseFacts, type Decision,
@@ -89,6 +90,12 @@ async function work(k: any, mode: "shadow" | "live", cfg: AgentConfig, summary: 
     hasEmail: !!lead?.email, openPortalRequest: (openRequests ?? 0) > 0, lastClientActivityAt: activity || null,
     nudgeCount: k.nudge_count, lastNudgeAt: ms(k.last_nudge_at),
   };
+  // Live cases keep their checklist up to date, whatever the decision is.
+  let ids: Record<string, string> = (k.checklist ?? {}) as Record<string, string>;
+  if (mode === "live") {
+    ids = await ensureChecklist(k, hh, lead?.id ?? null);
+    await syncChecklist(k, ids, facts);
+  }
   const d: Decision = decideNext(facts, cfg);
   summary.evaluated++;
   if (d.kind === "wait") { summary.waiting++; return; }
@@ -99,6 +106,10 @@ async function work(k: any, mode: "shadow" | "live", cfg: AgentConfig, summary: 
   if (d.kind === "complete") {
     await touch({ status: "complete", completed_at: new Date().toISOString() });
     await event(hh.id, k.id, mode, "complete", snapshot);
+    if (mode === "live" && ids.parent) {
+      await db.from("pm_tasks").update({ status: "done", completed_at: new Date().toISOString() }).eq("id", ids.parent);
+      await comment(ids.parent, COMPLETE_COMMENT);
+    }
     summary.complete++;
     return;
   }
@@ -111,6 +122,7 @@ async function work(k: any, mode: "shadow" | "live", cfg: AgentConfig, summary: 
     }
     await touch({ nudge_count: nextNudgeCount(facts), last_nudge_at: new Date().toISOString() });
     await event(hh.id, k.id, mode, mode === "live" ? "nudge_sent" : "nudge_would_send", { step: d.step, ...snapshot });
+    if (mode === "live") await comment(ids.parent, NUDGE_COMMENT(nextNudgeCount(facts), d.step));
     summary.nudges++;
     return;
   }
@@ -143,5 +155,46 @@ async function work(k: any, mode: "shadow" | "live", cfg: AgentConfig, summary: 
   }
   await touch({ status: "escalated", escalated_at: new Date().toISOString(), escalation_reason: d.reason, escalation_task_id: taskId });
   await event(hh.id, k.id, mode, mode === "live" ? "escalated" : "would_escalate", { reason: d.reason, detail: d.detail, taskId, ...snapshot });
+  if (mode === "live") await comment(ids.parent, ESCALATED_COMMENT(d.detail));
   summary.escalations++;
+}
+
+
+// ───── Checklist tasks (live mode only) ─────
+async function rolfId(): Promise<string | null> {
+  const { data } = await db.from("profiles").select("user_id").eq("email", ESCALATION_ASSIGNEE_EMAIL).maybeSingle();
+  return data?.user_id ?? null;
+}
+
+async function comment(taskId: string | undefined, body: string) {
+  if (taskId) await db.from("pm_task_comments").insert({ task_id: taskId, author_agent_key: CONCIERGE_KEY, body });
+}
+
+/** Creates the parent task and one subtask per checklist item the first time; returns the ids ({ parent, vault, survey, documents }). */
+async function ensureChecklist(k: any, hh: any, leadId: string | null): Promise<Record<string, string>> {
+  const existing = (k.checklist ?? {}) as Record<string, string>;
+  if (existing.parent) return existing;
+  const owner = await rolfId();
+  if (!owner) return existing;
+  const base = { status: "open", client_visible: false, assigned_agent_key: CONCIERGE_KEY, created_by: owner, household_id: hh.id, family_id: hh.family_id ?? null, contact_id: leadId };
+  const { data: parent } = await db.from("pm_tasks").insert({ ...base, title: parentTitle(hh.label ?? "household"), description: "Georgia, AI Assistant manages this client's onboarding. It is complete when the Survey Session is booked and documents have been received. Georgia hands the case to a person only if something needs one." }).select("id").maybeSingle();
+  if (!parent?.id) return existing;
+  const ids: Record<string, string> = { parent: parent.id };
+  for (const item of CHECKLIST) {
+    const { data: sub } = await db.from("pm_tasks").insert({ ...base, parent_task_id: parent.id, title: item.title }).select("id").maybeSingle();
+    if (sub?.id) ids[item.key] = sub.id;
+  }
+  await db.from("onboarding_cases").update({ checklist: ids }).eq("id", k.id);
+  return ids;
+}
+
+/** Marks checklist subtasks done as the milestones are reached. */
+async function syncChecklist(k: any, ids: Record<string, string>, facts: CaseFacts) {
+  if (!ids.parent) return;
+  const done: ChecklistKey[] = (ids.done ? String(ids.done).split(",") : []) as ChecklistKey[];
+  const fresh = newlyDone(progressFrom(facts), done);
+  if (!fresh.length) return;
+  const now = new Date().toISOString();
+  for (const key of fresh) if (ids[key]) await db.from("pm_tasks").update({ status: "done", completed_at: now }).eq("id", ids[key]);
+  await db.from("onboarding_cases").update({ checklist: { ...ids, done: [...done, ...fresh].join(",") } }).eq("id", k.id);
 }
