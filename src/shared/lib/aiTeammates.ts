@@ -5,6 +5,9 @@
 // supabase/functions/pm-ai-teammate-run/index.ts's prompt builder) once
 // there's a real capability split to justify it -- no migration needed,
 // pm_tasks.assigned_agent_key is free text.
+//
+// This PM teammate is draft-only by policy. The onboarding concierge (supabase/functions/onboarding-agent-tick) is a
+// separate system agent that is allowed to email clients on its own; it is not a persona here.
 
 export type AiTeammateKey = "pm_teammate";
 
