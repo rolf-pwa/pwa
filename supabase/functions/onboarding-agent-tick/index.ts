@@ -26,6 +26,8 @@ const CRON_SECRET = Deno.env.get("ONBOARDING_AGENT_CRON_SECRET");
 // Escalations go to Rolf until households record an advisor.
 const ESCALATION_ASSIGNEE_EMAIL = "rolf@prosperwise.ca";
 const MAX_CASES = 40;
+// The From header. Gmail only shows a custom display name ("Georgia, AI Assistant") when the address is a "send as" alias
+// of the connected mailbox, so set ONBOARDING_AGENT_FROM to e.g. "Georgia, AI Assistant <georgia@prosperwise.ca>" once that alias exists.
 
 const db = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "Content-Type": "application/json" } });
@@ -127,7 +129,7 @@ async function work(k: any, mode: "shadow" | "live", cfg: AgentConfig, summary: 
   if (d.kind === "nudge") {
     if (mode === "live") {
       const { subject, html } = nudgeEmail(lead?.first_name || "there", d.step);
-      const sent = await sendServiceEmailDetailed(db, { to: lead!.email, subject, html, from: AGENT_SENDER });
+      const sent = await sendServiceEmailDetailed(db, { to: lead!.email, subject, html, from: Deno.env.get("ONBOARDING_AGENT_FROM") || AGENT_SENDER });
       if (!sent.ok) { await event(hh.id, k.id, mode, "nudge_failed", { step: d.step }); summary.errors.push(`${hh.id}: email failed`); return; }
       if (sent.threadId) {
         await touch({
