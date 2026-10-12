@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { syncKnowledgeBaseToBrain } from "@/shared/lib/brain";
+import { SECOND_BRAIN_ENABLED } from "@/shared/lib/featureFlags";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { AppLayout } from "@/shared/components/AppLayout";
 import { Button } from "@/shared/components/ui/button";
@@ -272,10 +273,10 @@ function KnowledgeTab() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-sm">
         <p className="text-muted-foreground">
-          This feeds Georgia, the client-facing portal assistant — keep it client-safe. For your own private
-          notes and memory, use the <Link to="/brain" className="font-medium text-accent underline">Second Brain</Link> instead.
+          This feeds Georgia, the client-facing portal assistant — keep it client-safe.
+          {SECOND_BRAIN_ENABLED && <> For your own private notes and memory, use the <Link to="/brain" className="font-medium text-accent underline">Second Brain</Link> instead.</>}
         </p>
-        <Button
+        {SECOND_BRAIN_ENABLED && <Button
           size="sm"
           variant="outline"
           className="shrink-0 gap-1.5"
@@ -294,7 +295,7 @@ function KnowledgeTab() {
         >
           {syncingToBrain ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <BrainIcon className="h-3.5 w-3.5" />}
           Sync to Second Brain
-        </Button>
+        </Button>}
       </div>
 
       <div className="flex items-center justify-between">
