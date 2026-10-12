@@ -181,3 +181,6 @@ verify_jwt = false
 
 [functions.vault-reconcile]
 verify_jwt = false
+
+[functions.onboarding-agent-tick]
+verify_jwt = false
