@@ -696,7 +696,7 @@ async function audit(
   const drawerCtx = (actor as any)?.lastDrawer as (Drawer & { householdId?: string | null }) | null | undefined;
   if (drawerCtx && drawerCtx.kind !== "household") {
     metadata = { ...metadata, drawer: drawerCtx.kind, ...(drawerCtx.familyId ? { family_id: drawerCtx.familyId } : {}), ...(drawerCtx.entityId ? { entity_id: drawerCtx.entityId } : {}) };
-    if (drawerCtx.kind === "personal" && !householdId) householdId = (actor as any)?.householdId ?? (actor as any)?.scopeHouseholdId ?? null;
+    if ((drawerCtx.kind === "personal" || drawerCtx.kind === "entity") && !householdId) householdId = (actor as any)?.householdId ?? (actor as any)?.scopeHouseholdId ?? null;
   }
   try {
     if (!householdId && (actor?.kind === "client" || actor?.kind === "share_link")) householdId = actor.householdId ?? null;
@@ -1337,9 +1337,9 @@ serve(async (req) => {
     });
   }
 
-  if (actor.kind === "staff" && body?.scope && typeof body.scope === "object" && ["family", "personal"].includes(body.scope.kind)) {
+  if (actor.kind === "staff" && body?.scope && typeof body.scope === "object" && ["family", "personal", "entity"].includes(body.scope.kind)) {
     // Labels the audit entries for this request (family or personal drawer); it grants nothing.
-    (actor as any).lastDrawer = { kind: body.scope.kind, rootId: "", familyId: body.scope.familyId ?? null, ownerContactId: body.scope.contactId ?? null };
+    (actor as any).lastDrawer = { kind: body.scope.kind, rootId: "", familyId: body.scope.familyId ?? null, ownerContactId: body.scope.contactId ?? null, entityId: body.scope.entityId ?? null };
     (actor as any).scopeHouseholdId = body.scope.householdId ?? null;
   }
 

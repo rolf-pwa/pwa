@@ -36,20 +36,23 @@ interface Crumb {
 
 /** A Vault space the person can open: the household's, the family's (VFO), or their own private one. */
 interface Drawer {
-  kind: "household" | "family" | "personal";
+  kind: "household" | "family" | "personal" | "entity";
   rootId: string;
   label: string;
   capability: string;
 }
 
 // Broadest to most private: Family, Household, Personal.
-const DRAWER_ORDER: Drawer["kind"][] = ["family", "household", "personal"];
-export const sortDrawers = (list: Drawer[]) => [...list].sort((a, b) => DRAWER_ORDER.indexOf(a.kind) - DRAWER_ORDER.indexOf(b.kind));
+// Entity (corporation) vaults come last.
+const DRAWER_ORDER: Drawer["kind"][] = ["family", "household", "personal", "entity"];
+export const sortDrawers = (list: Drawer[]) =>
+  [...list].sort((a, b) => DRAWER_ORDER.indexOf(a.kind) - DRAWER_ORDER.indexOf(b.kind) || (a.kind === "entity" ? a.label.localeCompare(b.label) : 0));
 
 const DRAWER_BLURB: Record<Drawer["kind"], string> = {
   household: "Shared with your household",
   family: "Shared with your family, by role",
   personal: "Private to you. Other members of your family cannot see it",
+  entity: "Shared only with the people named on this company",
 };
 
 interface Props {
@@ -78,7 +81,8 @@ export function PortalVault({ portalToken, householdId }: Props) {
   const [shoeboxId, setShoeboxId] = useState<string | null>(null);
   const [currentPerm, setCurrentPerm] = useState<"none" | "view" | "upload" | "manage">("view");
   const [drawers, setDrawers] = useState<Drawer[]>([]);
-  const [activeKind, setActiveKind] = useState<Drawer["kind"]>("household");
+  // The open space, by its root folder (a person can hold several company vaults). null = the household Vault.
+  const [activeRootId, setActiveRootId] = useState<string | null>(null);
   const folderUploadRef = useRef<HTMLInputElement | null>(null);
 
   const callVault = useCallback(
@@ -176,8 +180,8 @@ export function PortalVault({ portalToken, householdId }: Props) {
   }, [callVault, loadFolder, householdId]);
 
   const selectDrawer = (d: Drawer) => {
-    if (d.kind === activeKind) return;
-    setActiveKind(d.kind);
+    if (d.kind === "household" ? activeRootId === null : d.rootId === activeRootId) return;
+    setActiveRootId(d.kind === "household" ? null : d.rootId);
     const rootCrumb: Crumb = { id: d.rootId, name: d.label };
     loadFolder(rootCrumb, [rootCrumb]);
   };
@@ -381,8 +385,9 @@ export function PortalVault({ portalToken, householdId }: Props) {
   }
 
   const isEmpty = folders.length === 0 && files.length === 0;
+  const activeKind: Drawer["kind"] = drawers.find((d) => d.rootId === activeRootId)?.kind ?? "household";
   const inShoebox = activeKind === "household" && !!shoeboxId && crumbs[crumbs.length - 1]?.id === shoeboxId;
-  const activeDrawer = drawers.find((d) => d.kind === activeKind);
+  const activeDrawer = drawers.find((d) => d.rootId === activeRootId);
   const homeLabel = activeKind === "household" ? "Documents" : activeDrawer?.label ?? "Documents";
 
   return (
@@ -392,11 +397,11 @@ export function PortalVault({ portalToken, householdId }: Props) {
           <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Document spaces">
             {drawers.map((d) => (
               <button
-                key={d.kind}
+                key={d.rootId}
                 role="tab"
-                aria-selected={d.kind === activeKind}
+                aria-selected={d.kind === "household" ? activeRootId === null : d.rootId === activeRootId}
                 onClick={() => selectDrawer(d)}
-                className={`rounded-full border px-3.5 py-1.5 text-sm transition-colors ${d.kind === activeKind ? "border-accent bg-accent/10 text-accent" : "border-border text-muted-foreground hover:bg-muted/50"}`}
+                className={`rounded-full border px-3.5 py-1.5 text-sm transition-colors ${(d.kind === "household" ? activeRootId === null : d.rootId === activeRootId) ? "border-accent bg-accent/10 text-accent" : "border-border text-muted-foreground hover:bg-muted/50"}`}
               >
                 {d.label}
               </button>
@@ -477,6 +482,8 @@ export function PortalVault({ portalToken, householdId }: Props) {
                   ? "Your personal drawer is empty. Anything you add here stays private to you."
                   : activeKind === "family"
                     ? "There are no family documents here yet."
+                    : activeKind === "entity"
+                      ? "There are no company documents here yet."
                     : "Your Personal CFO has not shared any documents yet."
                 : "This folder is empty."}
             </p>

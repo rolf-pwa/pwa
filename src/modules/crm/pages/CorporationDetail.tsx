@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { AppLayout } from "@/shared/components/AppLayout";
+import { EntityVaultCard } from "@/modules/crm/components/EntityVaultCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
@@ -407,6 +408,7 @@ const CorporationDetail = () => {
         <div className="grid gap-4 lg:grid-cols-2">
           {/* Relationships: Shareholders + Subsidiaries */}
           <div className="space-y-4">
+          <EntityVaultCard corporation={corp} shareholderContactIds={shareholders.map((sh) => sh.contact_id)} onChanged={fetchData} />
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
