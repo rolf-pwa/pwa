@@ -64,6 +64,7 @@ const TermsOfEngagementDoc = lazy(() => import("@/modules/billing/pages/TermsOfE
 const Projects = lazy(() => import("@/modules/pm/pages/Projects"));
 const ProjectDetail = lazy(() => import("@/modules/pm/pages/ProjectDetail"));
 const TeamCapacity = lazy(() => import("@/modules/pm/pages/TeamCapacity"));
+const OnboardingAgent = lazy(() => import("@/modules/crm/pages/OnboardingAgent"));
 
 const Brain = lazy(() => import("@/modules/brain/pages/Brain"));
 const BrainDocument = lazy(() => import("@/modules/brain/pages/BrainDocument"));
@@ -148,6 +149,7 @@ const App = () => (
               <Route path="/services" element={<ProtectedRoute><BillingServices /></ProtectedRoute>} />
               <Route path="/invoices" element={<ProtectedRoute><BillingInvoices /></ProtectedRoute>} />
               <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
+              <Route path="/onboarding-agent" element={<ProtectedRoute><OnboardingAgent /></ProtectedRoute>} />
               <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
               <Route path="/team-capacity" element={<ProtectedRoute><TeamCapacity /></ProtectedRoute>} />
               <Route path="/book" element={<BookService />} />

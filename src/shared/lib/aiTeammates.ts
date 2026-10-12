@@ -13,6 +13,12 @@ export type AiTeammateKey = "pm_teammate";
 
 export const AI_TEAMMATE_ORDER: AiTeammateKey[] = ["pm_teammate"];
 
+/** System agents that work on their own: shown on tasks, but never offered a manual "Run" and not assignable by hand. */
+export const AUTONOMOUS_AGENT_LABEL: Record<string, string> = {
+  onboarding_concierge: "Georgia, AI Assistant (onboarding)",
+};
+export const isAutonomousAgent = (key: string | null | undefined): boolean => !!key && key in AUTONOMOUS_AGENT_LABEL;
+
 export const AI_TEAMMATE_LABEL: Record<AiTeammateKey, string> = {
   pm_teammate: "PM Teammate",
 };
