@@ -66,6 +66,8 @@ describe("onboarding messages", () => {
       const { subject, html } = nudgeEmail("Sam", step);
       expect(html).toContain("AI Assistant");
       expect(html).toContain("https://app.prosperwise.ca/portal");
+      expect(html).toContain("automated email from Georgia, Rolf's AI Assistant");
+      expect(html).toContain("just reply to this email");
       expect(html).not.toMatch(/token|statement|missing|passport|tax return/i);
       expect(subject).not.toMatch(/missing/i);
     }

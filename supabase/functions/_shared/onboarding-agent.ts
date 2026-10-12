@@ -126,7 +126,7 @@ export function nudgeEmail(firstName: string, step: NudgeStep): { subject: strin
       <p style="font-size:14px;line-height:1.6;">${lead} It only takes a few minutes.</p>
       <p style="font-size:14px;line-height:1.6;">To continue, sign in to your portal with this email address:</p>
       <p style="margin:20px 0;"><a href="${PORTAL_URL}" style="background:#1e293b;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:6px;font-size:14px;">Open your portal</a></p>
-      <p style="font-size:13px;line-height:1.6;color:#64748b;">If you would rather speak with a person, just reply to this email and someone from our team will get back to you.</p>
+      <p style="font-size:13px;line-height:1.6;color:#64748b;">This is an automated email from Georgia, Rolf's AI Assistant. If you need to get in touch with Rolf, just reply to this email, and I'll make sure he gets it.</p>
       <p style="font-size:14px;line-height:1.6;margin-top:24px;">Georgia<br/><span style="font-size:12px;color:#94a3b8;">AI Assistant, ProsperWise</span></p>
     </div>`.trim(),
   };
