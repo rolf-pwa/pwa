@@ -44,3 +44,13 @@ export function buildPersonalDrawerRow(i: { householdId: string; familyId: strin
     metadata: { household_id: i.householdId, ...(i.familyId ? { family_id: i.familyId } : {}), drawer: "personal", owner_contact_id: i.contactId, auto: true, source: i.source },
   };
 }
+
+/** One entry for an entity (corporation) vault being created: logged on its home household's audit file. */
+export function buildEntityVaultRow(i: { householdId: string; corporationId: string; corporationName: string; folderId: string; folderName: string | null; source: string; requestedBy?: { id: string; email: string | null } | null }) {
+  return {
+    household_id: i.householdId, actor_type: i.requestedBy ? "staff" : "system", actor_id: i.requestedBy?.id ?? null,
+    actor_label: i.requestedBy ? "staff" : "system:auto-provision", actor_email: i.requestedBy?.email ?? null,
+    action: "provision", drive_id: i.folderId, drive_name: i.folderName, ip: null, user_agent: null,
+    metadata: { household_id: i.householdId, drawer: "entity", entity_id: i.corporationId, entity_name: i.corporationName, auto: !i.requestedBy, source: i.source },
+  };
+}

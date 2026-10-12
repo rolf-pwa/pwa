@@ -17,9 +17,20 @@ export const FAMILY_DOCS = "1. Family Docs";
 export const FAMILY_DOCS_LABEL = "Family Docs";
 export const HOUSEHOLD_DOCS = "Household Docs";
 export const PERSONAL_DOCS = "Personal Docs";
+export const ENTITY_VAULTS = "Entity Vaults";
+export const CORPORATE_DOCS = "Corporate Docs";
+export const CORPORATE_ADVISOR_FILES = "Corporate Advisor Files";
+/** Folders created inside a new corporation's Corporate Docs. */
+export const CORPORATE_CATEGORIES = [
+  "01 Incorporation & Minute Book",
+  "02 Shareholder Agreements",
+  "03 Tax & Financial Statements",
+  "04 Insurance & Corporate-Owned Assets",
+  "05 Contracts & Banking",
+];
 
 /** "Peters Family" -> "Peters Family Vault"; already-suffixed names are left alone. */
-const RESERVED = new Set([FAMILY_DOCS, FAMILY_DOCS_LABEL, HOUSEHOLD_DOCS, PERSONAL_DOCS].map((n) => n.toLowerCase()));
+const RESERVED = new Set([FAMILY_DOCS, FAMILY_DOCS_LABEL, HOUSEHOLD_DOCS, PERSONAL_DOCS, ENTITY_VAULTS, CORPORATE_DOCS].map((n) => n.toLowerCase()));
 /** A household folder that was renamed to one of the three inner names by mistake gets a proper name again. */
 export const isReservedName = (name: string) => RESERVED.has(name.trim().toLowerCase());
 
@@ -59,7 +70,7 @@ export function planRestructure(s: StructureState): StructureOp[] {
   const misrooted = !!(s.familyDocs && s.familyFolder && s.familyDocs.id === s.familyFolder.id);
   if (misrooted) {
     const top = s.familyFolder!;
-    const topTarget = withVaultSuffix(`${s.familyName ?? "Family"} Family`);
+    const topTarget = withVaultSuffix(/\bfamily$/i.test((s.familyName ?? "").trim()) ? (s.familyName as string).trim() : `${s.familyName ?? "Family"} Family`);
     if (s.familyDocsCandidate) {
       ops.push({ op: "repoint", from: top.id, to: s.familyDocsCandidate.id, what: "Family Vault root" });
       if (s.familyDocsCandidate.name !== FAMILY_DOCS) ops.push({ op: "rename", id: s.familyDocsCandidate.id, from: s.familyDocsCandidate.name, to: FAMILY_DOCS, what: "Family Docs folder" });

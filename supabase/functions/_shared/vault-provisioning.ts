@@ -18,9 +18,9 @@
 // Family" folder is created directly inside) and a connected Google account
 // in `google_tokens` (see _shared/google-token.ts).
 
-import { buildVaultCreatedRow, buildPersonalDrawerRow } from "./vault-audit-events.ts";
+import { buildVaultCreatedRow, buildPersonalDrawerRow, buildEntityVaultRow } from "./vault-audit-events.ts";
 import { hasPersonalDrawerRole, FAMILY_VAULT_CATEGORIES } from "./vault-drawers.ts";
-import { FAMILY_DOCS, HOUSEHOLD_DOCS, PERSONAL_DOCS, withVaultSuffix } from "./vault-structure.ts";
+import { FAMILY_DOCS, HOUSEHOLD_DOCS, PERSONAL_DOCS, ENTITY_VAULTS, CORPORATE_DOCS, CORPORATE_ADVISOR_FILES, CORPORATE_CATEGORIES, withVaultSuffix } from "./vault-structure.ts";
 import { getServiceGoogleAccessToken } from "./google-token.ts";
 
 const CLIENT_ROOT_FOLDER_ID = Deno.env.get("CLIENT_VAULT_ROOT_FOLDER_ID");
@@ -266,6 +266,70 @@ export async function provisionClientFolderTree(
     }
 
     return { ok: true, vaultRootFolderId: vaultFolder.id, personalDrawers };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * Builds a corporation's vault inside its home household's Household Vault folder and records it. Idempotent.
+ *
+ *   {Household} Household Vault
+ *     Entity Vaults                     (created once per household; households.entity_vaults_folder_id)
+ *       {Corp} Vault                    <- corporations.vault_folder_id (navigation only)
+ *         Corporate Docs                <- corporations.vault_root_folder_id (the access root; category folders inside)
+ *         Corporate Advisor Files       (staff only)
+ *
+ * Access is explicit (entity_vault_access); nothing is granted by ownership or household role.
+ */
+// deno-lint-ignore no-explicit-any
+export async function provisionEntityVault(
+  admin: any,
+  corporationId: string,
+  source = "staff",
+  opts: { requestedBy?: { id: string; email: string | null } | null } = {},
+): Promise<{ ok: boolean; vaultRootFolderId?: string; alreadyExists?: boolean; error?: string }> {
+  const { data: corp } = await admin
+    .from("corporations")
+    .select("id, name, vault_folder_id, vault_root_folder_id, home_household_id")
+    .eq("id", corporationId)
+    .maybeSingle();
+  if (!corp) return { ok: false, error: "corporation_not_found" };
+  if (corp.vault_root_folder_id) return { ok: true, vaultRootFolderId: corp.vault_root_folder_id, alreadyExists: true };
+  if (!corp.home_household_id) return { ok: false, error: "no_home_household" };
+
+  const { data: hh } = await admin
+    .from("households")
+    .select("id, vault_folder_id, entity_vaults_folder_id")
+    .eq("id", corp.home_household_id)
+    .maybeSingle();
+  if (!hh?.vault_folder_id) return { ok: false, error: "household_no_vault" };
+
+  try {
+    const token = await getServiceGoogleAccessToken(admin);
+    let entityVaultsId: string | null = hh.entity_vaults_folder_id ?? null;
+    if (!entityVaultsId) {
+      // Reuse an existing "Entity Vaults" folder rather than creating a second one (e.g. if the pointer was never saved).
+      const kids = await driveListChildren(hh.vault_folder_id, token);
+      entityVaultsId = kids.find((k) => k.mimeType === "application/vnd.google-apps.folder" && k.name === ENTITY_VAULTS)?.id ?? null;
+      if (!entityVaultsId) entityVaultsId = (await driveCreateFolder(ENTITY_VAULTS, hh.vault_folder_id, token)).id;
+      await admin.from("households").update({ entity_vaults_folder_id: entityVaultsId }).eq("id", hh.id);
+    }
+    const top = await driveCreateFolder(withVaultSuffix(String(corp.name).trim()), entityVaultsId!, token);
+    const docs = await driveCreateFolder(CORPORATE_DOCS, top.id, token);
+    for (const c of CORPORATE_CATEGORIES) await driveCreateFolder(c, docs.id, token);
+    await driveCreateFolder(CORPORATE_ADVISOR_FILES, top.id, token);
+    await admin.from("corporations").update({ vault_folder_id: top.id, vault_root_folder_id: docs.id, vault_provisioned_at: new Date().toISOString() }).eq("id", corp.id);
+
+    try {
+      const { error } = await admin.from("vault_audit_log").insert(buildEntityVaultRow({
+        householdId: hh.id, corporationId: corp.id, corporationName: corp.name, folderId: docs.id, folderName: top.name ?? null, source, requestedBy: opts.requestedBy ?? null,
+      }));
+      if (error) console.error("[vault-provisioning] could not log entity vault:", error.message);
+    } catch (e) {
+      console.error("[vault-provisioning] could not log entity vault:", e instanceof Error ? e.message : String(e));
+    }
+    return { ok: true, vaultRootFolderId: docs.id };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

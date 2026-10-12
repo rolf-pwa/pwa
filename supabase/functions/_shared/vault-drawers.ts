@@ -2,16 +2,21 @@
 //   household  the existing household Vault (role + grants; handled by vault-service as before)
 //   family     the Family Vault, shared by a VFO family; access by family role, plus named grants
 //   personal   one adult's private drawer; only its owner (and staff) can open it, unless the owner invites someone
+//   entity     a corporation's vault ("Corporate Docs"); only people named in entity_vault_access (and staff) can open it
 // Pure (no I/O) so it can be unit-tested.
 
 export type Capability = "view" | "upload" | "manage";
-export type DrawerKind = "household" | "family" | "personal";
+export type DrawerKind = "household" | "family" | "personal" | "entity";
 
 export interface Drawer {
   kind: DrawerKind;
   rootId: string;
   ownerContactId?: string | null;
   familyId?: string | null;
+  /** The corporation, for an entity drawer. */
+  entityId?: string | null;
+  /** For an entity drawer: this person's explicit access to it (from entity_vault_access). */
+  entityCap?: Capability | null;
 }
 
 const RANK: Record<Capability, number> = { view: 0, upload: 1, manage: 2 };
@@ -53,6 +58,20 @@ export function drawerCapability(a: {
 }): { cap: Capability | null; reason: string | null } {
   if (a.drawer.kind === "personal") {
     return a.drawer.ownerContactId === a.actorContactId ? { cap: "manage", reason: null } : { cap: null, reason: "personal_drawer_private" };
+  }
+  if (a.drawer.kind === "entity") {
+    // Explicit access only: no role in the family or household opens an entity vault. A named grant on a folder can still open it.
+    const liveGrants = a.grants.filter((g) => g.revoked_at === null && (!g.expires_at || new Date(g.expires_at) > a.now) && a.chain.includes(g.drive_id));
+    let ecap: Capability | null = a.shoeboxOnly || a.isMinor ? null : a.drawer.entityCap ?? null;
+    for (const id of a.chain) {
+      const hit = liveGrants.find((g) => g.drive_id === id);
+      if (hit) {
+        const p = hit.permission as Capability;
+        if (ecap === null || RANK[p] > RANK[ecap]) ecap = p;
+        break;
+      }
+    }
+    return ecap ? { cap: ecap, reason: null } : { cap: null, reason: "entity_vault_not_named" };
   }
   if (a.drawer.kind !== "family") return { cap: null, reason: "not_a_drawer" };
   // A limited ("Shoebox only") client does not get the Family Vault.
