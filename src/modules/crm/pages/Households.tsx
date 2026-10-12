@@ -29,6 +29,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/shared/components/ui/tooltip";
+import { familyTitle } from "@/shared/lib/utils";
 
 interface HouseholdListItem {
   id: string;
@@ -224,7 +225,7 @@ const Households = () => {
                               <p className="font-serif text-base font-semibold leading-tight">{hh.label}</p>
                               <div className="flex flex-wrap items-center gap-1.5 mt-1">
                                 <span className="text-xs text-muted-foreground">
-                                  {hh.familyName} Family
+                                  {familyTitle(hh.familyName)}
                                   {hh.address && ` · ${hh.address}`}
                                 </span>
                                 {hh.governance_status && hh.governance_status !== "none" && (

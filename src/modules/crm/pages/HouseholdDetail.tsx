@@ -87,6 +87,7 @@ import {
   HeartHandshake,
 } from "lucide-react";
 import { ContactAnalytics } from "@/modules/crm/components/ContactAnalytics";
+import { familyTitle } from "@/shared/lib/utils";
 
 const ROLE_ICONS: Record<string, typeof Crown> = {
   head_of_family: Crown,
@@ -433,7 +434,7 @@ const HouseholdDetail = () => {
                       className="flex items-center gap-1.5 text-sm text-sanctuary-bronze hover:underline"
                     >
                       <Users className="h-3.5 w-3.5" />
-                      {familyName} Family
+                      {familyTitle(familyName)}
                     </Link>
                     {household.relationship_ended_at && (
                       <Badge variant="outline" className="text-[10px] uppercase gap-1">

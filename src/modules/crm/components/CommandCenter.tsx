@@ -24,6 +24,7 @@ import {
   useGmailMessages,
 } from "@/shared/hooks/useGoogle";
 import { useAuth } from "@/shared/hooks/useAuth";
+import { familyTitle } from "@/shared/lib/utils";
 
 export function CommandCenter() {
   const { data: status, isLoading: statusLoading } = useGoogleStatus();
@@ -391,7 +392,7 @@ async function resolveTaskEntityLinks(tasks: PmTask[]): Promise<Record<string, T
     } else if (t.household_id && householdLabel.has(t.household_id)) {
       links[t.id] = { label: householdLabel.get(t.household_id)!, to: `/households/${t.household_id}` };
     } else if (t.family_id && familyLabel.has(t.family_id)) {
-      links[t.id] = { label: `${familyLabel.get(t.family_id)!} Family`, to: `/families/${t.family_id}` };
+      links[t.id] = { label: familyTitle(familyLabel.get(t.family_id)), to: `/families/${t.family_id}` };
     }
   }
   return links;

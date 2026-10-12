@@ -46,6 +46,7 @@ import { FamilyTaskRollup } from "@/modules/crm/components/FamilyTaskRollup";
 import { AddCompanyDialog } from "@/modules/crm/components/AddCompanyDialog";
 import { CollapsibleCard } from "@/shared/components/CollapsibleCard";
 import { policyTypeLabel } from "@/shared/lib/insurance";
+import { familyTitle } from "@/shared/lib/utils";
 
 const ROLE_ICONS: Record<string, typeof Crown> = {
   head_of_family: Crown,
@@ -302,7 +303,7 @@ const FamilyDetail = () => {
           items={[
             { label: "Dashboard", href: "/dashboard" },
             { label: "Family Tree", href: "/families" },
-            { label: `${family.name} Family` },
+            { label: familyTitle(family.name) },
           ]}
         />
 
@@ -323,7 +324,7 @@ const FamilyDetail = () => {
                   <TreesIcon className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h1 className="text-xl font-bold truncate">{family.name} Family</h1>
+                  <h1 className="text-xl font-bold truncate">{familyTitle(family.name)}</h1>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
                     <Badge variant="outline" className="text-[10px] uppercase">
                       {households.length} {households.length === 1 ? "Household" : "Households"}

@@ -8,6 +8,7 @@ import ProTasksPanel from "@/modules/pro/components/ProTasksPanel";
 import SharedFolderCard from "@/modules/pro/components/SharedFolderCard";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { familyTitle } from "@/shared/lib/utils";
 
 interface Governance { charter: any | null; latest_review: any | null }
 
@@ -37,7 +38,7 @@ export default function ProPortalHousehold() {
   return (
     <ProPortalShell
       firmTitle={data?.household?.label || "Household"}
-      subtitle={data?.family?.name ? `${data.family.name} Family` : "Family"}
+      subtitle={familyTitle(data?.family?.name)}
       crumbs={[
         { label: "Portal", to: "/pro-portal" },
         { label: data?.family?.name || "Family", to: data?.family?.id ? `/pro-portal/family/${data.family.id}` : undefined },

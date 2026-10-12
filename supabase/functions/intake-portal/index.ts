@@ -1134,7 +1134,7 @@ async function handleOnboardingAction(
       const surname =
         primaryName.split(/\s+/).filter(Boolean).slice(1).join(" ") || primaryName;
       if (family && /^(client|new client)\b/i.test(String(family.name ?? ""))) {
-        await admin.from("families").update({ name: `${surname} Family` }).eq("id", family.id);
+        await admin.from("families").update({ name: surname }).eq("id", family.id);
       }
     }
 
