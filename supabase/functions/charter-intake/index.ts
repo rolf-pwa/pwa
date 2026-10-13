@@ -1003,8 +1003,8 @@ Draft the following six narratives, grounded strictly in the facts above — nev
       const SERVICE_TIER_CADENCE_TEXT: Record<string, string> = {
         tier_0: "No scheduled review — $249 CAD ad-hoc",
         tier_1: "1 annual review — $249 CAD ad-hoc",
-        tier_2a: "2 semi-annual reviews (Governance + Planning)",
-        tier_2b: "2 semi-annual reviews (Allocation + Review)",
+        tier_2a: "2 semi-annual reviews (Allocation + Review)",
+        tier_2b: "2 semi-annual reviews (Governance + Planning)",
         tier_3: "Semi-annual or 3 seasonal sessions",
         tier_4: "4 Quarterly Strategic Audit Meetings",
       };

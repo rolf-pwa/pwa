@@ -23,10 +23,10 @@ const MANAGED_CUSTODIANS = ["iA Financial Group", "JustWealth"];
 
 /**
  * Six-tier classification, purely from grouped AUM + charter status.
- * 2A vs 2B is not a separate AUM band -- both are $250k-$750k; ratified
+ * 2A (Traditional Legacy, no Charter) vs 2B (Chartered Legacy, the step before Tier 3) is not a separate AUM band -- both are $250k-$750k; ratified
  * Charter status is the only differentiator (confirmed against the source
  * doc directly, not the lossy roadmap-artifact summary that implied an
- * "AUM crosses $250k" auto-upgrade trigger for 2B->2A).
+ * "AUM crosses $250k" auto-upgrade trigger).
  *
  * Tier 0 detection is inferred, not stated as a formula in the source doc:
  * nil grouped AUM with at least one insurance policy on file. Tier 4's "or
@@ -38,7 +38,7 @@ export function classifyTier(input: { groupedAum: number; hasRatifiedCharter: bo
   const { groupedAum, hasRatifiedCharter, hasInsurancePolicy } = input;
   if (groupedAum <= 0 && hasInsurancePolicy) return "tier_0";
   if (groupedAum < 250_000) return "tier_1";
-  if (groupedAum < 750_000) return hasRatifiedCharter ? "tier_2a" : "tier_2b";
+  if (groupedAum < 750_000) return hasRatifiedCharter ? "tier_2b" : "tier_2a";
   if (groupedAum < 2_000_000) return "tier_3";
   return "tier_4";
 }
