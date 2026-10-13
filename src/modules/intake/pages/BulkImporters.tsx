@@ -9,7 +9,8 @@ import { Badge } from "@/shared/components/ui/badge";
 import { Label } from "@/shared/components/ui/label";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { toast } from "sonner";
-import { Upload, FileSpreadsheet, FileText, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
+import { Upload, FileSpreadsheet, FileText, CheckCircle2, AlertTriangle, Loader2, Send } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/shared/components/ui/alert-dialog";
 
 /* --------------------------- REGISTRY IMPORTER --------------------------- */
 
@@ -142,6 +143,67 @@ const HEADER_MAP: Record<string, keyof any> = {
   "3 years": "ror_3y",
   "5 years": "ror_5y",
 };
+
+/** After the monthly import: Georgia tells each person their balances are updated (portal notification + email, no figures). */
+function BalanceNoticeCard({ snapshotDate }: { snapshotDate: string }) {
+  const [plan, setPlan] = useState<any>(null);
+  const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const [sentResult, setSentResult] = useState<any>(null);
+
+  const call = async (action: "preview" | "send") => {
+    const { data, error } = await supabase.functions.invoke("balance-update-notify", { body: { action, snapshotDate } });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    return data;
+  };
+  const preview = async () => {
+    setBusy(true);
+    try { setPlan((await call("preview")).plan); setSentResult(null); } catch (e: any) { toast.error(e.message || "Couldn't load recipients"); } finally { setBusy(false); }
+  };
+  const send = async () => {
+    setBusy(true); setConfirm(false);
+    try {
+      const d = await call("send");
+      setSentResult(d.result);
+      toast.success(`Georgia sent ${d.result.sent} notice${d.result.sent === 1 ? "" : "s"}`);
+      setPlan((await call("preview")).plan);
+    } catch (e: any) { toast.error(e.message || "Couldn't send"); } finally { setBusy(false); }
+  };
+
+  return (
+    <Card>
+      <CardHeader><CardTitle>Tell clients their balances are updated</CardTitle></CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <p className="text-muted-foreground">
+          Georgia sends each person a short note (portal notification and email, no figures) about their own accounts as of {snapshotDate}.
+          The head of household can see household accounts when they open their own. Each person is told once per month.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={preview} disabled={busy}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Show who would be notified</Button>
+          <Button onClick={() => setConfirm(true)} disabled={busy || !plan || plan.send.length === 0}><Send className="mr-2 h-4 w-4" />Send from Georgia{plan ? ` (${plan.send.length})` : ""}</Button>
+        </div>
+        {plan && (
+          <div className="grid gap-3 md:grid-cols-3">
+            <div><div className="mb-1 text-xs font-medium">To notify ({plan.send.length})</div><ul className="max-h-40 space-y-0.5 overflow-y-auto rounded border p-2 text-xs">{plan.send.map((r: any) => <li key={r.contactId}>{r.name}{r.household ? <span className="text-muted-foreground"> · {r.household}</span> : null}</li>)}{plan.send.length === 0 && <li className="text-muted-foreground">Nobody left to notify.</li>}</ul></div>
+            <div><div className="mb-1 text-xs font-medium text-amber-700">No email on file ({plan.noEmail.length})</div><ul className="max-h-40 space-y-0.5 overflow-y-auto rounded border p-2 text-xs">{plan.noEmail.map((r: any) => <li key={r.contactId}>{r.name}{r.household ? <span className="text-muted-foreground"> · {r.household}</span> : null}</li>)}{plan.noEmail.length === 0 && <li className="text-muted-foreground">None.</li>}</ul></div>
+            <div><div className="mb-1 text-xs font-medium text-muted-foreground">Already notified ({plan.alreadyNotified.length})</div><ul className="max-h-40 space-y-0.5 overflow-y-auto rounded border p-2 text-xs">{plan.alreadyNotified.map((r: any) => <li key={r.contactId}>{r.name}</li>)}{plan.alreadyNotified.length === 0 && <li className="text-muted-foreground">None.</li>}</ul></div>
+          </div>
+        )}
+        {sentResult && <p className="text-xs text-muted-foreground">Sent {sentResult.sent}{sentResult.emailFailed ? `, ${sentResult.emailFailed} email${sentResult.emailFailed === 1 ? "" : "s"} failed (they still have the portal notification)` : ""}{sentResult.skipped ? `, ${sentResult.skipped} skipped` : ""}.</p>}
+      </CardContent>
+      <AlertDialog open={confirm} onOpenChange={setConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Send from Georgia?</AlertDialogTitle>
+            <AlertDialogDescription>Georgia will notify {plan?.send.length ?? 0} people that their balances are updated as of {snapshotDate}. This can't be unsent.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={send}>Send</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Card>
+  );
+}
 
 function PerformanceImporter() {
   const [file, setFile] = useState<File | null>(null);
@@ -344,6 +406,8 @@ function PerformanceImporter() {
           </CardContent>
         </Card>
       )}
+
+      {commitResult && <BalanceNoticeCard snapshotDate={snapshotDate} />}
 
       {commitResult && (
         <Card>
