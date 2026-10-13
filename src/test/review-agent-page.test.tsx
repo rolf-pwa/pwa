@@ -20,11 +20,13 @@ vi.mock("@/modules/crm/lib/reviewAgent", async () => {
         ob("c", "Smith", "annual_review", "2027-01-01", "2027-03-31", "open"),
         ob("d", "Jones", "annual_review", "2027-01-01", "2027-03-31", "escalated"),
         ob("e", "Fox", "sovereignty_review", "2027-04-01", "2027-06-30", "open"),
+        ob("r1", "Glanz", "rebalancing", "2027-10-01", "2027-12-31", "open"),
+        ob("r2", "Wangler", "rebalancing", "2027-10-01", "2027-12-31", "held", { published_at: "2027-10-03T18:00:00Z", acknowledged_at: "2027-10-04T18:00:00Z" }),
       ],
       events: [],
     }),
     getReminderOverview: vi.fn().mockResolvedValue({ config: { mode: "shadow", send_start_hour: 8, send_end_hour: 20, last_unmatched: [] }, recent: [] }),
-    setReviewMode: vi.fn(), setReviewPaused: vi.fn(), setReminderMode: vi.fn(),
+    setReviewMode: vi.fn(), setReviewPaused: vi.fn(), setReminderMode: vi.fn(), publishRebalancing: vi.fn().mockResolvedValue({ ok: true }), completeRebalancing: vi.fn().mockResolvedValue({ ok: true }), unpublishRebalancing: vi.fn(),
   };
 });
 
@@ -64,5 +66,25 @@ describe("Georgia's review windows page", () => {
     expect(within(q2).getByText("Fox Family")).toBeTruthy();
     fireEvent.click(within(q2).getByRole("button", { expanded: true }));
     expect(within(q2).queryByText("Fox Family")).toBeNull();
+  });
+
+  it("lets Rolf publish a rebalancing only with a summary, and mark an acknowledged one done", async () => {
+    const lib: any = await import("@/modules/crm/lib/reviewAgent");
+    render(<MemoryRouter><ReviewAgent /></MemoryRouter>);
+    const q4 = await screen.findByRole("region", { name: "Q4 2027" });
+    expect(within(q4).getByText(/^Preparing/)).toBeTruthy();
+    expect(within(q4).getByText(/^To carry out/)).toBeTruthy();
+    expect(within(q4).getByText("1 to carry out")).toBeTruthy();
+    fireEvent.click(within(q4).getByRole("button", { name: "Publish to portal" }));
+    const publish = await screen.findByRole("button", { name: "Publish to portal", hidden: false });
+    const dialogBtn = screen.getAllByRole("button", { name: "Publish to portal" }).pop()!;
+    expect((dialogBtn as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText("Summary for the client"), { target: { value: "Moving your TFSA back to target." } });
+    expect((dialogBtn as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(dialogBtn);
+    await waitFor(() => expect(lib.publishRebalancing).toHaveBeenCalledWith("r1", "Moving your TFSA back to target."));
+    expect(publish).toBeTruthy();
+    fireEvent.click(within(q4).getByRole("button", { name: "Mark done" }));
+    await waitFor(() => expect(lib.completeRebalancing).toHaveBeenCalledWith("r2"));
   });
 });

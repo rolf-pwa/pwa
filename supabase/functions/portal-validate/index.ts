@@ -610,13 +610,16 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
     }
 
     // The family's portfolio rebalancing, when its window is open: only for adults, and only once Georgia has made it live.
-    let rebalancing: { label: string; windowEnd: string; acknowledgedAt: string | null; statement: string; statementVersion: string } | null = null;
+    let rebalancing: { label: string; summary: string; publishedAt: string; acknowledgedAt: string | null; completedAt: string | null; statement: string; statementVersion: string } | null = null;
     try {
       const role = contactRes.data?.family_role;
       if ((role === "head_of_family" || role === "spouse") && !contactRes.data?.is_minor && familyId) {
         const today = pacificDate(Date.now());
-        const { data: ob } = await supabase.from("review_obligations").select("window_start, window_end, acknowledged_at").eq("family_id", familyId).eq("kind", "rebalancing").eq("mode", "live").neq("status", "cancelled").lte("window_start", today).gte("window_end", today).maybeSingle();
-        if (ob) rebalancing = { label: windowLabel(ob.window_start, ob.window_end), windowEnd: ob.window_end, acknowledgedAt: ob.acknowledged_at ?? null, statement: REBALANCE_STATEMENT, statementVersion: REBALANCE_STATEMENT_VERSION };
+        // Shown only once Rolf has published it to this family, and only while Georgia is live.
+        const { data: ob } = await supabase.from("review_obligations").select("window_start, window_end, published_at, proposal_summary, acknowledged_at, completed_at").eq("family_id", familyId).eq("kind", "rebalancing").eq("mode", "live").neq("status", "cancelled").not("published_at", "is", null).lte("window_start", today).order("window_start", { ascending: false }).limit(1).maybeSingle();
+        // A completed one stays on the card for a month, then goes quiet; one still being worked on stays until it is done.
+        const recent = ob && (!ob.completed_at || Date.now() - Date.parse(ob.completed_at) < 30 * 86_400_000);
+        if (ob && recent) rebalancing = { label: windowLabel(ob.window_start, ob.window_end), summary: ob.proposal_summary ?? "", publishedAt: ob.published_at, acknowledgedAt: ob.acknowledged_at ?? null, completedAt: ob.completed_at ?? null, statement: REBALANCE_STATEMENT, statementVersion: REBALANCE_STATEMENT_VERSION };
       }
     } catch (e) {
       console.error("[portal-validate] rebalancing fetch error", e);

@@ -7,8 +7,9 @@ import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/shared/components/ui/alert-dialog";
-import { KIND_LABEL, describeReviewEvent, statusLabel, getReminderOverview, groupByQuarter, getReviewOverview, setReminderMode, setReviewMode, setReviewPaused, type ReminderOverview, type ReviewMode, type ReviewObligation, type ReviewOverview } from "@/modules/crm/lib/reviewAgent";
+import { KIND_LABEL, completeRebalancing, describeReviewEvent, statusLabel, getReminderOverview, groupByQuarter, getReviewOverview, publishRebalancing, rebalancingStage, setReminderMode, unpublishRebalancing, setReviewMode, setReviewPaused, type ReminderOverview, type ReviewMode, type ReviewObligation, type ReviewOverview } from "@/modules/crm/lib/reviewAgent";
 import { familyTitle } from "@/shared/lib/utils";
+import { Textarea } from "@/shared/components/ui/textarea";
 
 const MODES: { value: ReviewMode; label: string; blurb: string }[] = [
   { value: "off", label: "Off", blurb: "Georgia does nothing." },
@@ -84,6 +85,8 @@ export default function ReviewAgent() {
   const [confirmLive, setConfirmLive] = useState(false);
   const [filter, setFilter] = useState<"all" | "attention" | "notBooked" | "booked">("all");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [publishing, setPublishing] = useState<ReviewObligation | null>(null);
+  const [summary, setSummary] = useState("");
 
   const load = useCallback(async () => {
     try { setData(await getReviewOverview()); setError(null); } catch (e: any) { setError(e?.message ?? "Couldn't load"); }
@@ -95,6 +98,12 @@ export default function ReviewAgent() {
     try { await setReviewMode(mode, mode === "live"); await load(); toast.success(`Georgia's review windows are now ${mode}`); }
     catch (e: any) { toast.error(e?.message ?? "Couldn't change the mode"); }
     finally { setBusy(false); setConfirmLive(false); }
+  };
+  const runRebalancing = async (fn: () => Promise<unknown>, ok: string) => {
+    setBusy(true);
+    try { await fn(); await load(); toast.success(ok); setPublishing(null); }
+    catch (e: any) { toast.error(e?.message ?? "Couldn't update"); }
+    finally { setBusy(false); }
   };
   const togglePause = async (o: ReviewObligation) => {
     try { await setReviewPaused(o.id, o.status !== "paused"); await load(); } catch (e: any) { toast.error(e?.message ?? "Couldn't update"); }
@@ -128,7 +137,7 @@ export default function ReviewAgent() {
                   ))}
                 </div>
                 <p className="text-sm text-muted-foreground">{MODES.find((m) => m.value === mode)?.blurb}</p>
-                {c && <p className="text-xs text-muted-foreground">Tier 1: an Annual Review in Q1 and a portfolio rebalancing, acknowledged in the portal, in Q3. Tier 2A: an Annual Review in Q2 and a rebalancing in Q4. Tier 2B: a Sovereignty Review in Q2 and another in Q4. Tier 3: Sovereignty Reviews in Q1–Q3 and a Governance Review in Q4. Invitations go out on the first day of each window, then a reminder every {c.remind_every_days} days (up to {c.max_nudges}); with {c.handoff_days_before_end} days left and nothing booked, the family comes to you. Only windows that start after {when(c.since)} are managed.</p>}
+                {c && <p className="text-xs text-muted-foreground">Tier 1: an Annual Review in Q1 and a portfolio rebalancing in Q3. Tier 2A: an Annual Review in Q2 and a rebalancing in Q4. A rebalancing is prepared by you family by family, published to the portal when it is ready, and Georgia invites the family only then. Tier 2B: a Sovereignty Review in Q2 and another in Q4. Tier 3: Sovereignty Reviews in Q1–Q3 and a Governance Review in Q4. Invitations go out on the first day of each window, then a reminder every {c.remind_every_days} days (up to {c.max_nudges}); with {c.handoff_days_before_end} days left and nothing booked, the family comes to you. Only windows that start after {when(c.since)} are managed.</p>}
               </CardContent>
             </Card>
 
@@ -161,6 +170,7 @@ export default function ReviewAgent() {
                         <span className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs">
                           <span className="text-muted-foreground">{sec.items.length} meeting{sec.items.length === 1 ? "" : "s"}</span>
                           {sec.counts.notBooked > 0 && <span className="text-foreground">{sec.counts.notBooked} not booked</span>}
+                          {sec.counts.toExecute > 0 && <span className="font-medium text-amber-700">{sec.counts.toExecute} to carry out</span>}
                           {sec.counts.booked > 0 && <span className="text-emerald-700">{sec.counts.booked} booked</span>}
                           {sec.counts.held > 0 && <span className="text-muted-foreground">{sec.counts.held} done</span>}
                           {sec.counts.withPerson > 0 && <span className="font-medium text-destructive">{sec.counts.withPerson} with a person</span>}
@@ -173,12 +183,24 @@ export default function ReviewAgent() {
                             <div key={o.id} className="flex items-center justify-between gap-3 border-b border-border py-2 text-sm last:border-0">
                               <div className="min-w-0">
                                 <Link to={`/families/${o.family_id}`} className="truncate font-medium hover:underline">{familyTitle(o.family_name)}</Link>
-                                <div className="text-xs text-muted-foreground">{KIND_LABEL[o.kind]} · window {day(o.window_start)} to {day(o.window_end)}{o.booked_start ? ` · booked ${when(o.booked_start)}` : ""}{o.acknowledged_at ? ` · acknowledged ${when(o.acknowledged_at)}` : ""}</div>
+                                <div className="text-xs text-muted-foreground">{KIND_LABEL[o.kind]} · window {day(o.window_start)} to {day(o.window_end)}{o.booked_start ? ` · booked ${when(o.booked_start)}` : ""}{o.published_at && o.kind === "rebalancing" ? ` · published ${when(o.published_at)}` : ""}{o.acknowledged_at ? ` · acknowledged ${when(o.acknowledged_at)}` : ""}{o.completed_at ? ` · done ${when(o.completed_at)}` : ""}</div>
                               </div>
                               <div className="flex shrink-0 items-center gap-2">
                                 <span className="text-xs text-muted-foreground">{o.nudge_count} invitation{o.nudge_count === 1 ? "" : "s"}</span>
                                 <Badge variant={o.status === "escalated" ? "destructive" : "secondary"}>{statusLabel(o)}{o.invite === false ? " (tracking only)" : ""}{o.mode === "shadow" ? " (shadow)" : ""}</Badge>
-                                {(o.status === "open" || o.status === "booked" || o.status === "paused") && (
+                                {o.kind === "rebalancing" && (
+                                  <>
+                                    {rebalancingStage(o) === "preparing" && <Button size="sm" className="h-7 text-xs" onClick={() => { setPublishing(o); setSummary(o.proposal_summary ?? ""); }}>Publish to portal</Button>}
+                                    {rebalancingStage(o) === "waiting" && (
+                                      <>
+                                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setPublishing(o); setSummary(o.proposal_summary ?? ""); }}>Edit</Button>
+                                        <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={busy} onClick={() => runRebalancing(() => unpublishRebalancing(o.id), "Taken back from the portal")}>Take back</Button>
+                                      </>
+                                    )}
+                                    {rebalancingStage(o) === "toExecute" && <Button size="sm" className="h-7 text-xs" disabled={busy} onClick={() => runRebalancing(() => completeRebalancing(o.id), "Marked done: the family is told")}>Mark done</Button>}
+                                  </>
+                                )}
+                                {(o.status === "open" || o.status === "booked" || o.status === "paused") && (o.kind !== "rebalancing" || rebalancingStage(o) !== "toExecute") && (
                                   <Button size="icon" variant="ghost" className="h-7 w-7" aria-label={o.status === "paused" ? "Resume" : "Pause"} onClick={() => togglePause(o)}>
                                     {o.status === "paused" ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
                                   </Button>
@@ -209,6 +231,22 @@ export default function ReviewAgent() {
           </>
         )}
       </div>
+
+      <AlertDialog open={!!publishing} onOpenChange={(o) => !o && setPublishing(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Publish the rebalancing for {familyTitle(publishing?.family_name ?? null)}</AlertDialogTitle>
+            <AlertDialogDescription>
+              Write what the client should review: what will change and why, in plain words. Also put the full proposal in their Documents. It appears on their portal now, and Georgia emails both adults to review it. They acknowledge only after reading it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea rows={6} value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="For example: We are moving your TFSA and RRSP back to the 60/40 target after this year's equity gains, and topping up your cash reserve. Details are in the proposal in your Documents." aria-label="Summary for the client" />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={busy || summary.trim().length < 10} onClick={(e) => { e.preventDefault(); if (publishing) void runRebalancing(() => publishRebalancing(publishing.id, summary.trim()), "Published to the portal"); }}>{publishing?.published_at ? "Save changes" : "Publish to portal"}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={confirmLive} onOpenChange={setConfirmLive}>
         <AlertDialogContent>

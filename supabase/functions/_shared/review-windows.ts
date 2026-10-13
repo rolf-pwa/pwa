@@ -114,8 +114,10 @@ export interface ReviewFacts {
   snoozedUntil: number | null;
   /** false for a window that was already open when Georgia went live: tracked for bookings, never invited or handed over. */
   invite?: boolean;
-  /** A rebalancing the client has acknowledged: the work for this window is done. */
-  completedAt?: number | null;
+  /** Rebalancing only: when Rolf published it to the portal (null = still being prepared, so Georgia stays silent). */
+  publishedAt?: number | null;
+  /** Rebalancing only: when the client acknowledged it after reviewing it. */
+  acknowledgedAt?: number | null;
   /** "rebalancing" changes the wording of the hand-off ("not yet acknowledged", not "no meeting is booked"). */
   kind?: ObligationKind;
 }
@@ -135,25 +137,48 @@ function inSendWindow(ms: number, cfg: ReviewConfig): boolean {
   return hour >= cfg.sendStartHour && hour < cfg.sendEndHour;
 }
 
+/** Reminders for a published rebalancing: first invitation at once, then every two weeks, three invitations in all. */
+export const REBALANCE_REMIND_DAYS = 14;
+export const REBALANCE_MAX_INVITES = 3;
+
+/**
+ * A rebalancing is prepared by Rolf family by family and published to the portal when it is ready, so Georgia says nothing until
+ * then. After that she invites both adults, reminds them every two weeks, and hands the family to Rolf if three invitations get no
+ * acknowledgement. There is no window deadline: the work takes as long as it takes.
+ */
+function decideRebalancing(f: ReviewFacts, cfg: ReviewConfig): ReviewDecision {
+  if (f.status === "held" || f.status === "cancelled") return { kind: "wait", reason: f.status };
+  if (f.status === "escalated") return { kind: "wait", reason: "with_a_person" };
+  if (f.status === "paused") return { kind: "wait", reason: "paused" };
+  if (f.acknowledgedAt != null) return { kind: "held" };
+  if (f.publishedAt == null) return { kind: "wait", reason: "not_published" };
+  if (f.recipients === 0) return { kind: "escalate", reason: "no_email", detail: "Neither adult in this family has an email address on file, so nobody can be invited to review the rebalancing." };
+  if (f.snoozedUntil && f.now < f.snoozedUntil) return { kind: "wait", reason: "snoozed" };
+  const due = f.nudgeCount === 0 || (f.lastNudgeAt !== null && f.now - f.lastNudgeAt >= REBALANCE_REMIND_DAYS * 86_400_000);
+  if (!due) return { kind: "wait", reason: "not_due" };
+  if (f.nudgeCount >= REBALANCE_MAX_INVITES) return { kind: "escalate", reason: "no_response", detail: `${f.nudgeCount} invitations sent to review the rebalancing and it has not been acknowledged.` };
+  if (!inSendWindow(f.now, cfg)) return { kind: "wait", reason: "outside_send_window" };
+  return { kind: "nudge", reminder: f.nudgeCount > 0 };
+}
+
 export function decideReview(f: ReviewFacts, cfg: ReviewConfig = DEFAULT_REVIEW_CONFIG): ReviewDecision {
   if (f.status === "held" || f.status === "cancelled") return { kind: "wait", reason: f.status };
   if (f.status === "escalated") return { kind: "wait", reason: "with_a_person" };
   if (f.status === "paused") return { kind: "wait", reason: "paused" };
 
+  if (f.kind === "rebalancing") return decideRebalancing(f, cfg);
   const today = pacificDate(f.now);
-  if (f.completedAt != null) return { kind: "held" };
   if (f.bookedStart !== null) return f.bookedStart < f.now ? { kind: "held" } : { kind: "booked" };
   if (f.invite === false) return { kind: "wait", reason: "tracking_only" };
 
   if (today < f.windowStart) return { kind: "wait", reason: "window_not_open" };
-  if (today > f.windowEnd) return { kind: "escalate", reason: "window_closed", detail: `The window closed on ${f.windowEnd} ${f.kind === "rebalancing" ? "without the rebalancing being acknowledged" : "with no meeting booked"}.` };
+  if (today > f.windowEnd) return { kind: "escalate", reason: "window_closed", detail: `The window closed on ${f.windowEnd} with no meeting booked.` };
   if (f.recipients === 0) return { kind: "escalate", reason: "no_email", detail: "Neither adult in this family has an email address on file, so nobody can be invited." };
   if (f.snoozedUntil && f.now < f.snoozedUntil) return { kind: "wait", reason: "snoozed" };
 
   const daysLeft = daysBetween(today, f.windowEnd);
   if (daysLeft <= cfg.handoffDaysBeforeEnd) {
-    const left = f.kind === "rebalancing" ? "has not been acknowledged" : "no meeting is booked";
-    return { kind: "escalate", reason: "not_booked_near_end", detail: `${daysLeft} day${daysLeft === 1 ? "" : "s"} left in the window and ${left} (${f.nudgeCount} invitation${f.nudgeCount === 1 ? "" : "s"} sent).` };
+    return { kind: "escalate", reason: "not_booked_near_end", detail: `${daysLeft} day${daysLeft === 1 ? "" : "s"} left in the window and no meeting is booked (${f.nudgeCount} invitation${f.nudgeCount === 1 ? "" : "s"} sent).` };
   }
   if (f.nudgeCount >= cfg.maxNudges) return { kind: "escalate", reason: "no_response", detail: `${f.nudgeCount} invitations sent with no meeting booked.` };
 
@@ -258,28 +283,29 @@ export function gateMeetingTypes<T extends { cadence_kind: string | null }>(type
   return { bookable, booked };
 }
 
-// ───── Portfolio rebalancing: what the client acknowledges ─────
-// The wording is part of the client's consent record. Change it only by adding a new version; each acknowledgement stores the version and text shown.
-export const REBALANCE_STATEMENT_VERSION = "2026-10-v1";
+// ───── Portfolio rebalancing: what the client reviews and acknowledges ─────
+// The wording is part of the client's consent record. Change it only by adding a new version; each acknowledgement stores the version,
+// the wording and the proposal the client was shown.
+export const REBALANCE_STATEMENT_VERSION = "2026-10-v2";
 export const REBALANCE_STATEMENT =
-  "I have reviewed my accounts in my portal. I authorize ProsperWise Advisors to rebalance my portfolio back to its target allocation, in line with my plan. I understand I can ask to speak with Rolf before this is done.";
+  "I have reviewed the proposed rebalancing of my portfolio shown here and in my Documents. I authorize ProsperWise Advisors to carry it out. I understand I can ask to speak with Rolf before it is done.";
 
 export function windowLabel(windowStart: string, windowEnd: string): string {
   const q = Math.floor((Number(windowEnd.slice(5, 7)) - 1) / 3) + 1;
   return `Q${q} ${windowEnd.slice(0, 4)}`;
 }
 
-export function rebalancingEmail(i: { firstName: string; windowEnd: string; windowStart: string; reminder: boolean; portalUrl: string; fromLine: string }): { subject: string; html: string } {
+export function rebalancingEmail(i: { firstName: string; reminder: boolean; portalUrl: string; fromLine: string }): { subject: string; html: string } {
   const lead = i.reminder
-    ? "A quick reminder: your portfolio rebalancing is waiting for your acknowledgement."
-    : "Your portfolio rebalancing is ready for your acknowledgement.";
+    ? "A quick reminder: Rolf's proposed rebalancing of your portfolio is waiting for your review."
+    : "Rolf has prepared a rebalancing of your portfolio for your review.";
   return {
-    subject: i.reminder ? "Reminder: your portfolio rebalancing" : "Your portfolio rebalancing is ready for your acknowledgement",
+    subject: i.reminder ? "Reminder: your portfolio rebalancing is waiting for your review" : "Your portfolio rebalancing is ready for your review",
     html: `
     <div style="font-family:'DM Sans',sans-serif;color:#334155;max-width:520px;margin:0 auto;">
       <p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;">Sovereignty Operating System™</p>
       <p style="font-size:14px;line-height:1.6;">Hi ${escape(i.firstName || "there")},</p>
-      <p style="font-size:14px;line-height:1.6;">${lead} Please sign in to your portal, review your accounts and acknowledge it before ${dateLabel(i.windowEnd)}. If you would rather talk it through first, you can book a time from the same page.</p>
+      <p style="font-size:14px;line-height:1.6;">${lead} Please sign in to your portal to read it. When you are comfortable with it, you can acknowledge it there. If you would rather talk it through first, you can book a time from the same page.</p>
       <p style="margin:20px 0;"><a href="${i.portalUrl}" style="background:#1e293b;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:6px;font-size:14px;">Open your portal</a></p>
       <p style="font-size:13px;line-height:1.6;color:#64748b;">This is an automated email from ${i.fromLine}. If you need to get in touch with Rolf, just reply to this email, and I'll make sure he gets it.</p>
       <p style="font-size:14px;line-height:1.6;margin-top:24px;">Georgia<br/><span style="font-size:12px;color:#94a3b8;">AI Assistant, ProsperWise</span></p>

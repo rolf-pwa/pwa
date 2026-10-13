@@ -70,6 +70,38 @@ Deno.serve(async (req) => {
       return json({ ok: true, mode });
     }
 
+    // ── Portfolio rebalancing: prepared by Rolf family by family, published to the portal, then carried out after the client acknowledges ──
+    if (action === "publishRebalancing" || action === "unpublishRebalancing" || action === "completeRebalancing") {
+      const id = String(body?.obligationId ?? "");
+      const { data: o } = await db.from("review_obligations").select("*").eq("id", id).maybeSingle();
+      if (!o || o.kind !== "rebalancing") return json({ error: "That is not a rebalancing." }, 404);
+      const log = (kind: string, detail: Record<string, unknown> = {}) => db.from("review_agent_events").insert({ family_id: o.family_id, obligation_id: id, mode: o.mode, kind, detail: { by: staff.email, ...detail } });
+
+      if (action === "publishRebalancing") {
+        const summary = String(body?.summary ?? "").trim();
+        if (summary.length < 10) return json({ error: "Write a short summary of the rebalancing for the client (at least a sentence)." }, 400);
+        if (o.acknowledged_at) return json({ error: "The client has already acknowledged this one." }, 400);
+        await db.from("review_obligations").update({ published_at: o.published_at ?? new Date().toISOString(), published_by: staff.userId, proposal_summary: summary, updated_at: new Date().toISOString() }).eq("id", id);
+        await log(o.published_at ? "rebalancing_republished" : "rebalancing_published");
+        return json({ ok: true });
+      }
+      if (action === "unpublishRebalancing") {
+        if (o.acknowledged_at) return json({ error: "The client has already acknowledged this one, so it can't be taken back." }, 400);
+        await db.from("review_obligations").update({ published_at: null, proposal_summary: null, updated_at: new Date().toISOString() }).eq("id", id);
+        await log("rebalancing_unpublished");
+        return json({ ok: true });
+      }
+      // completeRebalancing
+      if (!o.acknowledged_at) return json({ error: "The client has not acknowledged this one yet." }, 400);
+      if (o.completed_at) return json({ ok: true });
+      await db.from("review_obligations").update({ completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", id);
+      await db.from("pm_tasks").update({ status: "done", completed_at: new Date().toISOString() }).eq("family_id", o.family_id).eq("status", "open").like("title", "Rebalance %: acknowledged");
+      const { data: adults } = await db.from("contacts").select("id").eq("family_id", o.family_id).in("family_role", ["head_of_family", "spouse"]);
+      for (const a of adults ?? []) await db.from("portal_client_notifications").insert({ contact_id: a.id, title: "Your portfolio rebalancing is complete", body: "Your portfolio has been rebalanced. Sign in to see your accounts.", source_type: "rebalancing_complete", link_tab: "financials" });
+      await log("rebalancing_completed");
+      return json({ ok: true });
+    }
+
     if (action === "reminderOverview") {
       const { data: config } = await db.from("meeting_reminder_config").select("mode, send_start_hour, send_end_hour, last_unmatched").eq("id", true).maybeSingle();
       const { data: recent } = await db.from("meeting_reminders").select("id, contact_id, kind, start_time, mode, meeting_name, email_ok, note, created_at").order("created_at", { ascending: false }).limit(40);

@@ -1,5 +1,6 @@
 // portal-rebalance: a client's response to their portfolio rebalancing (Tier 1 in Q3, Tier 2A in Q4), from the portal or VFO.
-//   acknowledge  records the acknowledgement with the exact wording shown, completes the rebalancing for Georgia, and gives Rolf a task
+// Only after Rolf has published it to the family: the client reviews the proposal first and consents after.
+//   acknowledge  records the acknowledgement with the exact wording and proposal shown, completes it for Georgia, and gives Rolf a task to carry it out
 //   talk_first   records that the client wants to talk before it is done, pauses Georgia's reminders for two weeks, and tells Rolf
 // Only adults (head of family, spouse) can respond, only while the family's live rebalancing window is open. Nothing here changes a
 // portfolio: it records consent and hands the work to a person.
@@ -42,7 +43,7 @@ Deno.serve(async (req) => {
     if (!me?.family_id || !["head_of_family", "spouse"].includes(me.family_role ?? "") || me.is_minor) return json({ error: "Not available" }, 403);
 
     const today = pacificDate(Date.now());
-    const { data: ob } = await db.from("review_obligations").select("*").eq("family_id", me.family_id).eq("kind", "rebalancing").eq("mode", "live").neq("status", "cancelled").lte("window_start", today).gte("window_end", today).maybeSingle();
+    const { data: ob } = await db.from("review_obligations").select("*").eq("family_id", me.family_id).eq("kind", "rebalancing").eq("mode", "live").neq("status", "cancelled").not("published_at", "is", null).lte("window_start", today).is("completed_at", null).order("window_start", { ascending: false }).limit(1).maybeSingle();
     if (!ob) return json({ error: "There is no rebalancing waiting for you right now." }, 404);
     if (ob.acknowledged_at) return json({ ok: true, alreadyAcknowledged: true });
 
@@ -55,7 +56,7 @@ Deno.serve(async (req) => {
 
     await db.from("rebalance_acknowledgements").insert({
       obligation_id: ob.id, family_id: me.family_id, contact_id: me.id, decision: action === "acknowledge" ? "acknowledged" : "wants_meeting",
-      statement_version: REBALANCE_STATEMENT_VERSION, statement_text: REBALANCE_STATEMENT, ip, user_agent: ua,
+      statement_version: REBALANCE_STATEMENT_VERSION, statement_text: REBALANCE_STATEMENT, proposal_summary: ob.proposal_summary ?? null, ip, user_agent: ua,
     });
 
     const { data: rolf } = await db.from("profiles").select("user_id").eq("email", ASSIGNEE_EMAIL).maybeSingle();
@@ -66,7 +67,7 @@ Deno.serve(async (req) => {
 
     if (action === "acknowledge") {
       await db.from("review_obligations").update({ acknowledged_at: new Date().toISOString(), status: "held", updated_at: new Date().toISOString() }).eq("id", ob.id);
-      await task(`Rebalance ${family}: acknowledged`, `${name} acknowledged the ${label} portfolio rebalancing in the portal on ${today}. Rebalance the family's portfolio to its target allocation and note it in the household record.\n\nThe acknowledgement (wording version ${REBALANCE_STATEMENT_VERSION}) is stored with the family's records.`, 3);
+      await task(`Rebalance ${family}: acknowledged`, `${name} reviewed the ${label} rebalancing you published and acknowledged it in the portal on ${today}. Carry it out, then mark it done on Georgia Reviews so the family is told.\n\nThe acknowledgement (wording version ${REBALANCE_STATEMENT_VERSION}, with the proposal they saw) is stored with the family's records.`, 3);
       await db.from("staff_notifications").insert({ title: `Rebalancing acknowledged: ${family}`, body: `${name} acknowledged the ${label} rebalancing.`, link: `/families/${me.family_id}`, contact_id: me.id, source_type: "rebalancing" });
       await db.from("review_agent_events").insert({ family_id: me.family_id, obligation_id: ob.id, mode: "live", kind: "rebalancing_acknowledged", detail: { by: name, label } });
       return json({ ok: true });
@@ -74,7 +75,7 @@ Deno.serve(async (req) => {
 
     // talk_first: pause Georgia's reminders for two weeks and tell Rolf.
     await db.from("review_obligations").update({ snoozed_until: new Date(Date.now() + 14 * 86_400_000).toISOString(), updated_at: new Date().toISOString() }).eq("id", ob.id);
-    await task(`${family} wants to talk before the rebalancing`, `${name} asked to talk before the ${label} portfolio rebalancing is done. They are booking an Interim Strategy Session; if it is not on your calendar, call them.`, 2);
+    await task(`${family} wants to talk before the rebalancing`, `${name} asked to talk about the ${label} rebalancing you published before agreeing to it. They are booking an Interim Strategy Session; if it is not on your calendar, call them.`, 2);
     await db.from("staff_notifications").insert({ title: `${family} wants to talk before rebalancing`, body: `${name} asked to talk before the ${label} rebalancing.`, link: `/families/${me.family_id}`, contact_id: me.id, source_type: "rebalancing" });
     await db.from("review_agent_events").insert({ family_id: me.family_id, obligation_id: ob.id, mode: "live", kind: "rebalancing_talk_first", detail: { by: name, label } });
     return json({ ok: true });

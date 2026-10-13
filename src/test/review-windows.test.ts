@@ -165,28 +165,45 @@ describe("portfolio rebalancing", () => {
     expect(requiredMeetings("tier_1", 2027).some((m) => (m.kind as string) === "rebalancing")).toBe(false);
     expect(requiredObligations("tier_3", 2027)).toHaveLength(4);
   });
-  const base = { now: Date.parse("2027-08-03T18:00:00Z"), status: "open" as const, windowStart: "2027-07-01", windowEnd: "2027-09-30", bookedStart: null, recipients: 1, nudgeCount: 0, lastNudgeAt: null, snoozedUntil: null, kind: "rebalancing" as const };
-  it("is done once acknowledged, and Georgia stops", () => {
-    expect(decideReview({ ...base, completedAt: Date.parse("2027-08-02T18:00:00Z") })).toEqual({ kind: "held" });
+  const base = { now: Date.parse("2027-08-03T18:00:00Z"), status: "open" as const, windowStart: "2027-07-01", windowEnd: "2027-09-30", bookedStart: null, recipients: 1, nudgeCount: 0, lastNudgeAt: null, snoozedUntil: null, kind: "rebalancing" as const, publishedAt: Date.parse("2027-08-02T18:00:00Z"), acknowledgedAt: null };
+  const D = 86_400_000;
+  it("keeps Georgia silent until Rolf has published it to the portal", () => {
+    expect(decideReview({ ...base, publishedAt: null })).toEqual({ kind: "wait", reason: "not_published" });
+    expect(decideReview({ ...base, publishedAt: null, now: Date.parse("2027-09-29T18:00:00Z") })).toEqual({ kind: "wait", reason: "not_published" });
+    expect(decideReview({ ...base, publishedAt: null, now: Date.parse("2027-11-20T18:00:00Z") })).toEqual({ kind: "wait", reason: "not_published" }); // no deadline: it takes as long as it takes
+  });
+  it("invites at once after publishing, then every two weeks, three times", () => {
     expect(decideReview(base)).toEqual({ kind: "nudge", reminder: false });
-  });
-  it("hands over in its own words when it is not acknowledged in time", () => {
-    const d = decideReview({ ...base, now: Date.parse("2027-09-12T18:00:00Z"), nudgeCount: 2, lastNudgeAt: Date.parse("2027-08-20T18:00:00Z") });
+    expect(decideReview({ ...base, nudgeCount: 1, lastNudgeAt: base.now - 10 * D })).toEqual({ kind: "wait", reason: "not_due" });
+    expect(decideReview({ ...base, nudgeCount: 1, lastNudgeAt: base.now - 15 * D })).toEqual({ kind: "nudge", reminder: true });
+    const d = decideReview({ ...base, nudgeCount: 3, lastNudgeAt: base.now - 15 * D });
+    expect(d.kind === "escalate" && d.reason).toBe("no_response");
     expect(d.kind === "escalate" && d.detail).toContain("has not been acknowledged");
-    expect(d.kind === "escalate" && d.detail).not.toContain("meeting");
-    const closed = decideReview({ ...base, now: Date.parse("2027-10-05T18:00:00Z") });
-    expect(closed.kind === "escalate" && closed.detail).toContain("without the rebalancing being acknowledged");
   });
-  it("words the invitation and reminder for the client, with no figures", () => {
-    const e = rebalancingEmail({ firstName: "Sam", windowStart: "2027-07-01", windowEnd: "2027-09-30", reminder: false, portalUrl: "https://app.prosperwise.ca/portal", fromLine: "Georgia, Rolf's AI Assistant" });
-    expect(e.subject).toBe("Your portfolio rebalancing is ready for your acknowledgement");
-    expect(e.html).toContain("before September 30, 2027");
-    expect(e.html).not.toMatch(/\$|balance of|account number/i);
-    expect(rebalancingEmail({ firstName: "Sam", windowStart: "x", windowEnd: "2027-09-30", reminder: true, portalUrl: "p", fromLine: "f" }).subject).toBe("Reminder: your portfolio rebalancing");
+  it("is done once the client acknowledges, and not before", () => {
+    expect(decideReview({ ...base, acknowledgedAt: Date.parse("2027-08-02T20:00:00Z") })).toEqual({ kind: "held" });
+    expect(decideReview({ ...base, publishedAt: null, acknowledgedAt: null }).kind).toBe("wait");
+  });
+  it("only sends in business hours and never to a family nobody can email", () => {
+    expect(decideReview({ ...base, now: Date.parse("2027-08-03T06:00:00Z") })).toEqual({ kind: "wait", reason: "outside_send_window" });
+    const none = decideReview({ ...base, recipients: 0 });
+    expect(none.kind === "escalate" && none.reason).toBe("no_email");
+  });
+  it("leaves paused, escalated and cancelled work alone, and honours a snooze (the client asked to talk first)", () => {
+    for (const status of ["paused", "escalated", "cancelled"] as const) expect(decideReview({ ...base, status }).kind).toBe("wait");
+    expect(decideReview({ ...base, snoozedUntil: base.now + D })).toEqual({ kind: "wait", reason: "snoozed" });
+  });
+  it("words the invitation for review, not approval, with no figures and no deadline", () => {
+    const e = rebalancingEmail({ firstName: "Sam", reminder: false, portalUrl: "https://app.prosperwise.ca/portal", fromLine: "Georgia, Rolf's AI Assistant" });
+    expect(e.subject).toBe("Your portfolio rebalancing is ready for your review");
+    expect(e.html).toContain("for your review");
+    expect(e.html).not.toMatch(/\$|balance of|account number|before (January|February|March|April|May|June|July|August|September|October|November|December)/i);
+    expect(rebalancingEmail({ firstName: "Sam", reminder: true, portalUrl: "p", fromLine: "f" }).subject).toBe("Reminder: your portfolio rebalancing is waiting for your review");
   });
   it("keeps a versioned consent statement and labels a window by quarter", () => {
-    expect(REBALANCE_STATEMENT_VERSION).toBe("2026-10-v1");
-    expect(REBALANCE_STATEMENT).toContain("rebalance my portfolio");
+    expect(REBALANCE_STATEMENT_VERSION).toBe("2026-10-v2");
+    expect(REBALANCE_STATEMENT).toContain("I have reviewed the proposed rebalancing");
+    expect(REBALANCE_STATEMENT).not.toContain("before it is reviewed");
     expect(windowLabel("2027-07-01", "2027-09-30")).toBe("Q3 2027");
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { describeReviewEvent, groupByQuarter, statusLabel, type ReviewObligation } from "@/modules/crm/lib/reviewAgent";
+import { describeReviewEvent, groupByQuarter, rebalancingStage, statusLabel, type ReviewObligation } from "@/modules/crm/lib/reviewAgent";
 
 describe("describeReviewEvent", () => {
   it("describes invitations and reminders", () => {
@@ -57,7 +57,7 @@ describe("groupByQuarter", () => {
       ob({ family_name: "Cal", status: "held" }), ob({ family_name: "Dee", status: "paused" }), ob({ family_name: "Gone", status: "cancelled" }),
     ], "2027-02-01");
     expect(secs).toHaveLength(1);
-    expect(secs[0].counts).toEqual({ notBooked: 2, booked: 1, held: 1, withPerson: 1 });
+    expect(secs[0].counts).toEqual({ notBooked: 2, booked: 1, held: 1, withPerson: 1, toExecute: 0 });
     expect(secs[0].items.map((i) => i.family_name)).toEqual(["Moe", "Abe", "Dee", "Zed", "Cal"]);
   });
   it("marks earlier quarters as past", () => {
@@ -68,17 +68,45 @@ describe("groupByQuarter", () => {
 
 describe("rebalancing in the log and labels", () => {
   it("describes acknowledgements and requests to talk", () => {
-    expect(describeReviewEvent({ kind: "rebalancing_acknowledged", detail: { by: "Sam Fox", label: "Q3 2027" } })).toBe("Sam Fox acknowledged the Q3 2027 rebalancing");
+    expect(describeReviewEvent({ kind: "rebalancing_acknowledged", detail: { by: "Sam Fox", label: "Q3 2027" } })).toBe("Sam Fox reviewed and acknowledged the Q3 2027 rebalancing");
     expect(describeReviewEvent({ kind: "rebalancing_talk_first", detail: { by: "Sam Fox", label: "Q4 2027" } })).toBe("Sam Fox wants to talk before the Q4 2027 rebalancing");
-    expect(describeReviewEvent({ kind: "held", detail: { kind: "rebalancing" } })).toBe("The rebalancing was acknowledged");
+    expect(describeReviewEvent({ kind: "held", detail: { kind: "rebalancing" } })).toBe("The client acknowledged the rebalancing");
     expect(describeReviewEvent({ kind: "held", detail: {} })).toBe("The meeting took place");
+  });
+});
+
+describe("rebalancing stages", () => {
+  const o = (x: any) => ({ published_at: null, acknowledged_at: null, completed_at: null, ...x });
+  it("moves from preparing to waiting for the client to to-carry-out to done", () => {
+    expect(rebalancingStage(o({}))).toBe("preparing");
+    expect(rebalancingStage(o({ published_at: "2027-08-02T00:00:00Z" }))).toBe("waiting");
+    expect(rebalancingStage(o({ published_at: "x", acknowledged_at: "y" }))).toBe("toExecute");
+    expect(rebalancingStage(o({ published_at: "x", acknowledged_at: "y", completed_at: "z" }))).toBe("done");
+  });
+  it("labels each stage for Rolf, and leaves a meeting's label alone", () => {
+    expect(statusLabel({ ...o({}), status: "open", kind: "rebalancing" })).toBe("Preparing");
+    expect(statusLabel({ ...o({ published_at: "x" }), status: "open", kind: "rebalancing" })).toBe("Waiting for the client");
+    expect(statusLabel({ ...o({ published_at: "x", acknowledged_at: "y" }), status: "held", kind: "rebalancing" })).toBe("To carry out");
+    expect(statusLabel({ ...o({ published_at: "x", acknowledged_at: "y", completed_at: "z" }), status: "held", kind: "rebalancing" })).toBe("Done");
+    expect(statusLabel({ ...o({}), status: "held", kind: "annual_review" })).toBe("Held");
+    expect(statusLabel({ ...o({}), status: "escalated", kind: "rebalancing" })).toBe("With a person");
+  });
+  it("counts rebalancing stages in the quarter header", () => {
+    const base: any = { id: "1", family_id: "f", family_name: "Fox", kind: "rebalancing", window_key: "w", window_start: "2027-07-01", window_end: "2027-09-30", tier: "tier_1", mode: "live", status: "open", booked_start: null, nudge_count: 0, escalation_reason: null };
+    const secs = groupByQuarter([
+      { ...base, id: "a" }, { ...base, id: "b", published_at: "x" },
+      { ...base, id: "c", status: "held", published_at: "x", acknowledged_at: "y" }, { ...base, id: "d", status: "held", published_at: "x", acknowledged_at: "y", completed_at: "z" },
+    ], "2027-08-01");
+    expect(secs[0].counts).toEqual({ notBooked: 2, booked: 0, held: 1, withPerson: 0, toExecute: 1 });
+  });
+  it("describes publishing, taking back and completing", () => {
+    expect(describeReviewEvent({ kind: "rebalancing_published", detail: {} })).toContain("Georgia will invite the family to review it");
+    expect(describeReviewEvent({ kind: "rebalancing_completed", detail: {} })).toContain("the family was told");
   });
 });
 
 describe("status label", () => {
   it("calls a completed rebalancing Acknowledged, and a held meeting Held", () => {
-    expect(statusLabel({ status: "held", kind: "rebalancing" })).toBe("Acknowledged");
-    expect(statusLabel({ status: "held", kind: "annual_review" })).toBe("Held");
-    expect(statusLabel({ status: "open", kind: "rebalancing" })).toBe("Open");
+    expect(statusLabel({ status: "held", kind: "annual_review", published_at: null, acknowledged_at: null, completed_at: null })).toBe("Held");
   });
 });

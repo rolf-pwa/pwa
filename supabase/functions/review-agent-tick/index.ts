@@ -73,6 +73,26 @@ Deno.serve(async (req) => {
         }
       }
     }
+    // When a rebalancing window has opened for some families (live), give Rolf one task to prepare and publish them: it takes days.
+    if (mode === "live") {
+      const { data: opened } = await db.from("review_obligations").select("window_key, window_start, window_end").eq("mode", "live").eq("kind", "rebalancing").neq("status", "cancelled").lte("window_start", today).gte("window_end", today);
+      const byWindow = new Map<string, { label: string; end: string; n: number }>();
+      for (const r of opened ?? []) {
+        const w = byWindow.get(r.window_key) ?? { label: `Q${Math.floor((Number(r.window_end.slice(5, 7)) - 1) / 3) + 1} ${r.window_end.slice(0, 4)}`, end: r.window_end, n: 0 };
+        w.n++; byWindow.set(r.window_key, w);
+      }
+      if (byWindow.size) {
+        const { data: rolf } = await db.from("profiles").select("user_id").eq("email", ESCALATION_ASSIGNEE_EMAIL).maybeSingle();
+        for (const [, w] of byWindow) {
+          const title = `Prepare the ${w.label} rebalancing (${w.n} famil${w.n === 1 ? "y" : "ies"})`;
+          const { count } = await db.from("pm_tasks").select("id", { count: "exact", head: true }).like("title", `Prepare the ${w.label} rebalancing%`);
+          if (rolf?.user_id && !count) {
+            await db.from("pm_tasks").insert({ title, status: "open", client_visible: false, assignee_id: rolf.user_id, created_by: rolf.user_id, due_date: w.end, description: "On Georgia Reviews, each family is listed as Preparing. Prepare its rebalancing, then use Publish to portal with a short summary for the client. Georgia invites the family to review it only after you publish. When the client acknowledges, you get a task to carry it out, and you mark it done on the same page." });
+          }
+        }
+      }
+    }
+
     // A tier change can make an unstarted obligation obsolete (Tier 1 becomes 2B, say): cancel it unless a meeting is already booked.
     for (const o of existing ?? []) {
       if (o.status === "open" && !wanted.has(`${o.family_id}|${o.window_key}`)) {
@@ -83,7 +103,7 @@ Deno.serve(async (req) => {
     }
 
     // 2. Work each live obligation.
-    const { data: obligations } = await db.from("review_obligations").select("*").eq("mode", mode).in("status", ["open", "booked"]).gte("window_end", pacificDate(now - 7 * DAY)).order("window_start").limit(MAX_OBLIGATIONS);
+    const { data: obligations } = await db.from("review_obligations").select("*").eq("mode", mode).in("status", ["open", "booked"]).or(`window_end.gte.${pacificDate(now - 7 * DAY)},kind.eq.rebalancing`).order("window_start").limit(MAX_OBLIGATIONS);
     const familyById = new Map((families ?? []).map((f: any) => [f.id, f]));
     const calendarCache = new Map<string, any[]>();
     for (const o of obligations ?? []) {
@@ -130,7 +150,7 @@ async function work(o: any, family: any, contacts: FamilyContact[], mode: "shado
 
   const d = decideReview({
     now, status: o.status, windowStart: o.window_start, windowEnd: o.window_end, bookedStart: o.booked_start ? Date.parse(o.booked_start) : null,
-    recipients: invitees.length, invite: o.invite !== false, kind: o.kind, completedAt: o.acknowledged_at ? Date.parse(o.acknowledged_at) : null, nudgeCount: o.nudge_count, lastNudgeAt: o.last_nudge_at ? Date.parse(o.last_nudge_at) : null, snoozedUntil: o.snoozed_until ? Date.parse(o.snoozed_until) : null,
+    recipients: invitees.length, invite: o.invite !== false, kind: o.kind, publishedAt: o.published_at ? Date.parse(o.published_at) : null, acknowledgedAt: o.acknowledged_at ? Date.parse(o.acknowledged_at) : null, nudgeCount: o.nudge_count, lastNudgeAt: o.last_nudge_at ? Date.parse(o.last_nudge_at) : null, snoozedUntil: o.snoozed_until ? Date.parse(o.snoozed_until) : null,
   }, cfg);
   summary.evaluated++;
   if (d.kind === "wait") { summary.waiting++; return; }
@@ -150,7 +170,7 @@ async function work(o: any, family: any, contacts: FamilyContact[], mode: "shado
       let sentAny = false;
       for (const p of invitees) {
         const { subject, html } = o.kind === "rebalancing"
-          ? rebalancingEmail({ firstName: p.firstName, windowStart: o.window_start, windowEnd: o.window_end, reminder: d.reminder, portalUrl: PORTAL_URL, fromLine })
+          ? rebalancingEmail({ firstName: p.firstName, reminder: d.reminder, portalUrl: PORTAL_URL, fromLine })
           : windowEmail({ firstName: p.firstName, kind: o.kind, windowEnd: o.window_end, reminder: d.reminder, portalUrl: PORTAL_URL, fromLine });
         const sent = await sendServiceEmailDetailed(db, { to: p.email, subject, html, from: Deno.env.get("ONBOARDING_AGENT_FROM") || AGENT_SENDER });
         if (sent.ok) { sentAny = true; if (sent.threadId) threadIds.push(sent.threadId); if (sent.messageId) sentIds.push(sent.messageId); }

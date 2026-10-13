@@ -7,22 +7,28 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { PortalRebalancing } from "@/modules/portal/components/PortalRebalancing";
 
-const state = { label: "Q3 2027", windowEnd: "2027-09-30", acknowledgedAt: null, statement: "I authorize ProsperWise Advisors to rebalance my portfolio back to its target allocation.", statementVersion: "v1" };
+const state = {
+  label: "Q3 2027", summary: "We are moving your TFSA back to the 60/40 target and topping up your cash reserve.", publishedAt: "2027-08-02T18:00:00Z",
+  acknowledgedAt: null, completedAt: null, statement: "I have reviewed the proposed rebalancing of my portfolio shown here. I authorize ProsperWise Advisors to carry it out.", statementVersion: "v2",
+};
 
 describe("PortalRebalancing", () => {
   beforeEach(() => invoke.mockReset());
 
-  it("asks the client to review and acknowledge, showing the quarter and the deadline", () => {
+  it("shows what Rolf proposed before offering any consent", () => {
     render(<PortalRebalancing rebalancing={state} portalToken="t" onChanged={vi.fn()} onTalkFirst={vi.fn()} />);
     expect(screen.getByText(/Portfolio rebalancing · Q3 2027/)).toBeTruthy();
-    expect(screen.getByText(/acknowledge it by September 30, 2027/)).toBeTruthy();
+    expect(screen.getByText(state.summary)).toBeTruthy();
+    expect(screen.getByText(/proposal is in your Documents/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "I've reviewed it: acknowledge" })).toBeTruthy();
+    expect(invoke).not.toHaveBeenCalled();
   });
 
-  it("shows the exact wording before recording an acknowledgement", async () => {
+  it("shows the consent wording and records nothing until the client confirms it", async () => {
     invoke.mockResolvedValue({ data: { ok: true }, error: null });
     const onChanged = vi.fn();
     render(<PortalRebalancing rebalancing={state} portalToken="tok" onChanged={onChanged} onTalkFirst={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Review and acknowledge" }));
+    fireEvent.click(screen.getByRole("button", { name: "I've reviewed it: acknowledge" }));
     expect(await screen.findByText(state.statement)).toBeTruthy();
     expect(invoke).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "I acknowledge and approve" }));
@@ -39,7 +45,7 @@ describe("PortalRebalancing", () => {
     await waitFor(() => expect(onTalkFirst).toHaveBeenCalled());
   });
 
-  it("does not open booking or refresh when the server refuses", async () => {
+  it("does not open booking when the server refuses", async () => {
     invoke.mockResolvedValue({ data: { error: "There is no rebalancing waiting for you right now." }, error: null });
     const onTalkFirst = vi.fn();
     render(<PortalRebalancing rebalancing={state} portalToken="tok" onChanged={vi.fn()} onTalkFirst={onTalkFirst} />);
@@ -48,9 +54,12 @@ describe("PortalRebalancing", () => {
     expect(onTalkFirst).not.toHaveBeenCalled();
   });
 
-  it("shows a thank-you with the date once acknowledged, with no buttons", () => {
-    render(<PortalRebalancing rebalancing={{ ...state, acknowledgedAt: "2027-08-05T18:00:00Z" }} portalToken="t" onChanged={vi.fn()} onTalkFirst={vi.fn()} />);
+  it("says Rolf is carrying it out once acknowledged, then that it is complete, with no buttons", () => {
+    const { rerender } = render(<PortalRebalancing rebalancing={{ ...state, acknowledgedAt: "2027-08-05T18:00:00Z" }} portalToken="t" onChanged={vi.fn()} onTalkFirst={vi.fn()} />);
     expect(screen.getByText(/Acknowledged on August 5, 2027/)).toBeTruthy();
+    expect(screen.getByText(/Rolf is carrying it out/)).toBeTruthy();
     expect(screen.queryByRole("button")).toBeNull();
+    rerender(<PortalRebalancing rebalancing={{ ...state, acknowledgedAt: "2027-08-05T18:00:00Z", completedAt: "2027-08-09T18:00:00Z" }} portalToken="t" onChanged={vi.fn()} onTalkFirst={vi.fn()} />);
+    expect(screen.getByText(/Completed on August 9, 2027/)).toBeTruthy();
   });
 });
