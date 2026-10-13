@@ -190,7 +190,7 @@ function BalanceNoticeCard({ snapshotDate }: { snapshotDate: string }) {
             <div><div className="mb-1 text-xs font-medium text-muted-foreground">Already notified ({plan.alreadyNotified.length})</div><ul className="max-h-40 space-y-0.5 overflow-y-auto rounded border p-2 text-xs">{plan.alreadyNotified.map((r: any) => <li key={r.contactId}>{r.name}</li>)}{plan.alreadyNotified.length === 0 && <li className="text-muted-foreground">None.</li>}</ul></div>
           </div>
         )}
-        {sentResult && <p className="text-xs text-muted-foreground">Sent {sentResult.sent}{sentResult.emailFailed ? `, ${sentResult.emailFailed} email${sentResult.emailFailed === 1 ? "" : "s"} failed (they still have the portal notification)` : ""}{sentResult.skipped ? `, ${sentResult.skipped} skipped` : ""}.</p>}
+        {sentResult && <p className="text-xs text-muted-foreground">Sent {sentResult.sent}{sentResult.emailFailed ? `, ${sentResult.emailFailed} email${sentResult.emailFailed === 1 ? "" : "s"} failed (they still have the portal notification)` : ""}{sentResult.skipped ? `, ${sentResult.skipped} skipped (already notified)` : ""}{sentResult.errors ? `, ${sentResult.errors} could not be sent (see the function logs)` : ""}.</p>}
       </CardContent>
       <AlertDialog open={confirm} onOpenChange={setConfirm}>
         <AlertDialogContent>
