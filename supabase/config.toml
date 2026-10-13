@@ -187,3 +187,6 @@ verify_jwt = false
 
 [functions.review-agent-tick]
 verify_jwt = false
+
+[functions.portal-meeting-check]
+verify_jwt = false

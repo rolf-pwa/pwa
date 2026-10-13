@@ -35,6 +35,8 @@ import { getPortalSession, setPortalSession, clearPortalSession } from "@/module
 import prosperwiseLogo from "@/assets/prosperwise-logo.png";
 import prosperwiseIconPaper from "@/assets/prosperwise-icon-paper.png";
 import { PortalBookedMeetings, type BookedMeeting } from "@/modules/portal/components/PortalBookedMeetings";
+import { useBookingWatcher } from "@/modules/portal/lib/useBookingWatcher";
+import { toast } from "sonner";
 import { familyTitle } from "@/shared/lib/utils";
 
 const CORP_TYPE_LABELS: Record<string, string> = { opco: "Operating Co", holdco: "Holding Co", trust: "Trust", partnership: "Partnership", other: "Entity" };
@@ -253,6 +255,13 @@ const VfoPortal = () => {
     })();
     return () => { cancelled = true; };
   }, [token]);
+
+  // While a scheduler is open, and when it closes, look for the meeting the client just booked so "booked" appears at once.
+  useBookingWatcher({
+    portalToken: getPortalSession(token || "") || token || "",
+    active: !!embeddedBooking,
+    onFound: (found) => { toast.success(`Your ${found[0].label} is booked.`); void refreshData(); },
+  });
 
   const refreshData = async () => {
     if (!token) return;
