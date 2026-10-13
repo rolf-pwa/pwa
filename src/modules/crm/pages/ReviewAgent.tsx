@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { CalendarClock, Loader2, Pause, Play } from "lucide-react";
+import { CalendarClock, ChevronDown, ChevronRight, Loader2, Pause, Play } from "lucide-react";
 import { AppLayout } from "@/shared/components/AppLayout";
 import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/shared/components/ui/alert-dialog";
-import { KIND_LABEL, STATUS_LABEL, describeReviewEvent, getReminderOverview, getReviewOverview, setReminderMode, setReviewMode, setReviewPaused, type ReminderOverview, type ReviewMode, type ReviewObligation, type ReviewOverview } from "@/modules/crm/lib/reviewAgent";
+import { KIND_LABEL, STATUS_LABEL, describeReviewEvent, getReminderOverview, groupByQuarter, getReviewOverview, setReminderMode, setReviewMode, setReviewPaused, type ReminderOverview, type ReviewMode, type ReviewObligation, type ReviewOverview } from "@/modules/crm/lib/reviewAgent";
 import { familyTitle } from "@/shared/lib/utils";
 
 const MODES: { value: ReviewMode; label: string; blurb: string }[] = [
@@ -82,6 +82,8 @@ export default function ReviewAgent() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmLive, setConfirmLive] = useState(false);
+  const [filter, setFilter] = useState<"all" | "attention" | "notBooked" | "booked">("all");
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     try { setData(await getReviewOverview()); setError(null); } catch (e: any) { setError(e?.message ?? "Couldn't load"); }
@@ -102,6 +104,11 @@ export default function ReviewAgent() {
   const c = data?.config;
   // Show the obligations for the mode that is running, soonest window first.
   const rows = useMemo(() => (data?.obligations ?? []).filter((o) => o.mode === (mode === "off" ? "live" : mode) && o.status !== "cancelled"), [data, mode]);
+  const sections = useMemo(() => groupByQuarter(rows, new Date().toLocaleDateString("en-CA", { timeZone: "America/Vancouver" })), [rows]);
+  const matches = (o: ReviewObligation) =>
+    filter === "all" ? true : filter === "attention" ? o.status === "escalated" : filter === "booked" ? o.status === "booked" || o.status === "held" : o.status === "open" || o.status === "paused";
+  const isCollapsed = (key: string, past: boolean) => collapsed[key] ?? past;
+  const FILTERS: { value: typeof filter; label: string }[] = [{ value: "all", label: "All" }, { value: "attention", label: "Needs a person" }, { value: "notBooked", label: "Not booked yet" }, { value: "booked", label: "Booked or held" }];
 
   return (
     <AppLayout>
@@ -128,26 +135,62 @@ export default function ReviewAgent() {
             <MeetingReminderCard />
 
             <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-lg">Meetings owed</CardTitle></CardHeader>
-              <CardContent className="space-y-1">
-                {rows.length === 0 && <p className="text-sm text-muted-foreground">Nothing yet. Windows appear here once they start after the date above.</p>}
-                {rows.map((o) => (
-                  <div key={o.id} className="flex items-center justify-between gap-3 border-b border-border py-2 text-sm last:border-0">
-                    <div className="min-w-0">
-                      <Link to={`/families/${o.family_id}`} className="truncate font-medium hover:underline">{familyTitle(o.family_name)}</Link>
-                      <div className="text-xs text-muted-foreground">{KIND_LABEL[o.kind]} · {day(o.window_start)} to {day(o.window_end)}{o.booked_start ? ` · booked ${when(o.booked_start)}` : ""}</div>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <span className="text-xs text-muted-foreground">{o.nudge_count} invitation{o.nudge_count === 1 ? "" : "s"}</span>
-                      <Badge variant={o.status === "escalated" ? "destructive" : "secondary"}>{STATUS_LABEL[o.status]}{o.invite === false ? " (tracking only)" : ""}{o.mode === "shadow" ? " (shadow)" : ""}</Badge>
-                      {(o.status === "open" || o.status === "booked" || o.status === "paused") && (
-                        <Button size="icon" variant="ghost" className="h-7 w-7" aria-label={o.status === "paused" ? "Resume" : "Pause"} onClick={() => togglePause(o)}>
-                          {o.status === "paused" ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
-                        </Button>
-                      )}
-                    </div>
+              <CardHeader className="pb-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <CardTitle className="text-lg">Meetings owed, by quarter</CardTitle>
+                  <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Filter meetings">
+                    {FILTERS.map((f) => (
+                      <Button key={f.value} size="sm" role="radio" aria-checked={filter === f.value} variant={filter === f.value ? "default" : "outline"} className="h-7 text-xs" onClick={() => setFilter(f.value)}>{f.label}</Button>
+                    ))}
                   </div>
-                ))}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {sections.length === 0 && <p className="text-sm text-muted-foreground">Nothing yet. Meetings appear here once their windows start after the date above.</p>}
+                {sections.map((sec) => {
+                  const items = sec.items.filter(matches);
+                  if (filter !== "all" && items.length === 0) return null;
+                  const closed = isCollapsed(sec.key, sec.isPast);
+                  return (
+                    <section key={sec.key} aria-label={sec.label} className={`rounded-lg border ${sec.isCurrent ? "border-accent/50" : "border-border"}`}>
+                      <button type="button" onClick={() => setCollapsed((c) => ({ ...c, [sec.key]: !closed }))} className="flex w-full items-center gap-3 px-3 py-2.5 text-left" aria-expanded={!closed}>
+                        {closed ? <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                        <span className="font-serif text-base font-semibold">{sec.label}</span>
+                        {sec.isCurrent && <Badge className="bg-accent text-accent-foreground">Now</Badge>}
+                        <span className="hidden text-xs text-muted-foreground sm:inline">{sec.range}</span>
+                        <span className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs">
+                          <span className="text-muted-foreground">{sec.items.length} meeting{sec.items.length === 1 ? "" : "s"}</span>
+                          {sec.counts.notBooked > 0 && <span className="text-foreground">{sec.counts.notBooked} not booked</span>}
+                          {sec.counts.booked > 0 && <span className="text-emerald-700">{sec.counts.booked} booked</span>}
+                          {sec.counts.held > 0 && <span className="text-muted-foreground">{sec.counts.held} held</span>}
+                          {sec.counts.withPerson > 0 && <span className="font-medium text-destructive">{sec.counts.withPerson} with a person</span>}
+                        </span>
+                      </button>
+                      {!closed && (
+                        <div className="border-t border-border px-3">
+                          {items.length === 0 && <p className="py-3 text-sm text-muted-foreground">No meetings match this filter.</p>}
+                          {items.map((o) => (
+                            <div key={o.id} className="flex items-center justify-between gap-3 border-b border-border py-2 text-sm last:border-0">
+                              <div className="min-w-0">
+                                <Link to={`/families/${o.family_id}`} className="truncate font-medium hover:underline">{familyTitle(o.family_name)}</Link>
+                                <div className="text-xs text-muted-foreground">{KIND_LABEL[o.kind]} · window {day(o.window_start)} to {day(o.window_end)}{o.booked_start ? ` · booked ${when(o.booked_start)}` : ""}</div>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <span className="text-xs text-muted-foreground">{o.nudge_count} invitation{o.nudge_count === 1 ? "" : "s"}</span>
+                                <Badge variant={o.status === "escalated" ? "destructive" : "secondary"}>{STATUS_LABEL[o.status]}{o.invite === false ? " (tracking only)" : ""}{o.mode === "shadow" ? " (shadow)" : ""}</Badge>
+                                {(o.status === "open" || o.status === "booked" || o.status === "paused") && (
+                                  <Button size="icon" variant="ghost" className="h-7 w-7" aria-label={o.status === "paused" ? "Resume" : "Pause"} onClick={() => togglePause(o)}>
+                                    {o.status === "paused" ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  );
+                })}
               </CardContent>
             </Card>
 

@@ -69,3 +69,49 @@ export function describeReviewEvent(e: Pick<ReviewEvent, "kind" | "detail">): st
     default: return e.kind.replace(/_/g, " ");
   }
 }
+
+// ───── The "Meetings owed" page, by quarter ─────
+export interface QuarterSection {
+  key: string;            // "2027-Q1"
+  label: string;          // "Q1 2027"
+  range: string;          // "Jan 1 to Mar 31"
+  isCurrent: boolean;
+  isPast: boolean;
+  items: ReviewObligation[];
+  counts: { notBooked: number; booked: number; held: number; withPerson: number };
+}
+
+const quarterOf = (iso: string) => ({ y: Number(iso.slice(0, 4)), q: Math.floor((Number(iso.slice(5, 7)) - 1) / 3) + 1 });
+const QUARTER_RANGE: Record<number, [string, string]> = { 1: ["Jan 1", "Mar 31"], 2: ["Apr 1", "Jun 30"], 3: ["Jul 1", "Sep 30"], 4: ["Oct 1", "Dec 31"] };
+const STATUS_ORDER: Record<ReviewObligation["status"], number> = { escalated: 0, open: 1, paused: 2, booked: 3, held: 4, cancelled: 5 };
+
+/**
+ * Groups meetings owed into quarters, by the quarter each is due in (its window's end). A half-year window (Tier 2B) is due in
+ * the second quarter it covers. Sections run in date order; inside one, the ones needing attention come first.
+ */
+export function groupByQuarter(obligations: ReviewObligation[], today: string): QuarterSection[] {
+  const now = quarterOf(today);
+  const sections = new Map<string, QuarterSection>();
+  for (const o of obligations) {
+    if (o.status === "cancelled") continue;
+    const { y, q } = quarterOf(o.window_end);
+    const key = `${y}-Q${q}`;
+    if (!sections.has(key)) {
+      const [from, to] = QUARTER_RANGE[q];
+      sections.set(key, {
+        key, label: `Q${q} ${y}`, range: `${from} to ${to}`, isCurrent: y === now.y && q === now.q, isPast: y < now.y || (y === now.y && q < now.q),
+        items: [], counts: { notBooked: 0, booked: 0, held: 0, withPerson: 0 },
+      });
+    }
+    const sec = sections.get(key)!;
+    sec.items.push(o);
+    if (o.status === "escalated") sec.counts.withPerson++;
+    else if (o.status === "booked") sec.counts.booked++;
+    else if (o.status === "held") sec.counts.held++;
+    else sec.counts.notBooked++;
+  }
+  for (const sec of sections.values()) {
+    sec.items.sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || (a.family_name ?? "").localeCompare(b.family_name ?? ""));
+  }
+  return [...sections.values()].sort((a, b) => a.key.localeCompare(b.key));
+}

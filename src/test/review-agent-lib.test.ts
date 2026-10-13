@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { describeReviewEvent } from "@/modules/crm/lib/reviewAgent";
+import { describeReviewEvent, groupByQuarter, type ReviewObligation } from "@/modules/crm/lib/reviewAgent";
 
 describe("describeReviewEvent", () => {
   it("describes invitations and reminders", () => {
@@ -29,5 +29,39 @@ describe("tracking-only windows", () => {
 describe("reminder mode changes", () => {
   it("describes them in the log", () => {
     expect(describeReviewEvent({ kind: "reminder_mode_changed", detail: { from: "shadow", to: "live", by: "rolf@prosperwise.ca" } })).toBe("Meeting reminders changed from shadow to live by rolf@prosperwise.ca");
+  });
+});
+
+describe("groupByQuarter", () => {
+  const ob = (o: Partial<ReviewObligation>): ReviewObligation => ({
+    id: Math.random().toString(), family_id: "f", family_name: "Fox", kind: "annual_review", window_key: "k", window_start: "2027-01-01", window_end: "2027-03-31",
+    tier: "tier_1", mode: "live", status: "open", booked_start: null, nudge_count: 0, escalation_reason: null, ...o,
+  });
+  it("makes a section per quarter in date order, marking the current one", () => {
+    const secs = groupByQuarter([
+      ob({ window_start: "2027-01-01", window_end: "2027-03-31" }), ob({ window_start: "2026-10-01", window_end: "2026-12-31", kind: "governance_review" }),
+      ob({ window_start: "2027-04-01", window_end: "2027-06-30", kind: "sovereignty_review" }),
+    ], "2026-11-05");
+    expect(secs.map((s) => s.label)).toEqual(["Q4 2026", "Q1 2027", "Q2 2027"]);
+    expect(secs.map((s) => s.isCurrent)).toEqual([true, false, false]);
+    expect(secs[0].range).toBe("Oct 1 to Dec 31");
+    expect(secs.map((s) => s.isPast)).toEqual([false, false, false]);
+  });
+  it("puts a half-year window in the quarter it ends", () => {
+    const secs = groupByQuarter([ob({ window_start: "2027-01-01", window_end: "2027-06-30", kind: "sovereignty_review", window_key: "h1" })], "2027-02-01");
+    expect(secs.map((s) => s.label)).toEqual(["Q2 2027"]);
+  });
+  it("counts each status and sorts what needs attention first", () => {
+    const secs = groupByQuarter([
+      ob({ family_name: "Zed", status: "booked" }), ob({ family_name: "Abe", status: "open" }), ob({ family_name: "Moe", status: "escalated" }),
+      ob({ family_name: "Cal", status: "held" }), ob({ family_name: "Dee", status: "paused" }), ob({ family_name: "Gone", status: "cancelled" }),
+    ], "2027-02-01");
+    expect(secs).toHaveLength(1);
+    expect(secs[0].counts).toEqual({ notBooked: 2, booked: 1, held: 1, withPerson: 1 });
+    expect(secs[0].items.map((i) => i.family_name)).toEqual(["Moe", "Abe", "Dee", "Zed", "Cal"]);
+  });
+  it("marks earlier quarters as past", () => {
+    const secs = groupByQuarter([ob({ window_start: "2026-07-01", window_end: "2026-09-30" })], "2026-11-05");
+    expect(secs[0].isPast).toBe(true);
   });
 });
