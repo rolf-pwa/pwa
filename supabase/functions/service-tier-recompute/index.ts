@@ -114,8 +114,8 @@ async function recomputeOne(db: Db, family: FamilyRow): Promise<Transition | nul
 const TIER_LABEL: Record<ServiceTier, string> = {
   tier_0: "Tier 0 (Insurance Only)",
   tier_1: "Tier 1 (Foundational)",
-  tier_2a: "Tier 2A (Chartered Legacy)",
-  tier_2b: "Tier 2B (Traditional Legacy)",
+  tier_2a: "Tier 2A (Traditional Legacy)",
+  tier_2b: "Tier 2B (Chartered Legacy)",
   tier_3: "Tier 3 (Virtual Family Office)",
   tier_4: "Tier 4 (Sovereign Enterprise)",
 };

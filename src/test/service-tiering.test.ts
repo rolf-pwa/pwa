@@ -19,11 +19,11 @@ describe("classifyTier", () => {
     expect(classifyTier({ groupedAum: 249_999, hasRatifiedCharter: true, hasInsurancePolicy: false })).toBe("tier_1");
   });
 
-  it("splits Tier 2A vs 2B purely on Charter status, same $250k-$750k band", () => {
-    expect(classifyTier({ groupedAum: 250_000, hasRatifiedCharter: true, hasInsurancePolicy: false })).toBe("tier_2a");
-    expect(classifyTier({ groupedAum: 250_000, hasRatifiedCharter: false, hasInsurancePolicy: false })).toBe("tier_2b");
-    expect(classifyTier({ groupedAum: 749_999, hasRatifiedCharter: true, hasInsurancePolicy: false })).toBe("tier_2a");
-    expect(classifyTier({ groupedAum: 749_999, hasRatifiedCharter: false, hasInsurancePolicy: false })).toBe("tier_2b");
+  it("splits Tier 2A (Traditional) vs 2B (Chartered, the step before Tier 3) purely on Charter status, same $250k-$750k band", () => {
+    expect(classifyTier({ groupedAum: 250_000, hasRatifiedCharter: true, hasInsurancePolicy: false })).toBe("tier_2b");
+    expect(classifyTier({ groupedAum: 250_000, hasRatifiedCharter: false, hasInsurancePolicy: false })).toBe("tier_2a");
+    expect(classifyTier({ groupedAum: 749_999, hasRatifiedCharter: true, hasInsurancePolicy: false })).toBe("tier_2b");
+    expect(classifyTier({ groupedAum: 749_999, hasRatifiedCharter: false, hasInsurancePolicy: false })).toBe("tier_2a");
   });
 
   it("classifies Tier 3 -- $750k to $2M, regardless of Charter status", () => {
