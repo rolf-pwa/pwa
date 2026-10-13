@@ -9,9 +9,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendServiceEmailDetailed } from "../_shared/service-email.ts";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { fetchThread } from "../_shared/gmail-read.ts";
-import { SNOOZE_DAYS_STAFF, classifierPrompt, cleanReply, inboundReplies, parseClassification, replyAction } from "../_shared/onboarding-replies.ts";
-import { scrubText } from "../_shared/pii-scrub.ts";
-import { GEMINI_EXTRACT_MODEL, extractJson, generateVertexContent, parseServiceAccountKey, withThinking } from "../_shared/vertex-ai.ts";
+import { SNOOZE_DAYS_STAFF, cleanReply, inboundReplies, replyAction } from "../_shared/onboarding-replies.ts";
+import { triageReply } from "../_shared/reply-triage.ts";
 import { provisionClientFolderTree } from "../_shared/vault-provisioning.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
 import { CHECKLIST, COMPLETE_COMMENT, CONCIERGE_KEY, ESCALATED_COMMENT, NUDGE_COMMENT, newlyDone, parentTitle, progressFrom, type ChecklistKey } from "../_shared/onboarding-checklist.ts";
@@ -203,20 +202,10 @@ async function handleReplies(k: any, hh: any, lead: any, facts: CaseFacts, ids: 
   const reply = client[0];
   const text = cleanReply(reply.text);
   const names = [lead?.first_name, hh.label].filter(Boolean) as string[];
-  let intent: string = "other";
-  let blurb = "";
-  try {
-    const sa = await parseServiceAccountKey(Deno.env.get("GCP_SERVICE_ACCOUNT_KEY"));
-    const out = await generateVertexContent(sa, GEMINI_EXTRACT_MODEL, [{ role: "user", parts: [{ text: classifierPrompt(scrubText(text, { names })) }] }], withThinking(GEMINI_EXTRACT_MODEL, { temperature: 0, maxOutputTokens: 512 }, "low"));
-    // deno-lint-ignore no-explicit-any
-    const raw = (out.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? "").join("");
-    const parsed = parseClassification(extractJson(raw));
-    intent = parsed.intent;
-    blurb = parsed.summary;
-  } catch (e) {
-    // If the reply cannot be read automatically it goes to a person.
-    summary.errors.push(`${hh.id}: reply classification failed: ${e instanceof Error ? e.message : String(e)}`);
-  }
+  const triaged = await triageReply(text, names);
+  if (triaged.failed) summary.errors.push(`${hh.id}: reply classification failed: ${triaged.failed}`);
+  const intent: string = triaged.intent;
+  const blurb = triaged.summary;
   const action = replyAction(intent as any, text);
   await event(hh.id, k.id, "live", "reply_received", { intent, summary: blurb, messageId: reply.id });
   await touch({ handled_message_ids: [...handledIds, reply.id].slice(-50) });
