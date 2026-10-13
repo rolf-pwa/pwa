@@ -32,6 +32,7 @@ import { getPortalSession, setPortalSession, clearPortalSession } from "@/module
 import prosperwiseLogo from "@/assets/prosperwise-icon-paper.png";
 import { policyTypeLabel } from "@/shared/lib/insurance";
 import { PortalBookedMeetings, type BookedMeeting } from "@/modules/portal/components/PortalBookedMeetings";
+import { useBookingWatcher } from "@/modules/portal/lib/useBookingWatcher";
 import { insuranceCashForStorehouses, sumValues, isAumStorehouse, formatCurrency, householdName } from "@/modules/portal/lib/portalAum";
 
 interface PortalData {
@@ -104,6 +105,15 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
   const [completedEl, setCompletedEl] = useState<HTMLElement | null>(null);
   const [embeddedBooking, setEmbeddedBooking] = useState<{ label: string; embedUrl: string } | null>(null);
   useEffect(() => { if (activeTab !== "meetings") setEmbeddedBooking(null); }, [activeTab]);
+  // While a scheduler is open, and when it closes, look for the meeting the client just booked so "booked" appears at once.
+  useBookingWatcher({
+    portalToken: getPortalSession(token || "") || token || (data as any)?.portal_token || "",
+    active: !!embeddedBooking,
+    onFound: (found) => {
+      toast.success(`Your ${found[0].label} is booked.`);
+      void refreshData(getPortalSession(token || "") || token || (data as any)?.portal_token || "");
+    },
+  });
   const taskCounts = useTaskCounts(getPortalSession(token) || token || (data as any)?.portal_token || "", data?.contact?.id);
 
   // Drill-down state
