@@ -187,3 +187,6 @@ verify_jwt = false
 
 [functions.review-agent-tick]
 verify_jwt = false
+
+[functions.meeting-reminder-tick]
+verify_jwt = false
