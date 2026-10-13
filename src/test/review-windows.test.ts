@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { requiredMeetings, kindFromTitle, decideReview, inviteesOf, windowEmail, daysBetween, pacificDate, DEFAULT_REVIEW_CONFIG, type ReviewFacts } from "../../supabase/functions/_shared/review-windows";
+import { requiredMeetings, kindFromTitle, decideReview, inviteesOf, windowEmail, daysBetween, pacificDate, meetingsOwedNow, gateMeetingTypes, DEFAULT_REVIEW_CONFIG, type ReviewFacts } from "../../supabase/functions/_shared/review-windows";
 
 describe("which meetings each tier is owed", () => {
   it("gives Tier 0 nothing, Tier 1 and 2A one Annual Review in Q1", () => {
@@ -101,5 +101,46 @@ describe("dates and invitees", () => {
     expect(e.html).toContain("open <strong>Meetings</strong>");
     expect(e.html).not.toMatch(/\$|balance|account/i);
     expect(windowEmail({ firstName: "Sam", kind: "annual_review", windowEnd: "2027-03-31", reminder: true, portalUrl: "x", fromLine: "x" }).subject).toBe("Reminder: book your Annual Review");
+  });
+});
+
+describe("which meeting links a family sees", () => {
+  const NOW = Date.parse("2027-02-10T18:00:00Z");
+  const types = [
+    { label: "Interim Strategy Session", cadence_kind: null as string | null },
+    { label: "Annual Review", cadence_kind: "annual_review" },
+    { label: "Sovereignty Review", cadence_kind: "sovereignty_review" },
+    { label: "Governance Review", cadence_kind: "governance_review" },
+  ];
+  it("shows a Tier 1 family only the Annual Review, and only in Q1", () => {
+    const owedQ1 = meetingsOwedNow("tier_1", "2027-02-10", [], NOW);
+    expect(owedQ1.map((o) => o.kind)).toEqual(["annual_review"]);
+    expect(gateMeetingTypes(types, owedQ1, true).bookable.map((t) => t.label)).toEqual(["Interim Strategy Session", "Annual Review"]);
+    const owedJune = meetingsOwedNow("tier_1", "2027-06-10", [], NOW);
+    expect(gateMeetingTypes(types, owedJune, true).bookable.map((t) => t.label)).toEqual(["Interim Strategy Session"]);
+  });
+  it("shows Tier 3 the Sovereignty Review in Q1-Q3 and the Governance Review in Q4", () => {
+    expect(gateMeetingTypes(types, meetingsOwedNow("tier_3", "2027-05-01", [], NOW), true).bookable.map((t) => t.label)).toEqual(["Interim Strategy Session", "Sovereignty Review"]);
+    expect(gateMeetingTypes(types, meetingsOwedNow("tier_3", "2026-11-05", [], NOW), true).bookable.map((t) => t.label)).toEqual(["Interim Strategy Session", "Governance Review"]);
+  });
+  it("shows a booked message instead of the link, and nothing once the meeting has happened", () => {
+    const booked = [{ window_key: "2027-Q1-annual_review", status: "booked", booked_start: "2027-02-20T18:00:00Z" }];
+    const g = gateMeetingTypes(types, meetingsOwedNow("tier_1", "2027-02-10", booked, NOW), true);
+    expect(g.bookable.map((t) => t.label)).toEqual(["Interim Strategy Session"]);
+    expect(g.booked.map((b) => [b.type.label, b.start])).toEqual([["Annual Review", "2027-02-20T18:00:00Z"]]);
+    const held = [{ window_key: "2027-Q1-annual_review", status: "held", booked_start: "2027-02-05T18:00:00Z" }];
+    const g2 = gateMeetingTypes(types, meetingsOwedNow("tier_1", "2027-02-10", held, NOW), true);
+    expect(g2.booked).toEqual([]);
+    expect(g2.bookable.map((t) => t.label)).toEqual(["Interim Strategy Session"]);
+  });
+  it("shows review links only to adults, and nothing to a Tier 0 family", () => {
+    expect(gateMeetingTypes(types, meetingsOwedNow("tier_1", "2027-02-10", [], NOW), false).bookable.map((t) => t.label)).toEqual(["Interim Strategy Session"]);
+    expect(meetingsOwedNow("tier_0", "2027-02-10", [], NOW)).toEqual([]);
+  });
+  it("only tracks, never invites, a window that was already open at go-live", () => {
+    const f = { now: Date.parse("2026-11-05T18:00:00Z"), status: "open" as const, windowStart: "2026-10-01", windowEnd: "2026-12-31", bookedStart: null, recipients: 1, nudgeCount: 0, lastNudgeAt: null, snoozedUntil: null, invite: false };
+    expect(decideReview(f)).toEqual({ kind: "wait", reason: "tracking_only" });
+    expect(decideReview({ ...f, bookedStart: Date.parse("2026-11-20T18:00:00Z") })).toEqual({ kind: "booked" });
+    expect(decideReview({ ...f, now: Date.parse("2026-12-20T18:00:00Z") })).toEqual({ kind: "wait", reason: "tracking_only" });
   });
 });

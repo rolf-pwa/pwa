@@ -34,6 +34,7 @@ import { PortalShoeboxUpload } from "@/modules/portal/components/PortalShoeboxUp
 import { getPortalSession, setPortalSession, clearPortalSession } from "@/modules/portal/lib/portalSession";
 import prosperwiseLogo from "@/assets/prosperwise-logo.png";
 import prosperwiseIconPaper from "@/assets/prosperwise-icon-paper.png";
+import { PortalBookedMeetings, type BookedMeeting } from "@/modules/portal/components/PortalBookedMeetings";
 import { familyTitle } from "@/shared/lib/utils";
 
 const CORP_TYPE_LABELS: Record<string, string> = { opco: "Operating Co", holdco: "Holding Co", trust: "Trust", partnership: "Partnership", other: "Entity" };
@@ -619,6 +620,7 @@ const VfoPortal = () => {
             </button>
             {bookMeetingOpen && (
               <div className="pb-2">
+                <PortalBookedMeetings items={(((data as any)?.booked_meetings ?? []) as BookedMeeting[])} className="px-4 pb-2" />
                 {meetingTypes.map((link) => (
                   <button
                     key={link.url}
@@ -1033,7 +1035,7 @@ const VfoPortal = () => {
           )}
 
           {/* Sidebar (Meetings): book a meeting, from the types marked for clients */}
-          {effectiveTab === "meetings" && isSelf && meetingTypes.length > 0 && (
+          {effectiveTab === "meetings" && isSelf && (meetingTypes.length > 0 || ((data as any)?.booked_meetings ?? []).length > 0) && (
             <div className="min-w-0 space-y-4">
               <Card>
                 <CardContent className="space-y-1 p-4">
@@ -1041,6 +1043,7 @@ const VfoPortal = () => {
                     <Calendar className="h-4 w-4 text-accent" />
                     <h3 className="font-serif text-sm font-semibold text-foreground">Book a meeting</h3>
                   </div>
+                  <PortalBookedMeetings items={(((data as any)?.booked_meetings ?? []) as BookedMeeting[])} className="mb-2" />
                   {meetingTypes.map((m) => (
                     <button
                       key={m.url}

@@ -31,6 +31,7 @@ import { Grape, ScrollText, Clock, Calendar, FolderOpen, CheckSquare, ShieldChec
 import { getPortalSession, setPortalSession, clearPortalSession } from "@/modules/portal/lib/portalSession";
 import prosperwiseLogo from "@/assets/prosperwise-icon-paper.png";
 import { policyTypeLabel } from "@/shared/lib/insurance";
+import { PortalBookedMeetings, type BookedMeeting } from "@/modules/portal/components/PortalBookedMeetings";
 import { insuranceCashForStorehouses, sumValues, isAumStorehouse, formatCurrency, householdName } from "@/modules/portal/lib/portalAum";
 
 interface PortalData {
@@ -1300,7 +1301,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
         </div>
 
         {/* Right Sidebar (Meetings tab): book a meeting, from the types marked for clients */}
-        {effectiveTab === "meetings" && isSelf && (((data as any).meeting_types ?? []) as { label: string; url: string; embedUrl: string }[]).length > 0 && (
+        {effectiveTab === "meetings" && isSelf && ((((data as any).meeting_types ?? []) as { label: string; url: string; embedUrl: string }[]).length > 0 || ((data as any).booked_meetings ?? []).length > 0) && (
         <div className="min-w-0 space-y-4">
           <Card>
             <CardContent className="space-y-1 p-4">
@@ -1308,6 +1309,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
                 <Calendar className="h-4 w-4 text-accent" />
                 <h3 className="font-serif text-sm font-semibold text-foreground">Book a meeting</h3>
               </div>
+              <PortalBookedMeetings items={((data as any).booked_meetings ?? []) as BookedMeeting[]} className="mb-2" />
               {(((data as any).meeting_types ?? []) as { label: string; url: string; embedUrl: string }[]).map((m) => (
                 <button
                   key={m.url}

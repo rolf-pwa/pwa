@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { gateMeetingTypes, meetingsOwedNow, pacificDate } from "../_shared/review-windows.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { makeVisibilityFilter } from "../_shared/portal-visibility.ts";
 
@@ -582,9 +583,25 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
 
     // Meeting types clients may book (managed in the CRM under Book a meeting > Edit meeting types).
     let meeting_types: { label: string; url: string; embedUrl: string }[] | null = null;
+    let booked_meetings: { label: string; start: string }[] = [];
     try {
-      const { data: mt } = await supabase.from("meeting_types").select("label, client_label, url, embed_url").eq("active", true).eq("client_visible", true).order("sort_order");
-      meeting_types = (mt ?? []).map((t: any) => ({ label: t.client_label || t.label, url: t.url, embedUrl: t.embed_url || t.url }));
+      const { data: mt } = await supabase.from("meeting_types").select("label, client_label, url, embed_url, cadence_kind").eq("active", true).eq("client_visible", true).order("sort_order");
+      // A meeting type tied to the review cadence is shown only to the family's adults, and only while that meeting is owed:
+      // its window is open and nothing is booked. Once booked, the portal shows the date instead of a booking link.
+      let owed: ReturnType<typeof meetingsOwedNow> = [];
+      const role = contactRes.data?.family_role;
+      const canBook = (role === "head_of_family" || role === "spouse") && !contactRes.data?.is_minor;
+      if (canBook && familyId && (mt ?? []).some((t: any) => t.cadence_kind)) {
+        const today = pacificDate(Date.now());
+        const [{ data: fam }, { data: tracked }] = await Promise.all([
+          supabase.from("families").select("service_tier").eq("id", familyId).maybeSingle(),
+          supabase.from("review_obligations").select("window_key, status, booked_start").eq("family_id", familyId).lte("window_start", today).gte("window_end", today),
+        ]);
+        owed = meetingsOwedNow((fam?.service_tier ?? null) as any, today, (tracked ?? []) as any);
+      }
+      const gated = gateMeetingTypes((mt ?? []) as any[], owed, canBook);
+      meeting_types = gated.bookable.map((t: any) => ({ label: t.client_label || t.label, url: t.url, embedUrl: t.embed_url || t.url }));
+      booked_meetings = gated.booked.map((b: any) => ({ label: b.type.client_label || b.type.label, start: b.start }));
     } catch (e) {
       console.error("[portal-validate] meeting types fetch error", e);
     }
@@ -615,6 +632,7 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
       engagements,
       insurance_policies,
       meeting_types,
+      booked_meetings,
       liabilities_total,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

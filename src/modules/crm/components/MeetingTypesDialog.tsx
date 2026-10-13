@@ -75,6 +75,19 @@ export function MeetingTypesDialog({ open, onOpenChange }: { open: boolean; onOp
               <div className="min-w-0">
                 <Input className="h-8" defaultValue={t.label} onBlur={(e) => e.target.value.trim() && e.target.value !== t.label && patch(t.id, { label: e.target.value.trim() })} />
                 {t.client_visible && (
+                  <select
+                    className="mt-1 h-7 w-full rounded-md border border-input bg-background px-2 text-xs"
+                    aria-label={`When clients see ${t.label}`}
+                    value={t.cadence_kind ?? ""}
+                    onChange={(e) => patch(t.id, { cadence_kind: (e.target.value || null) as MeetingType["cadence_kind"] })}
+                  >
+                    <option value="">Always show to clients</option>
+                    <option value="annual_review">Only while an Annual Review is owed</option>
+                    <option value="sovereignty_review">Only while a Sovereignty Review is owed</option>
+                    <option value="governance_review">Only while a Governance Review is owed</option>
+                  </select>
+                )}
+                {t.client_visible && (
                   <Input className="mt-1 h-7 text-xs" placeholder="Name clients see (optional)" defaultValue={t.client_label ?? ""} onBlur={(e) => (e.target.value.trim() || null) !== t.client_label && patch(t.id, { client_label: e.target.value.trim() || null })} />
                 )}
                 <a href={t.url} target="_blank" rel="noopener noreferrer" className="block truncate text-[10px] text-muted-foreground hover:underline">{t.url}</a>

@@ -88,6 +88,8 @@ export interface ReviewFacts {
   nudgeCount: number;
   lastNudgeAt: number | null;
   snoozedUntil: number | null;
+  /** false for a window that was already open when Georgia went live: tracked for bookings, never invited or handed over. */
+  invite?: boolean;
 }
 
 export type ReviewDecision =
@@ -112,6 +114,7 @@ export function decideReview(f: ReviewFacts, cfg: ReviewConfig = DEFAULT_REVIEW_
 
   const today = pacificDate(f.now);
   if (f.bookedStart !== null) return f.bookedStart < f.now ? { kind: "held" } : { kind: "booked" };
+  if (f.invite === false) return { kind: "wait", reason: "tracking_only" };
 
   if (today < f.windowStart) return { kind: "wait", reason: "window_not_open" };
   if (today > f.windowEnd) return { kind: "escalate", reason: "window_closed", detail: `The window closed on ${f.windowEnd} with no meeting booked.` };
@@ -182,4 +185,43 @@ export function reviewTaskBody(i: { reason: string; detail: string; family: stri
     "",
     "Georgia has stopped contacting this family about this meeting. Mark this task done once it is resolved.",
   ].join("\n");
+}
+
+// ───── Which meeting links a family sees ─────
+export interface TrackedMeeting { window_key: string; status: string; booked_start: string | null }
+export interface OwedMeeting { kind: ReviewKind; windowKey: string; windowEnd: string; bookedStart: string | null }
+
+/**
+ * The meetings a family owes right now: windows containing today, minus any already held. A meeting booked for a future
+ * date is still owed but carries its date, so the portal can say so instead of offering a booking link.
+ */
+export function meetingsOwedNow(tier: Tier | null, today: string, tracked: TrackedMeeting[], now: number = Date.now()): OwedMeeting[] {
+  const year = Number(today.slice(0, 4));
+  const out: OwedMeeting[] = [];
+  for (const m of requiredMeetings(tier, year)) {
+    if (m.windowStart > today || m.windowEnd < today) continue;
+    const t = tracked.find((x) => x.window_key === m.key);
+    const start = t?.booked_start ? Date.parse(t.booked_start) : null;
+    if (t && (t.status === "held" || t.status === "cancelled")) continue;
+    if (start !== null && start < now) continue; // it has happened
+    out.push({ kind: m.kind, windowKey: m.key, windowEnd: m.windowEnd, bookedStart: start !== null ? t!.booked_start : null });
+  }
+  return out;
+}
+
+/**
+ * Splits the meeting types a client may see into those they can book and those already booked. A type with a cadence
+ * is shown only to adults (canBook) and only while that meeting is owed; types without one are shown as before.
+ */
+export function gateMeetingTypes<T extends { cadence_kind: string | null }>(types: T[], owed: OwedMeeting[], canBook: boolean): { bookable: T[]; booked: { type: T; start: string }[] } {
+  const bookable: T[] = [];
+  const booked: { type: T; start: string }[] = [];
+  for (const t of types) {
+    if (!t.cadence_kind) { bookable.push(t); continue; }
+    if (!canBook) continue;
+    const o = owed.find((x) => x.kind === t.cadence_kind);
+    if (!o) continue;
+    if (o.bookedStart) booked.push({ type: t, start: o.bookedStart }); else bookable.push(t);
+  }
+  return { bookable, booked };
 }
