@@ -128,6 +128,9 @@ const HEADER_MAP: Record<string, keyof any> = {
   "contract number": "contract",
   "product": "product",
   "type of registration": "registration",
+  "account type": "registration",
+  "account number": "contract",
+  "custodian": "custodian",
   "issue date": "issue_date",
   "begining of the year": "boy_value",
   "beginning of the year": "boy_value",
@@ -147,10 +150,12 @@ function PerformanceImporter() {
   const [report, setReport] = useState<any>(null);
   const [commitResult, setCommitResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  // Contract numbers of exceptions (big moves) that you have approved for this import.
+  const [approved, setApproved] = useState<Set<string>>(new Set());
 
   const parseFile = async (f: File) => {
     setFile(f);
-    setReport(null); setCommitResult(null); setRows([]);
+    setReport(null); setCommitResult(null); setRows([]); setApproved(new Set());
     // Auto-detect date from filename: Tracking_Performance_YYYYMMDD_...
     const dm = f.name.match(/(\d{4})(\d{2})(\d{2})/);
     if (dm) setSnapshotDate(`${dm[1]}-${dm[2]}-${dm[3]}`);
@@ -205,21 +210,33 @@ function PerformanceImporter() {
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("bulk-import-performance", {
-        body: { mode, snapshot_date: snapshotDate, rows, source_file: file?.name },
+        body: { mode, snapshot_date: snapshotDate, rows, source_file: file?.name, approved_exceptions: [...approved] },
       });
       if (error) throw error;
       if (data.error) throw new Error(data.error);
       setReport(data.report);
+      if (mode === "preview") setApproved(new Set());
       if (mode === "commit") { setCommitResult(data.commit); toast.success("Snapshots imported."); }
     } catch (e: any) {
       toast.error(e.message || "Import failed");
     } finally { setLoading(false); }
   };
 
+  const lines: any[] = report?.lines ?? [];
+  const exceptionLines = lines.filter((l) => l.status === "exception");
+  const routineCount = lines.filter((l) => l.status === "update" || l.status === "new_account").length;
+  const unresolved = exceptionLines.filter((l) => !approved.has(l.contract)).length;
+  const commitLabel = !report
+    ? "Commit Snapshots"
+    : `Import ${routineCount + exceptionLines.length - unresolved} account${routineCount + exceptionLines.length - unresolved === 1 ? "" : "s"}${unresolved ? ` (${unresolved} exception${unresolved === 1 ? "" : "s"} left out)` : ""}`;
+  const toggleApprove = (contract: string) => setApproved((prev) => { const n = new Set(prev); if (n.has(contract)) n.delete(contract); else n.add(contract); return n; });
+  const money = (v: number | null) => (v === null || v === undefined ? "—" : v.toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }));
+  const STATUS_TEXT: Record<string, string> = { update: "Update", new_account: "New account", exception: "Needs approval", unmatched: "No match", no_data: "No balance", duplicate: "Duplicate row" };
+
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader><CardTitle>Monthly Performance File (iA XLSX)</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Monthly Performance File (iA XLSX, plus JustWealth rows)</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="grid md:grid-cols-2 gap-3">
             <div>
@@ -238,7 +255,7 @@ function PerformanceImporter() {
               Preview Match
             </Button>
             <Button onClick={() => run("commit")} disabled={!report || loading} className="bg-accent">
-              <Upload className="h-4 w-4 mr-2" /> Commit Snapshots
+              <Upload className="h-4 w-4 mr-2" /> {commitLabel}
             </Button>
           </div>
         </CardContent>
@@ -255,8 +272,63 @@ function PerformanceImporter() {
               <Stat label="Auto-created HT" value={report.auto_created_holding} tone="amber" />
               <Stat label="Updated existing" value={report.updated_existing} tone="amber" />
               <Stat label="Skipped (no data)" value={report.skipped_no_data} />
+              <Stat label="Need approval" value={report.exceptions ?? 0} tone={report.exceptions ? "amber" : undefined} />
 
             </div>
+            {report.warnings?.length > 0 && (
+              <ul className="mb-4 space-y-1 rounded border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+                {report.warnings.map((w: string, i: number) => <li key={i} className="flex items-start gap-1"><AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" /> {w}</li>)}
+              </ul>
+            )}
+            {lines.length > 0 && (
+              <div className="mb-4">
+                <div className="mb-1 flex items-center justify-between text-xs">
+                  <span className="font-medium">{lines.length} rows. Changes beyond {report.threshold_pct}%, a drop to zero or a negative value need your approval.</span>
+                  {exceptionLines.length > 0 && <span className="text-amber-700">{exceptionLines.length - unresolved} of {exceptionLines.length} approved</span>}
+                </div>
+                <div className="max-h-96 overflow-auto rounded border">
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 bg-muted text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                      <tr><th className="p-2">Owner</th><th className="p-2">Contract</th><th className="p-2 text-right">Last month</th><th className="p-2 text-right">This month</th><th className="p-2 text-right">Change</th><th className="p-2">Status</th></tr>
+                    </thead>
+                    <tbody>
+                      {[...lines].sort((a, b) => (a.status === "exception" ? 0 : a.status === "update" ? 2 : 1) - (b.status === "exception" ? 0 : b.status === "update" ? 2 : 1)).map((l) => (
+                        <tr key={`${l.contract}-${l.status}-${l.name}`} className={`border-t ${l.status === "exception" ? "bg-amber-50" : ""}`}>
+                          <td className="p-2">{l.owner ?? l.name}{l.custodian ? <span className="text-muted-foreground"> · {l.custodian}</span> : null}</td>
+                          <td className="p-2 font-mono">{l.contract}</td>
+                          <td className="p-2 text-right tabular-nums">{money(l.previous)}</td>
+                          <td className="p-2 text-right tabular-nums">{money(l.current)}</td>
+                          <td className="p-2 text-right tabular-nums">{l.change_pct === null ? "—" : `${l.change_pct > 0 ? "+" : ""}${l.change_pct.toFixed(1)}%`}</td>
+                          <td className="p-2">
+                            {l.status === "exception" ? (
+                              <label className="flex items-center gap-1.5">
+                                <input type="checkbox" checked={approved.has(l.contract)} onChange={() => toggleApprove(l.contract)} />
+                                <span>{l.reason} · approve</span>
+                              </label>
+                            ) : (
+                              <span className={l.status === "update" ? "text-muted-foreground" : "text-amber-700"}>{STATUS_TEXT[l.status]}{l.status !== "update" && l.reason ? ` · ${l.reason}` : ""}</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+            {report.missing?.length > 0 && (
+              <div className="mb-4 text-xs">
+                <div className="mb-1 flex items-center gap-1 font-medium text-amber-700">
+                  <AlertTriangle className="h-3 w-3" /> {report.missing.length} account{report.missing.length === 1 ? "" : "s"} at iA or JustWealth {report.missing.length === 1 ? "is" : "are"} in the system but not in this file:
+                </div>
+                <ul className="max-h-40 space-y-0.5 overflow-y-auto rounded border p-2">
+                  {report.missing.map((m: any) => <li key={m.id}>#{m.accountNumber} — {m.owner || "no owner"} · {m.label} · {m.custodian}</li>)}
+                </ul>
+              </div>
+            )}
+            {report.unchecked_custodian > 0 && (
+              <p className="mb-4 text-xs text-muted-foreground">{report.unchecked_custodian} other account{report.unchecked_custodian === 1 ? "" : "s"} (no custodian, or another custodian) are not checked for completeness.</p>
+            )}
             {report.unmatched_no_contact?.length > 0 && (
               <div className="text-xs">
                 <div className="font-medium text-destructive mb-1 flex items-center gap-1">
@@ -277,10 +349,11 @@ function PerformanceImporter() {
         <Card>
           <CardHeader><CardTitle>Commit Result</CardTitle></CardHeader>
           <CardContent>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
               <Stat label="Snapshots written" value={commitResult.snapshots_inserted} />
               <Stat label="Snapshots updated" value={commitResult.snapshots_updated} tone="amber" />
               <Stat label="HT auto-created" value={commitResult.ht_created} tone="amber" />
+              <Stat label="Left out (not approved)" value={commitResult.skipped_exceptions?.length || 0} tone={commitResult.skipped_exceptions?.length ? "amber" : undefined} />
               <Stat label="Errors" value={commitResult.errors?.length || 0} tone={commitResult.errors?.length ? "red" : undefined} />
             </div>
             {commitResult.errors?.length > 0 && (
