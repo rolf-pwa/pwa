@@ -1,5 +1,6 @@
 -- On the 1st of each month, give Rolf the task for his part of the monthly round: the iA file is dated the last day of
--- the month that just ended. One task with a checklist of subtasks, internal only. Skips if it already exists.
+-- the month that just ended (iA updates nightly, so the 1st is fine). It is created at 4:00 a.m. Pacific so the 6:00 a.m.
+-- daily briefing includes it. One task with a checklist of subtasks, internal only. Skips if it already exists.
 -- (A one-off job; the general recurring-workflow engine, when built, can replace it.)
 CREATE OR REPLACE FUNCTION public.create_monthly_import_task() RETURNS uuid
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
@@ -9,7 +10,7 @@ DECLARE
   label text := to_char(month_end, 'FMMonth FMDD, YYYY');
   parent_title text := 'Monthly import: ' || to_char(month_end, 'FMMonth FMDD, YYYY') || ' data';
   parent uuid;
-  due date := (date_trunc('month', now() AT TIME ZONE 'America/Vancouver')::date + 4);
+  due date := date_trunc('month', now() AT TIME ZONE 'America/Vancouver')::date;
   step text;
   steps text[] := ARRAY[
     'Download the iA performance file (dated ' || to_char(month_end, 'FMMonth FMDD') || ')',
@@ -34,5 +35,7 @@ END $$;
 REVOKE ALL ON FUNCTION public.create_monthly_import_task() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.create_monthly_import_task() TO service_role;
 
--- 15:00 UTC on the 1st = 8:00 a.m. Pacific (7:00 in winter).
-SELECT cron.schedule('monthly-import-task', '0 15 1 * *', $$select public.create_monthly_import_task();$$);
+-- 4:00 a.m. Pacific on the 1st. pg_cron runs in UTC, so it fires at 11:00 and 12:00 UTC and the command only acts in the
+-- hour that is 4 a.m. in Vancouver (summer or winter time). The task is due the same day.
+SELECT cron.schedule('monthly-import-task', '0 11,12 1 * *',
+  $$select public.create_monthly_import_task() where extract(hour from now() at time zone 'America/Vancouver') = 4;$$);
