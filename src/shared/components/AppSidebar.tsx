@@ -31,6 +31,7 @@ import {
   MoreHorizontal,
   Gauge,
   Bot,
+  CalendarClock,
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { useEffect, useState, createContext, useContext } from "react";
@@ -72,6 +73,7 @@ const GROUPS = [
       { to: "/projects", label: "Projects", icon: ListTodo },
       { to: "/team-capacity", label: "Team Capacity", icon: Gauge },
       { to: "/onboarding-agent", label: "Georgia Onboarding", icon: Bot },
+      { to: "/review-agent", label: "Georgia Reviews", icon: CalendarClock },
       { to: "/invoices", label: "Invoices", icon: Receipt },
       { to: "/services", label: "Services", icon: ConciergeBell },
     ],

@@ -184,3 +184,6 @@ verify_jwt = false
 
 [functions.onboarding-agent-tick]
 verify_jwt = false
+
+[functions.review-agent-tick]
+verify_jwt = false
