@@ -87,6 +87,14 @@ export function MeetingTypesDialog({ open, onOpenChange }: { open: boolean; onOp
             <div key={t.id} className="grid grid-cols-1 items-center gap-2 border-b py-1.5 md:grid-cols-[1fr_4rem_3.5rem_3.5rem_3.5rem_5.5rem]">
               <div className="min-w-0">
                 <Input className="h-8" defaultValue={t.label} onBlur={(e) => e.target.value.trim() && e.target.value !== t.label && patch(t.id, { label: e.target.value.trim() })} />
+                <label className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <input type="checkbox" checked={!!t.reminders} onChange={(e) => patch(t.id, { reminders: e.target.checked })} />
+                  Georgia sends the one-week and one-day reminders
+                </label>
+                {t.reminders && (
+                  <Input className="mt-1 h-7 text-xs" placeholder="Calendar title, if Google names it differently (optional)" defaultValue={t.event_title ?? ""}
+                    onBlur={(e) => (e.target.value.trim() || null) !== (t.event_title ?? null) && patch(t.id, { event_title: e.target.value.trim() || null })} />
+                )}
                 {t.client_visible && (
                   <select
                     className="mt-1 h-7 w-full rounded-md border border-input bg-background px-2 text-xs"

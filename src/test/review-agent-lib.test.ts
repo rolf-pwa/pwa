@@ -25,3 +25,9 @@ describe("tracking-only windows", () => {
     expect(describeReviewEvent({ kind: "obligation_opened", detail: { kind: "governance_review", window: "2026-10-01 to 2026-12-31", trackingOnly: true } })).toContain("watching for a booking, no invitations");
   });
 });
+
+describe("reminder mode changes", () => {
+  it("describes them in the log", () => {
+    expect(describeReviewEvent({ kind: "reminder_mode_changed", detail: { from: "shadow", to: "live", by: "rolf@prosperwise.ca" } })).toBe("Meeting reminders changed from shadow to live by rolf@prosperwise.ca");
+  });
+});

@@ -70,6 +70,25 @@ Deno.serve(async (req) => {
       return json({ ok: true, mode });
     }
 
+    if (action === "reminderOverview") {
+      const { data: config } = await db.from("meeting_reminder_config").select("mode, send_start_hour, send_end_hour, last_unmatched").eq("id", true).maybeSingle();
+      const { data: recent } = await db.from("meeting_reminders").select("id, contact_id, kind, start_time, mode, meeting_name, email_ok, note, created_at").order("created_at", { ascending: false }).limit(40);
+      const ids = [...new Set((recent ?? []).map((r: any) => r.contact_id))];
+      const { data: cs } = ids.length ? await db.from("contacts").select("id, first_name, last_name").in("id", ids) : { data: [] as any[] };
+      const nm = new Map((cs ?? []).map((c: any) => [c.id, `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim()]));
+      return json({ config, recent: (recent ?? []).map((r: any) => ({ ...r, name: nm.get(r.contact_id) ?? null })) });
+    }
+
+    if (action === "setReminderMode") {
+      const mode = String(body?.mode ?? "");
+      if (!["off", "shadow", "live"].includes(mode)) return json({ error: "invalid mode" }, 400);
+      if (mode === "live" && body?.confirm !== true) return json({ error: "Going live needs confirm: true" }, 400);
+      const { data: before } = await db.from("meeting_reminder_config").select("mode").eq("id", true).maybeSingle();
+      await db.from("meeting_reminder_config").update({ mode, updated_at: new Date().toISOString() }).eq("id", true);
+      await db.from("review_agent_events").insert({ family_id: null, mode, kind: "reminder_mode_changed", detail: { from: before?.mode ?? null, to: mode, by: staff.email } });
+      return json({ ok: true, mode });
+    }
+
     if (action === "setPaused") {
       const id = String(body?.obligationId ?? "");
       const paused = body?.paused === true;

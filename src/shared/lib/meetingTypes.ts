@@ -13,6 +13,10 @@ export interface MeetingType {
   staff_visible: boolean;
   client_visible: boolean;
   /** When set, clients see this type only while that review meeting is owed (annual_review, sovereignty_review or governance_review). */
+  /** Georgia sends the one-week and one-day reminders for this type. */
+  reminders?: boolean;
+  /** The title Google gives this type's bookings on the calendar, when it differs from the name here. */
+  event_title?: string | null;
   cadence_kind?: "annual_review" | "sovereignty_review" | "governance_review" | null;
 }
 

@@ -26,6 +26,13 @@ async function call<T>(action: string, payload: Record<string, unknown> = {}): P
   return json as T;
 }
 
+export interface ReminderOverview {
+  config: { mode: ReviewMode; send_start_hour: number; send_end_hour: number; last_unmatched?: string[] } | null;
+  recent: { id: string; name: string | null; kind: "7d" | "1d"; start_time: string; mode: "shadow" | "live"; meeting_name: string; email_ok: boolean | null; note?: string | null; created_at: string }[];
+}
+export const getReminderOverview = () => call<ReminderOverview>("reminderOverview");
+export const setReminderMode = (mode: ReviewMode, confirm = false) => call<{ ok: true; mode: ReviewMode }>("setReminderMode", { mode, confirm });
+
 export const getReviewOverview = () => call<ReviewOverview>("overview");
 export const setReviewMode = (mode: ReviewMode, confirm = false) => call<{ ok: true; mode: ReviewMode }>("setMode", { mode, confirm });
 export const setReviewPaused = (obligationId: string, paused: boolean) => call<{ ok: true }>("setPaused", { obligationId, paused });
@@ -57,6 +64,7 @@ export function describeReviewEvent(e: Pick<ReviewEvent, "kind" | "detail">): st
     case "staff_replied": return `A person replied to the family: Georgia will wait ${d.waitDays ?? 7} days`;
     case "paused": return `Paused by ${d.by ?? "staff"}`;
     case "resumed": return `Resumed by ${d.by ?? "staff"}`;
+    case "reminder_mode_changed": return `Meeting reminders changed from ${d.from ?? "?"} to ${d.to} by ${d.by ?? "staff"}`;
     case "mode_changed": return `Mode changed from ${d.from ?? "?"} to ${d.to} by ${d.by ?? "staff"}`;
     default: return e.kind.replace(/_/g, " ");
   }
