@@ -28,7 +28,7 @@ async function call<T>(action: string, payload: Record<string, unknown> = {}): P
 
 export interface ReminderOverview {
   config: { mode: ReviewMode; send_start_hour: number; send_end_hour: number; last_unmatched?: string[] } | null;
-  recent: { id: string; name: string | null; kind: "7d" | "1d"; start_time: string; mode: "shadow" | "live"; meeting_name: string; email_ok: boolean | null; created_at: string }[];
+  recent: { id: string; name: string | null; kind: "7d" | "1d"; start_time: string; mode: "shadow" | "live"; meeting_name: string; email_ok: boolean | null; note?: string | null; created_at: string }[];
 }
 export const getReminderOverview = () => call<ReminderOverview>("reminderOverview");
 export const setReminderMode = (mode: ReviewMode, confirm = false) => call<{ ok: true; mode: ReviewMode }>("setReminderMode", { mode, confirm });

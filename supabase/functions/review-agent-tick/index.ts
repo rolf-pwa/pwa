@@ -9,6 +9,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendServiceEmailDetailed } from "../_shared/service-email.ts";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
+import { findBooking } from "../_shared/review-calendar.ts";
 import { fetchThread } from "../_shared/gmail-read.ts";
 import { triageReply } from "../_shared/reply-triage.ts";
 import { SNOOZE_DAYS_STAFF, cleanReply, inboundReplies, replyAction } from "../_shared/onboarding-replies.ts";
@@ -16,8 +17,8 @@ import { AGENT_SENDER, PORTAL_URL } from "../_shared/onboarding-agent.ts";
 import { FROM_LINE } from "../_shared/balance-notice.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
 import {
-  DEFAULT_REVIEW_CONFIG, REVIEW_TASK_TITLE, decideReview, inviteesOf, kindFromTitle, pacificDate, requiredMeetings, reviewTaskBody, windowEmail,
-  type FamilyContact, type ReviewConfig, type ReviewKind, type Tier,
+  DEFAULT_REVIEW_CONFIG, REVIEW_TASK_TITLE, decideReview, inviteesOf, pacificDate, requiredMeetings, reviewTaskBody, windowEmail,
+  type FamilyContact, type ReviewConfig, type Tier,
 } from "../_shared/review-windows.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -102,37 +103,13 @@ async function event(familyId: string | null, obligationId: string | null, mode:
   await db.from("review_agent_events").insert({ family_id: familyId, obligation_id: obligationId, mode, kind, detail });
 }
 
-/** The family's adults' calendar events in and around the window, matched to this kind of meeting. */
-async function findBooking(emails: string[], kind: ReviewKind, windowStart: string, windowEnd: string, cache: Map<string, any[]>): Promise<{ id: string; start: number } | null> {
-  if (!emails.length) return null;
-  const token = await getServiceGoogleAccessToken(db);
-  const timeMin = new Date(Date.parse(`${windowStart}T00:00:00Z`) - 14 * DAY).toISOString();
-  const timeMax = new Date(Date.parse(`${windowEnd}T23:59:59Z`) + DAY).toISOString();
-  let best: { id: string; start: number } | null = null;
-  for (const email of emails) {
-    const key = `${email}|${timeMin}|${timeMax}`;
-    if (!cache.has(key)) {
-      const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events?" + new URLSearchParams({ timeMin, timeMax, maxResults: "100", singleEvents: "true", orderBy: "startTime", q: email }), { headers: { Authorization: `Bearer ${token}` } });
-      cache.set(key, res.ok ? ((await res.json()).items ?? []) : []);
-    }
-    for (const ev of cache.get(key) ?? []) {
-      if (ev.status === "cancelled" || kindFromTitle(ev.summary) !== kind) continue;
-      const withFamily = (ev.attendees ?? []).some((a: any) => String(a.email ?? "").toLowerCase() === email) || String(ev.organizer?.email ?? "").toLowerCase() === email || String(ev.creator?.email ?? "").toLowerCase() === email;
-      const startMs = Date.parse(ev.start?.dateTime ?? `${ev.start?.date}T12:00:00Z`);
-      if (!withFamily || !Number.isFinite(startMs)) continue;
-      if (!best || startMs < best.start || (best.start < Date.now() && startMs >= Date.now())) best = { id: ev.id, start: startMs };
-    }
-  }
-  return best;
-}
-
 async function work(o: any, family: any, contacts: FamilyContact[], mode: "shadow" | "live", cfg: ReviewConfig, now: number, summary: Summary, cache: Map<string, any[]>) {
   if (!family) return;
   const invitees = inviteesOf(contacts);
   const allEmails = [...new Set(contacts.filter((p) => !p.isMinor && p.email).map((p) => String(p.email).trim().toLowerCase()))];
   const touch = (patch: Record<string, unknown>) => db.from("review_obligations").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", o.id);
 
-  const booking = await findBooking(allEmails, o.kind, o.window_start, o.window_end, cache);
+  const booking = await findBooking(db, allEmails, o.kind, o.window_start, o.window_end, cache);
   if (booking && (booking.id !== o.booked_event_id)) {
     await touch({ booked_event_id: booking.id, booked_start: new Date(booking.start).toISOString(), status: booking.start < now ? o.status : "booked" });
     o = { ...o, booked_event_id: booking.id, booked_start: new Date(booking.start).toISOString() };

@@ -58,7 +58,7 @@ function MeetingReminderCard() {
           {(data?.recent ?? []).length === 0 && <p className="text-sm text-muted-foreground">No reminders yet.</p>}
           {(data?.recent ?? []).map((r) => (
             <div key={r.id} className="flex items-baseline justify-between gap-3 border-b border-border py-1.5 text-sm last:border-0">
-              <span className="min-w-0">{r.mode === "shadow" ? "Would send" : r.email_ok === false ? "Failed to send" : "Sent"} the {r.kind === "7d" ? "one-week" : "one-day"} reminder for {r.meeting_name} to <span className="font-medium">{r.name ?? "a client"}</span> (meeting {when(r.start_time)})</span>
+              <span className="min-w-0">{r.note ? "Skipped" : r.mode === "shadow" ? "Would send" : r.email_ok === false ? "Failed to send" : "Sent"} the {r.kind === "7d" ? "one-week" : "one-day"} reminder for {r.meeting_name} to <span className="font-medium">{r.name ?? "a client"}</span> (meeting {when(r.start_time)}){r.note ? `: ${r.note}` : ""}</span>
               <span className="shrink-0 text-xs text-muted-foreground">{when(r.created_at)}</span>
             </div>
           ))}

@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
 
     if (action === "reminderOverview") {
       const { data: config } = await db.from("meeting_reminder_config").select("mode, send_start_hour, send_end_hour, last_unmatched").eq("id", true).maybeSingle();
-      const { data: recent } = await db.from("meeting_reminders").select("id, contact_id, kind, start_time, mode, meeting_name, email_ok, created_at").order("created_at", { ascending: false }).limit(40);
+      const { data: recent } = await db.from("meeting_reminders").select("id, contact_id, kind, start_time, mode, meeting_name, email_ok, note, created_at").order("created_at", { ascending: false }).limit(40);
       const ids = [...new Set((recent ?? []).map((r: any) => r.contact_id))];
       const { data: cs } = ids.length ? await db.from("contacts").select("id, first_name, last_name").in("id", ids) : { data: [] as any[] };
       const nm = new Map((cs ?? []).map((c: any) => [c.id, `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim()]));

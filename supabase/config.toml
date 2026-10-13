@@ -190,3 +190,6 @@ verify_jwt = false
 
 [functions.meeting-reminder-tick]
 verify_jwt = false
+
+[functions.portal-meeting-check]
+verify_jwt = false
