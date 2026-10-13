@@ -31,6 +31,7 @@ import { Grape, ScrollText, Clock, Calendar, FolderOpen, CheckSquare, ShieldChec
 import { getPortalSession, setPortalSession, clearPortalSession } from "@/modules/portal/lib/portalSession";
 import prosperwiseLogo from "@/assets/prosperwise-icon-paper.png";
 import { policyTypeLabel } from "@/shared/lib/insurance";
+import { withBookedMeetings } from "@/modules/portal/lib/bookedMeetings";
 import { PortalBookedMeetings, type BookedMeeting } from "@/modules/portal/components/PortalBookedMeetings";
 import { useBookingWatcher } from "@/modules/portal/lib/useBookingWatcher";
 import { insuranceCashForStorehouses, sumValues, isAumStorehouse, formatCurrency, householdName } from "@/modules/portal/lib/portalAum";
@@ -1209,7 +1210,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
                   </div>
                 </div>
               ) : isSelf ? (
-                <PortalMeetings meetings={meetings} />
+                <PortalMeetings meetings={withBookedMeetings(meetings, (data as any)?.booked_meetings)} />
               ) : (
                 <div className="rounded-lg border border-border bg-muted/30 p-8 text-center">
                   <Calendar className="mx-auto h-8 w-8 text-muted-foreground mb-3" />

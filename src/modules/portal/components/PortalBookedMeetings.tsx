@@ -11,7 +11,7 @@ export function PortalBookedMeetings({ items, className = "" }: { items: BookedM
       {items.map((b) => (
         <div key={`${b.label}-${b.start}`} className="flex items-start gap-2 rounded-md bg-accent/10 px-2.5 py-2 text-xs text-foreground">
           <CalendarCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
-          <span><span className="font-medium">{b.label}</span> is booked for {when(b.start)}.</span>
+          <span><span className="font-medium">{b.label}</span> is booked for {when(b.start).replace(/\.?$/, ".")}</span>
         </div>
       ))}
     </div>

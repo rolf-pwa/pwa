@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { gateMeetingTypes, meetingsOwedNow, pacificDate } from "../_shared/review-windows.ts";
+import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { makeVisibilityFilter } from "../_shared/portal-visibility.ts";
 
@@ -438,7 +439,9 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
     let meetings: any[] = [];
     const contactEmail = contactRes.data?.email;
     if (contactEmail) {
-      const googleToken = await getValidGoogleToken(supabase, advisorUserId);
+      // The advisor who made the link, or the firm's shared Google account when the link has none (a welcome-email link).
+      let googleToken = await getValidGoogleToken(supabase, advisorUserId);
+      if (!googleToken) { try { googleToken = await getServiceGoogleAccessToken(supabase); } catch { googleToken = null; } }
       if (googleToken) {
         meetings = await fetchCalendarEvents(googleToken, contactEmail);
       }

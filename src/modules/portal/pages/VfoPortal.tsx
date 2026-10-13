@@ -34,6 +34,7 @@ import { PortalShoeboxUpload } from "@/modules/portal/components/PortalShoeboxUp
 import { getPortalSession, setPortalSession, clearPortalSession } from "@/modules/portal/lib/portalSession";
 import prosperwiseLogo from "@/assets/prosperwise-logo.png";
 import prosperwiseIconPaper from "@/assets/prosperwise-icon-paper.png";
+import { withBookedMeetings } from "@/modules/portal/lib/bookedMeetings";
 import { PortalBookedMeetings, type BookedMeeting } from "@/modules/portal/components/PortalBookedMeetings";
 import { useBookingWatcher } from "@/modules/portal/lib/useBookingWatcher";
 import { toast } from "sonner";
@@ -979,7 +980,7 @@ const VfoPortal = () => {
                   </div>
                 </div>
               ) : isSelf ? (
-                <PortalMeetings meetings={meetings} />
+                <PortalMeetings meetings={withBookedMeetings(meetings, (data as any)?.booked_meetings)} />
               ) : (
                 <div className="rounded-lg border border-border bg-muted/30 p-8 text-center text-sm text-muted-foreground">
                   Meeting schedule is only visible on your own view.
