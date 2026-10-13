@@ -72,11 +72,16 @@ Deno.serve(async (req) => {
 
     if (action === "send") {
       if (p.send.length > MAX_SEND) return json({ error: `Too many recipients (${p.send.length}); the limit is ${MAX_SEND} per send.` }, 400);
-      const result = { sent: 0, emailFailed: 0, skipped: 0 };
+      const result = { sent: 0, emailFailed: 0, skipped: 0, errors: 0 };
       for (const r of p.send) {
         // Claim this person for this date first, so a second click or a retry can never notify them twice.
-        const { data: claimed } = await db.from("balance_update_notices").insert({ snapshot_date: snapshotDate, contact_id: r.contactId, sent_by: staff.userId }).select("id").maybeSingle();
-        if (!claimed?.id) { result.skipped++; continue; }
+        const { data: claimed, error: claimErr } = await db.from("balance_update_notices").insert({ snapshot_date: snapshotDate, contact_id: r.contactId, sent_by: staff.userId }).select("id").maybeSingle();
+        if (claimErr) {
+          // 23505 = this person was already notified for this date (a second click or a retry); anything else is a real failure.
+          if (claimErr.code === "23505") result.skipped++; else { result.errors++; console.error("[balance-update-notify] claim failed:", claimErr.message); }
+          continue;
+        }
+        if (!claimed?.id) { result.errors++; continue; }
         await db.from("portal_client_notifications").insert({ contact_id: r.contactId, title: NOTICE_TITLE, body: noticeBody(snapshotDate), source_type: "balances_updated", link_tab: "financials" });
         const { subject, html } = balanceEmail(r.firstName, snapshotDate);
         const sent = await sendServiceEmailDetailed(db, { to: r.email, subject, html, from: Deno.env.get("ONBOARDING_AGENT_FROM") || AGENT_SENDER });
