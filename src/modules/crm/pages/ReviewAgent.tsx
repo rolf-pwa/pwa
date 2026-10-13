@@ -7,7 +7,7 @@ import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/shared/components/ui/alert-dialog";
-import { KIND_LABEL, STATUS_LABEL, describeReviewEvent, getReminderOverview, groupByQuarter, getReviewOverview, setReminderMode, setReviewMode, setReviewPaused, type ReminderOverview, type ReviewMode, type ReviewObligation, type ReviewOverview } from "@/modules/crm/lib/reviewAgent";
+import { KIND_LABEL, describeReviewEvent, statusLabel, getReminderOverview, groupByQuarter, getReviewOverview, setReminderMode, setReviewMode, setReviewPaused, type ReminderOverview, type ReviewMode, type ReviewObligation, type ReviewOverview } from "@/modules/crm/lib/reviewAgent";
 import { familyTitle } from "@/shared/lib/utils";
 
 const MODES: { value: ReviewMode; label: string; blurb: string }[] = [
@@ -108,7 +108,7 @@ export default function ReviewAgent() {
   const matches = (o: ReviewObligation) =>
     filter === "all" ? true : filter === "attention" ? o.status === "escalated" : filter === "booked" ? o.status === "booked" || o.status === "held" : o.status === "open" || o.status === "paused";
   const isCollapsed = (key: string, past: boolean) => collapsed[key] ?? past;
-  const FILTERS: { value: typeof filter; label: string }[] = [{ value: "all", label: "All" }, { value: "attention", label: "Needs a person" }, { value: "notBooked", label: "Not booked yet" }, { value: "booked", label: "Booked or held" }];
+  const FILTERS: { value: typeof filter; label: string }[] = [{ value: "all", label: "All" }, { value: "attention", label: "Needs a person" }, { value: "notBooked", label: "Not booked yet" }, { value: "booked", label: "Booked or done" }];
 
   return (
     <AppLayout>
@@ -128,7 +128,7 @@ export default function ReviewAgent() {
                   ))}
                 </div>
                 <p className="text-sm text-muted-foreground">{MODES.find((m) => m.value === mode)?.blurb}</p>
-                {c && <p className="text-xs text-muted-foreground">Tier 1: an Annual Review in Q1. Tier 2A: an Annual Review in Q2. Tier 2B: a Sovereignty Review in Q2 and another in Q4. Tier 3: Sovereignty Reviews in Q1–Q3 and a Governance Review in Q4. Invitations go out on the first day of each window, then a reminder every {c.remind_every_days} days (up to {c.max_nudges}); with {c.handoff_days_before_end} days left and nothing booked, the family comes to you. Only windows that start after {when(c.since)} are managed.</p>}
+                {c && <p className="text-xs text-muted-foreground">Tier 1: an Annual Review in Q1 and a portfolio rebalancing, acknowledged in the portal, in Q3. Tier 2A: an Annual Review in Q2 and a rebalancing in Q4. Tier 2B: a Sovereignty Review in Q2 and another in Q4. Tier 3: Sovereignty Reviews in Q1–Q3 and a Governance Review in Q4. Invitations go out on the first day of each window, then a reminder every {c.remind_every_days} days (up to {c.max_nudges}); with {c.handoff_days_before_end} days left and nothing booked, the family comes to you. Only windows that start after {when(c.since)} are managed.</p>}
               </CardContent>
             </Card>
 
@@ -137,7 +137,7 @@ export default function ReviewAgent() {
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <CardTitle className="text-lg">Meetings owed, by quarter</CardTitle>
+                  <CardTitle className="text-lg">Meetings and rebalancing, by quarter</CardTitle>
                   <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Filter meetings">
                     {FILTERS.map((f) => (
                       <Button key={f.value} size="sm" role="radio" aria-checked={filter === f.value} variant={filter === f.value ? "default" : "outline"} className="h-7 text-xs" onClick={() => setFilter(f.value)}>{f.label}</Button>
@@ -162,7 +162,7 @@ export default function ReviewAgent() {
                           <span className="text-muted-foreground">{sec.items.length} meeting{sec.items.length === 1 ? "" : "s"}</span>
                           {sec.counts.notBooked > 0 && <span className="text-foreground">{sec.counts.notBooked} not booked</span>}
                           {sec.counts.booked > 0 && <span className="text-emerald-700">{sec.counts.booked} booked</span>}
-                          {sec.counts.held > 0 && <span className="text-muted-foreground">{sec.counts.held} held</span>}
+                          {sec.counts.held > 0 && <span className="text-muted-foreground">{sec.counts.held} done</span>}
                           {sec.counts.withPerson > 0 && <span className="font-medium text-destructive">{sec.counts.withPerson} with a person</span>}
                         </span>
                       </button>
@@ -173,11 +173,11 @@ export default function ReviewAgent() {
                             <div key={o.id} className="flex items-center justify-between gap-3 border-b border-border py-2 text-sm last:border-0">
                               <div className="min-w-0">
                                 <Link to={`/families/${o.family_id}`} className="truncate font-medium hover:underline">{familyTitle(o.family_name)}</Link>
-                                <div className="text-xs text-muted-foreground">{KIND_LABEL[o.kind]} · window {day(o.window_start)} to {day(o.window_end)}{o.booked_start ? ` · booked ${when(o.booked_start)}` : ""}</div>
+                                <div className="text-xs text-muted-foreground">{KIND_LABEL[o.kind]} · window {day(o.window_start)} to {day(o.window_end)}{o.booked_start ? ` · booked ${when(o.booked_start)}` : ""}{o.acknowledged_at ? ` · acknowledged ${when(o.acknowledged_at)}` : ""}</div>
                               </div>
                               <div className="flex shrink-0 items-center gap-2">
                                 <span className="text-xs text-muted-foreground">{o.nudge_count} invitation{o.nudge_count === 1 ? "" : "s"}</span>
-                                <Badge variant={o.status === "escalated" ? "destructive" : "secondary"}>{STATUS_LABEL[o.status]}{o.invite === false ? " (tracking only)" : ""}{o.mode === "shadow" ? " (shadow)" : ""}</Badge>
+                                <Badge variant={o.status === "escalated" ? "destructive" : "secondary"}>{statusLabel(o)}{o.invite === false ? " (tracking only)" : ""}{o.mode === "shadow" ? " (shadow)" : ""}</Badge>
                                 {(o.status === "open" || o.status === "booked" || o.status === "paused") && (
                                   <Button size="icon" variant="ghost" className="h-7 w-7" aria-label={o.status === "paused" ? "Resume" : "Pause"} onClick={() => togglePause(o)}>
                                     {o.status === "paused" ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}

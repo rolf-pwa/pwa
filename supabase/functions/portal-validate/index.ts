@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { gateMeetingTypes, meetingsOwedNow, pacificDate } from "../_shared/review-windows.ts";
+import { REBALANCE_STATEMENT, REBALANCE_STATEMENT_VERSION, gateMeetingTypes, meetingsOwedNow, pacificDate, windowLabel } from "../_shared/review-windows.ts";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { makeVisibilityFilter } from "../_shared/portal-visibility.ts";
@@ -609,6 +609,19 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
       console.error("[portal-validate] meeting types fetch error", e);
     }
 
+    // The family's portfolio rebalancing, when its window is open: only for adults, and only once Georgia has made it live.
+    let rebalancing: { label: string; windowEnd: string; acknowledgedAt: string | null; statement: string; statementVersion: string } | null = null;
+    try {
+      const role = contactRes.data?.family_role;
+      if ((role === "head_of_family" || role === "spouse") && !contactRes.data?.is_minor && familyId) {
+        const today = pacificDate(Date.now());
+        const { data: ob } = await supabase.from("review_obligations").select("window_start, window_end, acknowledged_at").eq("family_id", familyId).eq("kind", "rebalancing").eq("mode", "live").neq("status", "cancelled").lte("window_start", today).gte("window_end", today).maybeSingle();
+        if (ob) rebalancing = { label: windowLabel(ob.window_start, ob.window_end), windowEnd: ob.window_end, acknowledgedAt: ob.acknowledged_at ?? null, statement: REBALANCE_STATEMENT, statementVersion: REBALANCE_STATEMENT_VERSION };
+      }
+    } catch (e) {
+      console.error("[portal-validate] rebalancing fetch error", e);
+    }
+
     return new Response(JSON.stringify({
       session_token: sessionToken,
       contact: contactRes.data,
@@ -636,6 +649,7 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
       insurance_policies,
       meeting_types,
       booked_meetings,
+      rebalancing,
       liabilities_total,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

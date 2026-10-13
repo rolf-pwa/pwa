@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { describeReviewEvent, groupByQuarter, type ReviewObligation } from "@/modules/crm/lib/reviewAgent";
+import { describeReviewEvent, groupByQuarter, statusLabel, type ReviewObligation } from "@/modules/crm/lib/reviewAgent";
 
 describe("describeReviewEvent", () => {
   it("describes invitations and reminders", () => {
@@ -63,5 +63,22 @@ describe("groupByQuarter", () => {
   it("marks earlier quarters as past", () => {
     const secs = groupByQuarter([ob({ window_start: "2026-07-01", window_end: "2026-09-30" })], "2026-11-05");
     expect(secs[0].isPast).toBe(true);
+  });
+});
+
+describe("rebalancing in the log and labels", () => {
+  it("describes acknowledgements and requests to talk", () => {
+    expect(describeReviewEvent({ kind: "rebalancing_acknowledged", detail: { by: "Sam Fox", label: "Q3 2027" } })).toBe("Sam Fox acknowledged the Q3 2027 rebalancing");
+    expect(describeReviewEvent({ kind: "rebalancing_talk_first", detail: { by: "Sam Fox", label: "Q4 2027" } })).toBe("Sam Fox wants to talk before the Q4 2027 rebalancing");
+    expect(describeReviewEvent({ kind: "held", detail: { kind: "rebalancing" } })).toBe("The rebalancing was acknowledged");
+    expect(describeReviewEvent({ kind: "held", detail: {} })).toBe("The meeting took place");
+  });
+});
+
+describe("status label", () => {
+  it("calls a completed rebalancing Acknowledged, and a held meeting Held", () => {
+    expect(statusLabel({ status: "held", kind: "rebalancing" })).toBe("Acknowledged");
+    expect(statusLabel({ status: "held", kind: "annual_review" })).toBe("Held");
+    expect(statusLabel({ status: "open", kind: "rebalancing" })).toBe("Open");
   });
 });

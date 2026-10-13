@@ -3,10 +3,10 @@ import { supabase } from "@/shared/integrations/supabase/client";
 const URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/review-agent-admin`;
 
 export type ReviewMode = "off" | "shadow" | "live";
-export type ReviewKind = "annual_review" | "sovereignty_review" | "governance_review";
+export type ReviewKind = "annual_review" | "sovereignty_review" | "governance_review" | "rebalancing";
 export interface ReviewObligation {
   id: string; family_id: string; family_name: string | null; kind: ReviewKind; window_key: string; window_start: string; window_end: string; tier: string | null;
-  invite?: boolean; mode: "shadow" | "live"; status: "open" | "booked" | "held" | "escalated" | "paused" | "cancelled"; booked_start: string | null; nudge_count: number; escalation_reason: string | null;
+  invite?: boolean; mode: "shadow" | "live"; status: "open" | "booked" | "held" | "escalated" | "paused" | "cancelled"; booked_start: string | null; acknowledged_at?: string | null; nudge_count: number; escalation_reason: string | null;
 }
 export interface ReviewEvent { id: string; family_id: string | null; family_name: string | null; mode: string; kind: string; detail: Record<string, any>; created_at: string }
 export interface ReviewOverview {
@@ -37,7 +37,9 @@ export const getReviewOverview = () => call<ReviewOverview>("overview");
 export const setReviewMode = (mode: ReviewMode, confirm = false) => call<{ ok: true; mode: ReviewMode }>("setMode", { mode, confirm });
 export const setReviewPaused = (obligationId: string, paused: boolean) => call<{ ok: true }>("setPaused", { obligationId, paused });
 
-export const KIND_LABEL: Record<ReviewKind, string> = { annual_review: "Annual Review", sovereignty_review: "Sovereignty Review", governance_review: "Governance Review" };
+export const KIND_LABEL: Record<ReviewKind, string> = { annual_review: "Annual Review", sovereignty_review: "Sovereignty Review", governance_review: "Governance Review", rebalancing: "Portfolio Rebalancing" };
+/** "Held" means a meeting took place; for a rebalancing it means the client acknowledged it. */
+export const statusLabel = (o: { status: ReviewObligation["status"]; kind: ReviewKind }) => (o.kind === "rebalancing" && o.status === "held" ? "Acknowledged" : STATUS_LABEL[o.status]);
 export const STATUS_LABEL: Record<ReviewObligation["status"], string> = { open: "Open", booked: "Booked", held: "Held", escalated: "With a person", paused: "Paused", cancelled: "Cancelled" };
 const REASON: Record<string, string> = {
   no_email: "no email on file", not_booked_near_end: "not booked with time running out", window_closed: "the window closed with no meeting",
@@ -53,7 +55,9 @@ export function describeReviewEvent(e: Pick<ReviewEvent, "kind" | "detail">): st
     case "obligation_cancelled": return "Stopped tracking this meeting: the family's tier changed";
     case "booking_detected": return `Meeting found on the calendar${d.start ? ` for ${monthDay(String(d.start).slice(0, 10))}` : ""}`;
     case "booking_removed": return "The booked meeting is no longer on the calendar";
-    case "held": return "The meeting took place";
+    case "held": return d.kind === "rebalancing" ? "The rebalancing was acknowledged" : "The meeting took place";
+    case "rebalancing_acknowledged": return `${d.by ?? "A client"} acknowledged the ${d.label ?? ""} rebalancing`.replace(/\s+/g, " ");
+    case "rebalancing_talk_first": return `${d.by ?? "A client"} wants to talk before the ${d.label ?? ""} rebalancing`.replace(/\s+/g, " ");
     case "invitation_sent": return `${d.reminder ? "Sent a reminder" : "Sent the invitation"} to ${d.to} adult${d.to === 1 ? "" : "s"}`;
     case "invitation_would_send": return `Would ${d.reminder ? "send a reminder" : "send the invitation"} to ${d.to} adult${d.to === 1 ? "" : "s"}`;
     case "nudge_failed": return "The invitation email failed and will be retried";

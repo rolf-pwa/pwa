@@ -17,7 +17,7 @@ import { AGENT_SENDER, PORTAL_URL } from "../_shared/onboarding-agent.ts";
 import { FROM_LINE } from "../_shared/balance-notice.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
 import {
-  DEFAULT_REVIEW_CONFIG, REVIEW_TASK_TITLE, decideReview, inviteesOf, pacificDate, requiredMeetings, reviewTaskBody, windowEmail,
+  DEFAULT_REVIEW_CONFIG, REVIEW_TASK_TITLE, decideReview, inviteesOf, pacificDate, rebalancingEmail, requiredObligations, reviewTaskBody, windowEmail,
   type FamilyContact, type ReviewConfig, type Tier,
 } from "../_shared/review-windows.ts";
 
@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
     const wanted = new Set<string>();
     for (const f of families ?? []) {
       for (const y of years) {
-        for (const m of requiredMeetings(f.service_tier as Tier, y)) {
+        for (const m of requiredObligations(f.service_tier as Tier, y)) {
           const k = `${f.id}|${m.key}`;
           wanted.add(k);
           if (have.has(k) || m.windowEnd < today) continue;
@@ -109,7 +109,8 @@ async function work(o: any, family: any, contacts: FamilyContact[], mode: "shado
   const allEmails = [...new Set(contacts.filter((p) => !p.isMinor && p.email).map((p) => String(p.email).trim().toLowerCase()))];
   const touch = (patch: Record<string, unknown>) => db.from("review_obligations").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", o.id);
 
-  const booking = await findBooking(db, allEmails, o.kind, o.window_start, o.window_end, cache);
+  // A rebalancing is completed by the client's acknowledgement in the portal, not by a calendar event.
+  const booking = o.kind === "rebalancing" ? null : await findBooking(db, allEmails, o.kind, o.window_start, o.window_end, cache);
   if (booking && (booking.id !== o.booked_event_id)) {
     await touch({ booked_event_id: booking.id, booked_start: new Date(booking.start).toISOString(), status: booking.start < now ? o.status : "booked" });
     o = { ...o, booked_event_id: booking.id, booked_start: new Date(booking.start).toISOString() };
@@ -123,20 +124,20 @@ async function work(o: any, family: any, contacts: FamilyContact[], mode: "shado
   }
 
   // Replies to Georgia's invitations (live only: shadow sends nothing, so there is nothing to reply to).
-  if (mode === "live" && (o.thread_ids ?? []).length && !booking) {
+  if (mode === "live" && (o.thread_ids ?? []).length && !booking && !o.acknowledged_at) {
     if (await handleReplies(o, family, contacts, summary)) return;
   }
 
   const d = decideReview({
     now, status: o.status, windowStart: o.window_start, windowEnd: o.window_end, bookedStart: o.booked_start ? Date.parse(o.booked_start) : null,
-    recipients: invitees.length, invite: o.invite !== false, nudgeCount: o.nudge_count, lastNudgeAt: o.last_nudge_at ? Date.parse(o.last_nudge_at) : null, snoozedUntil: o.snoozed_until ? Date.parse(o.snoozed_until) : null,
+    recipients: invitees.length, invite: o.invite !== false, kind: o.kind, completedAt: o.acknowledged_at ? Date.parse(o.acknowledged_at) : null, nudgeCount: o.nudge_count, lastNudgeAt: o.last_nudge_at ? Date.parse(o.last_nudge_at) : null, snoozedUntil: o.snoozed_until ? Date.parse(o.snoozed_until) : null,
   }, cfg);
   summary.evaluated++;
   if (d.kind === "wait") { summary.waiting++; return; }
   if (d.kind === "booked") { summary.waiting++; return; }
   if (d.kind === "held") {
     await touch({ status: "held" });
-    await event(o.family_id, o.id, mode, "held", { start: o.booked_start });
+    await event(o.family_id, o.id, mode, "held", { start: o.booked_start, kind: o.kind });
     summary.held++;
     return;
   }
@@ -148,7 +149,9 @@ async function work(o: any, family: any, contacts: FamilyContact[], mode: "shado
       const sentIds = [...(o.sent_message_ids ?? [])];
       let sentAny = false;
       for (const p of invitees) {
-        const { subject, html } = windowEmail({ firstName: p.firstName, kind: o.kind, windowEnd: o.window_end, reminder: d.reminder, portalUrl: PORTAL_URL, fromLine });
+        const { subject, html } = o.kind === "rebalancing"
+          ? rebalancingEmail({ firstName: p.firstName, windowStart: o.window_start, windowEnd: o.window_end, reminder: d.reminder, portalUrl: PORTAL_URL, fromLine })
+          : windowEmail({ firstName: p.firstName, kind: o.kind, windowEnd: o.window_end, reminder: d.reminder, portalUrl: PORTAL_URL, fromLine });
         const sent = await sendServiceEmailDetailed(db, { to: p.email, subject, html, from: Deno.env.get("ONBOARDING_AGENT_FROM") || AGENT_SENDER });
         if (sent.ok) { sentAny = true; if (sent.threadId) threadIds.push(sent.threadId); if (sent.messageId) sentIds.push(sent.messageId); }
         else summary.errors.push(`${o.family_id}: email to a contact failed`);

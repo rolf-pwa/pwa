@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { requiredMeetings, kindFromTitle, decideReview, inviteesOf, windowEmail, daysBetween, pacificDate, meetingsOwedNow, gateMeetingTypes, DEFAULT_REVIEW_CONFIG, type ReviewFacts } from "../../supabase/functions/_shared/review-windows";
+import { requiredMeetings, requiredRebalancing, requiredObligations, rebalancingEmail, windowLabel, REBALANCE_STATEMENT, REBALANCE_STATEMENT_VERSION, kindFromTitle, decideReview, inviteesOf, windowEmail, daysBetween, pacificDate, meetingsOwedNow, gateMeetingTypes, DEFAULT_REVIEW_CONFIG, type ReviewFacts } from "../../supabase/functions/_shared/review-windows";
 
 describe("which meetings each tier is owed", () => {
   it("gives Tier 0 nothing and Tier 1 an Annual Review in Q1", () => {
@@ -151,5 +151,42 @@ describe("which meeting links a family sees", () => {
     expect(decideReview(f)).toEqual({ kind: "wait", reason: "tracking_only" });
     expect(decideReview({ ...f, bookedStart: Date.parse("2026-11-20T18:00:00Z") })).toEqual({ kind: "booked" });
     expect(decideReview({ ...f, now: Date.parse("2026-12-20T18:00:00Z") })).toEqual({ kind: "wait", reason: "tracking_only" });
+  });
+});
+
+describe("portfolio rebalancing", () => {
+  it("is a Q3 acknowledgement for Tier 1 and a Q4 one for Tier 2A, and nothing for the other tiers", () => {
+    expect(requiredRebalancing("tier_1", 2027)).toEqual([{ kind: "rebalancing", key: "2027-Q3-rebalancing", windowStart: "2027-07-01", windowEnd: "2027-09-30" }]);
+    expect(requiredRebalancing("tier_2a", 2027)).toEqual([{ kind: "rebalancing", key: "2027-Q4-rebalancing", windowStart: "2027-10-01", windowEnd: "2027-12-31" }]);
+    for (const t of ["tier_0", "tier_2b", "tier_3", "tier_4", null] as const) expect(requiredRebalancing(t, 2027)).toEqual([]);
+  });
+  it("is tracked alongside the meetings but is never a meeting", () => {
+    expect(requiredObligations("tier_1", 2027).map((o) => [o.kind, o.windowStart])).toEqual([["annual_review", "2027-01-01"], ["rebalancing", "2027-07-01"]]);
+    expect(requiredMeetings("tier_1", 2027).some((m) => (m.kind as string) === "rebalancing")).toBe(false);
+    expect(requiredObligations("tier_3", 2027)).toHaveLength(4);
+  });
+  const base = { now: Date.parse("2027-08-03T18:00:00Z"), status: "open" as const, windowStart: "2027-07-01", windowEnd: "2027-09-30", bookedStart: null, recipients: 1, nudgeCount: 0, lastNudgeAt: null, snoozedUntil: null, kind: "rebalancing" as const };
+  it("is done once acknowledged, and Georgia stops", () => {
+    expect(decideReview({ ...base, completedAt: Date.parse("2027-08-02T18:00:00Z") })).toEqual({ kind: "held" });
+    expect(decideReview(base)).toEqual({ kind: "nudge", reminder: false });
+  });
+  it("hands over in its own words when it is not acknowledged in time", () => {
+    const d = decideReview({ ...base, now: Date.parse("2027-09-12T18:00:00Z"), nudgeCount: 2, lastNudgeAt: Date.parse("2027-08-20T18:00:00Z") });
+    expect(d.kind === "escalate" && d.detail).toContain("has not been acknowledged");
+    expect(d.kind === "escalate" && d.detail).not.toContain("meeting");
+    const closed = decideReview({ ...base, now: Date.parse("2027-10-05T18:00:00Z") });
+    expect(closed.kind === "escalate" && closed.detail).toContain("without the rebalancing being acknowledged");
+  });
+  it("words the invitation and reminder for the client, with no figures", () => {
+    const e = rebalancingEmail({ firstName: "Sam", windowStart: "2027-07-01", windowEnd: "2027-09-30", reminder: false, portalUrl: "https://app.prosperwise.ca/portal", fromLine: "Georgia, Rolf's AI Assistant" });
+    expect(e.subject).toBe("Your portfolio rebalancing is ready for your acknowledgement");
+    expect(e.html).toContain("before September 30, 2027");
+    expect(e.html).not.toMatch(/\$|balance of|account number/i);
+    expect(rebalancingEmail({ firstName: "Sam", windowStart: "x", windowEnd: "2027-09-30", reminder: true, portalUrl: "p", fromLine: "f" }).subject).toBe("Reminder: your portfolio rebalancing");
+  });
+  it("keeps a versioned consent statement and labels a window by quarter", () => {
+    expect(REBALANCE_STATEMENT_VERSION).toBe("2026-10-v1");
+    expect(REBALANCE_STATEMENT).toContain("rebalance my portfolio");
+    expect(windowLabel("2027-07-01", "2027-09-30")).toBe("Q3 2027");
   });
 });

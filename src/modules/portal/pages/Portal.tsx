@@ -31,6 +31,7 @@ import { Grape, ScrollText, Clock, Calendar, FolderOpen, CheckSquare, ShieldChec
 import { getPortalSession, setPortalSession, clearPortalSession } from "@/modules/portal/lib/portalSession";
 import prosperwiseLogo from "@/assets/prosperwise-icon-paper.png";
 import { policyTypeLabel } from "@/shared/lib/insurance";
+import { PortalRebalancing, type RebalancingState } from "@/modules/portal/components/PortalRebalancing";
 import { withBookedMeetings } from "@/modules/portal/lib/bookedMeetings";
 import { PortalBookedMeetings, type BookedMeeting } from "@/modules/portal/components/PortalBookedMeetings";
 import { useBookingWatcher } from "@/modules/portal/lib/useBookingWatcher";
@@ -1077,8 +1078,22 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
 
     // The Dashboard's sidebar: household, quick links, the Charter, and open requests with Ask Georgia.
     const charterUrl = charter?.draft_status === "ratified" ? (contact.charter_url || family?.charter_document_url) : null;
+    const rebalancingCard = isSelf && (data as any)?.rebalancing ? (
+      <PortalRebalancing
+        rebalancing={(data as any).rebalancing as RebalancingState}
+        portalToken={portalToken}
+        onChanged={() => refreshData(portalToken)}
+        onTalkFirst={() => {
+          const m = ((data as any).meeting_types ?? []).find((t: { label: string }) => /interim strategy/i.test(t.label));
+          setActiveTab("meetings");
+          if (m) { if (m.embedUrl && m.embedUrl !== m.url) setEmbeddedBooking({ label: m.label, embedUrl: m.embedUrl }); else window.open(m.url, "_blank", "noopener,noreferrer"); }
+        }}
+      />
+    ) : null;
+
     const dashboardSidebar = (
       <>
+        {rebalancingCard}
         {familyTile}
         {charterUrl ? <PortalCharter charterUrl={charterUrl} /> : null}
         {isSelf && (
