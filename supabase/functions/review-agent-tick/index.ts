@@ -64,9 +64,11 @@ Deno.serve(async (req) => {
         for (const m of requiredMeetings(f.service_tier as Tier, y)) {
           const k = `${f.id}|${m.key}`;
           wanted.add(k);
-          if (have.has(k) || m.windowStart < sinceDate || m.windowEnd < today) continue;
-          const { data: row, error } = await db.from("review_obligations").insert({ family_id: f.id, kind: m.kind, window_key: m.key, window_start: m.windowStart, window_end: m.windowEnd, tier: f.service_tier, mode }).select("id").maybeSingle();
-          if (!error && row) { summary.created++; await event(f.id, row.id, mode, "obligation_opened", { kind: m.kind, window: `${m.windowStart} to ${m.windowEnd}` }); }
+          if (have.has(k) || m.windowEnd < today) continue;
+          // A window already open when Georgia went live is tracked for bookings only: she never invites or hands over for it.
+          const trackingOnly = m.windowStart < sinceDate;
+          const { data: row, error } = await db.from("review_obligations").insert({ family_id: f.id, kind: m.kind, window_key: m.key, window_start: m.windowStart, window_end: m.windowEnd, tier: f.service_tier, mode, invite: !trackingOnly }).select("id").maybeSingle();
+          if (!error && row) { summary.created++; await event(f.id, row.id, mode, "obligation_opened", { kind: m.kind, window: `${m.windowStart} to ${m.windowEnd}`, ...(trackingOnly ? { trackingOnly: true } : {}) }); }
         }
       }
     }
@@ -150,7 +152,7 @@ async function work(o: any, family: any, contacts: FamilyContact[], mode: "shado
 
   const d = decideReview({
     now, status: o.status, windowStart: o.window_start, windowEnd: o.window_end, bookedStart: o.booked_start ? Date.parse(o.booked_start) : null,
-    recipients: invitees.length, nudgeCount: o.nudge_count, lastNudgeAt: o.last_nudge_at ? Date.parse(o.last_nudge_at) : null, snoozedUntil: o.snoozed_until ? Date.parse(o.snoozed_until) : null,
+    recipients: invitees.length, invite: o.invite !== false, nudgeCount: o.nudge_count, lastNudgeAt: o.last_nudge_at ? Date.parse(o.last_nudge_at) : null, snoozedUntil: o.snoozed_until ? Date.parse(o.snoozed_until) : null,
   }, cfg);
   summary.evaluated++;
   if (d.kind === "wait") { summary.waiting++; return; }

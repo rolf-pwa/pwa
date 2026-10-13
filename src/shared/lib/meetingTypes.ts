@@ -12,6 +12,8 @@ export interface MeetingType {
   active: boolean;
   staff_visible: boolean;
   client_visible: boolean;
+  /** When set, clients see this type only while that review meeting is owed (annual_review, sovereignty_review or governance_review). */
+  cadence_kind?: "annual_review" | "sovereignty_review" | "governance_review" | null;
 }
 
 const SCHEDULE = /^https:\/\/calendar\.google\.com\/calendar(?:\/u\/\d+)?\/appointments\/schedules\/([\w-]+)\/?(?:\?.*)?$/;

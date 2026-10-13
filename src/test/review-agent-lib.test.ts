@@ -19,3 +19,9 @@ describe("describeReviewEvent", () => {
     expect(describeReviewEvent({ kind: "mode_changed", detail: { from: "shadow", to: "live", by: "rolf@prosperwise.ca" } })).toBe("Mode changed from shadow to live by rolf@prosperwise.ca");
   });
 });
+
+describe("tracking-only windows", () => {
+  it("explains a window that was already open at go-live", () => {
+    expect(describeReviewEvent({ kind: "obligation_opened", detail: { kind: "governance_review", window: "2026-10-01 to 2026-12-31", trackingOnly: true } })).toContain("watching for a booking, no invitations");
+  });
+});

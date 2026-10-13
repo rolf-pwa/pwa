@@ -6,7 +6,7 @@ export type ReviewMode = "off" | "shadow" | "live";
 export type ReviewKind = "annual_review" | "sovereignty_review" | "governance_review";
 export interface ReviewObligation {
   id: string; family_id: string; family_name: string | null; kind: ReviewKind; window_key: string; window_start: string; window_end: string; tier: string | null;
-  mode: "shadow" | "live"; status: "open" | "booked" | "held" | "escalated" | "paused" | "cancelled"; booked_start: string | null; nudge_count: number; escalation_reason: string | null;
+  invite?: boolean; mode: "shadow" | "live"; status: "open" | "booked" | "held" | "escalated" | "paused" | "cancelled"; booked_start: string | null; nudge_count: number; escalation_reason: string | null;
 }
 export interface ReviewEvent { id: string; family_id: string | null; family_name: string | null; mode: string; kind: string; detail: Record<string, any>; created_at: string }
 export interface ReviewOverview {
@@ -42,7 +42,7 @@ const monthDay = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateStrin
 export function describeReviewEvent(e: Pick<ReviewEvent, "kind" | "detail">): string {
   const d = e.detail ?? {};
   switch (e.kind) {
-    case "obligation_opened": return `Tracking a ${KIND_LABEL[d.kind as ReviewKind] ?? "review"} (${d.window ?? ""})`;
+    case "obligation_opened": return `Tracking a ${KIND_LABEL[d.kind as ReviewKind] ?? "review"} (${d.window ?? ""})${d.trackingOnly ? ", already open: watching for a booking, no invitations" : ""}`;
     case "obligation_cancelled": return "Stopped tracking this meeting: the family's tier changed";
     case "booking_detected": return `Meeting found on the calendar${d.start ? ` for ${monthDay(String(d.start).slice(0, 10))}` : ""}`;
     case "booking_removed": return "The booked meeting is no longer on the calendar";

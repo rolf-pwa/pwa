@@ -78,7 +78,7 @@ export default function ReviewAgent() {
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <span className="text-xs text-muted-foreground">{o.nudge_count} invitation{o.nudge_count === 1 ? "" : "s"}</span>
-                      <Badge variant={o.status === "escalated" ? "destructive" : "secondary"}>{STATUS_LABEL[o.status]}{o.mode === "shadow" ? " (shadow)" : ""}</Badge>
+                      <Badge variant={o.status === "escalated" ? "destructive" : "secondary"}>{STATUS_LABEL[o.status]}{o.invite === false ? " (tracking only)" : ""}{o.mode === "shadow" ? " (shadow)" : ""}</Badge>
                       {(o.status === "open" || o.status === "booked" || o.status === "paused") && (
                         <Button size="icon" variant="ghost" className="h-7 w-7" aria-label={o.status === "paused" ? "Resume" : "Pause"} onClick={() => togglePause(o)}>
                           {o.status === "paused" ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
