@@ -41,10 +41,23 @@ export function MeetingTypesDialog({ open, onOpenChange }: { open: boolean; onOp
     refresh();
   };
 
+  /** Asks the server for the embeddable address behind a short Google link (the browser can't follow it). */
+  const resolveEmbed = async (link: string): Promise<string | null> => {
+    const { data, error } = await supabase.functions.invoke("meeting-link-resolve", { body: { url: link } });
+    if (error || data?.error) { toast.error(data?.error ?? "Couldn't make that link embeddable. It will open in a new tab instead."); return null; }
+    return (data?.embed_url as string) ?? null;
+  };
+
+  const makeEmbeddable = async (t: MeetingType) => {
+    const embed = await resolveEmbed(t.url);
+    if (embed) { await patch(t.id, { embed_url: embed }); toast.success(`"${t.label}" now opens inside the portal`); }
+  };
+
   const add = async () => {
     const parsed = parseBookingLink(form.link);
     if (!parsed) { toast.error("Paste the booking link from Google Calendar (calendar.google.com/calendar/appointments/schedules/… or calendar.app.google/…)."); return; }
     setBusy(true);
+    if (!parsed.embed_url) parsed.embed_url = await resolveEmbed(parsed.url);
     const { error } = await supabase.from("meeting_types").insert({
       label: form.label.trim(), minutes: Number(form.minutes) || null, url: parsed.url, embed_url: parsed.embed_url,
       sort_order: types.length ? Math.max(...types.map((t) => t.sort_order)) + 1 : 0, staff_visible: true, client_visible: false,
@@ -91,6 +104,9 @@ export function MeetingTypesDialog({ open, onOpenChange }: { open: boolean; onOp
                   <Input className="mt-1 h-7 text-xs" placeholder="Name clients see (optional)" defaultValue={t.client_label ?? ""} onBlur={(e) => (e.target.value.trim() || null) !== t.client_label && patch(t.id, { client_label: e.target.value.trim() || null })} />
                 )}
                 <a href={t.url} target="_blank" rel="noopener noreferrer" className="block truncate text-[10px] text-muted-foreground hover:underline">{t.url}</a>
+                {t.client_visible && !t.embed_url && (
+                  <button type="button" className="text-[10px] text-accent underline" onClick={() => makeEmbeddable(t)}>Opens in a new tab. Make it open inside the portal</button>
+                )}
               </div>
               <Input className="h-8" type="number" defaultValue={t.minutes ?? ""} onBlur={(e) => Number(e.target.value) !== (t.minutes ?? 0) && patch(t.id, { minutes: Number(e.target.value) || null })} />
               <div className="flex justify-center"><Switch checked={t.staff_visible} onCheckedChange={(v) => patch(t.id, { staff_visible: v })} /></div>
