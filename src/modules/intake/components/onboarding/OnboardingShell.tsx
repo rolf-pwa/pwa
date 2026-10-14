@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertCircle, FileText, HelpCircle, Loader2, PartyPopper } from "lucide-react";
 import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent } from "@/shared/components/ui/card";
@@ -53,6 +53,15 @@ export const OnboardingShell = ({ portalToken, onBack, onAskForHelp }: Props) =>
   useEffect(() => {
     setCurrent((prev) => (furthest > prev ? furthest : prev));
   }, [furthest]);
+
+  // Declared after the effect above so it wins on first load.
+  // A step chosen on the welcome splash (?step=N): open it, but never past what they have unlocked.
+  const requested = useRef(Number(new URLSearchParams(window.location.search).get("step")) || 0);
+  useEffect(() => {
+    if (!state || !requested.current) return;
+    setCurrent(Math.max(1, Math.min(requested.current, furthest)));
+    requested.current = 0;
+  }, [state, furthest]);
 
   if (loading) {
     return (

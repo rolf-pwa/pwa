@@ -1425,7 +1425,7 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
     return (
       <OnboardingSplashGate
         portalToken={portalToken}
-        onContinue={() => navigate(token ? `/portal/${token}/intake` : "/portal/intake")}
+        onContinue={(stepId) => navigate(`${token ? `/portal/${token}/intake` : "/portal/intake"}${stepId ? `?step=${stepId}` : ""}`)}
         onAskForHelp={() => setGeorgiaOpen(true)}
       >
         {renderMain()}
