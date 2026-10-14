@@ -12,7 +12,8 @@
 // staff-only by design (client rollout targeted January 2027).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { classifyTier, computeGroupedAum, hasFamilyRatifiedCharter, hasFamilyInsurancePolicy, type ServiceTier } from "../_shared/service-tiering.ts";
+import { classifyTier, computeGroupedAum, computeHouseholdAum, hasFamilyRatifiedCharter, hasFamilyInsurancePolicy, hasHouseholdInsurancePolicy, type ServiceTier } from "../_shared/service-tiering.ts";
+import { familyDisplayTier, isPooledFamily } from "../_shared/review-units.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -63,6 +64,7 @@ interface FamilyRow {
   name: string;
   service_tier: ServiceTier | null;
   service_tier_source: string;
+  vfo_enabled?: boolean | null;
 }
 
 interface Transition {
@@ -78,8 +80,26 @@ async function recomputeOne(db: Db, family: FamilyRow): Promise<Transition | nul
     hasFamilyRatifiedCharter(db, family.id),
     hasFamilyInsurancePolicy(db, family.id),
   ]);
-  const newTier = classifyTier({ groupedAum, hasRatifiedCharter: hasCharter, hasInsurancePolicy: hasInsurance });
+  const pooledTier = classifyTier({ groupedAum, hasRatifiedCharter: hasCharter, hasInsurancePolicy: hasInsurance });
   const isOverridden = family.service_tier_source === "manual_override";
+
+  // With no ratified Charter and no Virtual Family Office nothing binds a family's households together, so each household is tiered on
+  // its own assets. The family's own tier is then the highest of them, for display.
+  const standsAlone = !isPooledFamily({ has_ratified_charter: hasCharter, vfo_enabled: family.vfo_enabled, service_tier_source: family.service_tier_source });
+  const { data: households } = await db.from("households").select("id, relationship_ended_at").eq("family_id", family.id);
+  const householdTiers: string[] = [];
+  for (const h of (households || []) as { id: string; relationship_ended_at: string | null }[]) {
+    if (!standsAlone || h.relationship_ended_at) {
+      await db.from("households").update({ service_tier: null, grouped_aum_cad: null }).eq("id", h.id);
+      continue;
+    }
+    const [aum, insured] = await Promise.all([computeHouseholdAum(db, h.id), hasHouseholdInsurancePolicy(db, h.id)]);
+    // No managed assets and no insurance: nothing to review, so no tier and no meetings. Insurance only is Tier 0 (no scheduled review).
+    const tier = aum <= 0 && !insured ? null : classifyTier({ groupedAum: aum, hasRatifiedCharter: false, hasInsurancePolicy: insured });
+    if (tier) householdTiers.push(tier);
+    await db.from("households").update({ service_tier: tier, grouped_aum_cad: aum }).eq("id", h.id);
+  }
+  const newTier = (standsAlone ? (familyDisplayTier(householdTiers) as ServiceTier | null) : null) ?? pooledTier;
 
   const patch: Record<string, unknown> = {
     grouped_aum_cad: groupedAum,
@@ -121,7 +141,7 @@ const TIER_LABEL: Record<ServiceTier, string> = {
 };
 
 async function runRecompute(db: Db, familyId?: string): Promise<{ familiesProcessed: number; transitions: Transition[] }> {
-  let query = db.from("families").select("id, name, service_tier, service_tier_source");
+  let query = db.from("families").select("id, name, service_tier, service_tier_source, vfo_enabled");
   if (familyId) query = query.eq("id", familyId);
   const { data: families, error } = await query;
   if (error) throw new Error(`Failed to load families: ${error.message}`);

@@ -74,7 +74,29 @@ async function fetchFamilyCorporationIds(db: SupabaseClient, contactIds: string[
  */
 export async function computeGroupedAum(db: SupabaseClient, familyId: string): Promise<number> {
   const members = await fetchFamilyMembers(db, familyId);
-  const contactIds = members.map((m) => m.contactId);
+  return aumForContacts(db, members.map((m) => m.contactId));
+}
+
+/** The same figure for one household standing alone: its own members' accounts, and the corporations they own. */
+export async function computeHouseholdAum(db: SupabaseClient, householdId: string): Promise<number> {
+  return aumForContacts(db, await householdContactIds(db, householdId));
+}
+
+async function householdContactIds(db: SupabaseClient, householdId: string): Promise<string[]> {
+  const { data, error } = await db.from("contacts").select("id").eq("household_id", householdId);
+  if (error) throw new Error(`Failed to load household members: ${error.message}`);
+  return (data || []).map((c: { id: string }) => c.id);
+}
+
+export async function hasHouseholdInsurancePolicy(db: SupabaseClient, householdId: string): Promise<boolean> {
+  const contactIds = await householdContactIds(db, householdId);
+  if (contactIds.length === 0) return false;
+  const { count, error } = await db.from("insurance_policies").select("id", { count: "exact", head: true }).in("contact_id", contactIds);
+  if (error) throw new Error(`Failed to check insurance policies: ${error.message}`);
+  return (count || 0) > 0;
+}
+
+async function aumForContacts(db: SupabaseClient, contactIds: string[]): Promise<number> {
   if (contactIds.length === 0) return 0;
 
   const corporationIds = await fetchFamilyCorporationIds(db, contactIds);

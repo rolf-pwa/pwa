@@ -41,6 +41,7 @@ export function ReviewAgentGuide() {
               <li>On the first day of a meeting's window Georgia emails both adults to book it, then sends reminders. Booking links open on the family's portal.</li>
               <li>When a meeting is booked on your Google calendar, Georgia notices within about 30 minutes. The booking shows here and on the client's portal.</li>
               <li>If time is running out and nothing is booked, or a reply needs a person, the family comes to you as a task and shows "With a person".</li>
+              <li>Without a ratified Charter (or a Virtual Family Office) nothing binds a family's households together, so each household is tiered on its own assets and listed on its own as Family: Household. Chartered families and VFOs stay pooled.</li>
               <li>Families whose advisory relationship has ended are dropped automatically.</li>
               <li>Mode: Off does nothing, Shadow records what she would do, Live sends real emails.</li>
             </ul>

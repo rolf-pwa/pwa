@@ -16,6 +16,7 @@ import { SNOOZE_DAYS_STAFF, cleanReply, inboundReplies, replyAction } from "../_
 import { AGENT_SENDER, PORTAL_URL } from "../_shared/onboarding-agent.ts";
 import { FROM_LINE } from "../_shared/balance-notice.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
+import { reviewUnits, unitKey } from "../_shared/review-units.ts";
 import {
   DEFAULT_REVIEW_CONFIG, REVIEW_TASK_TITLE, decideReview, inviteesOf, pacificDate, rebalancingEmail, requiredObligations, reviewTaskBody, windowEmail,
   type FamilyContact, type ReviewConfig, type Tier,
@@ -32,7 +33,7 @@ const db = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: fal
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "Content-Type": "application/json" } });
 
 type Summary = Record<string, number> & { errors: string[] };
-const familyTitle = (name: string | null) => { const n = (name ?? "").trim(); return !n ? "Family" : /\bfamily$/i.test(n) ? n : `${n} Family`; };
+const familyTitle = (name: string | null) => { const n = (name ?? "").trim(); return !n ? "Family" : /\bfamily$/i.test(n) || n.includes(": ") ? n : `${n} Family`; };
 
 Deno.serve(async (req) => {
   if (!CRON_SECRET || req.headers.get("x-review-agent-cron-secret") !== CRON_SECRET) return json({ error: "unauthorized" }, 401);
@@ -46,35 +47,39 @@ Deno.serve(async (req) => {
     const today = pacificDate(now);
     const sinceDate = pacificDate(Date.parse(c.since));
 
-    // 1. Keep each family's obligations in step with its tier.
-    const { data: allFamilies } = await db.from("families").select("id, name, service_tier").not("service_tier", "is", null);
-    // A family whose households have all ended their advisory relationship owes no meetings: it gets none, and the cancel step below clears any it already had.
-    const { data: hhs } = await db.from("households").select("family_id, relationship_ended_at");
-    const activeFamilies = new Set<string>((hhs ?? []).filter((h: any) => !h.relationship_ended_at).map((h: any) => h.family_id));
-    const hasHouseholds = new Set<string>((hhs ?? []).map((h: any) => h.family_id));
-    const families = (allFamilies ?? []).filter((f: any) => activeFamilies.has(f.id) || !hasHouseholds.has(f.id));
-    const { data: allContacts } = await db.from("contacts").select("id, family_id, first_name, last_name, email, family_role, is_minor, household_id").in("family_id", (families ?? []).map((f: any) => f.id));
+    // 1. Keep each unit's obligations in step with its tier. A unit is a whole family when its households are bound together (a ratified
+    // Charter, a Virtual Family Office, or a hand-set tier), otherwise each household with an active advisory relationship on its own.
+    // A unit that has ended its relationship gets none, and the cancel step below clears any it already had.
+    const { data: allFamilies } = await db.from("families").select("id, name, service_tier, vfo_enabled, has_ratified_charter, service_tier_source").not("service_tier", "is", null);
+    const { data: hhs } = await db.from("households").select("id, family_id, label, service_tier, relationship_ended_at");
+    const units = reviewUnits((allFamilies ?? []) as any[], (hhs ?? []) as any[]);
+    const unitByKey = new Map(units.map((u) => [u.key, u]));
+    const { data: allContacts } = await db.from("contacts").select("id, family_id, first_name, last_name, email, family_role, is_minor, household_id").in("family_id", [...new Set(units.map((u) => u.familyId))]);
     const contactsOf = new Map<string, FamilyContact[]>();
     for (const p of allContacts ?? []) {
-      const list = contactsOf.get(p.family_id) ?? [];
-      list.push({ id: p.id, firstName: p.first_name, lastName: p.last_name, email: p.email, role: p.family_role, isMinor: p.is_minor, householdId: p.household_id });
-      contactsOf.set(p.family_id, list);
+      const person: FamilyContact = { id: p.id, firstName: p.first_name, lastName: p.last_name, email: p.email, role: p.family_role, isMinor: p.is_minor, householdId: p.household_id };
+      // A household that stands alone writes only to its own adults; a pooled family to all of them.
+      for (const k of new Set([unitKey(p.family_id, null), unitKey(p.family_id, p.household_id)])) {
+        const list = contactsOf.get(k) ?? [];
+        list.push(person);
+        contactsOf.set(k, list);
+      }
     }
     const year = Number(today.slice(0, 4));
     const years = today >= `${year}-10-01` ? [year, year + 1] : [year];
-    const { data: existing } = await db.from("review_obligations").select("id, family_id, window_key, status").eq("mode", mode);
-    const have = new Map<string, any>((existing ?? []).map((o: any) => [`${o.family_id}|${o.window_key}`, o]));
+    const { data: existing } = await db.from("review_obligations").select("id, family_id, household_id, window_key, status").eq("mode", mode);
+    const have = new Map<string, any>((existing ?? []).map((o: any) => [`${unitKey(o.family_id, o.household_id)}|${o.window_key}`, o]));
     const wanted = new Set<string>();
-    for (const f of families ?? []) {
+    for (const f of units) {
       for (const y of years) {
-        for (const m of requiredObligations(f.service_tier as Tier, y)) {
-          const k = `${f.id}|${m.key}`;
+        for (const m of requiredObligations(f.tier as Tier, y)) {
+          const k = `${f.key}|${m.key}`;
           wanted.add(k);
           if (have.has(k) || m.windowEnd < today) continue;
           // A window already open when Georgia went live is tracked for bookings only: she never invites or hands over for it.
           const trackingOnly = m.windowStart < sinceDate;
-          const { data: row, error } = await db.from("review_obligations").insert({ family_id: f.id, kind: m.kind, window_key: m.key, window_start: m.windowStart, window_end: m.windowEnd, tier: f.service_tier, mode, invite: !trackingOnly }).select("id").maybeSingle();
-          if (!error && row) { summary.created++; await event(f.id, row.id, mode, "obligation_opened", { kind: m.kind, window: `${m.windowStart} to ${m.windowEnd}`, ...(trackingOnly ? { trackingOnly: true } : {}) }); }
+          const { data: row, error } = await db.from("review_obligations").insert({ family_id: f.familyId, household_id: f.householdId, kind: m.kind, window_key: m.key, window_start: m.windowStart, window_end: m.windowEnd, tier: f.tier, mode, invite: !trackingOnly }).select("id").maybeSingle();
+          if (!error && row) { summary.created++; await event(f.familyId, row.id, mode, "obligation_opened", { kind: m.kind, window: `${m.windowStart} to ${m.windowEnd}`, ...(trackingOnly ? { trackingOnly: true } : {}) }); }
         }
       }
     }
@@ -100,19 +105,21 @@ Deno.serve(async (req) => {
 
     // A tier change can make an unstarted obligation obsolete (Tier 1 becomes 2B, say): cancel it unless a meeting is already booked.
     for (const o of existing ?? []) {
-      if (o.status === "open" && !wanted.has(`${o.family_id}|${o.window_key}`)) {
+      if (o.status === "open" && !wanted.has(`${unitKey(o.family_id, o.household_id)}|${o.window_key}`)) {
         await db.from("review_obligations").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("id", o.id);
-        await event(o.family_id, o.id, mode, "obligation_cancelled", { reason: "the family no longer owes this meeting (tier change or advisory relationship ended)" });
+        await event(o.family_id, o.id, mode, "obligation_cancelled", { reason: "this household or family no longer owes this meeting (tier change, no longer a separate household, or advisory relationship ended)" });
         summary.cancelled++;
       }
     }
 
     // 2. Work each live obligation.
     const { data: obligations } = await db.from("review_obligations").select("*").eq("mode", mode).in("status", ["open", "booked"]).or(`window_end.gte.${pacificDate(now - 7 * DAY)},kind.eq.rebalancing`).order("window_start").limit(MAX_OBLIGATIONS);
-    const familyById = new Map((families ?? []).map((f: any) => [f.id, f]));
     const calendarCache = new Map<string, any[]>();
     for (const o of obligations ?? []) {
-      try { await work(o, familyById.get(o.family_id), contactsOf.get(o.family_id) ?? [], mode, cfg, now, summary, calendarCache); }
+      try {
+        const u = unitByKey.get(unitKey(o.family_id, o.household_id));
+        await work(o, u ? { id: u.familyId, name: u.name, service_tier: u.tier } : undefined, contactsOf.get(unitKey(o.family_id, o.household_id)) ?? [], mode, cfg, now, summary, calendarCache);
+      }
       catch (e) { summary.errors.push(`${o.family_id}: ${e instanceof Error ? e.message : String(e)}`); }
     }
     if (summary.errors.length) await logSystemHealth(db as any, { function_name: "review-agent-tick", severity: "WARN", error_code: "REVIEW_AGENT_PARTIAL", error_message: summary.errors.join("; ").slice(0, 900) });
