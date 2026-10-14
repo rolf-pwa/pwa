@@ -2,14 +2,15 @@
 
 // deno-lint-ignore-file no-explicit-any
 import { MANAGED_CUSTODIANS } from "./monthly-import.ts";
-import { buildPortfolioPack, type InvestorProfile, type PackAccount, type StatementFunds } from "./portfolio-review.ts";
+import { buildPortfolioPack, type Guarantee, type InvestorProfile, type PackAccount, type StatementFunds } from "./portfolio-review.ts";
 
 const norm = (s: string | null | undefined) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 const num = (v: unknown) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 
 export async function portfolioPackFor(db: any, householdId: string, today: string) {
-  const { data: people } = await db.from("contacts").select("id, first_name, last_name, full_name").eq("household_id", householdId);
+  const { data: people } = await db.from("contacts").select("id, first_name, last_name, full_name, date_of_birth").eq("household_id", householdId);
   const contactIds = (people ?? []).map((p: any) => p.id);
+  const dobOf = new Map((people ?? []).map((p: any) => [p.id, p.date_of_birth as string | null]));
   const ownerOf = new Map((people ?? []).map((p: any) => [p.id, p.full_name || `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim()]));
 
   const [{ data: tankRows }, { data: vineRows }] = await Promise.all([
@@ -36,17 +37,33 @@ export async function portfolioPackFor(db: any, householdId: string, today: stri
   // Statements the advisor approved in the Vault scan: the latest one per account number.
   const { data: audits } = await db.from("stage2_verification_audit").select("extracted_entities, created_at").eq("household_id", householdId).eq("review_status", "approved").order("created_at", { ascending: false });
   const funds = new Map<string, StatementFunds & { at: string }>();
+  const guarantees = new Map<string, { date: string; guarantee: Guarantee | null; allocation: PackAccount["statementAllocation"] }>();
   for (const au of audits ?? []) {
     const ex = au.extracted_entities?.extraction;
     for (const acc of ex?.accounts ?? []) {
       const key = norm(acc.account_number);
-      if (!key || !Array.isArray(acc.funds) || !acc.funds.length) continue;
       const date = ex?.statement_date ?? null;
+      // Guarantee and mix are read from the same latest statement per account as the funds.
+      if (key && (acc.guarantee || acc.statement_allocation)) {
+        const gPrev = guarantees.get(key);
+        if (!gPrev || gPrev.date < (date ?? "")) {
+          const g = acc.guarantee;
+          guarantees.set(key, {
+            date: date ?? "",
+            guarantee: g ? { series: g.series ?? null, maturityDate: g.maturity_date ?? null, guaranteedAtMaturity: num(g.guaranteed_at_maturity), guaranteedAtDeath: num(g.guaranteed_at_death), lastQuarterFee: num(g.last_quarter_fee), valueOfFunds: num(g.value_of_funds) } : null,
+            allocation: acc.statement_allocation ? { incomePct: num(acc.statement_allocation.income_pct), equityPct: num(acc.statement_allocation.equity_pct), profile: acc.statement_allocation.profile ?? null } : null,
+          });
+        }
+      }
+      if (!key || !Array.isArray(acc.funds) || !acc.funds.length) continue;
       const prev = funds.get(key);
       if (prev && (prev.statementDate ?? "") >= (date ?? "")) continue;
       funds.set(key, { statementDate: date, sourceFile: au.extracted_entities?.source?.file_name ?? null, at: au.created_at, funds: acc.funds.map((f: any) => ({ name: String(f.name ?? ""), category: f.category ?? null, value: num(f.value) ?? 0 })) });
     }
   }
+
+  const { data: resetRows } = await db.from("guarantee_resets").select("account_number, last_reset_date").eq("household_id", householdId);
+  const lastReset = new Map((resetRows ?? []).map((r: any) => [norm(r.account_number), r.last_reset_date as string | null]));
 
   const packAccounts: PackAccount[] = accounts.map((a: any) => {
     const snaps = snapsOf(a);
@@ -58,10 +75,14 @@ export async function portfolioPackFor(db: any, householdId: string, today: stri
       returns: { ytd: num(latest?.ror_ytd), sixMonth: num(latest?.ror_6m), oneYear: num(latest?.ror_1y), threeYear: num(latest?.ror_3y), fiveYear: num(latest?.ror_5y), sinceInception: num(latest?.ror_since_inception) },
       priorValue: num(prior?.current_value), priorAsOf: prior?.snapshot_date ?? null,
       statement: funds.get(norm(a.account_number)) ?? null,
+      guarantee: guarantees.get(norm(a.account_number))?.guarantee ?? null,
+      statementAllocation: guarantees.get(norm(a.account_number))?.allocation ?? null,
+      ownerDob: dobOf.get(a.contact_id) ?? null,
+      lastResetDate: lastReset.get(norm(a.account_number)) ?? null,
     };
   });
 
   const { data: profRows } = await db.from("investor_profiles").select("*").eq("household_id", householdId);
-  const profiles: InvestorProfile[] = (profRows ?? []).map((p: any) => ({ accountNumber: p.account_number, label: p.label, incomePct: num(p.income_pct), equityPct: num(p.equity_pct), bandPct: num(p.band_pct) ?? 5, asOf: p.as_of, source: p.source }));
+  const profiles: InvestorProfile[] = (profRows ?? []).map((p: any) => ({ accountNumber: p.account_number, label: p.label, incomePct: num(p.income_pct), equityPct: num(p.equity_pct), bandPct: num(p.band_pct) ?? 0, asOf: p.as_of, source: p.source }));
   return { pack: buildPortfolioPack({ accounts: packAccounts, profiles, today }), profiles: profRows ?? [] };
 }

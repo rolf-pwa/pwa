@@ -44,6 +44,7 @@ export interface PortfolioPackResponse {
 }
 export const getPortfolioPack = (householdId: string) => call<PortfolioPackResponse>("portfolioPack", { householdId });
 export const saveInvestorProfile = (p: { householdId: string; accountNumber?: string | null; label?: string; incomePct: number; bandPct?: number }) => call<{ ok: true }>("saveInvestorProfile", p);
+export const saveGuaranteeReset = (householdId: string, accountNumber: string, lastResetDate: string | null) => call<{ ok: true }>("saveGuaranteeReset", { householdId, accountNumber, lastResetDate });
 export const deleteInvestorProfile = (householdId: string, accountNumber: string | null) => call<{ ok: true }>("deleteInvestorProfile", { householdId, accountNumber });
 export const setReviewMode = (mode: ReviewMode, confirm = false) => call<{ ok: true; mode: ReviewMode }>("setMode", { mode, confirm });
 export const setReviewPaused = (obligationId: string, paused: boolean) => call<{ ok: true }>("setPaused", { obligationId, paused });

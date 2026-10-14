@@ -56,3 +56,46 @@ describe("the pack", () => {
     expect(p.accounts[0].drift.status).toBe("within");
   });
 });
+
+import { resetCheck, isResetSeries, ageOn, HARD_LINE_TOLERANCE } from "../../supabase/functions/_shared/portfolio-review";
+
+describe("iA's hard line", () => {
+  const t = classTotals([{ name: "A", category: "Income Funds", value: 40_400 }, { name: "B", category: "Canadian Equity funds", value: 59_600 }]);
+  it("treats anything that rounds to the target as on it, and flags the rest", () => {
+    expect(HARD_LINE_TOLERANCE).toBe(0.5);
+    expect(driftFor(t, { incomePct: 40, bandPct: 0 }).status).toBe("within");
+    const tight = classTotals([{ name: "A", category: "Income Funds", value: 34_000 }, { name: "B", category: "Canadian Equity funds", value: 66_000 }]);
+    expect(driftFor(tight, { incomePct: 40, bandPct: 0 }).status).toBe("too_little_income");
+  });
+});
+
+describe("death benefit resets", () => {
+  const g = (over: Record<string, unknown> = {}) => ({ series: "Series 75/100", maturityDate: "2046-12-31", guaranteedAtMaturity: 1, guaranteedAtDeath: 92_468, lastQuarterFee: 1, valueOfFunds: 100_067, ...over });
+  const a = (over: Partial<PackAccount> = {}): PackAccount => ({ ...acct(), guarantee: g(), ownerDob: "1955-06-01", ...over });
+  it("knows which series can be reset and ages by birthday", () => {
+    expect(isResetSeries("Series 75/100")).toBe(true);
+    expect(isResetSeries("Series 75 / 100 Prestige 500")).toBe(true);
+    expect(isResetSeries("Series 75/75")).toBe(false);
+    expect(ageOn("1955-12-31", "2026-10-14")).toBe(70);
+    expect(ageOn("1955-10-14", "2026-10-14")).toBe(71);
+  });
+  it("lists the room on an eligible account, and totals it", () => {
+    const r = resetCheck([a(), a({ id: "a2", guarantee: g({ valueOfFunds: 10_486, guaranteedAtDeath: 9_711 }) })], "2026-10-14");
+    expect(r.rows[0].status).toBe("reset");
+    expect(r.rows[0].room).toBeCloseTo(7_599, 0);
+    expect(r.toReset).toBe(2);
+    expect(r.totalRoom).toBeCloseTo(7_599 + 775, 0);
+  });
+  it("skips 75/75, anyone 85 or over, no room, and asks for a date of birth when missing", () => {
+    expect(resetCheck([a({ guarantee: g({ series: "Series 75/75" }) })], "2026-10-14").rows[0].status).toBe("no_reset_series");
+    expect(resetCheck([a({ ownerDob: "1940-01-01" })], "2026-10-14").rows[0].status).toBe("too_old");
+    expect(resetCheck([a({ guarantee: g({ valueOfFunds: 90_000 }) })], "2026-10-14").rows[0].status).toBe("no_room");
+    expect(resetCheck([a({ ownerDob: null })], "2026-10-14").rows[0].status).toBe("needs_dob");
+    expect(resetCheck([a({ guarantee: null })], "2026-10-14").rows).toEqual([]);
+  });
+  it("flags the last chance in the year an owner turns 85", () => {
+    const r = resetCheck([a({ ownerDob: "1941-12-01" })], "2026-10-14");
+    expect(r.rows[0].lastChance).toBe(true);
+    expect(r.rows[0].turns85On).toBe("2026-12-01");
+  });
+});

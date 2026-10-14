@@ -134,11 +134,21 @@ Deno.serve(async (req) => {
       let equity = pct(body?.equityPct);
       if (!householdId || income === null || !Number.isFinite(income) || income < 0 || income > 100) return json({ error: "Income % must be between 0 and 100" }, 400);
       if (equity === null) equity = 100 - income;
-      const band = pct(body?.bandPct) ?? 5;
+      const band = pct(body?.bandPct) ?? 0;
       const row = { household_id: householdId, account_number: accountNumber, label: String(body?.label ?? "").trim().slice(0, 80) || null, income_pct: income, equity_pct: equity, band_pct: band, source: "manual", as_of: pacificDate(Date.now()), updated_by: staff.email, updated_at: new Date().toISOString() };
       const lookup = db.from("investor_profiles").select("id").eq("household_id", householdId);
       const { data: found } = await (accountNumber === null ? lookup.is("account_number", null) : lookup.eq("account_number", accountNumber)).maybeSingle();
       const { error } = found?.id ? await db.from("investor_profiles").update(row).eq("id", found.id) : await db.from("investor_profiles").insert(row);
+      if (error) return json({ error: error.message }, 400);
+      return json({ ok: true });
+    }
+    if (action === "saveGuaranteeReset") {
+      const householdId = String(body?.householdId ?? "");
+      const accountNumber = String(body?.accountNumber ?? "").trim();
+      const d = body?.lastResetDate ? String(body.lastResetDate) : null;
+      if (!householdId || !accountNumber) return json({ error: "householdId and accountNumber required" }, 400);
+      if (d && !/^\d{4}-\d{2}-\d{2}$/.test(d)) return json({ error: "Date must be YYYY-MM-DD" }, 400);
+      const { error } = await db.from("guarantee_resets").upsert({ household_id: householdId, account_number: accountNumber, last_reset_date: d, updated_by: staff.email, updated_at: new Date().toISOString() }, { onConflict: "household_id,account_number" });
       if (error) return json({ error: error.message }, 400);
       return json({ ok: true });
     }
