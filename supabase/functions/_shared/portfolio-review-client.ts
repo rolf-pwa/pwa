@@ -8,15 +8,17 @@ import type { Pack, PackAccountOut } from "./portfolio-review.ts";
 export interface ClientIncludes { returns: boolean; mix: boolean; funds: boolean; reset: boolean }
 export const ALL_INCLUDED: ClientIncludes = { returns: true, mix: true, funds: true, reset: true };
 
-export interface ClientAccount { name: string; owner: string | null; last4: string | null; value: number | null; changeYtd: number | null; ytdPct: number | null; oneYearPct: number | null; threeYearPct: number | null }
+export interface ClientAccount { /** A short name for charts: the account type and the last four digits. */ label: string; name: string; owner: string | null; last4: string | null; value: number | null; changeYtd: number | null; ytdPct: number | null; oneYearPct: number | null; threeYearPct: number | null }
 export type MixStatus = "inside" | "below" | "above" | "unknown";
 export interface ClientView {
   householdLabel: string;
   valuesAsOf: string | null;
   note: string;
   summary: { value: number; changeYtd: number | null; ytdPct: number | null };
+  /** The household's value over time, oldest first (empty when there is not enough history). */
+  history: { date: string; value: number }[];
   accounts: ClientAccount[] | null;
-  mix: { profileLabel: string | null; incomePct: number | null; equityPct: number | null; rangeMin: number | null; rangeMax: number | null; targetIncomePct: number | null; status: MixStatus; accounts: { name: string; last4: string | null; incomePct: number | null; status: MixStatus }[] } | null;
+  mix: { classes: { key: string; label: string; pct: number }[]; profileLabel: string | null; incomePct: number | null; equityPct: number | null; rangeMin: number | null; rangeMax: number | null; targetIncomePct: number | null; status: MixStatus; accounts: { name: string; last4: string | null; incomePct: number | null; status: MixStatus }[] } | null;
   funds: { modelLabel: string; modelAsOf: string; heldInModelPct: number; rows: { name: string; modelPct: number | null; heldPct: number; inModel: boolean }[] } | null;
   reset: { rows: { name: string; owner: string | null; last4: string | null; fundValue: number; currentGuarantee: number; newGuarantee: number; lift: number }[]; totalLift: number } | null;
   disclosures: string[];
@@ -30,6 +32,13 @@ export const DISCLOSURES = [
 
 const last4 = (n: string | null) => (n ? n.replace(/[^0-9A-Za-z]/g, "").slice(-4) || null : null);
 const round1 = (n: number) => Math.round(n * 10) / 10;
+/** "iA Financial Group - IAG Savings and Retirement Plan - RRIF" becomes "RRIF", with the last four digits: "RRIF …0719". */
+export function shortAccountName(name: string, number: string | null): string {
+  const parts = String(name ?? "").split(" - ").map((s) => s.trim()).filter(Boolean);
+  const base = parts.length ? parts[parts.length - 1] : "Account";
+  const l4 = last4(number);
+  return l4 ? `${base} …${l4}` : base;
+}
 
 const mixStatus = (d: PackAccountOut["drift"]): MixStatus => (d.status === "within" ? "inside" : d.status === "too_little_income" ? "below" : d.status === "too_much_income" ? "above" : "unknown");
 
@@ -43,9 +52,16 @@ export function buildClientView(pack: Pack, includes: ClientIncludes, note: stri
     valuesAsOf: pack.asOf,
     note: note.trim(),
     summary: { value: pack.totalValue, changeYtd: h.changeYtd, ytdPct: h.valueWeightedYtd },
-    accounts: includes.returns ? pack.accounts.map((a) => ({ name: a.name, owner: a.owner, last4: last4(a.number), value: a.value, changeYtd: a.changeYtd, ytdPct: a.returns.ytd, oneYearPct: a.returns.oneYear, threeYearPct: a.returns.threeYear })) : null,
+    history: pack.history.length >= 2 ? pack.history : [],
+    accounts: includes.returns ? pack.accounts.map((a) => ({ label: shortAccountName(a.name, a.number), name: a.name, owner: a.owner, last4: last4(a.number), value: a.value, changeYtd: a.changeYtd, ytdPct: a.returns.ytd, oneYearPct: a.returns.oneYear, threeYearPct: a.returns.threeYear })) : null,
     mix: includes.mix && h.drift.status !== "no_data"
       ? {
+        classes: [
+          { key: "income", label: "Income", pct: covered > 0 ? round1((h.classTotals.income / covered) * 100) : 0 },
+          { key: "canadian", label: "Canadian equity", pct: covered > 0 ? round1((h.classTotals.canadian_equity / covered) * 100) : 0 },
+          { key: "global", label: "U.S. and international equity", pct: covered > 0 ? round1((h.classTotals.us_intl_equity / covered) * 100) : 0 },
+          { key: "other", label: "Other equity", pct: covered > 0 ? round1((h.classTotals.equity_other / covered) * 100) : 0 },
+        ].filter((c) => c.pct > 0),
         profileLabel: h.drift.profileLabel ?? null, incomePct: h.drift.actualIncomePct, equityPct: equity, rangeMin: h.drift.rangeMin ?? null, rangeMax: h.drift.rangeMax ?? null, targetIncomePct: h.drift.targetIncomePct, status: mixStatus(h.drift),
         accounts: pack.accounts.filter((a) => a.classTotals).map((a) => ({ name: a.name, last4: last4(a.number), incomePct: a.incomePct, status: mixStatus(a.drift) })),
       }

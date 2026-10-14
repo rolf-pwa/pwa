@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildPortfolioPack, type ModelPortfolio, type PackAccount } from "../../supabase/functions/_shared/portfolio-review";
-import { buildClientView, portfolioReviewReadyEmail, ALL_INCLUDED } from "../../supabase/functions/_shared/portfolio-review-client";
+import { buildClientView, portfolioReviewReadyEmail, shortAccountName, ALL_INCLUDED } from "../../supabase/functions/_shared/portfolio-review-client";
 
 const balanced: ModelPortfolio = { asOf: "2026-05-31", key: "balanced", label: "Balanced", incomeMin: 35, incomeMax: 55, equityMin: 45, equityMax: 65, incomeTarget: 40, funds: [{ name: "Fixed income managed portfolio (iA)", weight: 40 }, { name: "Fidelity Insights", weight: 60 }] };
 const acct = (over: Partial<PackAccount> = {}): PackAccount => ({
@@ -16,7 +16,9 @@ describe("the client's Portfolio Review", () => {
     const v = buildClientView(pack(), ALL_INCLUDED, "  Good year.  ", "Parent Household");
     expect(v.note).toBe("Good year.");
     expect(v.summary.value).toBe(100_000);
-    expect(v.accounts![0]).toMatchObject({ name: "iA RRSP", last4: "0719", ytdPct: 8, oneYearPct: 9, threeYearPct: 11 });
+    expect(v.accounts![0]).toMatchObject({ name: "iA RRSP", label: "iA RRSP …0719", last4: "0719", ytdPct: 8, oneYearPct: 9, threeYearPct: 11 });
+    expect(v.mix!.classes.map((c) => c.key)).toEqual(["income", "global"]);
+    expect(shortAccountName("iA Financial Group - IAG Savings and Retirement Plan - RRIF", "1818710719")).toBe("RRIF …0719");
     expect(v.mix).toMatchObject({ profileLabel: "Balanced", status: "below", rangeMin: 35, rangeMax: 55 });
     expect(v.reset!.rows[0]).toMatchObject({ currentGuarantee: 92_000, newGuarantee: 100_000, lift: 8_000 });
     expect(v.disclosures.length).toBeGreaterThan(1);
