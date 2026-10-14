@@ -28,3 +28,12 @@ describe("who owes a meeting", () => {
     expect(familyDisplayTier([])).toBeNull();
   });
 });
+
+describe("households with nothing to review", () => {
+  it("owe no meetings when they have no tier, and Tier 0 (insurance only) owes none by cadence", async () => {
+    const { requiredObligations } = await import("../../supabase/functions/_shared/review-windows");
+    const u = reviewUnits([fam()], [hh("empty", null), hh("insured", "tier_0"), hh("real", "tier_1")]);
+    expect(u.map((x) => x.key)).toEqual(["f1|insured", "f1|real"]);
+    expect(requiredObligations("tier_0", 2027)).toEqual([]);
+  });
+});

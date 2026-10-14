@@ -2,7 +2,8 @@
 //
 // A family that is bound together (a ratified Charter, a Virtual Family Office, or a tier Rolf set by hand) is one unit: its tier is
 // pooled and it owes one set of meetings. A family with no such binding is not one entity: each household that still has an advisory
-// relationship is its own unit, tiered on its own assets (Rolf, 2026-10-14).
+// relationship is its own unit, tiered on its own assets (Rolf, 2026-10-14). A household with nothing under management and no insurance
+// has no tier and owes no meetings; one with insurance only is Tier 0, which has no scheduled review either.
 
 export interface UnitFamily { id: string; name: string; service_tier: string | null; vfo_enabled?: boolean | null; has_ratified_charter?: boolean | null; service_tier_source?: string | null }
 export interface UnitHousehold { id: string; family_id: string; label: string | null; service_tier: string | null; relationship_ended_at: string | null }

@@ -13,8 +13,9 @@ export async function viewerUnit(db: Db, familyId: string, householdId: string |
   const familyTier = (fam?.service_tier ?? null) as string | null;
   if (!fam || !householdId || isPooledFamily(fam)) return { householdId: null, tier: familyTier };
   const { data: hh } = await db.from("households").select("service_tier, relationship_ended_at").eq("id", householdId).maybeSingle();
-  if (!hh?.service_tier || hh.relationship_ended_at) return { householdId: null, tier: familyTier };
-  return { householdId, tier: hh.service_tier as string };
+  if (!hh || hh.relationship_ended_at) return { householdId: null, tier: familyTier };
+  // A household that stands alone and has no tier (nothing under management, no insurance) owes nothing: it never falls back to the family tier.
+  return { householdId, tier: (hh.service_tier ?? null) as string | null };
 }
 
 /** Limits a review_obligations query to the viewer's own meetings. */

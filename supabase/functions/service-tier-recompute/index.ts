@@ -94,8 +94,9 @@ async function recomputeOne(db: Db, family: FamilyRow): Promise<Transition | nul
       continue;
     }
     const [aum, insured] = await Promise.all([computeHouseholdAum(db, h.id), hasHouseholdInsurancePolicy(db, h.id)]);
-    const tier = classifyTier({ groupedAum: aum, hasRatifiedCharter: false, hasInsurancePolicy: insured });
-    householdTiers.push(tier);
+    // No managed assets and no insurance: nothing to review, so no tier and no meetings. Insurance only is Tier 0 (no scheduled review).
+    const tier = aum <= 0 && !insured ? null : classifyTier({ groupedAum: aum, hasRatifiedCharter: false, hasInsurancePolicy: insured });
+    if (tier) householdTiers.push(tier);
     await db.from("households").update({ service_tier: tier, grouped_aum_cad: aum }).eq("id", h.id);
   }
   const newTier = (standsAlone ? (familyDisplayTier(householdTiers) as ServiceTier | null) : null) ?? pooledTier;
