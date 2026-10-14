@@ -137,7 +137,7 @@ export default function ReviewAgent() {
                   ))}
                 </div>
                 <p className="text-sm text-muted-foreground">{MODES.find((m) => m.value === mode)?.blurb}</p>
-                {c && <p className="text-xs text-muted-foreground">Tier 1: an Annual Review in Q1 and a portfolio rebalancing in Q3. Tier 2A: an Annual Review in Q2 and a rebalancing in Q4. A rebalancing is prepared by you family by family, published to the portal when it is ready, and Georgia invites the family only then. Tier 2B: a Sovereignty Review in Q2 and another in Q4. Tier 3: Sovereignty Reviews in Q1–Q3 and a Governance Review in Q4. Invitations go out on the first day of each window, then a reminder every {c.remind_every_days} days (up to {c.max_nudges}); with {c.handoff_days_before_end} days left and nothing booked, the family comes to you. Only windows that start after {when(c.since)} are managed.</p>}
+                {c && <p className="text-xs text-muted-foreground">Tier 1: an Annual Review in Q1 and a portfolio rebalancing in Q3. Tier 2A: an Annual Review in Q2 and a rebalancing in Q4. Tier 2B: a Sovereignty Review in Q2 and another in Q4. Tier 3: Sovereignty Reviews in Q1–Q3 and a Governance Review in Q4. A rebalancing is prepared by you family by family, published to the portal when it is ready, and Georgia invites the family only then. Meeting invitations go out on the first day of each window, then a reminder every {c.remind_every_days} days (up to {c.max_nudges}); with {c.handoff_days_before_end} days left and nothing booked, the family comes to you. Only windows that start after {when(c.since)} are managed.</p>}
               </CardContent>
             </Card>
 
