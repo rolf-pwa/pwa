@@ -492,7 +492,7 @@ async function classifyDocument(
     // Load active checklist templates to ground the model's category choice.
     const { data: templates } = await admin
       .from("intake_checklist_templates")
-      .select("id, name, category, requirement")
+      .select("id, name, category, requirement, situations, description")
       .eq("is_active", true)
       .order("sort_order");
 
@@ -698,6 +698,31 @@ async function handleInhouseUpload(
  * into the Vault (by staff, or by an existing client from before this
  * checklist pipeline existed) instead of uploaded through this wizard.
  */
+/** What is true of this household, as tags a document can be tied to: its wealth event, a spouse, children. */
+async function householdSituations(householdId: string): Promise<string[]> {
+  const [{ data: hh }, { data: people }] = await Promise.all([
+    admin.from("households").select("wealth_event_type").eq("id", householdId).maybeSingle(),
+    admin.from("contacts").select("family_role").eq("household_id", householdId),
+  ]);
+  const tags: string[] = [];
+  if (hh?.wealth_event_type) tags.push(String(hh.wealth_event_type));
+  if (hh?.wealth_event_type === "business_exit" || hh?.wealth_event_type === "business_growth") tags.push("corporation");
+  const roles = (people ?? []).map((p: any) => p.family_role);
+  if (roles.includes("spouse")) tags.push("spouse");
+  if (roles.includes("child") || roles.includes("dependant")) tags.push("children");
+  return tags;
+}
+const documentApplies = (templateSituations: string[] | null, have: string[]) =>
+  !templateSituations?.length || templateSituations.some((t) => have.includes(t));
+const REASON_LABEL: Record<string, string> = {
+  inheritance: "Your inheritance", divorce: "Your divorce or separation", retirement: "Your retirement", business_exit: "Your business sale",
+  business_growth: "Your growing business", other_sudden_wealth: "Your recent windfall", corporation: "Your business", spouse: "Your spouse or partner", children: "Your children",
+};
+const documentReason = (templateSituations: string[] | null, have: string[]) => {
+  const hit = (templateSituations ?? []).find((t) => have.includes(t));
+  return hit ? REASON_LABEL[hit] ?? null : null;
+};
+
 const CHECKLIST_CATEGORY_TO_VAULT_SLUG: Record<string, string> = {
   "01_Identities": "identity-legal",
   "02_Financial": "investments",
@@ -774,7 +799,9 @@ async function handleInhouseManifest(
       .order("created_at", { ascending: false }),
   ]);
 
-  const activeTemplates = (templates ?? []) as any[];
+  const situations = await householdSituations(resolved.householdId);
+  // Only the documents that fit this household: everyone's basics, plus those tied to their situation.
+  const activeTemplates = ((templates ?? []) as any[]).filter((t) => documentApplies(t.situations, situations));
   const classRows = (classifications ?? []) as any[];
 
   // Match each classification to the best template by name similarity.
@@ -836,6 +863,8 @@ async function handleInhouseManifest(
       status,
       receivedCount: matches.length,
       requirement: t.requirement === "required" ? "required" : "optional",
+      description: t.description ?? null,
+      reason: documentReason(t.situations, situations),
     };
   });
 
@@ -941,7 +970,7 @@ async function loadOnboarding(resolved: Resolved) {
       admin
         .from("households")
         .select(
-          "id, label, address, onboarding_step, onboarding_completed_at, audit_booked_at, profile_completed_at, wealth_event_type, wealth_event_notes, wealth_event_completed_at, vision_notes, values_notes, purpose_notes, intake_share_token, vault_root_folder_id, anchor_transfer_amount, anchor_transfer_amount_note, spousal_alignment_score, spousal_alignment_note, pressure_types, pressure_note, pending_capex_amount, pending_capex_date, pending_capex_description, legacy_advisor_friction_notes, household_context_completed_at, wealth_event_source, onboarding_intro_text",
+          "id, label, address, onboarding_step, onboarding_completed_at, audit_booked_at, profile_completed_at, wealth_event_type, wealth_event_notes, wealth_event_completed_at, vision_notes, values_notes, purpose_notes, intake_share_token, vault_root_folder_id, anchor_transfer_amount, anchor_transfer_amount_note, spousal_alignment_score, spousal_alignment_note, pressure_types, pressure_note, pending_capex_amount, pending_capex_date, pending_capex_description, legacy_advisor_friction_notes, household_context_completed_at, documents_completed_at, wealth_event_source, onboarding_intro_text",
         )
         .eq("id", resolved.householdId)
         .maybeSingle(),
@@ -973,8 +1002,9 @@ async function loadOnboarding(resolved: Resolved) {
       id: household?.id,
       label: household?.label ?? "",
       address: household?.address ?? "",
-      step: household?.onboarding_step ?? 1,
+      step: flowStepOf(household, resolved.legacyUpgrade),
       auditBookedAt: household?.audit_booked_at ?? null,
+      documentsCompletedAt: household?.documents_completed_at ?? null,
       profileCompletedAt: household?.profile_completed_at ?? null,
       wealthEventType: household?.wealth_event_type ?? null,
       wealthEventNotes: household?.wealth_event_notes ?? "",
@@ -1026,6 +1056,31 @@ async function loadOnboarding(resolved: Resolved) {
   };
 }
 
+/**
+ * Where a household is in the guided flow. New clients: 1 Household, 2 Wealth event, 3 Context (personal events only), 4 Documents,
+ * 5 Book the Survey Session. Worked out from what has been completed, so the order can change without renumbering stored data.
+ * Legacy upgrades keep their own stored step.
+ */
+function flowStepOf(hh: any, legacy: boolean): number {
+  if (legacy) return hh?.onboarding_step ?? 1;
+  if (!hh) return 1;
+  if (hh.onboarding_completed_at) return 5;
+  if (!hh.profile_completed_at) return 1;
+  if (!hh.wealth_event_completed_at) return 2;
+  const personal = PERSONAL_WEALTH_EVENTS.includes(hh.wealth_event_type as (typeof PERSONAL_WEALTH_EVENTS)[number]);
+  if (personal && !hh.household_context_completed_at) return 3;
+  if (!hh.documents_completed_at) return 4;
+  return 5;
+}
+
+/** A new client is finished once documents are confirmed and the Survey Session is booked, in either order. */
+async function finishIfDone(householdId: string) {
+  const { data: hh } = await admin.from("households").select("documents_completed_at, audit_booked_at, onboarding_completed_at").eq("id", householdId).maybeSingle();
+  if (hh && hh.documents_completed_at && hh.audit_booked_at && !hh.onboarding_completed_at) {
+    await admin.from("households").update({ onboarding_completed_at: new Date().toISOString() }).eq("id", householdId);
+  }
+}
+
 /** Bump the stored step forward only (never backwards). */
 async function advanceStep(householdId: string, step: number, patch: Record<string, unknown> = {}) {
   const { data: hh } = await admin
@@ -1058,7 +1113,8 @@ async function handleOnboardingAction(
   }
 
   if (action === "onboarding_audit_booked") {
-    await advanceStep(resolved.householdId, 2, { audit_booked_at: new Date().toISOString() });
+    await advanceStep(resolved.householdId, 5, { audit_booked_at: new Date().toISOString() });
+    await finishIfDone(resolved.householdId);
     return json(await loadOnboarding(resolved));
   }
 
@@ -1071,7 +1127,8 @@ async function handleOnboardingAction(
     }
     const event = await findAuditEvent(state.contact.email);
     if (!event) return json({ ...state, auditEvent: null, verified: false });
-    await advanceStep(resolved.householdId, 2, { audit_booked_at: event.start });
+    await advanceStep(resolved.householdId, 5, { audit_booked_at: event.start });
+    await finishIfDone(resolved.householdId);
     return json({ ...(await loadOnboarding(resolved)), auditEvent: event, verified: true });
   }
 
@@ -1187,10 +1244,8 @@ async function handleOnboardingAction(
       seenNames.add(fullName.toLowerCase());
     }
 
-    // Legacy upgrades run Household info first (Step 1) and unlock Vision &
-    // values (Step 2) next; new clients run Book Audit first, so completing
-    // Household info here (their Step 2) unlocks Wealth event (Step 3).
-    await advanceStep(resolved.householdId, resolved.legacyUpgrade ? 2 : 3, {
+    // Household info is Step 1 for everyone; the next step (Vision & values, or Wealth event) is Step 2.
+    await advanceStep(resolved.householdId, 2, {
       profile_completed_at: new Date().toISOString(),
     });
     const state = await loadOnboarding(resolved);
@@ -1222,7 +1277,7 @@ async function handleOnboardingAction(
       .maybeSingle();
     const keepsDiagnosticEvent =
       prior?.wealth_event_source === "georgia_diagnostic" && prior?.wealth_event_type === type;
-    await advanceStep(resolved.householdId, isPersonalEvent ? 4 : 5, {
+    await advanceStep(resolved.householdId, isPersonalEvent ? 3 : 4, {
       wealth_event_source: keepsDiagnosticEvent ? "georgia_diagnostic" : null,
       // The personalized intro describes the diagnostic's event -- once the
       // client changes it, it would be stale, so fall back to the generic text.
@@ -1260,7 +1315,7 @@ async function handleOnboardingAction(
       ? payload.pressureTypes.map((t: unknown) => str(t, 40)).filter(Boolean).slice(0, 20)
       : [];
 
-    await advanceStep(resolved.householdId, 5, {
+    await advanceStep(resolved.householdId, 4, {
       anchor_transfer_amount:
         typeof anchorTransferAmount === "number" && anchorTransferAmount >= 0 ? anchorTransferAmount : null,
       anchor_transfer_amount_note: str(payload?.anchorTransferAmountNote, 1000) || null,
@@ -1311,8 +1366,9 @@ async function handleOnboardingAction(
     await advanceStep(
       resolved.householdId,
       resolved.legacyUpgrade ? 4 : 5,
-      resolved.legacyUpgrade ? {} : { onboarding_completed_at: new Date().toISOString() },
+      resolved.legacyUpgrade ? {} : { documents_completed_at: new Date().toISOString() },
     );
+    if (!resolved.legacyUpgrade) await finishIfDone(resolved.householdId);
     return json(await loadOnboarding(resolved));
   }
 

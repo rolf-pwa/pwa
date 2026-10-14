@@ -265,7 +265,10 @@ export function PortalIntakePage({ portalToken, onBack, onComplete }: Props) {
 
           {/* Checklist */}
           <div className="space-y-3">
-            <h3 className={sectionLabel}>What we're expecting</h3>
+            <h3 className={sectionLabel}>Your list</h3>
+            <p className="text-xs text-muted-foreground">
+              Chosen for your situation. Send what you have; anything marked optional can wait, and a missing item never holds you up.
+            </p>
             {checklist.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No specific checklist yet — send whatever you have and we'll sort it. Your advisor
@@ -298,9 +301,10 @@ export function PortalIntakePage({ portalToken, onBack, onComplete }: Props) {
                               className="flex items-center justify-between gap-3 px-4 py-2.5"
                             >
                               <div className="min-w-0">
-                                <p className="truncate text-sm text-foreground">{item.name}</p>
-                                <p className="truncate text-[11px] text-muted-foreground">
-                                  {prettyCategory(item.category)}
+                                <p className="text-sm text-foreground">{item.name}</p>
+                                {item.description && <p className="text-xs text-muted-foreground">{item.description}</p>}
+                                <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                                  {item.reason ? `${item.reason} · ` : ""}{prettyCategory(item.category)}
                                   {item.subType ? ` · ${item.subType}` : ""}
                                 </p>
                               </div>

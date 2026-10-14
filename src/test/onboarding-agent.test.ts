@@ -20,8 +20,8 @@ describe("onboarding concierge decisions", () => {
   });
   it("waits for the first reminder, then sends one for the right step", () => {
     expect(decideNext(base({ enrolledAt: WED_10AM - 3_600_000, openedAt: WED_10AM - 3_600_000 }))).toEqual({ kind: "wait", reason: "not_due" });
-    expect(decideNext(base())).toEqual({ kind: "nudge", step: "survey" });
-    expect(decideNext(base({ surveyBooked: true }))).toEqual({ kind: "nudge", step: "documents" });
+    expect(decideNext(base())).toEqual({ kind: "nudge", step: "documents" });
+    expect(decideNext(base({ docsReceived: true }))).toEqual({ kind: "nudge", step: "survey" });
   });
   it("spaces later reminders at least the minimum gap apart", () => {
     expect(decideNext(base({ nudgeCount: 1, lastNudgeAt: WED_10AM - DAY }))).toEqual({ kind: "wait", reason: "not_due" });

@@ -50,6 +50,10 @@ export async function recordInviteClick(db: any, token: string): Promise<{ ok: b
     return { ok: true, started: true };
   }
 
+  // The portal's guided onboarding only opens for a household with a qualifying (paid or not-required) Survey booking, so an invited
+  // household needs a no-charge one, exactly as "Enroll in Guided Intake" creates for an existing client.
+  await ensureNoChargeBooking(db, (people ?? []).map((p: any) => p.id), inv.contact_id);
+
   let sent = 0;
   for (const r of recipients) {
     // A fresh portal link for each person, the same kind the paid onboarding email uses (7 days, then they sign in with their email).
@@ -62,4 +66,16 @@ export async function recordInviteClick(db: any, token: string): Promise<{ ok: b
   await db.from("onboarding_invites").update({ started_at: now, welcome_sent_to: sent }).eq("id", inv.id);
   await event(sent ? "welcome_sent" : "welcome_failed", { to: sent, of: recipients.length }, caseId);
   return { ok: true, started: true };
+}
+
+/** Makes sure someone in the household has a qualifying booking so the portal's guided onboarding switches on. Idempotent. */
+export async function ensureNoChargeBooking(db: any, memberIds: string[], contactId: string): Promise<void> {
+  if (!memberIds.length) return;
+  const { data: existing } = await db.from("service_bookings").select("id").in("contact_id", memberIds).in("payment_status", ["paid", "not_required"]).limit(1);
+  if (existing?.length) return;
+  const { data: service } = await db.from("services").select("id").ilike("name", "%sovereignty%audit%").limit(1).maybeSingle();
+  await db.from("service_bookings").insert({
+    contact_id: contactId, service_id: service?.id ?? null, status: "confirmed", payment_status: "not_required", amount: 0, total: 0, currency: "CAD",
+    paid_at: new Date().toISOString(), notes: "Invited by Rolf: Sovereignty Survey onboarding. No payment required.",
+  });
 }
