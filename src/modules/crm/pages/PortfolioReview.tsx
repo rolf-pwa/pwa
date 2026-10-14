@@ -11,6 +11,7 @@ import { deleteInvestorProfile, getPortfolioPack, saveGuaranteeReset, saveInvest
 import { CLASS_LABEL, type AssetClass, type DriftStatus, type ModelComparison } from "../../../../supabase/functions/_shared/portfolio-review";
 import { SERVICE_TIER_LABEL, type ServiceTier } from "@/shared/lib/serviceTier";
 import { IaModelUpload } from "@/modules/crm/components/IaModelUpload";
+import { PublishToClient } from "@/modules/crm/components/PublishToClient";
 
 const money = (n: number | null | undefined) => (n === null || n === undefined ? "—" : n.toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }));
 const pct = (n: number | null | undefined) => (n === null || n === undefined ? "—" : `${n.toFixed(1)}%`);
@@ -93,6 +94,8 @@ export default function PortfolioReview() {
               </div>
               <Badge variant="outline" className="text-[10px]">Staff only</Badge>
             </div>
+
+            <PublishToClient householdId={data.household.id} householdLabel={data.household.label ?? "Household"} pack={p} publication={data.publication} onChanged={load} />
 
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               {[["Managed value", money(p.totalValue)], ["Year to date (weighted)", pct(p.household.valueWeightedYtd)], ["Since last month", signed(p.household.changeSincePrior)], ["Change this year", signed(p.household.changeYtd)]].map(([k, v]) => (
