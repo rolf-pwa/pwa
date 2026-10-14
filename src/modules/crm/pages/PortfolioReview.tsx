@@ -39,7 +39,12 @@ export default function PortfolioReview() {
     const v = Number(income);
     if (!id || income === "" || !Number.isFinite(v) || v < 0 || v > 100) { toast.error("Enter the target income share, 0 to 100"); return; }
     setSaving(true);
-    try { await saveInvestorProfile({ householdId: id, accountNumber: account || null, label, incomePct: v, bandPct: Number(band) || 5 }); setIncome(""); setLabel(""); await load(); toast.success("Investor Profile saved"); }
+    try {
+      // "All accounts" saves the same profile on every managed account (one at a time, as each account has its own profile).
+      const numbers = account === "__all__" ? (data?.pack.accounts ?? []).map((a) => a.number).filter((n): n is string => !!n) : [account || null];
+      for (const n of numbers) await saveInvestorProfile({ householdId: id, accountNumber: n, label, incomePct: v, bandPct: Number(band) || 5 });
+      setIncome(""); setLabel(""); await load(); toast.success(numbers.length > 1 ? `Investor Profile saved on ${numbers.length} accounts` : "Investor Profile saved");
+    }
     catch (e: any) { toast.error(e?.message ?? "Couldn't save"); }
     finally { setSaving(false); }
   };
@@ -140,7 +145,7 @@ export default function PortfolioReview() {
                   </div>
                 ))}
                 <div className="flex flex-wrap items-end gap-2">
-                  <label className="text-xs">Applies to<select value={account} onChange={(e) => setAccount(e.target.value)} className="mt-1 block h-9 rounded-md border bg-background px-2 text-sm"><option value="">Whole household</option>{p.accounts.filter((a) => a.number).map((a) => <option key={a.id} value={a.number!}>{a.name || a.number}</option>)}</select></label>
+                  <label className="text-xs">Applies to<select value={account} onChange={(e) => setAccount(e.target.value)} className="mt-1 block h-9 rounded-md border bg-background px-2 text-sm"><option value="">Whole household</option><option value="__all__">Every account (same profile)</option>{p.accounts.filter((a) => a.number).map((a) => <option key={a.id} value={a.number!}>{a.name || a.number}</option>)}</select></label>
                   <label className="text-xs">Profile name<Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Balanced" className="mt-1 w-36" /></label>
                   <label className="text-xs">Income %<Input value={income} onChange={(e) => setIncome(e.target.value)} inputMode="decimal" placeholder="40" className="mt-1 w-20" /></label>
                   <label className="text-xs">Band ±<Input value={band} onChange={(e) => setBand(e.target.value)} inputMode="decimal" className="mt-1 w-16" /></label>
