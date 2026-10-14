@@ -3,10 +3,10 @@ import { supabase } from "@/shared/integrations/supabase/client";
 const URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/review-agent-admin`;
 
 export type ReviewMode = "off" | "shadow" | "live";
-export type ReviewKind = "annual_review" | "sovereignty_review" | "governance_review";
+export type ReviewKind = "annual_review" | "sovereignty_review" | "governance_review" | "rebalancing";
 export interface ReviewObligation {
   id: string; family_id: string; family_name: string | null; kind: ReviewKind; window_key: string; window_start: string; window_end: string; tier: string | null;
-  invite?: boolean; mode: "shadow" | "live"; status: "open" | "booked" | "held" | "escalated" | "paused" | "cancelled"; booked_start: string | null; nudge_count: number; escalation_reason: string | null;
+  invite?: boolean; mode: "shadow" | "live"; status: "open" | "booked" | "held" | "escalated" | "paused" | "cancelled"; booked_start: string | null; acknowledged_at?: string | null; published_at?: string | null; completed_at?: string | null; proposal_summary?: string | null; nudge_count: number; escalation_reason: string | null;
 }
 export interface ReviewEvent { id: string; family_id: string | null; family_name: string | null; mode: string; kind: string; detail: Record<string, any>; created_at: string }
 export interface ReviewOverview {
@@ -36,8 +36,25 @@ export const setReminderMode = (mode: ReviewMode, confirm = false) => call<{ ok:
 export const getReviewOverview = () => call<ReviewOverview>("overview");
 export const setReviewMode = (mode: ReviewMode, confirm = false) => call<{ ok: true; mode: ReviewMode }>("setMode", { mode, confirm });
 export const setReviewPaused = (obligationId: string, paused: boolean) => call<{ ok: true }>("setPaused", { obligationId, paused });
+export const publishRebalancing = (obligationId: string, summary: string) => call<{ ok: true }>("publishRebalancing", { obligationId, summary });
+export const unpublishRebalancing = (obligationId: string) => call<{ ok: true }>("unpublishRebalancing", { obligationId });
+export const completeRebalancing = (obligationId: string) => call<{ ok: true }>("completeRebalancing", { obligationId });
 
-export const KIND_LABEL: Record<ReviewKind, string> = { annual_review: "Annual Review", sovereignty_review: "Sovereignty Review", governance_review: "Governance Review" };
+export const KIND_LABEL: Record<ReviewKind, string> = { annual_review: "Annual Review", sovereignty_review: "Sovereignty Review", governance_review: "Governance Review", rebalancing: "Portfolio Rebalancing" };
+/**
+ * Where a portfolio rebalancing is, for Rolf: still being prepared, published and waiting for the client to review it, acknowledged
+ * and waiting for him to carry it out, or done. Meetings have no such stages.
+ */
+export type RebalancingStage = "preparing" | "waiting" | "toExecute" | "done";
+export function rebalancingStage(o: Pick<ReviewObligation, "published_at" | "acknowledged_at" | "completed_at">): RebalancingStage {
+  if (o.completed_at) return "done";
+  if (o.acknowledged_at) return "toExecute";
+  return o.published_at ? "waiting" : "preparing";
+}
+const STAGE_LABEL: Record<RebalancingStage, string> = { preparing: "Preparing", waiting: "Waiting for the client", toExecute: "To carry out", done: "Done" };
+/** "Held" means a meeting took place; a rebalancing has its own stages. */
+export const statusLabel = (o: Pick<ReviewObligation, "status" | "kind" | "published_at" | "acknowledged_at" | "completed_at">) =>
+  o.kind === "rebalancing" && (o.status === "open" || o.status === "held") ? STAGE_LABEL[rebalancingStage(o)] : STATUS_LABEL[o.status];
 export const STATUS_LABEL: Record<ReviewObligation["status"], string> = { open: "Open", booked: "Booked", held: "Held", escalated: "With a person", paused: "Paused", cancelled: "Cancelled" };
 const REASON: Record<string, string> = {
   no_email: "no email on file", not_booked_near_end: "not booked with time running out", window_closed: "the window closed with no meeting",
@@ -53,7 +70,13 @@ export function describeReviewEvent(e: Pick<ReviewEvent, "kind" | "detail">): st
     case "obligation_cancelled": return "Stopped tracking this meeting: the family's tier changed";
     case "booking_detected": return `Meeting found on the calendar${d.start ? ` for ${monthDay(String(d.start).slice(0, 10))}` : ""}`;
     case "booking_removed": return "The booked meeting is no longer on the calendar";
-    case "held": return "The meeting took place";
+    case "held": return d.kind === "rebalancing" ? "The client acknowledged the rebalancing" : "The meeting took place";
+    case "rebalancing_published": return "Rebalancing published to the portal: Georgia will invite the family to review it";
+    case "rebalancing_republished": return "The published rebalancing was updated";
+    case "rebalancing_unpublished": return "The rebalancing was taken back from the portal";
+    case "rebalancing_completed": return "Rebalancing carried out: the family was told in the portal";
+    case "rebalancing_acknowledged": return `${d.by ?? "A client"} reviewed and acknowledged the ${d.label ?? ""} rebalancing`.replace(/\s+/g, " ");
+    case "rebalancing_talk_first": return `${d.by ?? "A client"} wants to talk before the ${d.label ?? ""} rebalancing`.replace(/\s+/g, " ");
     case "invitation_sent": return `${d.reminder ? "Sent a reminder" : "Sent the invitation"} to ${d.to} adult${d.to === 1 ? "" : "s"}`;
     case "invitation_would_send": return `Would ${d.reminder ? "send a reminder" : "send the invitation"} to ${d.to} adult${d.to === 1 ? "" : "s"}`;
     case "nudge_failed": return "The invitation email failed and will be retried";
@@ -78,7 +101,7 @@ export interface QuarterSection {
   isCurrent: boolean;
   isPast: boolean;
   items: ReviewObligation[];
-  counts: { notBooked: number; booked: number; held: number; withPerson: number };
+  counts: { notBooked: number; booked: number; held: number; withPerson: number; toExecute: number };
 }
 
 const quarterOf = (iso: string) => ({ y: Number(iso.slice(0, 4)), q: Math.floor((Number(iso.slice(5, 7)) - 1) / 3) + 1 });
@@ -100,12 +123,14 @@ export function groupByQuarter(obligations: ReviewObligation[], today: string): 
       const [from, to] = QUARTER_RANGE[q];
       sections.set(key, {
         key, label: `Q${q} ${y}`, range: `${from} to ${to}`, isCurrent: y === now.y && q === now.q, isPast: y < now.y || (y === now.y && q < now.q),
-        items: [], counts: { notBooked: 0, booked: 0, held: 0, withPerson: 0 },
+        items: [], counts: { notBooked: 0, booked: 0, held: 0, withPerson: 0, toExecute: 0 },
       });
     }
     const sec = sections.get(key)!;
     sec.items.push(o);
-    if (o.status === "escalated") sec.counts.withPerson++;
+    if (o.kind === "rebalancing" && o.status !== "escalated" && rebalancingStage(o) === "toExecute") sec.counts.toExecute++;
+    else if (o.kind === "rebalancing" && o.status !== "escalated" && rebalancingStage(o) === "done") sec.counts.held++;
+    else if (o.status === "escalated") sec.counts.withPerson++;
     else if (o.status === "booked") sec.counts.booked++;
     else if (o.status === "held") sec.counts.held++;
     else sec.counts.notBooked++;

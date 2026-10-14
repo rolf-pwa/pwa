@@ -34,6 +34,7 @@ import { PortalShoeboxUpload } from "@/modules/portal/components/PortalShoeboxUp
 import { getPortalSession, setPortalSession, clearPortalSession } from "@/modules/portal/lib/portalSession";
 import prosperwiseLogo from "@/assets/prosperwise-logo.png";
 import prosperwiseIconPaper from "@/assets/prosperwise-icon-paper.png";
+import { PortalRebalancing, type RebalancingState } from "@/modules/portal/components/PortalRebalancing";
 import { withBookedMeetings } from "@/modules/portal/lib/bookedMeetings";
 import { PortalBookedMeetings, type BookedMeeting } from "@/modules/portal/components/PortalBookedMeetings";
 import { useBookingWatcher } from "@/modules/portal/lib/useBookingWatcher";
@@ -904,8 +905,22 @@ const VfoPortal = () => {
     const charterUrl = charter?.draft_status === "ratified" ? (contact.charter_url || family?.charter_document_url) : null;
     const fullName = `${contact.first_name || ""} ${contact.last_name || ""}`.trim();
 
+    const rebalancingCard = isSelf && (data as any)?.rebalancing ? (
+      <PortalRebalancing
+        rebalancing={(data as any).rebalancing as RebalancingState}
+        portalToken={portalToken}
+        onChanged={refreshData}
+        onTalkFirst={() => {
+          const m = (((data as any)?.meeting_types ?? []) as { label: string; url: string; embedUrl: string }[]).find((t) => /interim strategy/i.test(t.label));
+          setTab("meetings");
+          if (m) { if (m.embedUrl && m.embedUrl !== m.url) setEmbeddedBooking({ label: m.label, embedUrl: m.embedUrl }); else window.open(m.url, "_blank", "noopener,noreferrer"); }
+        }}
+      />
+    ) : null;
+
     const dashboardSidebar = (
       <>
+        {rebalancingCard}
         {charterUrl ? <PortalCharter charterUrl={charterUrl} /> : null}
         {renderConciergeCard()}
         <PortalYourTeam professionals={professionals} engagements={engagements} onSelect={professionals.length > 0 ? () => setTab("team") : undefined} />

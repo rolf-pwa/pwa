@@ -193,3 +193,6 @@ verify_jwt = false
 
 [functions.portal-meeting-check]
 verify_jwt = false
+
+[functions.portal-rebalance]
+verify_jwt = false

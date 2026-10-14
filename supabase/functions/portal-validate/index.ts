@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { gateMeetingTypes, meetingsOwedNow, pacificDate } from "../_shared/review-windows.ts";
+import { REBALANCE_STATEMENT, REBALANCE_STATEMENT_VERSION, gateMeetingTypes, meetingsOwedNow, pacificDate, windowLabel } from "../_shared/review-windows.ts";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { makeVisibilityFilter } from "../_shared/portal-visibility.ts";
@@ -609,6 +609,22 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
       console.error("[portal-validate] meeting types fetch error", e);
     }
 
+    // The family's portfolio rebalancing, when its window is open: only for adults, and only once Georgia has made it live.
+    let rebalancing: { label: string; summary: string; publishedAt: string; acknowledgedAt: string | null; completedAt: string | null; statement: string; statementVersion: string } | null = null;
+    try {
+      const role = contactRes.data?.family_role;
+      if ((role === "head_of_family" || role === "spouse") && !contactRes.data?.is_minor && familyId) {
+        const today = pacificDate(Date.now());
+        // Shown only once Rolf has published it to this family, and only while Georgia is live.
+        const { data: ob } = await supabase.from("review_obligations").select("window_start, window_end, published_at, proposal_summary, acknowledged_at, completed_at").eq("family_id", familyId).eq("kind", "rebalancing").eq("mode", "live").neq("status", "cancelled").not("published_at", "is", null).lte("window_start", today).order("window_start", { ascending: false }).limit(1).maybeSingle();
+        // A completed one stays on the card for a month, then goes quiet; one still being worked on stays until it is done.
+        const recent = ob && (!ob.completed_at || Date.now() - Date.parse(ob.completed_at) < 30 * 86_400_000);
+        if (ob && recent) rebalancing = { label: windowLabel(ob.window_start, ob.window_end), summary: ob.proposal_summary ?? "", publishedAt: ob.published_at, acknowledgedAt: ob.acknowledged_at ?? null, completedAt: ob.completed_at ?? null, statement: REBALANCE_STATEMENT, statementVersion: REBALANCE_STATEMENT_VERSION };
+      }
+    } catch (e) {
+      console.error("[portal-validate] rebalancing fetch error", e);
+    }
+
     return new Response(JSON.stringify({
       session_token: sessionToken,
       contact: contactRes.data,
@@ -636,6 +652,7 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
       insurance_policies,
       meeting_types,
       booked_meetings,
+      rebalancing,
       liabilities_total,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

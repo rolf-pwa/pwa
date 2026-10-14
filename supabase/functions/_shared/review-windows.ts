@@ -5,12 +5,15 @@
 // three weeks, and hands the family to a person if nothing is booked with three weeks to go. She never writes back to a reply.
 
 export type ReviewKind = "annual_review" | "sovereignty_review" | "governance_review";
+/** What Georgia tracks per window: a meeting, or the portfolio rebalancing a client acknowledges in the portal. */
+export type ObligationKind = ReviewKind | "rebalancing";
 export type Tier = "tier_0" | "tier_1" | "tier_2a" | "tier_2b" | "tier_3" | "tier_4";
 
-export const KIND_LABEL: Record<ReviewKind, string> = {
+export const KIND_LABEL: Record<ObligationKind, string> = {
   annual_review: "Annual Review",
   sovereignty_review: "Sovereignty Review",
   governance_review: "Governance Review",
+  rebalancing: "Portfolio Rebalancing",
 };
 
 /** Words in a calendar event title that mean each kind of meeting ("System Review" is the older name for the Sovereignty Review, "Charter Review" for the Governance Review). */
@@ -21,6 +24,7 @@ const ALIASES: Record<ReviewKind, string[]> = {
 };
 
 export interface RequiredMeeting { kind: ReviewKind; key: string; windowStart: string; windowEnd: string }
+export interface RequiredObligation { kind: ObligationKind; key: string; windowStart: string; windowEnd: string }
 
 const Q = (y: number, q: 1 | 2 | 3 | 4) => ({
   1: [`${y}-01-01`, `${y}-03-31`], 2: [`${y}-04-01`, `${y}-06-30`], 3: [`${y}-07-01`, `${y}-09-30`], 4: [`${y}-10-01`, `${y}-12-31`],
@@ -51,6 +55,25 @@ export function requiredMeetings(tier: Tier | null, year: number): RequiredMeeti
     default:
       return [];
   }
+}
+
+/**
+ * The portfolio rebalancing a client acknowledges in the portal (Rolf, 2026-10-14): Tier 1 in Q3 (chartered or not), Tier 2A in Q4.
+ * Tiers 2B, 3 and 4 discuss rebalancing in their review meetings; Tier 0 has none.
+ */
+export function requiredRebalancing(tier: Tier | null, year: number): RequiredObligation[] {
+  const make = (q: 3 | 4): RequiredObligation[] => {
+    const [s, e] = Q(year, q);
+    return [{ kind: "rebalancing", key: `${year}-Q${q}-rebalancing`, windowStart: s, windowEnd: e }];
+  };
+  if (tier === "tier_1") return make(3);
+  if (tier === "tier_2a") return make(4);
+  return [];
+}
+
+/** Everything Georgia tracks for a family in a year: its meetings and its rebalancing. */
+export function requiredObligations(tier: Tier | null, year: number): RequiredObligation[] {
+  return [...requiredMeetings(tier, year), ...requiredRebalancing(tier, year)];
 }
 
 /** Which kind of review a calendar event is, from its title. Null when it is some other meeting. */
@@ -91,6 +114,12 @@ export interface ReviewFacts {
   snoozedUntil: number | null;
   /** false for a window that was already open when Georgia went live: tracked for bookings, never invited or handed over. */
   invite?: boolean;
+  /** Rebalancing only: when Rolf published it to the portal (null = still being prepared, so Georgia stays silent). */
+  publishedAt?: number | null;
+  /** Rebalancing only: when the client acknowledged it after reviewing it. */
+  acknowledgedAt?: number | null;
+  /** "rebalancing" changes the wording of the hand-off ("not yet acknowledged", not "no meeting is booked"). */
+  kind?: ObligationKind;
 }
 
 export type ReviewDecision =
@@ -108,11 +137,36 @@ function inSendWindow(ms: number, cfg: ReviewConfig): boolean {
   return hour >= cfg.sendStartHour && hour < cfg.sendEndHour;
 }
 
+/** Reminders for a published rebalancing: first invitation at once, then every two weeks, three invitations in all. */
+export const REBALANCE_REMIND_DAYS = 14;
+export const REBALANCE_MAX_INVITES = 3;
+
+/**
+ * A rebalancing is prepared by Rolf family by family and published to the portal when it is ready, so Georgia says nothing until
+ * then. After that she invites both adults, reminds them every two weeks, and hands the family to Rolf if three invitations get no
+ * acknowledgement. There is no window deadline: the work takes as long as it takes.
+ */
+function decideRebalancing(f: ReviewFacts, cfg: ReviewConfig): ReviewDecision {
+  if (f.status === "held" || f.status === "cancelled") return { kind: "wait", reason: f.status };
+  if (f.status === "escalated") return { kind: "wait", reason: "with_a_person" };
+  if (f.status === "paused") return { kind: "wait", reason: "paused" };
+  if (f.acknowledgedAt != null) return { kind: "held" };
+  if (f.publishedAt == null) return { kind: "wait", reason: "not_published" };
+  if (f.recipients === 0) return { kind: "escalate", reason: "no_email", detail: "Neither adult in this family has an email address on file, so nobody can be invited to review the rebalancing." };
+  if (f.snoozedUntil && f.now < f.snoozedUntil) return { kind: "wait", reason: "snoozed" };
+  const due = f.nudgeCount === 0 || (f.lastNudgeAt !== null && f.now - f.lastNudgeAt >= REBALANCE_REMIND_DAYS * 86_400_000);
+  if (!due) return { kind: "wait", reason: "not_due" };
+  if (f.nudgeCount >= REBALANCE_MAX_INVITES) return { kind: "escalate", reason: "no_response", detail: `${f.nudgeCount} invitations sent to review the rebalancing and it has not been acknowledged.` };
+  if (!inSendWindow(f.now, cfg)) return { kind: "wait", reason: "outside_send_window" };
+  return { kind: "nudge", reminder: f.nudgeCount > 0 };
+}
+
 export function decideReview(f: ReviewFacts, cfg: ReviewConfig = DEFAULT_REVIEW_CONFIG): ReviewDecision {
   if (f.status === "held" || f.status === "cancelled") return { kind: "wait", reason: f.status };
   if (f.status === "escalated") return { kind: "wait", reason: "with_a_person" };
   if (f.status === "paused") return { kind: "wait", reason: "paused" };
 
+  if (f.kind === "rebalancing") return decideRebalancing(f, cfg);
   const today = pacificDate(f.now);
   if (f.bookedStart !== null) return f.bookedStart < f.now ? { kind: "held" } : { kind: "booked" };
   if (f.invite === false) return { kind: "wait", reason: "tracking_only" };
@@ -174,15 +228,17 @@ export function windowEmail(i: { firstName: string; kind: ReviewKind; windowEnd:
   };
 }
 
-export const REVIEW_TASK_TITLE = (family: string, kind: ReviewKind) => `${KIND_LABEL[kind]} needs a person: ${family}`;
-export function reviewTaskBody(i: { reason: string; detail: string; family: string; kind: ReviewKind; windowStart: string; windowEnd: string; nudges: number; replyPreview?: string }): string {
+export const REVIEW_TASK_TITLE = (family: string, kind: ObligationKind) => `${KIND_LABEL[kind]} needs a person: ${family}`;
+export function reviewTaskBody(i: { reason: string; detail: string; family: string; kind: ObligationKind; windowStart: string; windowEnd: string; nudges: number; replyPreview?: string }): string {
   return [
     i.detail,
     ...(i.replyPreview ? ["", "What the client wrote:", `"${i.replyPreview}"`] : []),
     "",
     `Family: ${i.family}. ${KIND_LABEL[i.kind]} window: ${dateLabel(i.windowStart)} to ${dateLabel(i.windowEnd)}. Invitations sent: ${i.nudges}.`,
     "",
-    "Suggested next step: call or write to the family and book the meeting with them directly.",
+    i.kind === "rebalancing"
+      ? "Suggested next step: call or write to the family and walk them through the rebalancing, or ask them to acknowledge it in the portal."
+      : "Suggested next step: call or write to the family and book the meeting with them directly.",
     "",
     "Georgia has stopped contacting this family about this meeting. Mark this task done once it is resolved.",
   ].join("\n");
@@ -225,4 +281,34 @@ export function gateMeetingTypes<T extends { cadence_kind: string | null }>(type
     if (o.bookedStart) booked.push({ type: t, start: o.bookedStart }); else bookable.push(t);
   }
   return { bookable, booked };
+}
+
+// ───── Portfolio rebalancing: what the client reviews and acknowledges ─────
+// The wording is part of the client's consent record. Change it only by adding a new version; each acknowledgement stores the version,
+// the wording and the proposal the client was shown.
+export const REBALANCE_STATEMENT_VERSION = "2026-10-v2";
+export const REBALANCE_STATEMENT =
+  "I have reviewed the proposed rebalancing of my portfolio shown here and in my Documents. I authorize ProsperWise Advisors to carry it out. I understand I can ask to speak with Rolf before it is done.";
+
+export function windowLabel(windowStart: string, windowEnd: string): string {
+  const q = Math.floor((Number(windowEnd.slice(5, 7)) - 1) / 3) + 1;
+  return `Q${q} ${windowEnd.slice(0, 4)}`;
+}
+
+export function rebalancingEmail(i: { firstName: string; reminder: boolean; portalUrl: string; fromLine: string }): { subject: string; html: string } {
+  const lead = i.reminder
+    ? "A quick reminder: Rolf's proposed rebalancing of your portfolio is waiting for your review."
+    : "Rolf has prepared a rebalancing of your portfolio for your review.";
+  return {
+    subject: i.reminder ? "Reminder: your portfolio rebalancing is waiting for your review" : "Your portfolio rebalancing is ready for your review",
+    html: `
+    <div style="font-family:'DM Sans',sans-serif;color:#334155;max-width:520px;margin:0 auto;">
+      <p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;">Sovereignty Operating System™</p>
+      <p style="font-size:14px;line-height:1.6;">Hi ${escape(i.firstName || "there")},</p>
+      <p style="font-size:14px;line-height:1.6;">${lead} Please sign in to your portal to read it. When you are comfortable with it, you can acknowledge it there. If you would rather talk it through first, you can book a time from the same page.</p>
+      <p style="margin:20px 0;"><a href="${i.portalUrl}" style="background:#1e293b;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:6px;font-size:14px;">Open your portal</a></p>
+      <p style="font-size:13px;line-height:1.6;color:#64748b;">This is an automated email from ${i.fromLine}. If you need to get in touch with Rolf, just reply to this email, and I'll make sure he gets it.</p>
+      <p style="font-size:14px;line-height:1.6;margin-top:24px;">Georgia<br/><span style="font-size:12px;color:#94a3b8;">AI Assistant, ProsperWise</span></p>
+    </div>`.trim(),
+  };
 }
