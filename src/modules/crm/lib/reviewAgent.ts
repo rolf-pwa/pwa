@@ -46,6 +46,10 @@ export interface PortfolioPackResponse {
 export const getPortfolioPack = (householdId: string) => call<PortfolioPackResponse>("portfolioPack", { householdId });
 export const saveInvestorProfile = (p: { householdId: string; accountNumber?: string | null; profileKey?: string; label?: string; incomePct?: number; bandPct?: number }) => call<{ ok: true }>("saveInvestorProfile", p);
 export const saveGuaranteeReset = (householdId: string, accountNumber: string, lastResetDate: string | null) => call<{ ok: true }>("saveGuaranteeReset", { householdId, accountNumber, lastResetDate });
+import type { ModelValidation, ParsedModel } from "../../../../supabase/functions/_shared/ia-model-parse";
+export type { ModelValidation, ParsedModel };
+export const readModelPdf = (pdfBase64: string) => call<{ validation: ModelValidation }>("readModelPdf", { pdfBase64 });
+export const saveModels = (asOf: string, models: ParsedModel[], sourceFile: string) => call<{ ok: true; asOf: string }>("saveModels", { asOf, models, sourceFile });
 export const deleteInvestorProfile = (householdId: string, accountNumber: string | null) => call<{ ok: true }>("deleteInvestorProfile", { householdId, accountNumber });
 export const setReviewMode = (mode: ReviewMode, confirm = false) => call<{ ok: true; mode: ReviewMode }>("setMode", { mode, confirm });
 export const setReviewPaused = (obligationId: string, paused: boolean) => call<{ ok: true }>("setPaused", { obligationId, paused });
@@ -101,6 +105,7 @@ export function describeReviewEvent(e: Pick<ReviewEvent, "kind" | "detail">): st
     case "paused": return `Paused by ${d.by ?? "staff"}`;
     case "resumed": return `Resumed by ${d.by ?? "staff"}`;
     case "reminder_mode_changed": return `Meeting reminders changed from ${d.from ?? "?"} to ${d.to} by ${d.by ?? "staff"}`;
+    case "ia_models_saved": return `iA model portfolios as at ${d.as_of ?? "?"} saved by ${d.by ?? "staff"}`;
     case "mode_changed": return `Mode changed from ${d.from ?? "?"} to ${d.to} by ${d.by ?? "staff"}`;
     default: return e.kind.replace(/_/g, " ");
   }
