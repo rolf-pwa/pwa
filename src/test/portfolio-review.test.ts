@@ -99,3 +99,13 @@ describe("death benefit resets", () => {
     expect(r.rows[0].turns85On).toBe("2026-12-01");
   });
 });
+
+describe("zero balances", () => {
+  it("are left out of the pack entirely", () => {
+    const p = buildPortfolioPack({ accounts: [acct(), acct({ id: "z", name: "Empty", number: "999", value: 0, statement: null, guarantee: { series: "Series 75/100", maturityDate: null, guaranteedAtMaturity: 0, guaranteedAtDeath: 247, lastQuarterFee: 0, valueOfFunds: 0 } })], profiles: [], today: "2026-10-14" });
+    expect(p.accounts.map((a) => a.id)).toEqual(["a1"]);
+    expect(p.totalValue).toBe(100_000);
+    expect(p.gaps.some((g) => /Empty/.test(g))).toBe(false);
+    expect(p.resets.rows).toEqual([]);
+  });
+});

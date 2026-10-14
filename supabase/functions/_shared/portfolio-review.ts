@@ -152,7 +152,9 @@ const money = (n: number) => n.toLocaleString("en-CA", { style: "currency", curr
 const norm = (s: string | null | undefined) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
 export function buildPortfolioPack(input: { accounts: PackAccount[]; profiles: InvestorProfile[]; today: string }): Pack {
-  const { accounts, profiles, today } = input;
+  const { profiles, today } = input;
+  // A zero balance has nothing to review: leave it out of the totals, the allocation, the gaps and the reset list.
+  const accounts = input.accounts.filter((a) => !(a.value !== null && a.value <= 0));
   const householdProfile = profiles.find((p) => !p.accountNumber) ?? null;
   const profileFor = (a: PackAccount): InvestorProfile | null => profiles.find((p) => p.accountNumber && norm(p.accountNumber) === norm(a.number)) ?? householdProfile;
 
