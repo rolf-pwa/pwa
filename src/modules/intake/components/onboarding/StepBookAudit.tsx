@@ -27,7 +27,7 @@ interface Props {
   onCheckBooking?: () => Promise<boolean>;
 }
 
-/** Step 1 — book the Sovereignty Survey session. */
+/** Final step — book the Survey Session with Rolf, the conversation that completes your Sovereignty Survey. */
 export const StepBookAudit = ({
   fullName,
   email,
@@ -90,10 +90,10 @@ export const StepBookAudit = ({
     <Card>
       <CardContent className="space-y-5 p-6">
         <div className="space-y-1.5">
-          <h2 className="font-serif text-lg font-semibold text-foreground">Book your Survey</h2>
+          <h2 className="font-serif text-lg font-semibold text-foreground">Book your Survey Session</h2>
           <p className="text-sm text-muted-foreground">
-            Your payment is confirmed{serviceName ? ` for the ${serviceName}` : ""}. Pick a time
-            below — the session runs about 90 minutes, and there is nothing to prepare beforehand.
+            This is the last step. Pick a time below to sit down with Rolf. The session runs about 90
+            minutes, and everything you have shared is already in front of him, so there is nothing more to prepare.
           </p>
         </div>
 
@@ -129,7 +129,7 @@ export const StepBookAudit = ({
           ) : (
             <CalendarCheck className="h-4 w-4" />
           )}
-          Continue to next step
+          I've booked my session
         </Button>
       </CardContent>
     </Card>

@@ -24,6 +24,7 @@ export interface OnboardingState {
     address: string;
     step: number;
     auditBookedAt: string | null;
+    documentsCompletedAt: string | null;
     profileCompletedAt: string | null;
     wealthEventType: WealthEventType | null;
     wealthEventNotes: string;

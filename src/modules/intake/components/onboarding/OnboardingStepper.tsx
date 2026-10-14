@@ -8,11 +8,11 @@ export interface OnboardingStepMeta {
 }
 
 export const ONBOARDING_STEPS: OnboardingStepMeta[] = [
-  { id: 1, title: "Book your Survey", hint: "Pick the time that suits you" },
-  { id: 2, title: "Your household", hint: "Who we'll be working with" },
-  { id: 3, title: "Your wealth event", hint: "What brought you here" },
-  { id: 4, title: "A bit more context", hint: "Personal sudden-wealth events only" },
-  { id: 5, title: "Your documents", hint: "Upload what you have" },
+  { id: 1, title: "Your household", hint: "Who we'll be working with" },
+  { id: 2, title: "Your wealth event", hint: "What brought you here" },
+  { id: 3, title: "A bit more context", hint: "Personal sudden-wealth events only" },
+  { id: 4, title: "Your documents", hint: "Upload what you have" },
+  { id: 5, title: "Book your Survey Session", hint: "Pick the time that suits you" },
 ];
 
 /** Legacy upgrades (existing clients staff enrolled) skip the payment-track

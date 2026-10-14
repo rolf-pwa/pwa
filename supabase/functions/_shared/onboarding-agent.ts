@@ -105,7 +105,7 @@ export function decideNext(f: CaseFacts, cfg: AgentConfig = DEFAULT_CONFIG): Dec
     return { kind: "escalate", reason: "no_response", detail: `${sent} reminders sent over several days with no response from the client.` };
   }
   if (!withinSendWindow(f.now, cfg)) return { kind: "wait", reason: "outside_send_window" };
-  return { kind: "nudge", step: f.surveyBooked ? "documents" : "survey" };
+  return { kind: "nudge", step: f.docsReceived ? "survey" : "documents" };
 }
 
 // ───── The message ─────

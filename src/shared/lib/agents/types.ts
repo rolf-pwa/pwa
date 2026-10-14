@@ -26,6 +26,9 @@ export interface IntakeChecklistItem {
   status?: string | null;
   receivedCount?: number;
   requirement?: "required" | "optional" | null;
+  /** Why this document is on the list ("Your inheritance"); null for the basics everyone sends. */
+  reason?: string | null;
+  description?: string | null;
 }
 
 export interface IntakeAuditSummary {

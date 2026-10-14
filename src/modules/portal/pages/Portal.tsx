@@ -20,7 +20,7 @@ import { PortalNotificationBell } from "@/modules/portal/components/PortalNotifi
 import { PortalMessages } from "@/modules/portal/components/PortalMessages";
 import { PortalVault } from "@/modules/portal/components/PortalVault";
 import { PortalShoeboxUpload } from "@/modules/portal/components/PortalShoeboxUpload";
-import { PortalIntakeBanner } from "@/modules/intake";
+import { PortalIntakeBanner, OnboardingSplashGate, markSplashSeen } from "@/modules/intake";
 import { OnboardingShell } from "@/modules/intake";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
 import { Input } from "@/shared/components/ui/input";
@@ -1416,11 +1416,23 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
       return (
         <OnboardingShell
           portalToken={portalToken}
-          onBack={() => navigate(token ? `/portal/${token}` : "/portal")}
+          onBack={() => { markSplashSeen(portalToken); navigate(token ? `/portal/${token}` : "/portal"); }}
           onAskForHelp={() => setGeorgiaOpen(true)}
         />
       );
     }
+    // Until onboarding is done, the portal opens on Georgia's welcome (see OnboardingSplashGate).
+    return (
+      <OnboardingSplashGate
+        portalToken={portalToken}
+        onContinue={() => navigate(token ? `/portal/${token}/intake` : "/portal/intake")}
+        onAskForHelp={() => setGeorgiaOpen(true)}
+      >
+        {renderMain()}
+      </OnboardingSplashGate>
+    );
+  };
+  const renderMain = () => {
     if (drilldown.level === "family" && hierarchyLevel === "family") {
       return renderFamilyView();
     }

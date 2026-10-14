@@ -20,10 +20,9 @@ interface Props {
 }
 
 /**
- * Guided Sovereignty Survey onboarding. New clients: Book Audit → Household →
- * Wealth event → Household context (personal sudden-wealth events only —
- * skipped straight to Documents for business_exit/business_growth) →
- * Documents. Legacy upgrades (existing clients staff enrolled, no payment):
+ * Guided Sovereignty Survey onboarding. New clients: Household → Wealth event →
+ * Household context (personal sudden-wealth events only — skipped straight to
+ * Documents for business_exit/business_growth) → Documents → Book the Survey Session. Legacy upgrades (existing clients staff enrolled, no payment):
  * Household info → Vision & values → Documents → Book meeting — no Household
  * context step at all (no triggering wealth event to gate it on), different
  * order and content throughout, since nothing "brought them here" and there's
@@ -146,109 +145,96 @@ export const OnboardingShell = ({ portalToken, onBack, onAskForHelp }: Props) =>
         </div>
       )}
 
-      {current === 1 &&
-        (isLegacy ? (
-          <StepHouseholdProfile
-            state={state}
+      {/* Legacy upgrades: Household info, Vision & values, Documents, Book meeting. */}
+      {isLegacy && current === 1 && (
+        <StepHouseholdProfile
+          state={state}
+          saving={saving}
+          onSave={async (input) => {
+            const ok = await saveProfile(input);
+            if (ok) setCurrent(2);
+          }}
+        />
+      )}
+      {isLegacy && current === 2 && (
+        <StepVisionValues
+          state={state}
+          saving={saving}
+          onSave={async (vision, values, purpose) => {
+            const ok = await saveVisionValues(vision, values, purpose);
+            if (ok) setCurrent(3);
+          }}
+        />
+      )}
+      {isLegacy && current === 3 && (
+        <PortalIntakePage
+          portalToken={portalToken}
+          onBack={onBack}
+          onComplete={state.household.step < 4 ? () => void markDocumentsComplete() : undefined}
+        />
+      )}
+      {isLegacy && current === 4 && (
+        <div className="space-y-4">
+          <StepBookMeeting
+            fullName={state.contact.fullName}
+            email={state.contact.email}
             saving={saving}
-            onSave={async (input) => {
-              const ok = await saveProfile(input);
-              if (ok) setCurrent(2);
-            }}
+            onConfirm={() => void confirmMeetingBooked()}
           />
-        ) : (
+          {completionBanner}
+        </div>
+      )}
+
+      {/* Everyone else: Household, Wealth event, Context (personal events only), Documents, then the Survey Session last. */}
+      {!isLegacy && current === 1 && (
+        <StepHouseholdProfile
+          state={state}
+          saving={saving}
+          onSave={async (input) => {
+            const ok = await saveProfile(input);
+            if (ok) setCurrent(2);
+          }}
+        />
+      )}
+      {!isLegacy && current === 2 && (
+        <StepWealthEvent
+          state={state}
+          saving={saving}
+          onSave={async (type, notes) => {
+            // Personal events land on Household Context next; business events skip it and land on Documents. The server decides which
+            // via household.step, so the furthest-tracking effect above follows it forward.
+            await saveWealthEvent(type, notes);
+          }}
+        />
+      )}
+      {!isLegacy && current === 3 && (
+        <StepHouseholdContext
+          state={state}
+          saving={saving}
+          onSave={async (input) => {
+            const ok = await saveHouseholdContext(input);
+            if (ok) setCurrent(4);
+          }}
+        />
+      )}
+      {!isLegacy && current === 4 && (
+        <PortalIntakePage
+          portalToken={portalToken}
+          onBack={onBack}
+          onComplete={state.household.documentsCompletedAt ? undefined : () => void markDocumentsComplete()}
+        />
+      )}
+      {!isLegacy && current === 5 && (
+        <div className="space-y-4">
           <StepBookAudit
             fullName={state.contact.fullName}
             email={state.contact.email}
             serviceName={state.booking?.serviceName ?? null}
             schedulingUrl={state.booking?.schedulingUrl ?? null}
             bookedAt={state.household.auditBookedAt}
-            onCheckBooking={async () => {
-              const found = await checkAuditBooking();
-              if (found) setCurrent(2);
-              return found;
-            }}
+            onCheckBooking={checkAuditBooking}
             saving={saving}
-            onConfirm={async () => {
-              const ok = await confirmAuditBooked();
-              if (ok) setCurrent(2);
-            }}
-          />
-        ))}
-
-      {current === 2 &&
-        (isLegacy ? (
-          <StepVisionValues
-            state={state}
-            saving={saving}
-            onSave={async (vision, values, purpose) => {
-              const ok = await saveVisionValues(vision, values, purpose);
-              if (ok) setCurrent(3);
-            }}
-          />
-        ) : (
-          <StepHouseholdProfile
-            state={state}
-            saving={saving}
-            onSave={async (input) => {
-              const ok = await saveProfile(input);
-              if (ok) setCurrent(3);
-            }}
-          />
-        ))}
-
-      {current === 3 &&
-        (isLegacy ? (
-          <PortalIntakePage
-            portalToken={portalToken}
-            onBack={onBack}
-            onComplete={state.household.step < 4 ? () => void markDocumentsComplete() : undefined}
-          />
-        ) : (
-          <StepWealthEvent
-            state={state}
-            saving={saving}
-            onSave={async (type, notes) => {
-              // Personal events land on Household Context (step 4) next;
-              // corporate events skip it entirely and land on Documents (step
-              // 5) instead — the server decides which via household.step, so
-              // just let the furthest-tracking effect above follow it forward
-              // rather than hardcoding a target step here.
-              await saveWealthEvent(type, notes);
-            }}
-          />
-        ))}
-
-      {current === 4 &&
-        (isLegacy ? (
-          <div className="space-y-4">
-            <StepBookMeeting
-              fullName={state.contact.fullName}
-              email={state.contact.email}
-              saving={saving}
-              onConfirm={() => void confirmMeetingBooked()}
-            />
-            {completionBanner}
-          </div>
-        ) : (
-          <StepHouseholdContext
-            state={state}
-            saving={saving}
-            onSave={async (input) => {
-              const ok = await saveHouseholdContext(input);
-              if (ok) setCurrent(5);
-            }}
-          />
-        ))}
-
-      {current === 5 && !isLegacy && (
-        <div className="space-y-4">
-          <PortalIntakePage
-            portalToken={portalToken}
-            onBack={onBack}
-            onComplete={
-              state.household.onboardingCompletedAt ? undefined : () => void markDocumentsComplete()
-            }
+            onConfirm={() => void confirmAuditBooked()}
           />
           {completionBanner}
         </div>
