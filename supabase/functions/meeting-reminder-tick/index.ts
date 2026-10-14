@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
     if (!inReminderHours(now, c.send_start_hour, c.send_end_hour)) return json({ ok: true, mode, quiet: true });
 
     const { data: types } = await db.from("meeting_types").select("label, client_label, reminders, event_title").eq("active", true);
-    const { data: people } = await db.from("contacts").select("id, first_name, email, is_minor").not("email", "is", null);
+    const { data: people } = await db.from("contacts").select("id, first_name, email, is_minor").eq("no_automated_email", false).not("email", "is", null);
     const byEmail = new Map<string, { id: string; firstName: string }>();
     for (const p of people ?? []) {
       const e = String(p.email ?? "").trim().toLowerCase();

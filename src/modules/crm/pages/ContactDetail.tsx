@@ -24,6 +24,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator
 } from "@/shared/components/ui/dropdown-menu";
 import { SidebarSection } from "@/shared/components/SidebarSection";
+import { NoAutomatedEmailControl } from "@/modules/crm/components/NoAutomatedEmailControl";
 import { ContactTotalsStrip } from "@/modules/crm/components/ContactTotalsStrip";
 import { CollapsibleCard } from "@/shared/components/CollapsibleCard";
 import { toast } from "sonner";
@@ -614,6 +615,13 @@ const ContactDetail = () => {
                       </Badge>
                     )}
                   </div>
+                  <NoAutomatedEmailControl
+                    contactId={contact.id}
+                    firstName={contact.first_name}
+                    flagged={!!(contact as any).no_automated_email}
+                    note={(contact as any).no_automated_email_note ?? null}
+                    onChanged={(patch) => setContact((c: any) => (c ? { ...c, ...patch } : c))}
+                  />
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">

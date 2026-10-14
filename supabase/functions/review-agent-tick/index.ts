@@ -54,10 +54,10 @@ Deno.serve(async (req) => {
     const { data: hhs } = await db.from("households").select("id, family_id, label, service_tier, relationship_ended_at");
     const units = reviewUnits((allFamilies ?? []) as any[], (hhs ?? []) as any[]);
     const unitByKey = new Map(units.map((u) => [u.key, u]));
-    const { data: allContacts } = await db.from("contacts").select("id, family_id, first_name, last_name, email, family_role, is_minor, household_id").in("family_id", [...new Set(units.map((u) => u.familyId))]);
+    const { data: allContacts } = await db.from("contacts").select("id, family_id, first_name, last_name, email, family_role, is_minor, household_id, no_automated_email").in("family_id", [...new Set(units.map((u) => u.familyId))]);
     const contactsOf = new Map<string, FamilyContact[]>();
     for (const p of allContacts ?? []) {
-      const person: FamilyContact = { id: p.id, firstName: p.first_name, lastName: p.last_name, email: p.email, role: p.family_role, isMinor: p.is_minor, householdId: p.household_id };
+      const person: FamilyContact = { id: p.id, firstName: p.first_name, lastName: p.last_name, email: p.email, role: p.family_role, isMinor: p.is_minor, householdId: p.household_id, noAutoEmail: p.no_automated_email };
       // A household that stands alone writes only to its own adults; a pooled family to all of them.
       for (const k of new Set([unitKey(p.family_id, null), unitKey(p.family_id, p.household_id)])) {
         const list = contactsOf.get(k) ?? [];

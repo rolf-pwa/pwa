@@ -194,7 +194,7 @@ export function decideReview(f: ReviewFacts, cfg: ReviewConfig = DEFAULT_REVIEW_
 }
 
 // ───── Who is invited ─────
-export interface FamilyContact { id: string; firstName: string | null; lastName: string | null; email: string | null; role: string | null; isMinor: boolean | null; householdId?: string | null }
+export interface FamilyContact { id: string; firstName: string | null; lastName: string | null; email: string | null; role: string | null; isMinor: boolean | null; householdId?: string | null; noAutoEmail?: boolean | null }
 /**
  * Is this person one of the family's two adults for review meetings and rebalancing? The head of family, or their spouse. A family can
  * hold several households (a parent and an adult child's), each with its own "spouse": only the one in the head of family's own
@@ -216,6 +216,7 @@ export function inviteesOf(contacts: FamilyContact[]): { contactId: string; firs
   const hofHouseholds = contacts.filter((c) => c.role === "head_of_family").map((c) => c.householdId);
   for (const c of contacts) {
     if (!isFamilyAdult(c, hofHouseholds)) continue;
+    if (c.noAutoEmail) continue; // asked not to be emailed: a person follows up instead
     const email = (c.email ?? "").trim().toLowerCase();
     if (!email || seen.has(email)) continue;
     seen.add(email);
