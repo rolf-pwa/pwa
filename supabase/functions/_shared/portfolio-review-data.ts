@@ -10,8 +10,8 @@ const num = (v: unknown) => (v === null || v === undefined || v === "" || !Numbe
 export async function portfolioPackFor(db: any, householdId: string, today: string) {
   const { data: people } = await db.from("contacts").select("id, first_name, last_name, full_name, date_of_birth").eq("household_id", householdId);
   const contactIds = (people ?? []).map((p: any) => p.id);
-  const dobOf = new Map((people ?? []).map((p: any) => [p.id, p.date_of_birth as string | null]));
-  const ownerOf = new Map((people ?? []).map((p: any) => [p.id, p.full_name || `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim()]));
+  const dobOf = new Map<string, string | null>((people ?? []).map((p: any) => [p.id as string, (p.date_of_birth ?? null) as string | null]));
+  const ownerOf = new Map<string, string>((people ?? []).map((p: any) => [p.id as string, (p.full_name || `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim()) as string]));
 
   const [{ data: tankRows }, { data: vineRows }] = await Promise.all([
     db.from("holding_tank").select("id, contact_id, account_name, account_number, account_type, custodian, current_value, book_value").or(`household_id.eq.${householdId}${contactIds.length ? `,contact_id.in.(${contactIds.join(",")})` : ""}`).neq("status", "moved"),
@@ -63,7 +63,7 @@ export async function portfolioPackFor(db: any, householdId: string, today: stri
   }
 
   const { data: resetRows } = await db.from("guarantee_resets").select("account_number, last_reset_date").eq("household_id", householdId);
-  const lastReset = new Map((resetRows ?? []).map((r: any) => [norm(r.account_number), r.last_reset_date as string | null]));
+  const lastReset = new Map<string, string | null>((resetRows ?? []).map((r: any) => [norm(r.account_number), (r.last_reset_date ?? null) as string | null]));
 
   const packAccounts: PackAccount[] = accounts.map((a: any) => {
     const snaps = snapsOf(a);

@@ -32,7 +32,7 @@ const DAY = 86_400_000;
 const db = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "Content-Type": "application/json" } });
 
-type Summary = Record<string, number> & { errors: string[] };
+interface Summary { created: number; cancelled: number; evaluated: number; booked: number; held: number; nudges: number; escalations: number; waiting: number; errors: string[] }
 const familyTitle = (name: string | null) => { const n = (name ?? "").trim(); return !n ? "Family" : /\bfamily$/i.test(n) || n.includes(": ") ? n : `${n} Family`; };
 
 Deno.serve(async (req) => {

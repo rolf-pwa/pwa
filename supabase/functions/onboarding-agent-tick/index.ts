@@ -26,6 +26,7 @@ const CRON_SECRET = Deno.env.get("ONBOARDING_AGENT_CRON_SECRET");
 // Escalations go to Rolf until households record an advisor.
 const ESCALATION_ASSIGNEE_EMAIL = "rolf@prosperwise.ca";
 const MAX_CASES = 40;
+interface Summary { opened: number; evaluated: number; complete: number; nudges: number; vaultRetries: number; escalations: number; waiting: number; errors: string[] }
 // The From header. Gmail only shows a custom display name ("Georgia, AI Assistant") when the address is a "send as" alias
 // of the connected mailbox, so set ONBOARDING_AGENT_FROM to e.g. "Georgia, AI Assistant <georgia@prosperwise.ca>" once that alias exists.
 
@@ -35,7 +36,7 @@ const ms = (v: string | null | undefined) => (v ? Date.parse(v) : null);
 
 Deno.serve(async (req) => {
   if (!CRON_SECRET || req.headers.get("x-onboarding-agent-cron-secret") !== CRON_SECRET) return json({ error: "unauthorized" }, 401);
-  const summary: Record<string, number> & { errors: string[] } = { opened: 0, evaluated: 0, complete: 0, nudges: 0, vaultRetries: 0, escalations: 0, waiting: 0, errors: [] };
+  const summary: Summary = { opened: 0, evaluated: 0, complete: 0, nudges: 0, vaultRetries: 0, escalations: 0, waiting: 0, errors: [] };
   try {
     const { data: c } = await db.from("onboarding_agent_config").select("*").eq("id", true).maybeSingle();
     if (!c || c.mode === "off") return json({ ok: true, mode: "off" });
@@ -91,7 +92,7 @@ async function event(householdId: string, caseId: string | null, mode: string, k
   await db.from("onboarding_agent_events").insert({ household_id: householdId, case_id: caseId, mode, kind, detail });
 }
 
-async function work(k: any, mode: "shadow" | "live", cfg: AgentConfig, summary: Record<string, number> & { errors: string[] }) {
+async function work(k: any, mode: "shadow" | "live", cfg: AgentConfig, summary: Summary) {
   const now = Date.now();
   const { data: hh } = await db.from("households").select("id, label, family_id, created_at, onboarding_enabled, vault_root_folder_id, audit_booked_at, profile_completed_at, wealth_event_completed_at, household_context_completed_at").eq("id", k.household_id).maybeSingle();
   if (!hh) return;
@@ -207,7 +208,7 @@ async function escalateCase(k: any, hh: any, lead: any, facts: CaseFacts, mode: 
 }
 
 /** Looks for replies in the case's Gmail threads. Returns true when it acted (so the normal decision is skipped this tick). */
-async function handleReplies(k: any, hh: any, lead: any, facts: CaseFacts, ids: Record<string, string>, summary: Record<string, number> & { errors: string[] }): Promise<boolean> {
+async function handleReplies(k: any, hh: any, lead: any, facts: CaseFacts, ids: Record<string, string>, summary: Summary): Promise<boolean> {
   const token = await getServiceGoogleAccessToken(db);
   const messages = (await Promise.all((k.thread_ids as string[]).map((t) => fetchThread(token, t)))).flat();
   const { client, staff } = inboundReplies(messages, { sentIds: k.sent_message_ids ?? [], handledIds: k.handled_message_ids ?? [] });

@@ -661,6 +661,7 @@ async function handleInhouseUpload(
   // Classify asynchronously so the upload response returns immediately.
   // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
   if (typeof EdgeRuntime !== "undefined") {
+    // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
     EdgeRuntime.waitUntil(
       classifyDocument(
         classification!.id,
