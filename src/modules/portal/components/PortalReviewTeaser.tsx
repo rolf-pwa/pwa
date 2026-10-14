@@ -46,12 +46,12 @@ const whenLong = (iso: string) => new Date(iso).toLocaleString("en-CA", { weekda
  * opens the scheduler right here when it can be embedded. If the meeting is already booked it says when instead. Opening the page
  * clears the "New" badge.
  */
-export function PortalReviewPage({ review, onBack, meetingTypes = [], booked = [] }: { review: { id: string; view: ClientView; publishedAt: string } | null; onBack: () => void; meetingTypes?: ReviewMeetingType[]; booked?: ReviewBooked[] }) {
+export function PortalReviewPage({ review, onBack, meetingTypes = [], booked = [] }: { review: { id: string; view: ClientView; publishedAt: string; booking?: ReviewMeetingType | null } | null; onBack: () => void; meetingTypes?: ReviewMeetingType[]; booked?: ReviewBooked[] }) {
   useEffect(() => { if (review) markReviewSeen(review.id); }, [review]);
   const [embedded, setEmbedded] = useState<ReviewMeetingType | null>(null);
   const already = booked.find((b) => /portfolio review/i.test(b.label));
-  // The Portfolio Review meeting when it can be booked now; otherwise an Interim Strategy Session, so there is always a way to book.
-  const type = meetingTypes.find((t) => /portfolio review/i.test(t.label)) ?? meetingTypes.find((t) => /interim strategy/i.test(t.label)) ?? null;
+  // The Portfolio Review scheduler (always offered from the review); failing that one that can be booked now, or an Interim Strategy Session.
+  const type = review?.booking ?? meetingTypes.find((t) => /portfolio review/i.test(t.label)) ?? meetingTypes.find((t) => /interim strategy/i.test(t.label)) ?? null;
   const open = () => {
     if (!type) return;
     if (type.embedUrl && type.embedUrl !== type.url) setEmbedded(type); else window.open(type.url, "_blank", "noopener,noreferrer");

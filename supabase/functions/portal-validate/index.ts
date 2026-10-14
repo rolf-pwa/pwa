@@ -627,12 +627,16 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
     }
 
     // The household's Portfolio Review, once Rolf has published it: only to its own adults, as it was when he approved it.
-    let portfolio_review: { id: string; publishedAt: string; view: unknown } | null = null;
+    let portfolio_review: { id: string; publishedAt: string; view: unknown; booking: { label: string; url: string; embedUrl: string } | null } | null = null;
     try {
       const c = contactRes.data;
       if (c?.household_id && !c.is_minor && ["head_of_household", "head_of_family", "spouse"].includes(String(c.family_role ?? ""))) {
         const { data: pub } = await supabase.from("portfolio_review_publications").select("id, published_at, view").eq("household_id", c.household_id).is("unpublished_at", null).order("published_at", { ascending: false }).limit(1).maybeSingle();
-        if (pub) portfolio_review = { id: pub.id, publishedAt: pub.published_at, view: pub.view };
+        if (pub) {
+          // The meeting to talk it through is always the Portfolio Review scheduler, whether or not that meeting is "owed" right now.
+          const { data: mt } = await supabase.from("meeting_types").select("label, client_label, url, embed_url").eq("active", true).ilike("label", "portfolio review").limit(1).maybeSingle();
+          portfolio_review = { id: pub.id, publishedAt: pub.published_at, view: pub.view, booking: mt ? { label: mt.client_label || mt.label, url: mt.url, embedUrl: mt.embed_url || mt.url } : null };
+        }
       }
     } catch (e) {
       console.error("[portal-validate] portfolio review fetch error", e);

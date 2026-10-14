@@ -58,3 +58,12 @@ describe("booking the meeting from the review page", () => {
     expect(screen.getByText(/Ask Georgia to find a time/)).toBeTruthy();
   });
 });
+
+describe("the review's own booking link", () => {
+  it("embeds the Portfolio Review scheduler even when it is not among the bookable meeting types", () => {
+    const review = { id: "p10", view: view(), publishedAt: "2026-10-20T16:00:00Z", booking: { label: "Portfolio Review", url: "https://calendar.app.google/iaBTzycNNPDr4BmX9", embedUrl: "https://calendar.google.com/calendar/appointments/schedules/abc?gv=true" } };
+    render(<PortalReviewPage review={review} onBack={() => {}} meetingTypes={[]} />);
+    fireEvent.click(screen.getByRole("button", { name: /Book your meeting/ }));
+    expect(document.querySelector("iframe")?.getAttribute("src")).toBe("https://calendar.google.com/calendar/appointments/schedules/abc?gv=true");
+  });
+});
