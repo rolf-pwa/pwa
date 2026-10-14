@@ -26,6 +26,7 @@ export default function PortfolioReview() {
   const [error, setError] = useState<string | null>(null);
   const [income, setIncome] = useState("");
   const [label, setLabel] = useState("");
+  const [profileKey, setProfileKey] = useState("");
   const [band, setBand] = useState("0");
   const [account, setAccount] = useState("");
   const [saving, setSaving] = useState(false);
@@ -38,9 +39,16 @@ export default function PortfolioReview() {
 
   const save = async () => {
     const v = Number(income);
-    if (!id || income === "" || !Number.isFinite(v) || v < 0 || v > 100) { toast.error("Enter the target income share, 0 to 100"); return; }
+    const isModel = profileKey !== "" && profileKey !== "custom";
+    if (!id || !profileKey) { toast.error("Choose a profile"); return; }
+    if (!isModel && (income === "" || !Number.isFinite(v) || v < 0 || v > 100)) { toast.error("Enter the target income share, 0 to 100"); return; }
     setSaving(true);
-    try { await saveInvestorProfile({ householdId: id, accountNumber: account || null, label, incomePct: v, bandPct: Number(band) || 0 }); setIncome(""); setLabel(""); await load(); toast.success("Investor Profile saved"); }
+    try {
+      // "All accounts" saves the same profile on every managed account (one at a time, as each account has its own profile).
+      const numbers = account === "__all__" ? (data?.pack.accounts ?? []).map((a) => a.number).filter((n): n is string => !!n) : [account || null];
+      for (const n of numbers) await saveInvestorProfile({ householdId: id, accountNumber: n, profileKey, label, incomePct: isModel ? undefined : v, bandPct: Number(band) || 0 });
+      setIncome(""); setLabel(""); setProfileKey(""); await load(); toast.success(numbers.length > 1 ? `Investor Profile saved on ${numbers.length} accounts` : "Investor Profile saved");
+    }
     catch (e: any) { toast.error(e?.message ?? "Couldn't save"); }
     finally { setSaving(false); }
   };
@@ -88,7 +96,7 @@ export default function PortfolioReview() {
                     </ul>
                     <p>
                       <span className="font-medium">{DRIFT_TEXT[d!.status]}.</span>{" "}
-                      {d!.status === "no_target" ? `Income is ${pct(d!.actualIncomePct)}. Add the Investor Profile below to compare.` : d!.status === "within" ? `Income ${pct(d!.actualIncomePct)} against a ${d!.targetIncomePct}% target.` : `Income ${pct(d!.actualIncomePct)} against a ${d!.targetIncomePct}% target (±${d!.bandPct}): about ${money(Math.abs(d!.moveToIncome ?? 0))} to move ${d!.status === "too_much_income" ? "into equity" : "into income"}.`}
+                      {d!.status === "no_target" ? `Income is ${pct(d!.actualIncomePct)}. Add the Investor Profile below to compare.` : d!.status === "within" ? (d!.rangeMin != null ? `Income ${pct(d!.actualIncomePct)} is inside the ${d!.profileLabel} range of ${d!.rangeMin}–${d!.rangeMax}% (model mix ${d!.targetIncomePct}%).` : `Income ${pct(d!.actualIncomePct)} against a ${d!.targetIncomePct}% target.`) : `Income ${pct(d!.actualIncomePct)} is outside ${d!.rangeMin != null ? `the ${d!.profileLabel} range of ${d!.rangeMin}–${d!.rangeMax}%` : `the ${d!.targetIncomePct}% target`}: about ${money(Math.abs(d!.moveToIncome ?? 0))} to move ${d!.status === "too_much_income" ? "into equity" : "into income"} to reach the ${d!.targetIncomePct}% mix.`}
                     </p>
                     <p className="text-xs text-muted-foreground">Covers {pct(p.household.coveragePct)} of managed value, from the latest statements read in the Vault scan.</p>
                   </>
@@ -169,15 +177,18 @@ export default function PortfolioReview() {
                 <p className="text-muted-foreground">The target mix from the client's Investor Profile (kept in their Investment folder). If it isn't on file, enter it during the review. An account's own profile overrides the household's.</p>
                 {data.profiles.map((pr) => (
                   <div key={pr.id} className="flex items-center justify-between gap-2 rounded-md border px-3 py-2">
-                    <span>{pr.account_number ? `Account ${pr.account_number}` : "Whole household"}{pr.label ? ` · ${pr.label}` : ""}: {pr.income_pct}% income / {pr.equity_pct}% equity {Number(pr.band_pct) > 0 ? ` (±${pr.band_pct})` : ""}{pr.updated_by ? <span className="text-xs text-muted-foreground"> · set by {pr.updated_by}</span> : null}</span>
+                    <span>{pr.account_number ? `Account ${pr.account_number}` : "Whole household"}{pr.label ? ` · ${pr.label}` : ""}: {(() => { const m = data.models.find((x) => x.key === pr.profile_key); return m ? `iA model, income ${m.incomeMin}–${m.incomeMax}% (model mix ${m.incomeTarget}/${100 - m.incomeTarget})` : `${pr.income_pct}% income / ${pr.equity_pct}% equity${Number(pr.band_pct) > 0 ? ` (±${pr.band_pct})` : ""}`; })()}{pr.updated_by ? <span className="text-xs text-muted-foreground"> · set by {pr.updated_by}</span> : null}</span>
                     <Button size="icon" variant="ghost" className="h-7 w-7" aria-label="Remove profile" onClick={async () => { try { await deleteInvestorProfile(id!, pr.account_number); await load(); } catch (e: any) { toast.error(e?.message ?? "Couldn't remove"); } }}><Trash2 className="h-3.5 w-3.5" /></Button>
                   </div>
                 ))}
                 <div className="flex flex-wrap items-end gap-2">
-                  <label className="text-xs">Applies to<select value={account} onChange={(e) => setAccount(e.target.value)} className="mt-1 block h-9 rounded-md border bg-background px-2 text-sm"><option value="">Whole household</option>{p.accounts.filter((a) => a.number).map((a) => <option key={a.id} value={a.number!}>{a.name || a.number}</option>)}</select></label>
-                  <label className="text-xs">Profile name<Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Balanced" className="mt-1 w-36" /></label>
-                  <label className="text-xs">Income %<Input value={income} onChange={(e) => setIncome(e.target.value)} inputMode="decimal" placeholder="40" className="mt-1 w-20" /></label>
-                  <label className="text-xs" title="iA holds an account to its profile on a hard line, so leave this at 0.">Band ±<Input value={band} onChange={(e) => setBand(e.target.value)} inputMode="decimal" className="mt-1 w-16" /></label>
+                  <label className="text-xs">Applies to<select value={account} onChange={(e) => setAccount(e.target.value)} className="mt-1 block h-9 rounded-md border bg-background px-2 text-sm"><option value="">Whole household</option><option value="__all__">Every account (same profile)</option>{p.accounts.filter((a) => a.number).map((a) => <option key={a.id} value={a.number!}>{a.name || a.number}</option>)}</select></label>
+                  <label className="text-xs">Profile<select value={profileKey} onChange={(e) => setProfileKey(e.target.value)} className="mt-1 block h-9 rounded-md border bg-background px-2 text-sm"><option value="">Choose…</option>{data.models.map((m) => <option key={m.key} value={m.key}>{m.label} (income {m.incomeMin}–{m.incomeMax}%)</option>)}<option value="custom">Custom</option></select></label>
+                  {profileKey === "custom" && (<>
+                    <label className="text-xs">Profile name<Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Name" className="mt-1 w-36" /></label>
+                    <label className="text-xs">Income %<Input value={income} onChange={(e) => setIncome(e.target.value)} inputMode="decimal" placeholder="40" className="mt-1 w-20" /></label>
+                    <label className="text-xs" title="Leave at 0 to hold the account to the target, as iA does.">Band ±<Input value={band} onChange={(e) => setBand(e.target.value)} inputMode="decimal" className="mt-1 w-16" /></label>
+                  </>)}
                   <Button size="sm" onClick={save} disabled={saving}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}</Button>
                 </div>
               </CardContent>

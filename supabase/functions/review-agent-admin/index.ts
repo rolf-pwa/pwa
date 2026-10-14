@@ -4,7 +4,7 @@
 //   setPaused         pause or resume one obligation
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { portfolioPackFor } from "../_shared/portfolio-review-data.ts";
+import { latestModels, portfolioPackFor } from "../_shared/portfolio-review-data.ts";
 import { pacificDate } from "../_shared/review-windows.ts";
 
 const ALLOWED_ORIGINS = [
@@ -123,19 +123,23 @@ Deno.serve(async (req) => {
       if (!householdId) return json({ error: "householdId required" }, 400);
       const { data: hh } = await db.from("households").select("id, label, family_id, service_tier, families(name)").eq("id", householdId).maybeSingle();
       if (!hh) return json({ error: "Household not found" }, 404);
-      const { pack, profiles } = await portfolioPackFor(db, householdId, pacificDate(Date.now()));
-      return json({ household: { id: hh.id, label: hh.label, family_id: hh.family_id, family_name: (hh as any).families?.name ?? null, service_tier: hh.service_tier }, pack, profiles });
+      const { pack, profiles, models } = await portfolioPackFor(db, householdId, pacificDate(Date.now()));
+      return json({ household: { id: hh.id, label: hh.label, family_id: hh.family_id, family_name: (hh as any).families?.name ?? null, service_tier: hh.service_tier }, pack, profiles, models });
     }
     if (action === "saveInvestorProfile") {
       const householdId = String(body?.householdId ?? "");
       const accountNumber = String(body?.accountNumber ?? "").trim() || null;
       const pct = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number(v));
-      const income = pct(body?.incomePct);
-      let equity = pct(body?.equityPct);
+      // A model profile takes its target from iA's published model; "custom" uses the numbers typed in.
+      const profileKey = String(body?.profileKey ?? "").trim().toLowerCase() || null;
+      const model = profileKey && profileKey !== "custom" ? (await latestModels(db)).find((m) => m.key === profileKey) ?? null : null;
+      if (profileKey && profileKey !== "custom" && !model) return json({ error: "Unknown profile" }, 400);
+      const income = model ? model.incomeTarget : pct(body?.incomePct);
+      let equity = model ? 100 - model.incomeTarget : pct(body?.equityPct);
       if (!householdId || income === null || !Number.isFinite(income) || income < 0 || income > 100) return json({ error: "Income % must be between 0 and 100" }, 400);
       if (equity === null) equity = 100 - income;
       const band = pct(body?.bandPct) ?? 0;
-      const row = { household_id: householdId, account_number: accountNumber, label: String(body?.label ?? "").trim().slice(0, 80) || null, income_pct: income, equity_pct: equity, band_pct: band, source: "manual", as_of: pacificDate(Date.now()), updated_by: staff.email, updated_at: new Date().toISOString() };
+      const row = { household_id: householdId, account_number: accountNumber, label: model ? model.label : String(body?.label ?? "").trim().slice(0, 80) || null, profile_key: model ? model.key : null, income_pct: income, equity_pct: equity, band_pct: band, source: "manual", as_of: pacificDate(Date.now()), updated_by: staff.email, updated_at: new Date().toISOString() };
       const lookup = db.from("investor_profiles").select("id").eq("household_id", householdId);
       const { data: found } = await (accountNumber === null ? lookup.is("account_number", null) : lookup.eq("account_number", accountNumber)).maybeSingle();
       const { error } = found?.id ? await db.from("investor_profiles").update(row).eq("id", found.id) : await db.from("investor_profiles").insert(row);

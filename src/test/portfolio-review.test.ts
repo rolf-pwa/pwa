@@ -109,3 +109,34 @@ describe("zero balances", () => {
     expect(p.resets.rows).toEqual([]);
   });
 });
+
+import { resolveProfile, type ModelPortfolio } from "../../supabase/functions/_shared/portfolio-review";
+
+describe("iA model portfolios", () => {
+  const balanced: ModelPortfolio = { asOf: "2026-05-31", key: "balanced", label: "Balanced", incomeMin: 35, incomeMax: 55, equityMin: 45, equityMax: 65, incomeTarget: 40, funds: [] };
+  const growth: ModelPortfolio = { ...balanced, key: "growth", label: "Growth", incomeMin: 20, incomeMax: 40, incomeTarget: 25 };
+  const funds = (income: number) => [{ name: "I", category: "Income Funds", value: income * 1000 }, { name: "E", category: "Canadian Equity funds", value: (100 - income) * 1000 }];
+  const prof = { accountNumber: null, label: null, incomePct: 40, equityPct: 60, bandPct: 0, profileKey: "balanced" };
+
+  it("takes the target and range from the model, not from what was typed", () => {
+    const r = resolveProfile({ ...prof, incomePct: 99 }, [balanced])!;
+    expect(r.incomePct).toBe(40);
+    expect([r.rangeMin, r.rangeMax]).toEqual([35, 55]);
+    expect(resolveProfile({ ...prof, profileKey: "custom" }, [balanced])!.rangeMin).toBeUndefined();
+  });
+  it("holds an account to the profile's income range", () => {
+    const r = resolveProfile(prof, [balanced])!;
+    expect(driftFor(classTotals(funds(41)), r).status).toBe("within");
+    expect(driftFor(classTotals(funds(36)), r).status).toBe("within");
+    expect(driftFor(classTotals(funds(34)), r).status).toBe("too_little_income");
+    expect(driftFor(classTotals(funds(31)), r).status).toBe("too_little_income");
+    expect(driftFor(classTotals(funds(60)), r).status).toBe("too_much_income");
+    expect(driftFor(classTotals(funds(34)), r).moveToIncome).toBe(6000);
+  });
+  it("flags the same accounts iA labels as a different profile, and says why", () => {
+    const p = buildPortfolioPack({ accounts: [acct({ number: "1", statement: { statementDate: "2026-09-30", funds: funds(34) } }), acct({ id: "a2", number: "2", statement: { statementDate: "2026-09-30", funds: funds(41) } })], profiles: [prof], today: "2026-10-14", models: [balanced, growth] });
+    expect(p.accounts.map((a) => a.drift.status)).toEqual(["too_little_income", "within"]);
+    expect(p.exceptions.some((e) => /outside the Balanced range \(35-55% income\)/.test(e.text))).toBe(true);
+    expect(p.modelAsOf).toBe("2026-05-31");
+  });
+});

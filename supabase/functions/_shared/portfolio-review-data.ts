@@ -2,7 +2,7 @@
 
 // deno-lint-ignore-file no-explicit-any
 import { MANAGED_CUSTODIANS } from "./monthly-import.ts";
-import { buildPortfolioPack, type Guarantee, type InvestorProfile, type PackAccount, type StatementFunds } from "./portfolio-review.ts";
+import { buildPortfolioPack, type Guarantee, type InvestorProfile, type ModelPortfolio, type PackAccount, type StatementFunds } from "./portfolio-review.ts";
 
 const norm = (s: string | null | undefined) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 const num = (v: unknown) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
@@ -83,6 +83,15 @@ export async function portfolioPackFor(db: any, householdId: string, today: stri
   });
 
   const { data: profRows } = await db.from("investor_profiles").select("*").eq("household_id", householdId);
-  const profiles: InvestorProfile[] = (profRows ?? []).map((p: any) => ({ accountNumber: p.account_number, label: p.label, incomePct: num(p.income_pct), equityPct: num(p.equity_pct), bandPct: num(p.band_pct) ?? 0, asOf: p.as_of, source: p.source }));
-  return { pack: buildPortfolioPack({ accounts: packAccounts, profiles, today }), profiles: profRows ?? [] };
+  const profiles: InvestorProfile[] = (profRows ?? []).map((p: any) => ({ accountNumber: p.account_number, label: p.label, incomePct: num(p.income_pct), equityPct: num(p.equity_pct), bandPct: num(p.band_pct) ?? 0, asOf: p.as_of, source: p.source, profileKey: p.profile_key ?? null }));
+  const models = await latestModels(db);
+  return { pack: buildPortfolioPack({ accounts: packAccounts, profiles, today, models }), profiles: profRows ?? [], models };
+}
+
+/** The newest published set of iA model portfolios. */
+export async function latestModels(db: any): Promise<ModelPortfolio[]> {
+  const { data: newest } = await db.from("ia_model_portfolios").select("as_of").order("as_of", { ascending: false }).limit(1).maybeSingle();
+  if (!newest?.as_of) return [];
+  const { data } = await db.from("ia_model_portfolios").select("*").eq("as_of", newest.as_of).order("sort_order");
+  return (data ?? []).map((m: any) => ({ asOf: m.as_of, key: m.profile_key, label: m.label, incomeMin: Number(m.income_min), incomeMax: Number(m.income_max), equityMin: Number(m.equity_min), equityMax: Number(m.equity_max), incomeTarget: Number(m.income_target), funds: Array.isArray(m.funds) ? m.funds : [] }));
 }
