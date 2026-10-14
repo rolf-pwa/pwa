@@ -6,6 +6,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { latestModels, portfolioPackFor } from "../_shared/portfolio-review-data.ts";
 import { pacificDate } from "../_shared/review-windows.ts";
+import { MODEL_PROMPT, validateModels } from "../_shared/ia-model-parse.ts";
+import { GEMINI_EXTRACT_MODEL, extractJson, generateVertexContent, parseServiceAccountKey, withThinking } from "../_shared/vertex-ai.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -125,6 +127,27 @@ Deno.serve(async (req) => {
       if (!hh) return json({ error: "Household not found" }, 404);
       const { pack, profiles, models } = await portfolioPackFor(db, householdId, pacificDate(Date.now()));
       return json({ household: { id: hh.id, label: hh.label, family_id: hh.family_id, family_name: (hh as any).families?.name ?? null, service_tier: hh.service_tier }, pack, profiles, models });
+    }
+    // ── iA model portfolios: upload the published PDF, check what was read, then save it as a new dated set ──
+    if (action === "readModelPdf") {
+      const b64 = String(body?.pdfBase64 ?? "");
+      if (!b64) return json({ error: "pdfBase64 required" }, 400);
+      if (b64.length > 8_000_000) return json({ error: "That file is too large (limit about 5 MB)." }, 400);
+      const sa = await parseServiceAccountKey(Deno.env.get("GCP_SERVICE_ACCOUNT_KEY"));
+      const result = await generateVertexContent(sa, GEMINI_EXTRACT_MODEL, [{ role: "user", parts: [{ text: MODEL_PROMPT }, { inlineData: { mimeType: "application/pdf", data: b64 } }] }], withThinking(GEMINI_EXTRACT_MODEL, { temperature: 0.1, maxOutputTokens: 8000 }, "minimal"));
+      let raw: any;
+      try { raw = extractJson(result.candidates?.[0]?.content?.parts?.[0]?.text ?? ""); } catch { return json({ error: "The document could not be read as model portfolios." }, 422); }
+      return json({ validation: validateModels(raw, pacificDate(Date.now())) });
+    }
+    if (action === "saveModels") {
+      // Re-checked here: the browser's preview is not trusted.
+      const v = validateModels({ as_of: body?.asOf, portfolios: (body?.models ?? []).map((m: any) => ({ profile: m.key, income_min: m.incomeMin, income_max: m.incomeMax, equity_min: m.equityMin, equity_max: m.equityMax, funds: m.funds, fixed_income_weight: m.incomeTarget })) }, pacificDate(Date.now()));
+      if (!v.ok || !v.parsed.asOf) return json({ error: v.errors.join(" ") || "Not valid" }, 400);
+      const rows = v.parsed.models.map((m, i) => ({ as_of: v.parsed.asOf, profile_key: m.key, label: m.label, sort_order: i + 1, income_min: m.incomeMin, income_max: m.incomeMax, equity_min: m.equityMin, equity_max: m.equityMax, income_target: m.incomeTarget, funds: m.funds, source_file: String(body?.sourceFile ?? "").slice(0, 200) || null }));
+      const { error } = await db.from("ia_model_portfolios").upsert(rows, { onConflict: "as_of,profile_key" });
+      if (error) return json({ error: error.message }, 400);
+      await db.from("review_agent_events").insert({ family_id: null, mode: "live", kind: "ia_models_saved", detail: { as_of: v.parsed.asOf, by: staff.email, file: body?.sourceFile ?? null } });
+      return json({ ok: true, asOf: v.parsed.asOf });
     }
     if (action === "saveInvestorProfile") {
       const householdId = String(body?.householdId ?? "");

@@ -10,6 +10,7 @@ import { Input } from "@/shared/components/ui/input";
 import { deleteInvestorProfile, getPortfolioPack, saveGuaranteeReset, saveInvestorProfile, type PortfolioPackResponse } from "@/modules/crm/lib/reviewAgent";
 import { CLASS_LABEL, type AssetClass, type DriftStatus, type ModelComparison } from "../../../../supabase/functions/_shared/portfolio-review";
 import { SERVICE_TIER_LABEL, type ServiceTier } from "@/shared/lib/serviceTier";
+import { IaModelUpload } from "@/modules/crm/components/IaModelUpload";
 
 const money = (n: number | null | undefined) => (n === null || n === undefined ? "—" : n.toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }));
 const pct = (n: number | null | undefined) => (n === null || n === undefined ? "—" : `${n.toFixed(1)}%`);
@@ -240,6 +241,7 @@ export default function PortfolioReview() {
                 </div>
               </CardContent>
             </Card>
+            <IaModelUpload currentAsOf={data.models[0]?.asOf ?? null} onSaved={load} />
           </>
         )}
       </div>
