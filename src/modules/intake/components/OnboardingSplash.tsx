@@ -42,7 +42,7 @@ export function currentSplashIndex(state: Pick<OnboardingState, "household">, st
   return i === -1 ? steps.length - 1 : i;
 }
 
-interface SplashProps { state: OnboardingState; onContinue: () => void; onLookAround: () => void; onAskForHelp: () => void }
+interface SplashProps { state: OnboardingState; onContinue: (stepId?: number) => void; onLookAround: () => void; onAskForHelp: () => void }
 
 export function OnboardingSplash({ state, onContinue, onLookAround, onAskForHelp }: SplashProps) {
   const steps = splashStepsFor(state);
@@ -68,7 +68,9 @@ export function OnboardingSplash({ state, onContinue, onLookAround, onAskForHelp
           const done = i < current;
           const isCurrent = i === current;
           return (
-            <li key={s.id} className={`rounded-lg border p-4 ${isCurrent ? "border-primary/40 bg-card shadow-sm" : "border-border bg-card/60"} ${!isCurrent && !done ? "opacity-80" : ""}`}>
+            <li key={s.id}>
+              <button type="button" onClick={() => onContinue(s.id)} aria-label={`${done ? "Review" : "Open"} step ${i + 1}: ${s.title}`}
+                className={`block w-full rounded-lg border p-4 text-left transition hover:border-primary/60 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${isCurrent ? "border-primary/40 bg-card shadow-sm" : "border-border bg-card/60"} ${!isCurrent && !done ? "opacity-80" : ""}`}>
               <div className="flex items-start gap-3">
                 {done ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" /> : <Circle className={`mt-0.5 h-5 w-5 shrink-0 ${isCurrent ? "text-primary" : "text-muted-foreground"}`} />}
                 <div className="min-w-0 flex-1">
@@ -78,14 +80,16 @@ export function OnboardingSplash({ state, onContinue, onLookAround, onAskForHelp
                   </div>
                   {!done && <p className="mt-1 text-sm text-muted-foreground">{s.body}</p>}
                 </div>
+                <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
               </div>
+              </button>
             </li>
           );
         })}
       </ol>
 
       <div className="flex flex-col items-center gap-3 pt-1">
-        <Button size="lg" className="w-full gap-2 sm:w-auto" onClick={onContinue}>
+        <Button size="lg" className="w-full gap-2 sm:w-auto" onClick={() => onContinue()}>
           {started ? "Continue where you left off" : "Let's begin"} <ArrowRight className="h-4 w-4" />
         </Button>
         <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-sm">
@@ -98,7 +102,7 @@ export function OnboardingSplash({ state, onContinue, onLookAround, onAskForHelp
   );
 }
 
-interface GateProps { portalToken: string; onContinue: () => void; onAskForHelp: () => void; children: ReactNode }
+interface GateProps { portalToken: string; onContinue: (stepId?: number) => void; onAskForHelp: () => void; children: ReactNode }
 
 /**
  * Shows the welcome splash instead of the portal until onboarding is complete. Households that are not in the guided flow, and clients
@@ -111,7 +115,7 @@ export function OnboardingSplashGate({ portalToken, onContinue, onAskForHelp, ch
   if (loading && !seen) return <div className="flex items-center justify-center py-24"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
   const active = Boolean(state) && !disabled && !state!.household.onboardingCompletedAt;
   if (!active || seen) return <>{children}</>;
-  return <OnboardingSplash state={state!} onContinue={() => { markSplashSeen(portalToken); onContinue(); }} onAskForHelp={onAskForHelp} onLookAround={() => setSeen(true)} />;
+  return <OnboardingSplash state={state!} onContinue={(stepId) => { markSplashSeen(portalToken); onContinue(stepId); }} onAskForHelp={onAskForHelp} onLookAround={() => setSeen(true)} />;
 }
 
 function useSeen(token: string): [boolean, (v: boolean) => void] {

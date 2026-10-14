@@ -70,3 +70,14 @@ describe("splash steps", () => {
     expect(splashStepsFor(state({ legacyUpgrade: true })).map((s) => s.title)).toContain("Vision and values");
   });
 });
+
+describe("clickable steps", () => {
+  it("opens the chosen step when its card is clicked", () => {
+    sessionStorage.clear();
+    hook.mockReturnValue({ state: state({ step: 2, profileCompletedAt: "x" }), disabled: false, loading: false });
+    const onContinue = vi.fn();
+    render(<OnboardingSplashGate portalToken="tok2" onContinue={onContinue} onAskForHelp={vi.fn()}><div>P</div></OnboardingSplashGate>);
+    fireEvent.click(screen.getByRole("button", { name: /step 4: Your documents/ }));
+    expect(onContinue).toHaveBeenCalledWith(4);
+  });
+});
