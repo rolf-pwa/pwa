@@ -40,7 +40,7 @@ export const publishRebalancing = (obligationId: string, summary: string) => cal
 export const unpublishRebalancing = (obligationId: string) => call<{ ok: true }>("unpublishRebalancing", { obligationId });
 export const completeRebalancing = (obligationId: string) => call<{ ok: true }>("completeRebalancing", { obligationId });
 
-export const KIND_LABEL: Record<ReviewKind, string> = { annual_review: "Annual Review", sovereignty_review: "Sovereignty Review", governance_review: "Governance Review", rebalancing: "Portfolio Rebalancing" };
+export const KIND_LABEL: Record<ReviewKind, string> = { annual_review: "Portfolio Review", sovereignty_review: "Sovereignty Review", governance_review: "Governance Review", rebalancing: "Portfolio Rebalancing" };
 /**
  * Where a portfolio rebalancing is, for Rolf: still being prepared, published and waiting for the client to review it, acknowledged
  * and waiting for him to carry it out, or done. Meetings have no such stages.

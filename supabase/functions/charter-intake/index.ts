@@ -1002,11 +1002,11 @@ Draft the following six narratives, grounded strictly in the facts above — nev
       // rather than imported because Deno edge functions can't import from src/.
       const SERVICE_TIER_CADENCE_TEXT: Record<string, string> = {
         tier_0: "No scheduled review — $249 CAD ad-hoc",
-        tier_1: "1 annual review — $249 CAD ad-hoc",
-        tier_2a: "2 semi-annual reviews (Allocation + Review)",
-        tier_2b: "2 semi-annual reviews (Governance + Planning)",
-        tier_3: "Semi-annual or 3 seasonal sessions",
-        tier_4: "4 Quarterly Strategic Audit Meetings",
+        tier_1: "1 Portfolio Review (Q1) and a Q3 rebalancing — $249 CAD ad-hoc",
+        tier_2a: "2 Portfolio Reviews (Q2, Q4)",
+        tier_2b: "Portfolio Review (Q2) and Sovereignty Review (Q4)",
+        tier_3: "Sovereignty Reviews (Q1–Q3) and a Governance Review (Q4)",
+        tier_4: "Sovereignty Reviews (Q1–Q3) and a Governance Review (Q4)",
       };
 
       const values = (charter.core_values || []).map((v: NamedItem) => `${v.title}: ${v.description}`).join("\n");

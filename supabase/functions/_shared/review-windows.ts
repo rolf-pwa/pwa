@@ -10,7 +10,7 @@ export type ObligationKind = ReviewKind | "rebalancing";
 export type Tier = "tier_0" | "tier_1" | "tier_2a" | "tier_2b" | "tier_3" | "tier_4";
 
 export const KIND_LABEL: Record<ObligationKind, string> = {
-  annual_review: "Annual Review",
+  annual_review: "Portfolio Review", // stored as annual_review; Rolf renamed the meeting
   sovereignty_review: "Sovereignty Review",
   governance_review: "Governance Review",
   rebalancing: "Portfolio Rebalancing",
@@ -18,7 +18,7 @@ export const KIND_LABEL: Record<ObligationKind, string> = {
 
 /** Words in a calendar event title that mean each kind of meeting ("System Review" is the older name for the Sovereignty Review, "Charter Review" for the Governance Review). */
 const ALIASES: Record<ReviewKind, string[]> = {
-  annual_review: ["annual review", "annual stewardship review"],
+  annual_review: ["portfolio review", "annual review", "annual stewardship review"],
   sovereignty_review: ["sovereignty review", "system review"],
   governance_review: ["governance review", "charter review"],
 };
@@ -32,18 +32,24 @@ const Q = (y: number, q: 1 | 2 | 3 | 4) => ({
 
 /**
  * The meetings a family is owed in a year, by tier (Rolf's cadence, updated 2026-10-14):
- *  Tier 0: none. Tier 1: an Annual Review in Q1. Tier 2A: an Annual Review in Q2. Tier 2B: a Sovereignty Review in Q2 and another in Q4.
+ *  Tier 0: none. Tier 1: a Portfolio Review in Q1. Tier 2A: Portfolio Reviews in Q2 and Q4. Tier 2B: a Portfolio Review in Q2 and a Sovereignty Review in Q4.
+ *  (A Portfolio Review is stored as kind annual_review: it is the meeting formerly called the Annual Review.)
  *  Tier 3 (and 4, the same for now): Sovereignty Reviews in Q1, Q2 and Q3, and a Governance Review in Q4.
- * The portfolio reviews and rebalances (Tier 1 in Q3, Tier 2A in Q4) are not meetings and are not tracked here.
+ * Tier 1's Q3 portfolio rebalancing is not a meeting and is tracked separately (see requiredRebalancing).
  */
 export function requiredMeetings(tier: Tier | null, year: number): RequiredMeeting[] {
   switch (tier) {
     case "tier_1": { const [s, e] = Q(year, 1); return [{ kind: "annual_review", key: `${year}-Q1-annual_review`, windowStart: s, windowEnd: e }]; }
-    case "tier_2a": { const [s, e] = Q(year, 2); return [{ kind: "annual_review", key: `${year}-Q2-annual_review`, windowStart: s, windowEnd: e }]; }
+    case "tier_2a":
+      return ([2, 4] as const).map((q) => {
+        const [s, e] = Q(year, q);
+        return { kind: "annual_review" as const, key: `${year}-Q${q}-annual_review`, windowStart: s, windowEnd: e };
+      });
     case "tier_2b":
       return ([2, 4] as const).map((q) => {
         const [s, e] = Q(year, q);
-        return { kind: "sovereignty_review" as const, key: `${year}-Q${q}-sovereignty_review`, windowStart: s, windowEnd: e };
+        const kind: ReviewKind = q === 2 ? "annual_review" : "sovereignty_review";
+        return { kind, key: `${year}-Q${q}-${kind}`, windowStart: s, windowEnd: e };
       });
     case "tier_3":
     case "tier_4":
@@ -58,16 +64,15 @@ export function requiredMeetings(tier: Tier | null, year: number): RequiredMeeti
 }
 
 /**
- * The portfolio rebalancing a client acknowledges in the portal (Rolf, 2026-10-14): Tier 1 in Q3 (chartered or not), Tier 2A in Q4.
- * Tiers 2B, 3 and 4 discuss rebalancing in their review meetings; Tier 0 has none.
+ * The portfolio rebalancing a client acknowledges in the portal (Rolf, 2026-10-14): Tier 1 in Q3 (chartered or not) only.
+ * Tiers 2A, 2B, 3 and 4 cover rebalancing in their review meetings; Tier 0 has none.
  */
 export function requiredRebalancing(tier: Tier | null, year: number): RequiredObligation[] {
-  const make = (q: 3 | 4): RequiredObligation[] => {
+  const make = (q: 3): RequiredObligation[] => {
     const [s, e] = Q(year, q);
     return [{ kind: "rebalancing", key: `${year}-Q${q}-rebalancing`, windowStart: s, windowEnd: e }];
   };
   if (tier === "tier_1") return make(3);
-  if (tier === "tier_2a") return make(4);
   return [];
 }
 
