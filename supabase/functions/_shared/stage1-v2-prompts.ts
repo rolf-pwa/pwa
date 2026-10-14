@@ -28,7 +28,15 @@ Add "net_transactions" to every account object. Use null for anything not printe
 
 Fund holdings: if the statement lists the funds held in an account (a table of funds with values), add to that account
 "funds": [ { "name": the fund's name, "category": the category heading printed above it (for example "Income Funds" or "Canadian Equity funds"), "value": the fund's value as printed } ]
-Include EVERY fund of that account on EVERY page, even if the table continues across pages or is split into several series or sections. Copy each value exactly as printed; never add them up and never skip a fund. Use "funds": null if the statement lists no fund holdings.`;
+Include EVERY fund of that account on EVERY page, even if the table continues across pages or is split into several series or sections. Copy each value exactly as printed; never add them up and never skip a fund. Use "funds": null if the statement lists no fund holdings.
+
+Guarantees: segregated fund statements print a "Your guarantees" section for the account. When it is present, add to that account
+"guarantee": { "series": the series printed (for example "Series 75/100" or "Series 75/75", without the pricing label such as "Prestige 500"), "maturity_date": "YYYY-MM-DD" the maturity date of the guarantee, "guaranteed_at_maturity": the guaranteed value at maturity as printed, "guaranteed_at_death": the guaranteed value at death as printed, "last_quarter_fee": the last quarter guarantee fee as printed, "value_of_funds": the value of your funds printed in that section }
+Use "guarantee": null if the statement has no guarantees section. Copy every figure exactly as printed; never calculate one.
+
+Asset mix: some statements print the account's current asset allocation and the portfolio profile it corresponds to. When present, add to that account
+"statement_allocation": { "income_pct": the income percentage printed, "equity_pct": the equity percentage printed, "profile": the profile name printed (for example "Balanced" or "Growth") }
+Use "statement_allocation": null if the statement prints none.`;
 
 /**
  * Estate documents (Will, Power of Attorney, trust) from the Vault's Estate folder. V2 only; there is no V1

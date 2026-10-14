@@ -38,6 +38,7 @@ const ContactForm = () => {
     last_name: searchParams.get("last_name") || "",
     email: "",
     phone: "",
+    date_of_birth: "",
     address: "",
     family_role: "head_of_family" as "head_of_family" | "spouse" | "beneficiary" | "minor" | "head_of_household",
     vineyard_ebitda: "",
@@ -63,6 +64,7 @@ const ContactForm = () => {
         last_name: data.last_name || "",
         email: data.email || "",
         phone: data.phone || "",
+        date_of_birth: (data as any).date_of_birth || "",
         address: data.address || "",
         family_role: (data.family_role as any) || "head_of_family",
         vineyard_ebitda: data.vineyard_ebitda?.toString() || "",
@@ -110,6 +112,7 @@ const ContactForm = () => {
       last_name: form.last_name || null,
       email: form.email || null,
       phone: form.phone || null,
+      date_of_birth: form.date_of_birth || null,
       address: form.address || null,
       family_role: form.family_role,
       vineyard_ebitda: form.vineyard_ebitda ? Number(form.vineyard_ebitda) : null,
@@ -292,6 +295,11 @@ const ContactForm = () => {
             <div>
               <Label htmlFor="phone">Phone</Label>
               <Input id="phone" value={form.phone} onChange={(e) => update("phone", e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="date_of_birth">Date of birth</Label>
+              <Input id="date_of_birth" type="date" value={form.date_of_birth} onChange={(e) => update("date_of_birth", e.target.value)} />
+              <p className="mt-1 text-xs text-muted-foreground">Used for the age-85 limit on death benefit resets.</p>
             </div>
             <div className="sm:col-span-2">
               <Label htmlFor="address">Address</Label>

@@ -35,15 +35,17 @@ export const setReminderMode = (mode: ReviewMode, confirm = false) => call<{ ok:
 
 export const getReviewOverview = () => call<ReviewOverview>("overview");
 
-import type { Pack } from "../../../../supabase/functions/_shared/portfolio-review";
-export type { Pack as PortfolioPack };
+import type { ModelPortfolio, Pack } from "../../../../supabase/functions/_shared/portfolio-review";
+export type { Pack as PortfolioPack, ModelPortfolio };
 export interface PortfolioPackResponse {
   household: { id: string; label: string | null; family_id: string; family_name: string | null; service_tier: string | null };
   pack: Pack;
-  profiles: { id: string; account_number: string | null; label: string | null; income_pct: number | null; equity_pct: number | null; band_pct: number; as_of: string | null; updated_by: string | null }[];
+  profiles: { id: string; account_number: string | null; label: string | null; income_pct: number | null; equity_pct: number | null; band_pct: number; as_of: string | null; updated_by: string | null; profile_key: string | null }[];
+  models: ModelPortfolio[];
 }
 export const getPortfolioPack = (householdId: string) => call<PortfolioPackResponse>("portfolioPack", { householdId });
-export const saveInvestorProfile = (p: { householdId: string; accountNumber?: string | null; label?: string; incomePct: number; bandPct?: number }) => call<{ ok: true }>("saveInvestorProfile", p);
+export const saveInvestorProfile = (p: { householdId: string; accountNumber?: string | null; profileKey?: string; label?: string; incomePct?: number; bandPct?: number }) => call<{ ok: true }>("saveInvestorProfile", p);
+export const saveGuaranteeReset = (householdId: string, accountNumber: string, lastResetDate: string | null) => call<{ ok: true }>("saveGuaranteeReset", { householdId, accountNumber, lastResetDate });
 export const deleteInvestorProfile = (householdId: string, accountNumber: string | null) => call<{ ok: true }>("deleteInvestorProfile", { householdId, accountNumber });
 export const setReviewMode = (mode: ReviewMode, confirm = false) => call<{ ok: true; mode: ReviewMode }>("setMode", { mode, confirm });
 export const setReviewPaused = (obligationId: string, paused: boolean) => call<{ ok: true }>("setPaused", { obligationId, paused });
