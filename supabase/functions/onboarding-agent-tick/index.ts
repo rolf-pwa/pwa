@@ -76,8 +76,14 @@ async function event(householdId: string, caseId: string | null, mode: string, k
 
 async function work(k: any, mode: "shadow" | "live", cfg: AgentConfig, summary: Record<string, number> & { errors: string[] }) {
   const now = Date.now();
-  const { data: hh } = await db.from("households").select("id, label, family_id, created_at, vault_root_folder_id, audit_booked_at, profile_completed_at, wealth_event_completed_at, household_context_completed_at").eq("id", k.household_id).maybeSingle();
+  const { data: hh } = await db.from("households").select("id, label, family_id, created_at, onboarding_enabled, vault_root_folder_id, audit_booked_at, profile_completed_at, wealth_event_completed_at, household_context_completed_at").eq("id", k.household_id).maybeSingle();
   if (!hh) return;
+  // Switching "Audit onboarding" off for a household stops Georgia, even for a case she had already opened.
+  if (hh.onboarding_enabled === false) {
+    await db.from("onboarding_cases").update({ status: "paused", updated_at: new Date().toISOString() }).eq("id", k.id);
+    await event(hh.id, k.id, mode, "paused", { by: "system", reason: "onboarding was switched off for this household" });
+    return;
+  }
   const { data: head } = await db.from("contacts").select("id, first_name, email, family_role").eq("household_id", hh.id).order("family_role").limit(5);
   const lead = (head ?? []).find((p: any) => p.family_role === "head_of_family") ?? (head ?? [])[0] ?? null;
   const memberIds = (head ?? []).map((p: any) => p.id);
