@@ -20,7 +20,7 @@ export interface ClientView {
   accounts: ClientAccount[] | null;
   mix: { /** What the chart means for this household, in plain sentences built in code from the numbers. */ commentary: string[]; classes: { key: string; label: string; pct: number }[]; profileLabel: string | null; incomePct: number | null; equityPct: number | null; rangeMin: number | null; rangeMax: number | null; targetIncomePct: number | null; status: MixStatus; accounts: { name: string; last4: string | null; incomePct: number | null; status: MixStatus }[] } | null;
   funds: { commentary: string[]; modelLabel: string; modelAsOf: string; heldInModelPct: number; rows: { name: string; modelPct: number | null; heldPct: number; inModel: boolean }[] } | null;
-  reset: { rows: { name: string; owner: string | null; last4: string | null; fundValue: number; currentGuarantee: number; newGuarantee: number; lift: number }[]; totalLift: number } | null;
+  reset: { rows: { name: string; owner: string | null; last4: string | null; fundValue: number; currentGuarantee: number; newGuarantee: number; lift: number }[]; totalLift: number; /** The death guarantee across these accounts today, and after the reset. */ totalNow: number; totalAfter: number } | null;
   disclosures: string[];
 }
 
@@ -80,9 +80,9 @@ export function mixCommentary(pack: Pack): string[] {
   if (heavyEquity.length) out.push(`${heavyEquity.length} of your ${total} accounts hold more in equities than your profile calls for (${nameList(heavyEquity.map(accountName))}).${rising ? " Equity funds grow faster than income funds when markets rise, which can move an account away from its profile." : ""}`);
   if (heavyIncome.length) out.push(`${heavyIncome.length} of your ${total} accounts hold more in income funds than your profile calls for (${nameList(heavyIncome.map(accountName))}).`);
   const off = [...heavyEquity, ...heavyIncome];
-  if (off.length) out.push(`We recommend rebalancing ${off.length === 1 ? "this account" : "these accounts"} back to your ${label} profile. Rolf will take you through the details at your meeting.`);
+  if (off.length) out.push(`I recommend rebalancing ${off.length === 1 ? "this account" : "these accounts"} back to your ${label} profile. I will take you through the details at our meeting.`);
   else if (d.status === "within") out.push("No change is needed to your mix at this time.");
-  else out.push(`We recommend rebalancing your portfolio back to your ${label} profile. Rolf will take you through the details at your meeting.`);
+  else out.push(`I recommend rebalancing your portfolio back to your ${label} profile. I will take you through the details at our meeting.`);
   return out;
 }
 
@@ -93,12 +93,12 @@ export function fundsCommentary(mc: NonNullable<Pack["household"]["modelComparis
   const roughly = Math.round(mc.moveValue / 100) * 100;
   if (mc.offModelPct > 0) {
     return [
-      `${round1(mc.offModelPct)}% of your portfolio is held in funds outside iA's ${label} model, including ${nameList(off)}.`,
-      `We recommend rebalancing the portfolio to the model. Matching it would move about ${money0(roughly)} (${round1(mc.activeSharePct)}% of your portfolio). Rolf will take you through the details at your meeting.`,
+      `${round1(mc.offModelPct)}% of your portfolio is held in funds outside our ${label} model portfolio, including ${nameList(off)}.`,
+      `I recommend rebalancing the portfolio to the model. Matching it would move about ${money0(roughly)} (${round1(mc.activeSharePct)}% of your portfolio). I will take you through the details at our meeting.`,
     ];
   }
-  if (mc.activeSharePct >= 5) return [`All of your funds are in iA's ${label} model, but they are held in different proportions. Matching the model would move about ${round1(mc.activeSharePct)}% of your portfolio, and we recommend bringing them back into line.`];
-  return [`Your funds line up closely with iA's ${label} model.`];
+  if (mc.activeSharePct >= 5) return [`All of your funds are in our ${label} model portfolio, but they are held in different proportions. Matching the model would move about ${round1(mc.activeSharePct)}% of your portfolio, and I recommend bringing them back into line.`];
+  return [`Your funds line up closely with our ${label} model portfolio.`];
 }
 
 export function buildClientView(pack: Pack, includes: ClientIncludes, note: string, householdLabel: string): ClientView {
@@ -133,6 +133,8 @@ export function buildClientView(pack: Pack, includes: ClientIncludes, note: stri
       ? {
         rows: pack.resets.rows.filter((r) => r.status === "reset").map((r) => ({ name: r.name, owner: r.owner, last4: last4(r.number), fundValue: r.fundValue as number, currentGuarantee: r.deathGuarantee as number, newGuarantee: r.fundValue as number, lift: r.room as number })),
         totalLift: pack.resets.totalRoom,
+        totalNow: Math.round(pack.resets.rows.filter((r) => r.status === "reset").reduce((n, r) => n + (r.deathGuarantee ?? 0), 0)),
+        totalAfter: Math.round(pack.resets.rows.filter((r) => r.status === "reset").reduce((n, r) => n + (r.fundValue ?? 0), 0)),
       }
       : null,
     disclosures: DISCLOSURES,
