@@ -3,6 +3,7 @@ import { REBALANCE_STATEMENT, REBALANCE_STATEMENT_VERSION, gateMeetingTypes, isF
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { makeVisibilityFilter } from "../_shared/portal-visibility.ts";
+import { scopeToUnit, viewerUnit } from "../_shared/review-unit-for-contact.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -597,11 +598,9 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
       const canBook = isFamilyAdult({ role: contactRes.data?.family_role ?? null, isMinor: contactRes.data?.is_minor, householdId: contactRes.data?.household_id }, hofHouseholds);
       if (canBook && familyId && (mt ?? []).some((t: any) => t.cadence_kind)) {
         const today = pacificDate(Date.now());
-        const [{ data: fam }, { data: tracked }] = await Promise.all([
-          supabase.from("families").select("service_tier").eq("id", familyId).maybeSingle(),
-          supabase.from("review_obligations").select("window_key, status, booked_start").eq("family_id", familyId).lte("window_start", today).gte("window_end", today),
-        ]);
-        owed = meetingsOwedNow((fam?.service_tier ?? null) as any, today, (tracked ?? []) as any);
+        const unit = await viewerUnit(supabase, familyId, contactRes.data?.household_id);
+        const { data: tracked } = await scopeToUnit(supabase.from("review_obligations").select("window_key, status, booked_start").eq("family_id", familyId).lte("window_start", today).gte("window_end", today), unit);
+        owed = meetingsOwedNow((unit.tier ?? null) as any, today, (tracked ?? []) as any);
       }
       const gated = gateMeetingTypes((mt ?? []) as any[], owed, canBook);
       meeting_types = gated.bookable.map((t: any) => ({ label: t.client_label || t.label, url: t.url, embedUrl: t.embed_url || t.url }));
@@ -617,7 +616,8 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
       if (familyId && isFamilyAdult({ role: contactRes.data?.family_role ?? null, isMinor: contactRes.data?.is_minor, householdId: contactRes.data?.household_id }, (rHeads ?? []).map((h: any) => h.household_id))) {
         const today = pacificDate(Date.now());
         // Shown only once Rolf has published it to this family, and only while Georgia is live.
-        const { data: ob } = await supabase.from("review_obligations").select("window_start, window_end, published_at, proposal_summary, acknowledged_at, completed_at").eq("family_id", familyId).eq("kind", "rebalancing").eq("mode", "live").neq("status", "cancelled").not("published_at", "is", null).lte("window_start", today).order("window_start", { ascending: false }).limit(1).maybeSingle();
+        const rUnit = await viewerUnit(supabase, familyId, contactRes.data?.household_id);
+        const { data: ob } = await scopeToUnit(supabase.from("review_obligations").select("window_start, window_end, published_at, proposal_summary, acknowledged_at, completed_at").eq("family_id", familyId).eq("kind", "rebalancing").eq("mode", "live").neq("status", "cancelled").not("published_at", "is", null).lte("window_start", today), rUnit).order("window_start", { ascending: false }).limit(1).maybeSingle();
         // A completed one stays on the card for a month, then goes quiet; one still being worked on stays until it is done.
         const recent = ob && (!ob.completed_at || Date.now() - Date.parse(ob.completed_at) < 30 * 86_400_000);
         if (ob && recent) rebalancing = { label: windowLabel(ob.window_start, ob.window_end), summary: ob.proposal_summary ?? "", publishedAt: ob.published_at, acknowledgedAt: ob.acknowledged_at ?? null, completedAt: ob.completed_at ?? null, statement: REBALANCE_STATEMENT, statementVersion: REBALANCE_STATEMENT_VERSION };

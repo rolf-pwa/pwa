@@ -50,10 +50,14 @@ Deno.serve(async (req) => {
       const ids = [...new Set((obligations ?? []).map((o: any) => o.family_id))];
       const { data: fams } = ids.length ? await db.from("families").select("id, name").in("id", ids) : { data: [] as any[] };
       const name = new Map((fams ?? []).map((f: any) => [f.id, f.name]));
+      // A meeting owed by a single household is shown as "Family: Household".
+      const hids = [...new Set((obligations ?? []).map((o: any) => o.household_id).filter(Boolean))];
+      const { data: hhRows } = hids.length ? await db.from("households").select("id, label").in("id", hids) : { data: [] as any[] };
+      const hhLabel = new Map((hhRows ?? []).map((h: any) => [h.id, h.label]));
       const { data: events } = await db.from("review_agent_events").select("id, family_id, obligation_id, mode, kind, detail, created_at").order("created_at", { ascending: false }).limit(60);
       return json({
         config,
-        obligations: (obligations ?? []).map((o: any) => ({ ...o, family_name: name.get(o.family_id) ?? null })),
+        obligations: (obligations ?? []).map((o: any) => ({ ...o, family_name: o.household_id && hhLabel.get(o.household_id) ? `${name.get(o.family_id) ?? ""}: ${hhLabel.get(o.household_id)}` : name.get(o.family_id) ?? null })),
         events: (events ?? []).map((e: any) => ({ ...e, family_name: name.get(e.family_id) ?? null })),
       });
     }

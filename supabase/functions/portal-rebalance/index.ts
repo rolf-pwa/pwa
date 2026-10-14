@@ -8,6 +8,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validatePortalContact } from "../_shared/portal-auth.ts";
 import { REBALANCE_STATEMENT, REBALANCE_STATEMENT_VERSION, isFamilyAdult, pacificDate, windowLabel } from "../_shared/review-windows.ts";
+import { scopeToUnit, viewerUnit } from "../_shared/review-unit-for-contact.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -26,7 +27,7 @@ function cors(req: Request) {
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 const ASSIGNEE_EMAIL = "rolf@prosperwise.ca";
-const familyTitle = (name: string | null) => { const n = (name ?? "").trim(); return !n ? "Family" : /\bfamily$/i.test(n) ? n : `${n} Family`; };
+const familyTitle = (name: string | null) => { const n = (name ?? "").trim(); return !n ? "Family" : /\bfamily$/i.test(n) || n.includes(": ") ? n : `${n} Family`; };
 const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
 Deno.serve(async (req) => {
@@ -45,12 +46,14 @@ Deno.serve(async (req) => {
     if (!isFamilyAdult({ role: me.family_role, isMinor: me.is_minor, householdId: me.household_id }, (heads ?? []).map((h: any) => h.household_id))) return json({ error: "Not available" }, 403);
 
     const today = pacificDate(Date.now());
-    const { data: ob } = await db.from("review_obligations").select("*").eq("family_id", me.family_id).eq("kind", "rebalancing").eq("mode", "live").neq("status", "cancelled").not("published_at", "is", null).lte("window_start", today).is("completed_at", null).order("window_start", { ascending: false }).limit(1).maybeSingle();
+    const unit = await viewerUnit(db, me.family_id, me.household_id);
+    const { data: ob } = await scopeToUnit(db.from("review_obligations").select("*").eq("family_id", me.family_id).eq("kind", "rebalancing").eq("mode", "live").neq("status", "cancelled").not("published_at", "is", null).lte("window_start", today).is("completed_at", null), unit).order("window_start", { ascending: false }).limit(1).maybeSingle();
     if (!ob) return json({ error: "There is no rebalancing waiting for you right now." }, 404);
     if (ob.acknowledged_at) return json({ ok: true, alreadyAcknowledged: true });
 
     const { data: fam } = await db.from("families").select("name").eq("id", me.family_id).maybeSingle();
-    const family = familyTitle(fam?.name ?? null);
+    const { data: hhRow } = unit.householdId ? await db.from("households").select("label").eq("id", unit.householdId).maybeSingle() : { data: null as any };
+    const family = familyTitle(hhRow?.label ? `${fam?.name ?? ""}: ${hhRow.label}` : fam?.name ?? null);
     const name = `${me.first_name ?? ""} ${me.last_name ?? ""}`.trim() || "A client";
     const label = windowLabel(ob.window_start, ob.window_end);
     const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || null;

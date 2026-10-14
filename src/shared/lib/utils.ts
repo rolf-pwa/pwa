@@ -9,5 +9,6 @@ export function cn(...inputs: ClassValue[]) {
 export function familyTitle(name: string | null | undefined): string {
   const n = (name ?? "").trim();
   if (!n) return "Family";
-  return /\bfamily$/i.test(n) ? n : `${n} Family`;
+  // "Glanz: Lydia" names one household of a family and is shown as it is.
+  return /\bfamily$/i.test(n) || n.includes(": ") ? n : `${n} Family`;
 }

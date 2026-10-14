@@ -7,6 +7,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validatePortalContact } from "../_shared/portal-auth.ts";
 import { findBooking } from "../_shared/review-calendar.ts";
 import { KIND_LABEL, isFamilyAdult, meetingsOwedNow, pacificDate, requiredMeetings } from "../_shared/review-windows.ts";
+import { scopeToUnit, viewerUnit } from "../_shared/review-unit-for-contact.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -40,11 +41,12 @@ Deno.serve(async (req) => {
     if (!isFamilyAdult({ role: me.family_role, isMinor: me.is_minor, householdId: me.household_id }, (heads ?? []).map((h: any) => h.household_id))) return json({ ok: true, found: [] });
 
     const today = pacificDate(Date.now());
-    const [{ data: fam }, { data: tracked }, { data: contacts }] = await Promise.all([
-      db.from("families").select("service_tier").eq("id", me.family_id).maybeSingle(),
-      db.from("review_obligations").select("id, mode, window_key, status, booked_start, booked_event_id").eq("family_id", me.family_id).lte("window_start", today).gte("window_end", today),
-      db.from("contacts").select("email, is_minor").eq("family_id", me.family_id),
+    const unit = await viewerUnit(db, me.family_id, me.household_id);
+    const [{ data: tracked }, { data: contacts }] = await Promise.all([
+      scopeToUnit(db.from("review_obligations").select("id, mode, window_key, status, booked_start, booked_event_id").eq("family_id", me.family_id).lte("window_start", today).gte("window_end", today), unit),
+      unit.householdId ? db.from("contacts").select("email, is_minor").eq("household_id", unit.householdId) : db.from("contacts").select("email, is_minor").eq("family_id", me.family_id),
     ]);
+    const fam = { service_tier: unit.tier };
     const owed = meetingsOwedNow((fam?.service_tier ?? null) as any, today, (tracked ?? []) as any).filter((o) => !o.bookedStart);
     if (!owed.length) return json({ ok: true, found: [] });
 
@@ -64,7 +66,7 @@ Deno.serve(async (req) => {
         await db.from("review_obligations").update({ booked_event_id: booking.id, booked_start: start, status: row.status === "paused" ? "paused" : "booked", updated_at: new Date().toISOString() }).eq("id", row.id);
       } else {
         // No record yet for this window (a family whose tier changed, say): track it for bookings only, never invite.
-        await db.from("review_obligations").insert({ family_id: me.family_id, kind: o.kind, window_key: o.windowKey, window_start: w.windowStart, window_end: w.windowEnd, tier: fam?.service_tier ?? null, mode, status: "booked", booked_event_id: booking.id, booked_start: start, invite: false });
+        await db.from("review_obligations").insert({ family_id: me.family_id, household_id: unit.householdId, kind: o.kind, window_key: o.windowKey, window_start: w.windowStart, window_end: w.windowEnd, tier: fam?.service_tier ?? null, mode, status: "booked", booked_event_id: booking.id, booked_start: start, invite: false });
       }
       await db.from("review_agent_events").insert({ family_id: me.family_id, obligation_id: row?.id ?? null, mode, kind: "booking_detected", detail: { start, source: "portal" } });
       found.push({ label: KIND_LABEL[o.kind], start });

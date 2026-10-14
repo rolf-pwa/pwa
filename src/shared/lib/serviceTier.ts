@@ -1,6 +1,8 @@
 // Client Service Tier metadata (Phase A, staff-only). Mirrors the six-tier
 // classification in supabase/functions/_shared/service-tiering.ts exactly --
 // keep both in sync if the tier definitions ever change.
+// Pooling: a family with a ratified Charter (or a VFO, or a hand-set tier) is tiered as a whole; otherwise each household is tiered on
+// its own assets (see supabase/functions/_shared/review-units.ts).
 // Source: "Legacy Client Service Tier & Review Cadence Matrix" (Google Doc,
 // id 1uE1h4OYRVZKRzZD3k4PLh_O1BluWZV3iwTZrFPOk9P0).
 
