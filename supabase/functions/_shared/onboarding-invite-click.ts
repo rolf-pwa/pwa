@@ -40,9 +40,9 @@ export async function recordInviteClick(db: any, token: string): Promise<{ ok: b
     caseId = created?.id ?? null;
   }
 
-  const { data: people } = await db.from("contacts").select("id, first_name, email, family_role, household_id, is_minor").eq("household_id", inv.household_id);
+  const { data: people } = await db.from("contacts").select("id, first_name, email, family_role, household_id, is_minor, no_automated_email").eq("household_id", inv.household_id);
   const invitee = ((people ?? []) as InviteContact[]).find((p) => p.id === inv.contact_id);
-  const recipients = invitee ? welcomeRecipients(invitee, (people ?? []) as InviteContact[]) : [];
+  const recipients = invitee ? welcomeRecipients(invitee, ((people ?? []) as any[]).map((p) => (p.no_automated_email ? { ...p, email: null } : p)) as InviteContact[]) : [];
 
   if (mode === "shadow") {
     await event("welcome_would_send", { to: recipients.length }, caseId);

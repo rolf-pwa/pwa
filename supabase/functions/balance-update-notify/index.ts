@@ -43,14 +43,14 @@ async function plan(snapshotDate: string) {
   const { data: snaps } = await db.from("account_harvest_snapshots").select("contact_id").eq("snapshot_date", snapshotDate);
   const ids = (snaps ?? []).map((s: any) => s.contact_id).filter(Boolean) as string[];
   const unique = [...new Set(ids)];
-  const { data: contacts } = unique.length ? await db.from("contacts").select("id, first_name, last_name, email, household_id").in("id", unique) : { data: [] as any[] };
+  const { data: contacts } = unique.length ? await db.from("contacts").select("id, first_name, last_name, email, household_id, no_automated_email").in("id", unique) : { data: [] as any[] };
   const hhIds = [...new Set((contacts ?? []).map((c: any) => c.household_id).filter(Boolean))];
   const { data: hhs } = hhIds.length ? await db.from("households").select("id, label").in("id", hhIds) : { data: [] as any[] };
   const hhLabel = new Map((hhs ?? []).map((h: any) => [h.id, h.label]));
   const { data: done } = await db.from("balance_update_notices").select("contact_id").eq("snapshot_date", snapshotDate);
   return planNotices({
     snapshotContactIds: ids,
-    contacts: (contacts ?? []).map((c: any) => ({ id: c.id, firstName: c.first_name, lastName: c.last_name, email: c.email, household: c.household_id ? hhLabel.get(c.household_id) ?? null : null })),
+    contacts: (contacts ?? []).map((c: any) => ({ id: c.id, firstName: c.first_name, lastName: c.last_name, email: c.no_automated_email ? null : c.email, household: c.household_id ? hhLabel.get(c.household_id) ?? null : null })),
     alreadyNotified: new Set((done ?? []).map((d: any) => d.contact_id)),
   });
 }

@@ -235,3 +235,14 @@ describe("the family's two adults when a family has several households", () => {
     expect(out.map((o) => o.contactId)).toEqual(["colleen", "partner"]);
   });
 });
+
+describe("someone who asked not to be emailed", () => {
+  it("is never an invitee, though the other adult still is", () => {
+    const people = [
+      { id: "a", firstName: "Annette", lastName: "I", email: "a@x.ca", role: "head_of_family", isMinor: false, householdId: "h", noAutoEmail: true },
+      { id: "b", firstName: "Bo", lastName: "I", email: "b@x.ca", role: "spouse", isMinor: false, householdId: "h" },
+    ];
+    expect(inviteesOf(people).map((p) => p.contactId)).toEqual(["b"]);
+    expect(inviteesOf([people[0]])).toEqual([]);
+  });
+});

@@ -101,7 +101,7 @@ async function work(k: any, mode: "shadow" | "live", cfg: AgentConfig, summary: 
     await event(hh.id, k.id, mode, "paused", { by: "system", reason: "onboarding was switched off for this household" });
     return;
   }
-  const { data: head } = await db.from("contacts").select("id, first_name, email, family_role").eq("household_id", hh.id).order("family_role").limit(5);
+  const { data: head } = await db.from("contacts").select("id, first_name, email, family_role, no_automated_email").eq("household_id", hh.id).order("family_role").limit(5);
   const lead = (head ?? []).find((p: any) => p.family_role === "head_of_family") ?? (head ?? [])[0] ?? null;
   const memberIds = (head ?? []).map((p: any) => p.id);
 
@@ -116,7 +116,8 @@ async function work(k: any, mode: "shadow" | "live", cfg: AgentConfig, summary: 
   const facts: CaseFacts = {
     now, status: k.status, enrolledAt: Date.parse(hh.created_at), openedAt: Date.parse(k.opened_at),
     surveyBooked: !!hh.audit_booked_at, docsReceived: clientFiles.length > 0, vaultProvisioned: !!hh.vault_root_folder_id, vaultRetries: k.vault_retries,
-    hasEmail: !!lead?.email, openPortalRequest: (openRequests ?? 0) > 0, lastClientActivityAt: activity || null,
+    hasEmail: !!lead?.email && !lead?.no_automated_email, // someone who asked not to be emailed is handed to a person like one with no address
+    openPortalRequest: (openRequests ?? 0) > 0, lastClientActivityAt: activity || null,
     nudgeCount: k.nudge_count, lastNudgeAt: ms(k.last_nudge_at), snoozedUntil: ms(k.snoozed_until),
   };
   // Live cases keep their checklist up to date, whatever the decision is.
