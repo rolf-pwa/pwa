@@ -187,7 +187,7 @@ export default function ReviewAgent() {
                               </div>
                               <div className="flex shrink-0 items-center gap-2">
                                 <span className="text-xs text-muted-foreground">{o.nudge_count} invitation{o.nudge_count === 1 ? "" : "s"}</span>
-                                <Badge variant={o.status === "escalated" ? "destructive" : "secondary"}>{statusLabel(o)}{o.invite === false ? " (tracking only)" : ""}{o.mode === "shadow" ? " (shadow)" : ""}</Badge>
+                                <Badge variant={o.status === "escalated" ? "destructive" : "secondary"}>{statusLabel(o)}{o.invite === false && o.kind !== "rebalancing" ? " (tracking only)" : ""}{o.mode === "shadow" ? " (shadow)" : ""}</Badge>
                                 {o.kind === "rebalancing" && (
                                   <>
                                     {rebalancingStage(o) === "preparing" && <Button size="sm" className="h-7 text-xs" onClick={() => { setPublishing(o); setSummary(o.proposal_summary ?? ""); }}>Publish to portal</Button>}
