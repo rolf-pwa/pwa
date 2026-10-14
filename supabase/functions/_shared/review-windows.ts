@@ -27,19 +27,20 @@ const Q = (y: number, q: 1 | 2 | 3 | 4) => ({
 }[q]);
 
 /**
- * The meetings a family is owed in a year, by tier (Rolf's cadence, 2026-10-13):
- *  Tier 0: none. Tier 1 and 2A: one Annual Review in Q1. Tier 2B: a Sovereignty Review in Jan to Jun and another in Jul to Dec.
+ * The meetings a family is owed in a year, by tier (Rolf's cadence, updated 2026-10-14):
+ *  Tier 0: none. Tier 1: an Annual Review in Q1. Tier 2A: an Annual Review in Q2. Tier 2B: a Sovereignty Review in Q2 and another in Q4.
  *  Tier 3 (and 4, the same for now): Sovereignty Reviews in Q1, Q2 and Q3, and a Governance Review in Q4.
+ * The portfolio reviews and rebalances (Tier 1 in Q3, Tier 2A in Q4) are not meetings and are not tracked here.
  */
 export function requiredMeetings(tier: Tier | null, year: number): RequiredMeeting[] {
   switch (tier) {
-    case "tier_1":
-    case "tier_2a": { const [s, e] = Q(year, 1); return [{ kind: "annual_review", key: `${year}-Q1-annual_review`, windowStart: s, windowEnd: e }]; }
+    case "tier_1": { const [s, e] = Q(year, 1); return [{ kind: "annual_review", key: `${year}-Q1-annual_review`, windowStart: s, windowEnd: e }]; }
+    case "tier_2a": { const [s, e] = Q(year, 2); return [{ kind: "annual_review", key: `${year}-Q2-annual_review`, windowStart: s, windowEnd: e }]; }
     case "tier_2b":
-      return [
-        { kind: "sovereignty_review", key: `${year}-H1-sovereignty_review`, windowStart: `${year}-01-01`, windowEnd: `${year}-06-30` },
-        { kind: "sovereignty_review", key: `${year}-H2-sovereignty_review`, windowStart: `${year}-07-01`, windowEnd: `${year}-12-31` },
-      ];
+      return ([2, 4] as const).map((q) => {
+        const [s, e] = Q(year, q);
+        return { kind: "sovereignty_review" as const, key: `${year}-Q${q}-sovereignty_review`, windowStart: s, windowEnd: e };
+      });
     case "tier_3":
     case "tier_4":
       return ([1, 2, 3, 4] as const).map((q) => {
