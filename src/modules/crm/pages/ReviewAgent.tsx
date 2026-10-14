@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/shared/components/ui/alert-dialog";
 import { KIND_LABEL, completeRebalancing, describeReviewEvent, statusLabel, getReminderOverview, groupByQuarter, getReviewOverview, publishRebalancing, rebalancingStage, setReminderMode, unpublishRebalancing, setReviewMode, setReviewPaused, type ReminderOverview, type ReviewMode, type ReviewObligation, type ReviewOverview } from "@/modules/crm/lib/reviewAgent";
 import { familyTitle } from "@/shared/lib/utils";
+import { ReviewAgentGuide } from "@/modules/crm/components/ReviewAgentGuide";
 import { Textarea } from "@/shared/components/ui/textarea";
 
 const MODES: { value: ReviewMode; label: string; blurb: string }[] = [
@@ -140,6 +141,8 @@ export default function ReviewAgent() {
                 {c && <p className="text-xs text-muted-foreground">Tier 1: an Annual Review in Q1 and a portfolio rebalancing in Q3. Tier 2A: an Annual Review in Q2 and a rebalancing in Q4. Tier 2B: a Sovereignty Review in Q2 and another in Q4. Tier 3: Sovereignty Reviews in Q1–Q3 and a Governance Review in Q4. A rebalancing is prepared by you family by family, published to the portal when it is ready, and Georgia invites the family only then. Meeting invitations go out on the first day of each window, then a reminder every {c.remind_every_days} days (up to {c.max_nudges}); with {c.handoff_days_before_end} days left and nothing booked, the family comes to you. Only windows that start after {when(c.since)} are managed.</p>}
               </CardContent>
             </Card>
+
+            <ReviewAgentGuide />
 
             <MeetingReminderCard />
 
