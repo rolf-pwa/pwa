@@ -1,4 +1,4 @@
-// portal-rebalance: a client's response to their portfolio rebalancing (Tier 1 in Q3, Tier 2A in Q4), from the portal or VFO.
+// portal-rebalance: a client's response to their portfolio rebalancing (Tier 1 in Q3), from the portal or VFO.
 // Only after Rolf has published it to the family: the client reviews the proposal first and consents after.
 //   acknowledge  records the acknowledgement with the exact wording and proposal shown, completes it for Georgia, and gives Rolf a task to carry it out
 //   talk_first   records that the client wants to talk before it is done, pauses Georgia's reminders for two weeks, and tells Rolf

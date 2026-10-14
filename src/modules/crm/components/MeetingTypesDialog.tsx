@@ -103,7 +103,7 @@ export function MeetingTypesDialog({ open, onOpenChange }: { open: boolean; onOp
                     onChange={(e) => patch(t.id, { cadence_kind: (e.target.value || null) as MeetingType["cadence_kind"] })}
                   >
                     <option value="">Always show to clients</option>
-                    <option value="annual_review">Only while an Annual Review is owed</option>
+                    <option value="annual_review">Only while a Portfolio Review is owed</option>
                     <option value="sovereignty_review">Only while a Sovereignty Review is owed</option>
                     <option value="governance_review">Only while a Governance Review is owed</option>
                   </select>

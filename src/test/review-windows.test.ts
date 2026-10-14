@@ -2,18 +2,24 @@ import { describe, it, expect } from "vitest";
 import { requiredMeetings, isFamilyAdult, requiredRebalancing, requiredObligations, rebalancingEmail, windowLabel, REBALANCE_STATEMENT, REBALANCE_STATEMENT_VERSION, kindFromTitle, decideReview, inviteesOf, windowEmail, daysBetween, pacificDate, meetingsOwedNow, gateMeetingTypes, DEFAULT_REVIEW_CONFIG, type ReviewFacts } from "../../supabase/functions/_shared/review-windows";
 
 describe("which meetings each tier is owed", () => {
-  it("gives Tier 0 nothing and Tier 1 an Annual Review in Q1", () => {
+  it("gives Tier 0 nothing and Tier 1 a Portfolio Review in Q1", () => {
     expect(requiredMeetings("tier_0", 2027)).toEqual([]);
     expect(requiredMeetings(null, 2027)).toEqual([]);
     expect(requiredMeetings("tier_1", 2027)).toEqual([{ kind: "annual_review", key: "2027-Q1-annual_review", windowStart: "2027-01-01", windowEnd: "2027-03-31" }]);
   });
-  it("gives Tier 2A an Annual Review in Q2", () => {
-    expect(requiredMeetings("tier_2a", 2027)).toEqual([{ kind: "annual_review", key: "2027-Q2-annual_review", windowStart: "2027-04-01", windowEnd: "2027-06-30" }]);
-  });
-  it("gives Tier 2B a Sovereignty Review in Q2 and another in Q4", () => {
-    expect(requiredMeetings("tier_2b", 2027).map((m) => [m.kind, m.key, m.windowStart, m.windowEnd])).toEqual([
-      ["sovereignty_review", "2027-Q2-sovereignty_review", "2027-04-01", "2027-06-30"], ["sovereignty_review", "2027-Q4-sovereignty_review", "2027-10-01", "2027-12-31"],
+  it("gives Tier 2A a Portfolio Review in Q2 and another in Q4", () => {
+    expect(requiredMeetings("tier_2a", 2027).map((m) => [m.kind, m.key, m.windowStart, m.windowEnd])).toEqual([
+      ["annual_review", "2027-Q2-annual_review", "2027-04-01", "2027-06-30"], ["annual_review", "2027-Q4-annual_review", "2027-10-01", "2027-12-31"],
     ]);
+  });
+  it("gives Tier 2B a Portfolio Review in Q2 and a Sovereignty Review in Q4", () => {
+    expect(requiredMeetings("tier_2b", 2027).map((m) => [m.kind, m.key, m.windowStart, m.windowEnd])).toEqual([
+      ["annual_review", "2027-Q2-annual_review", "2027-04-01", "2027-06-30"], ["sovereignty_review", "2027-Q4-sovereignty_review", "2027-10-01", "2027-12-31"],
+    ]);
+  });
+  it("names the renamed meeting, and still recognises the old calendar title", () => {
+    expect(kindFromTitle("Portfolio Review: Smith")).toBe("annual_review");
+    expect(kindFromTitle("Annual Review: Smith")).toBe("annual_review");
   });
   it("gives Tier 3 (and 4) three Sovereignty Reviews and a Q4 Governance Review", () => {
     for (const t of ["tier_3", "tier_4"] as const) {
@@ -101,7 +107,7 @@ describe("dates and invitees", () => {
     expect(e.html).toContain("before March 31, 2027");
     expect(e.html).toContain("open <strong>Meetings</strong>");
     expect(e.html).not.toMatch(/\$|balance|account/i);
-    expect(windowEmail({ firstName: "Sam", kind: "annual_review", windowEnd: "2027-03-31", reminder: true, portalUrl: "x", fromLine: "x" }).subject).toBe("Reminder: book your Annual Review");
+    expect(windowEmail({ firstName: "Sam", kind: "annual_review", windowEnd: "2027-03-31", reminder: true, portalUrl: "x", fromLine: "x" }).subject).toBe("Reminder: book your Portfolio Review");
   });
 });
 
@@ -109,23 +115,24 @@ describe("which meeting links a family sees", () => {
   const NOW = Date.parse("2027-02-10T18:00:00Z");
   const types = [
     { label: "Interim Strategy Session", cadence_kind: null as string | null },
-    { label: "Annual Review", cadence_kind: "annual_review" },
+    { label: "Portfolio Review", cadence_kind: "annual_review" },
     { label: "Sovereignty Review", cadence_kind: "sovereignty_review" },
     { label: "Governance Review", cadence_kind: "governance_review" },
   ];
-  it("shows a Tier 1 family only the Annual Review, and only in Q1", () => {
+  it("shows a Tier 1 family only the Portfolio Review, and only in Q1", () => {
     const owedQ1 = meetingsOwedNow("tier_1", "2027-02-10", [], NOW);
     expect(owedQ1.map((o) => o.kind)).toEqual(["annual_review"]);
-    expect(gateMeetingTypes(types, owedQ1, true).bookable.map((t) => t.label)).toEqual(["Interim Strategy Session", "Annual Review"]);
+    expect(gateMeetingTypes(types, owedQ1, true).bookable.map((t) => t.label)).toEqual(["Interim Strategy Session", "Portfolio Review"]);
     const owedJune = meetingsOwedNow("tier_1", "2027-06-10", [], NOW);
     expect(gateMeetingTypes(types, owedJune, true).bookable.map((t) => t.label)).toEqual(["Interim Strategy Session"]);
   });
-  it("shows Tier 2A the Annual Review in Q2 (not Q1), and Tier 2B the Sovereignty Review in Q2 and Q4 only", () => {
+  it("shows Tier 2A the Portfolio Review in Q2 and Q4 (not Q1), and Tier 2B the Portfolio Review in Q2 and the Sovereignty Review in Q4", () => {
     expect(gateMeetingTypes(types, meetingsOwedNow("tier_2a", "2027-02-10", [], NOW), true).bookable.map((t) => t.label)).toEqual(["Interim Strategy Session"]);
-    expect(gateMeetingTypes(types, meetingsOwedNow("tier_2a", "2027-05-10", [], NOW), true).bookable.map((t) => t.label)).toEqual(["Interim Strategy Session", "Annual Review"]);
-    for (const [day, shown] of [["2027-02-10", false], ["2027-05-10", true], ["2027-08-10", false], ["2027-11-10", true]] as const) {
+    expect(gateMeetingTypes(types, meetingsOwedNow("tier_2a", "2027-05-10", [], NOW), true).bookable.map((t) => t.label)).toEqual(["Interim Strategy Session", "Portfolio Review"]);
+    expect(gateMeetingTypes(types, meetingsOwedNow("tier_2a", "2027-11-10", [], NOW), true).bookable.map((t) => t.label)).toEqual(["Interim Strategy Session", "Portfolio Review"]);
+    for (const [day, label] of [["2027-02-10", null], ["2027-05-10", "Portfolio Review"], ["2027-08-10", null], ["2027-11-10", "Sovereignty Review"]] as const) {
       const labels = gateMeetingTypes(types, meetingsOwedNow("tier_2b", day, [], NOW), true).bookable.map((t) => t.label);
-      expect(labels.includes("Sovereignty Review")).toBe(shown);
+      expect(labels).toEqual(label ? ["Interim Strategy Session", label] : ["Interim Strategy Session"]);
     }
   });
   it("shows Tier 3 the Sovereignty Review in Q1-Q3 and the Governance Review in Q4", () => {
@@ -136,7 +143,7 @@ describe("which meeting links a family sees", () => {
     const booked = [{ window_key: "2027-Q1-annual_review", status: "booked", booked_start: "2027-02-20T18:00:00Z" }];
     const g = gateMeetingTypes(types, meetingsOwedNow("tier_1", "2027-02-10", booked, NOW), true);
     expect(g.bookable.map((t) => t.label)).toEqual(["Interim Strategy Session"]);
-    expect(g.booked.map((b) => [b.type.label, b.start])).toEqual([["Annual Review", "2027-02-20T18:00:00Z"]]);
+    expect(g.booked.map((b) => [b.type.label, b.start])).toEqual([["Portfolio Review", "2027-02-20T18:00:00Z"]]);
     const held = [{ window_key: "2027-Q1-annual_review", status: "held", booked_start: "2027-02-05T18:00:00Z" }];
     const g2 = gateMeetingTypes(types, meetingsOwedNow("tier_1", "2027-02-10", held, NOW), true);
     expect(g2.booked).toEqual([]);
@@ -155,10 +162,9 @@ describe("which meeting links a family sees", () => {
 });
 
 describe("portfolio rebalancing", () => {
-  it("is a Q3 acknowledgement for Tier 1 and a Q4 one for Tier 2A, and nothing for the other tiers", () => {
+  it("is a Q3 acknowledgement for Tier 1 only", () => {
     expect(requiredRebalancing("tier_1", 2027)).toEqual([{ kind: "rebalancing", key: "2027-Q3-rebalancing", windowStart: "2027-07-01", windowEnd: "2027-09-30" }]);
-    expect(requiredRebalancing("tier_2a", 2027)).toEqual([{ kind: "rebalancing", key: "2027-Q4-rebalancing", windowStart: "2027-10-01", windowEnd: "2027-12-31" }]);
-    for (const t of ["tier_0", "tier_2b", "tier_3", "tier_4", null] as const) expect(requiredRebalancing(t, 2027)).toEqual([]);
+    for (const t of ["tier_0", "tier_2a", "tier_2b", "tier_3", "tier_4", null] as const) expect(requiredRebalancing(t, 2027)).toEqual([]);
   });
   it("is tracked alongside the meetings but is never a meeting", () => {
     expect(requiredObligations("tier_1", 2027).map((o) => [o.kind, o.windowStart])).toEqual([["annual_review", "2027-01-01"], ["rebalancing", "2027-07-01"]]);
