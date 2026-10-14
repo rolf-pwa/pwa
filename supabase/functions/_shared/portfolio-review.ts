@@ -114,6 +114,52 @@ export function resolveProfile(p: InvestorProfile | null, models: ModelPortfolio
 
 /** Statements print whole percentages, so a mix within half a point of the target is on target. */
 export const HARD_LINE_TOLERANCE = 0.5;
+/** A fund's name without the statement's series and sales-charge prefix ("3603H-NSC-" or "3233B-DSC-"), so it can be matched to a model's fund. */
+export function normalizeFundName(raw: string | null | undefined): string {
+  return String(raw ?? "").replace(/^\s*\d+[A-Za-z]?-[A-Za-z]{3}-/, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+const cleanFundName = (raw: string) => raw.replace(/^\s*\d+[A-Za-z]?-[A-Za-z]{3}-/, "").trim();
+
+export interface FundDeviationRow { name: string; modelPct: number | null; actualPct: number; actualValue: number; /** Actual less model, in points. Positive: holds more than the model. */ diffPts: number; inModel: boolean }
+export interface ModelComparison {
+  modelKey: string; modelLabel: string; modelAsOf: string; rows: FundDeviationRow[];
+  /** The share held in funds the model does not contain. */
+  offModelPct: number;
+  /** The share that would have to move to match the model exactly (half the sum of the differences). */
+  activeSharePct: number; totalValue: number; moveValue: number;
+}
+
+/** Compares an account's (or household's) funds, fund by fund, with a model's funds and weights. Weights are of the funds listed. */
+export function compareToModel(funds: FundRow[], model: ModelPortfolio): ModelComparison | null {
+  const total = funds.reduce((s, f) => s + (Number.isFinite(f.value) ? f.value : 0), 0);
+  if (total <= 0) return null;
+  const held = new Map<string, { name: string; value: number }>();
+  for (const f of funds) {
+    const k = normalizeFundName(f.name);
+    const cur = held.get(k) ?? { name: cleanFundName(f.name), value: 0 };
+    cur.value += Number.isFinite(f.value) ? f.value : 0;
+    held.set(k, cur);
+  }
+  const rows: FundDeviationRow[] = [];
+  const seen = new Set<string>();
+  for (const mf of model.funds) {
+    const k = normalizeFundName(mf.name);
+    seen.add(k);
+    const h = held.get(k);
+    const actualPct = h ? (h.value / total) * 100 : 0;
+    rows.push({ name: mf.name, modelPct: mf.weight, actualPct: round1(actualPct), actualValue: Math.round(h?.value ?? 0), diffPts: round1(actualPct - mf.weight), inModel: true });
+  }
+  for (const [k, h] of held) {
+    if (seen.has(k)) continue;
+    const actualPct = (h.value / total) * 100;
+    rows.push({ name: h.name, modelPct: null, actualPct: round1(actualPct), actualValue: Math.round(h.value), diffPts: round1(actualPct), inModel: false });
+  }
+  rows.sort((a, b) => Number(b.inModel) - Number(a.inModel) || b.actualPct - a.actualPct);
+  const offModelPct = round1(rows.filter((r) => !r.inModel).reduce((s, r) => s + r.actualPct, 0));
+  const activeSharePct = round1(rows.reduce((s, r) => s + Math.abs(r.diffPts), 0) / 2);
+  return { modelKey: model.key, modelLabel: model.label, modelAsOf: model.asOf, rows, offModelPct, activeSharePct, totalValue: Math.round(total), moveValue: Math.round((activeSharePct / 100) * total) };
+}
+
 export type DriftStatus = "within" | "too_much_income" | "too_little_income" | "no_target" | "no_data";
 export interface Drift { status: DriftStatus; targetIncomePct: number | null; actualIncomePct: number | null; bandPct: number; /** iA's income range for the profile, when the profile is one of its models. */ rangeMin?: number | null; rangeMax?: number | null; profileLabel?: string | null; /** Dollars to move out of income (positive) or into income (negative) to reach target. */ moveToIncome: number | null }
 
@@ -149,13 +195,13 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 export interface PackException { severity: "attention" | "note"; text: string }
 export interface PackAccountOut extends PackAccount {
   changeSincePrior: number | null; changeSincePriorPct: number | null; changeYtd: number | null;
-  classTotals: ClassTotals | null; incomePct: number | null; drift: Drift; statementAgeDays: number | null;
+  classTotals: ClassTotals | null; incomePct: number | null; drift: Drift; statementAgeDays: number | null; modelComparison: ModelComparison | null;
 }
 export interface Pack {
   asOf: string | null;
   totalValue: number;
   accounts: PackAccountOut[];
-  household: { classTotals: ClassTotals; coveredValue: number; coveragePct: number | null; drift: Drift; valueWeightedYtd: number | null; changeSincePrior: number | null; changeYtd: number | null };
+  household: { modelComparison: ModelComparison | null; classTotals: ClassTotals; coveredValue: number; coveragePct: number | null; drift: Drift; valueWeightedYtd: number | null; changeSincePrior: number | null; changeYtd: number | null };
   profile: { household: InvestorProfile | null; byAccount: number };
   /** The iA model set in use (null when no profile points at one). */
   modelAsOf: string | null;
@@ -192,6 +238,7 @@ export function buildPortfolioPack(input: { accounts: PackAccount[]; profiles: I
       incomePct: t && base > 0 ? round1((t.income / base) * 100) : null,
       drift: t ? driftFor(t, prof) : { status: "no_data", targetIncomePct: prof?.incomePct ?? null, actualIncomePct: null, bandPct: prof?.bandPct ?? 0, moveToIncome: null },
       statementAgeDays: a.statement?.statementDate ? daysBetween(a.statement.statementDate, today) : null,
+      modelComparison: prof?.model && a.statement?.funds.length ? compareToModel(a.statement.funds, prof.model) : null,
     };
   });
 
@@ -228,6 +275,10 @@ export function buildPortfolioPack(input: { accounts: PackAccount[]; profiles: I
     if (a.changeSincePriorPct !== null && Math.abs(a.changeSincePriorPct) > 25) exceptions.push({ severity: "attention", text: `${label} moved ${a.changeSincePriorPct > 0 ? "up" : "down"} ${Math.abs(a.changeSincePriorPct).toFixed(1)}% in a month. Check for a deposit or withdrawal.` });
     const against = a.drift.rangeMin != null ? `outside the ${a.drift.profileLabel ?? "profile"} range (${a.drift.rangeMin}-${a.drift.rangeMax}% income); ${money(Math.abs(a.drift.moveToIncome ?? 0))} to move ${a.drift.status === "too_much_income" ? "into equity" : "into income"} to reach the ${a.drift.targetIncomePct}% model mix` : `against a ${a.drift.targetIncomePct}% target (${money(Math.abs(a.drift.moveToIncome ?? 0))} to move ${a.drift.status === "too_much_income" ? "into equity" : "into income"})`;
     if (a.drift.status === "too_much_income" || a.drift.status === "too_little_income") exceptions.push({ severity: "attention", text: `${label} holds ${a.drift.actualIncomePct}% income, ${against}.` });
+    if (a.modelComparison && a.modelComparison.offModelPct > 0) {
+      const names = a.modelComparison.rows.filter((r) => !r.inModel).map((r) => r.name);
+      exceptions.push({ severity: "attention", text: `${label} holds ${a.modelComparison.offModelPct}% in funds that are not in the ${a.modelComparison.modelLabel} model (${names.slice(0, 3).join(", ")}${names.length > 3 ? `, and ${names.length - 3} more` : ""}). About ${money(a.modelComparison.moveValue)} would move to match the model.` });
+    }
     if (a.statementAgeDays !== null && a.statementAgeDays > STATEMENT_STALE_DAYS) exceptions.push({ severity: "note", text: `${label}: the latest statement read is ${a.statementAgeDays} days old (${a.statement!.statementDate}).` });
     if (!a.statement || !a.statement.funds.length) gaps.push(`No fund detail for ${label}. Scan its latest statement to include it in the allocation.`);
   }
@@ -242,6 +293,7 @@ export function buildPortfolioPack(input: { accounts: PackAccount[]; profiles: I
     totalValue,
     accounts: out,
     household: {
+      modelComparison: householdModelComparison(out),
       classTotals: hhTotals, coveredValue, coveragePct: totalValue > 0 ? round1((coveredValue / totalValue) * 100) : null, drift: hhDrift, valueWeightedYtd,
       changeSincePrior: priorKnown.length ? priorKnown.reduce((s, a) => s + (a.changeSincePrior as number), 0) : null,
       changeYtd: ytdKnown.length ? ytdKnown.reduce((s, a) => s + (a.changeYtd as number), 0) : null,
@@ -252,4 +304,16 @@ export function buildPortfolioPack(input: { accounts: PackAccount[]; profiles: I
     gaps,
     resets: resetCheck(accounts, today),
   };
+}
+
+/** The household's funds against one model, when every profiled account points at the same model; otherwise null. */
+function householdModelComparison(accounts: PackAccountOut[]): ModelComparison | null {
+  const withModel = accounts.filter((a) => a.modelComparison && a.statement);
+  if (!withModel.length) return null;
+  const keys = new Set(withModel.map((a) => a.modelComparison!.modelKey));
+  if (keys.size !== 1) return null;
+  // Rebuild a model from the first comparison's rows so this needs no model lookup: model rows are those with a model weight.
+  const first = withModel[0].modelComparison!;
+  const model: ModelPortfolio = { asOf: first.modelAsOf, key: first.modelKey, label: first.modelLabel, incomeMin: 0, incomeMax: 0, equityMin: 0, equityMax: 0, incomeTarget: 0, funds: first.rows.filter((r) => r.inModel).map((r) => ({ name: r.name, weight: r.modelPct as number })) };
+  return compareToModel(withModel.flatMap((a) => a.statement!.funds), model);
 }

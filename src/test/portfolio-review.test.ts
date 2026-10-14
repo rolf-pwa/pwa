@@ -140,3 +140,42 @@ describe("iA model portfolios", () => {
     expect(p.modelAsOf).toBe("2026-05-31");
   });
 });
+
+import { compareToModel, normalizeFundName } from "../../supabase/functions/_shared/portfolio-review";
+
+describe("funds against the model, fund by fund", () => {
+  const balanced: ModelPortfolio = { asOf: "2026-05-31", key: "balanced", label: "Balanced", incomeMin: 35, incomeMax: 55, equityMin: 45, equityMax: 65, incomeTarget: 40, funds: [
+    { name: "Fixed income managed portfolio (iA)", weight: 40 }, { name: "Canadian Equity Growth (iA)", weight: 10 }, { name: "Fidelity Canadian Opportunities", weight: 10 }, { name: "Fidelity Insights", weight: 20 }, { name: "Fidelity Global Concentrated Equity", weight: 20 }] };
+  it("matches statement names to the model's despite the series prefix", () => {
+    expect(normalizeFundName("3603H-NSC-Fixed Income Managed Portfolio (iA)")).toBe(normalizeFundName("Fixed income managed portfolio (iA)"));
+    expect(normalizeFundName("3233B-DSC-Thematic Innovation (iA)")).toBe("thematicinnovationia");
+  });
+  it("shows an account that holds the model's funds at different weights", () => {
+    const c = compareToModel([
+      { name: "3603H-NSC-Fixed Income Managed Portfolio (iA)", category: "Income Funds", value: 49_072 }, { name: "3790H-NSC-Fidelity Canadian Opportunities", category: "Canadian Equity funds", value: 27_547 },
+      { name: "3106H-NSC-Fidelity Insights", category: "U.S. & International Equity Funds", value: 24_447 }, { name: "3008H-NSC-Fidelity Global Concentrated Equity", category: "U.S. & International Equity Funds", value: 23_133 }, { name: "3725H-NSC-Canadian Equity Growth (iA)", category: "Canadian Equity funds", value: 22_001 },
+    ], balanced)!;
+    expect(c.offModelPct).toBe(0);
+    expect(c.rows.find((r) => r.name.startsWith("Fidelity Canadian"))!.diffPts).toBeGreaterThan(8);
+    expect(c.activeSharePct).toBeGreaterThan(8);
+    expect(c.moveValue).toBeGreaterThan(10_000);
+  });
+  it("flags funds the model does not hold, and model funds not held", () => {
+    const c = compareToModel([
+      { name: "3603H-NSC-Fixed Income Managed Portfolio (iA)", category: "Income Funds", value: 41_038 }, { name: "3233H-NSC-Thematic Innovation (iA)", category: "U.S. & International Equity Funds", value: 13_325 },
+      { name: "3695H-NSC-Dividend Growth (iA)", category: "Canadian Equity funds", value: 12_198 }, { name: "3019H-NSC-Global Opportunities (Loomis Sayles)", category: "U.S. & International Equity Funds", value: 11_633 },
+      { name: "3790H-NSC-Fidelity Canadian Opportunities", category: "Canadian Equity funds", value: 10_339 },
+    ], balanced)!;
+    const off = c.rows.filter((r) => !r.inModel).map((r) => r.name);
+    expect(off).toEqual(["Thematic Innovation (iA)", "Dividend Growth (iA)", "Global Opportunities (Loomis Sayles)"]);
+    expect(c.offModelPct).toBeGreaterThan(40);
+    expect(c.rows.find((r) => r.name === "Fidelity Insights")!.actualPct).toBe(0);
+    expect(compareToModel([], balanced)).toBeNull();
+  });
+  it("puts it in the pack: an exception per off-model account and a household table", () => {
+    const funds = [{ name: "3233H-NSC-Thematic Innovation (iA)", category: "U.S. & International Equity Funds", value: 30_000 }, { name: "3603H-NSC-Fixed Income Managed Portfolio (iA)", category: "Income Funds", value: 70_000 }];
+    const p = buildPortfolioPack({ accounts: [acct({ statement: { statementDate: "2026-09-30", funds } })], profiles: [{ accountNumber: null, label: null, incomePct: 40, equityPct: 60, bandPct: 0, profileKey: "balanced" }], today: "2026-10-14", models: [balanced] });
+    expect(p.household.modelComparison!.offModelPct).toBe(30);
+    expect(p.exceptions.some((e) => /not in the Balanced model \(Thematic Innovation \(iA\)\)/.test(e.text))).toBe(true);
+  });
+});
