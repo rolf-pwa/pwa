@@ -8,7 +8,7 @@ import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { Input } from "@/shared/components/ui/input";
 import { deleteInvestorProfile, getPortfolioPack, saveGuaranteeReset, saveInvestorProfile, type PortfolioPackResponse } from "@/modules/crm/lib/reviewAgent";
-import { CLASS_LABEL, type AssetClass, type DriftStatus } from "../../../../supabase/functions/_shared/portfolio-review";
+import { CLASS_LABEL, type AssetClass, type DriftStatus, type ModelComparison } from "../../../../supabase/functions/_shared/portfolio-review";
 import { SERVICE_TIER_LABEL, type ServiceTier } from "@/shared/lib/serviceTier";
 
 const money = (n: number | null | undefined) => (n === null || n === undefined ? "—" : n.toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }));
@@ -17,6 +17,25 @@ const signed = (n: number | null | undefined) => (n === null || n === undefined 
 const day = (iso: string | null) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-CA", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" }) : "—");
 const DRIFT_TEXT: Record<DriftStatus, string> = { within: "Within target", too_much_income: "Too much income", too_little_income: "Too little income", no_target: "No target", no_data: "No fund detail" };
 const RESET_TEXT: Record<string, string> = { reset: "Reset", no_room: "No room", no_reset_series: "Series 75/75: no reset", too_old: "Age 85 or over", needs_dob: "Add date of birth", no_guarantee_data: "No guarantee data" };
+/** A fund-by-fund table against a model, for the household or one account. */
+function ModelTable({ c }: { c: ModelComparison }) {
+  return (
+    <table className="w-full text-sm">
+      <thead><tr className="border-b text-left text-xs text-muted-foreground"><th className="py-2 pr-2">Fund</th><th className="px-2 text-right">Model</th><th className="px-2 text-right">Held</th><th className="px-2 text-right">Difference</th><th className="pl-2 text-right">Value</th></tr></thead>
+      <tbody>
+        {c.rows.map((r) => (
+          <tr key={r.name} className="border-b last:border-0">
+            <td className="py-1.5 pr-2">{r.name}{!r.inModel && <Badge variant="destructive" className="ml-2 text-[10px]">Not in model</Badge>}</td>
+            <td className="px-2 text-right">{r.modelPct === null ? "—" : `${r.modelPct}%`}</td>
+            <td className="px-2 text-right">{r.actualPct}%</td>
+            <td className={`px-2 text-right ${Math.abs(r.diffPts) >= 5 ? "font-medium text-destructive" : ""}`}>{r.diffPts > 0 ? "+" : ""}{r.diffPts} pts</td>
+            <td className="pl-2 text-right">{money(r.actualValue)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
 const COLOR: Record<AssetClass, string> = { income: "bg-sky-500", canadian_equity: "bg-emerald-600", us_intl_equity: "bg-emerald-400", equity_other: "bg-emerald-300", other: "bg-muted-foreground/40" };
 
 /** Staff-only prep pack for a household's Portfolio Review: returns from the monthly import, allocation from the statements, drift from the Investor Profile. */
@@ -104,6 +123,33 @@ export default function PortfolioReview() {
               </CardContent>
             </Card>
 
+            <Card>
+              <CardHeader className="pb-3"><CardTitle className="text-lg">Funds against the model{p.household.modelComparison ? `: ${p.household.modelComparison.modelLabel}` : ""}</CardTitle></CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {p.household.modelComparison ? (
+                  <>
+                    <p>
+                      <span className="font-medium">{p.household.modelComparison.offModelPct}% is held in funds the model does not contain.</span>{" "}
+                      Matching the model would move about {money(p.household.modelComparison.moveValue)} of {money(p.household.modelComparison.totalValue)} ({p.household.modelComparison.activeSharePct}%).
+                    </p>
+                    <div className="overflow-x-auto"><ModelTable c={p.household.modelComparison} /></div>
+                    <p className="text-xs text-muted-foreground">iA {p.household.modelComparison.modelLabel} model as at {day(p.household.modelComparison.modelAsOf)}. Weights are of the funds on the latest statements read, across every account with the same profile. Difference is held less model.</p>
+                    <details className="rounded-md border px-3 py-2">
+                      <summary className="cursor-pointer text-sm font-medium">By account</summary>
+                      <div className="mt-3 space-y-4">
+                        {p.accounts.filter((a) => a.modelComparison).map((a) => (
+                          <div key={a.id}>
+                            <p className="mb-1 text-xs"><span className="font-medium">{a.name || a.number}</span> · {a.modelComparison!.offModelPct}% off model · {money(a.modelComparison!.moveValue)} to match</p>
+                            <div className="overflow-x-auto"><ModelTable c={a.modelComparison!} /></div>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  </>
+                ) : <p className="text-muted-foreground">Choose an iA profile below (Prudent to Aggressive) and the funds on the statements are compared with that model.</p>}
+              </CardContent>
+            </Card>
+
             {(p.exceptions.length > 0 || p.gaps.length > 0) && (
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="text-lg">To raise and to fix</CardTitle></CardHeader>
@@ -151,7 +197,7 @@ export default function PortfolioReview() {
               <CardHeader className="pb-3"><CardTitle className="text-lg">Accounts</CardTitle></CardHeader>
               <CardContent className="overflow-x-auto p-0">
                 <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-xs text-muted-foreground"><th className="px-4 py-2">Account</th><th className="px-2 py-2 text-right">Value</th><th className="px-2 py-2 text-right">Month</th><th className="px-2 py-2 text-right">YTD</th><th className="px-2 py-2 text-right">1Y</th><th className="px-2 py-2 text-right">3Y</th><th className="px-2 py-2 text-right">Income</th><th className="px-4 py-2">Status</th></tr></thead>
+                  <thead><tr className="border-b text-left text-xs text-muted-foreground"><th className="px-4 py-2">Account</th><th className="px-2 py-2 text-right">Value</th><th className="px-2 py-2 text-right">Month</th><th className="px-2 py-2 text-right">YTD</th><th className="px-2 py-2 text-right">1Y</th><th className="px-2 py-2 text-right">3Y</th><th className="px-2 py-2 text-right">Income</th><th className="px-2 py-2 text-right">Off model</th><th className="px-4 py-2">Status</th></tr></thead>
                   <tbody>
                     {p.accounts.map((a) => (
                       <tr key={a.id} className="border-b last:border-0">
@@ -162,10 +208,11 @@ export default function PortfolioReview() {
                         <td className="px-2 py-2 text-right">{pct(a.returns.oneYear)}</td>
                         <td className="px-2 py-2 text-right">{pct(a.returns.threeYear)}</td>
                         <td className="px-2 py-2 text-right">{pct(a.incomePct)}</td>
+                        <td className="px-2 py-2 text-right">{a.modelComparison ? pct(a.modelComparison.offModelPct) : "—"}</td>
                         <td className="px-4 py-2"><Badge variant={a.drift.status === "too_much_income" || a.drift.status === "too_little_income" ? "destructive" : "secondary"} className="text-[10px]">{DRIFT_TEXT[a.drift.status]}</Badge></td>
                       </tr>
                     ))}
-                    {p.accounts.length === 0 && <tr><td className="px-4 py-6 text-muted-foreground" colSpan={8}>No managed accounts found.</td></tr>}
+                    {p.accounts.length === 0 && <tr><td className="px-4 py-6 text-muted-foreground" colSpan={9}>No managed accounts found.</td></tr>}
                   </tbody>
                 </table>
               </CardContent>
