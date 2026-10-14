@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { REBALANCE_STATEMENT, REBALANCE_STATEMENT_VERSION, gateMeetingTypes, meetingsOwedNow, pacificDate, windowLabel } from "../_shared/review-windows.ts";
+import { REBALANCE_STATEMENT, REBALANCE_STATEMENT_VERSION, gateMeetingTypes, isFamilyAdult, meetingsOwedNow, pacificDate, windowLabel } from "../_shared/review-windows.ts";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { makeVisibilityFilter } from "../_shared/portal-visibility.ts";
@@ -592,8 +592,9 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
       // A meeting type tied to the review cadence is shown only to the family's adults, and only while that meeting is owed:
       // its window is open and nothing is booked. Once booked, the portal shows the date instead of a booking link.
       let owed: ReturnType<typeof meetingsOwedNow> = [];
-      const role = contactRes.data?.family_role;
-      const canBook = (role === "head_of_family" || role === "spouse") && !contactRes.data?.is_minor;
+      const { data: heads } = familyId ? await supabase.from("contacts").select("household_id").eq("family_id", familyId).eq("family_role", "head_of_family") : { data: [] as any[] };
+      const hofHouseholds = (heads ?? []).map((h: any) => h.household_id);
+      const canBook = isFamilyAdult({ role: contactRes.data?.family_role ?? null, isMinor: contactRes.data?.is_minor, householdId: contactRes.data?.household_id }, hofHouseholds);
       if (canBook && familyId && (mt ?? []).some((t: any) => t.cadence_kind)) {
         const today = pacificDate(Date.now());
         const [{ data: fam }, { data: tracked }] = await Promise.all([
@@ -612,8 +613,8 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
     // The family's portfolio rebalancing, when its window is open: only for adults, and only once Georgia has made it live.
     let rebalancing: { label: string; summary: string; publishedAt: string; acknowledgedAt: string | null; completedAt: string | null; statement: string; statementVersion: string } | null = null;
     try {
-      const role = contactRes.data?.family_role;
-      if ((role === "head_of_family" || role === "spouse") && !contactRes.data?.is_minor && familyId) {
+      const { data: rHeads } = familyId ? await supabase.from("contacts").select("household_id").eq("family_id", familyId).eq("family_role", "head_of_family") : { data: [] as any[] };
+      if (familyId && isFamilyAdult({ role: contactRes.data?.family_role ?? null, isMinor: contactRes.data?.is_minor, householdId: contactRes.data?.household_id }, (rHeads ?? []).map((h: any) => h.household_id))) {
         const today = pacificDate(Date.now());
         // Shown only once Rolf has published it to this family, and only while Georgia is live.
         const { data: ob } = await supabase.from("review_obligations").select("window_start, window_end, published_at, proposal_summary, acknowledged_at, completed_at").eq("family_id", familyId).eq("kind", "rebalancing").eq("mode", "live").neq("status", "cancelled").not("published_at", "is", null).lte("window_start", today).order("window_start", { ascending: false }).limit(1).maybeSingle();

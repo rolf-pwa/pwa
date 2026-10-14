@@ -7,7 +7,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validatePortalContact } from "../_shared/portal-auth.ts";
-import { REBALANCE_STATEMENT, REBALANCE_STATEMENT_VERSION, pacificDate, windowLabel } from "../_shared/review-windows.ts";
+import { REBALANCE_STATEMENT, REBALANCE_STATEMENT_VERSION, isFamilyAdult, pacificDate, windowLabel } from "../_shared/review-windows.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -39,8 +39,10 @@ Deno.serve(async (req) => {
     if (!who) return json({ error: "Unauthorized" }, 401);
     if (action !== "acknowledge" && action !== "talk_first") return json({ error: "unknown_action" }, 400);
 
-    const { data: me } = await db.from("contacts").select("id, first_name, last_name, family_id, family_role, is_minor").eq("id", who.contactId).maybeSingle();
-    if (!me?.family_id || !["head_of_family", "spouse"].includes(me.family_role ?? "") || me.is_minor) return json({ error: "Not available" }, 403);
+    const { data: me } = await db.from("contacts").select("id, first_name, last_name, family_id, family_role, is_minor, household_id").eq("id", who.contactId).maybeSingle();
+    if (!me?.family_id) return json({ error: "Not available" }, 403);
+    const { data: heads } = await db.from("contacts").select("household_id").eq("family_id", me.family_id).eq("family_role", "head_of_family");
+    if (!isFamilyAdult({ role: me.family_role, isMinor: me.is_minor, householdId: me.household_id }, (heads ?? []).map((h: any) => h.household_id))) return json({ error: "Not available" }, 403);
 
     const today = pacificDate(Date.now());
     const { data: ob } = await db.from("review_obligations").select("*").eq("family_id", me.family_id).eq("kind", "rebalancing").eq("mode", "live").neq("status", "cancelled").not("published_at", "is", null).lte("window_start", today).is("completed_at", null).order("window_start", { ascending: false }).limit(1).maybeSingle();

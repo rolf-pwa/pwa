@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { requiredMeetings, requiredRebalancing, requiredObligations, rebalancingEmail, windowLabel, REBALANCE_STATEMENT, REBALANCE_STATEMENT_VERSION, kindFromTitle, decideReview, inviteesOf, windowEmail, daysBetween, pacificDate, meetingsOwedNow, gateMeetingTypes, DEFAULT_REVIEW_CONFIG, type ReviewFacts } from "../../supabase/functions/_shared/review-windows";
+import { requiredMeetings, isFamilyAdult, requiredRebalancing, requiredObligations, rebalancingEmail, windowLabel, REBALANCE_STATEMENT, REBALANCE_STATEMENT_VERSION, kindFromTitle, decideReview, inviteesOf, windowEmail, daysBetween, pacificDate, meetingsOwedNow, gateMeetingTypes, DEFAULT_REVIEW_CONFIG, type ReviewFacts } from "../../supabase/functions/_shared/review-windows";
 
 describe("which meetings each tier is owed", () => {
   it("gives Tier 0 nothing and Tier 1 an Annual Review in Q1", () => {
@@ -205,5 +205,27 @@ describe("portfolio rebalancing", () => {
     expect(REBALANCE_STATEMENT).toContain("I have reviewed the proposed rebalancing");
     expect(REBALANCE_STATEMENT).not.toContain("before it is reviewed");
     expect(windowLabel("2027-07-01", "2027-09-30")).toBe("Q3 2027");
+  });
+});
+
+describe("the family's two adults when a family has several households", () => {
+  const hof = "h-colleen";
+  it("counts the head of family and the spouse in the same household", () => {
+    expect(isFamilyAdult({ role: "head_of_family", householdId: hof }, [hof])).toBe(true);
+    expect(isFamilyAdult({ role: "spouse", householdId: hof }, [hof])).toBe(true);
+  });
+  it("does not count the spouse of a head of another household in the family", () => {
+    expect(isFamilyAdult({ role: "spouse", householdId: "h-singbeil" }, [hof])).toBe(false);
+    expect(isFamilyAdult({ role: "head_of_household", householdId: "h-singbeil" }, [hof])).toBe(false);
+  });
+  it("never counts a minor, and falls back to the old rule when there is no household information", () => {
+    expect(isFamilyAdult({ role: "spouse", isMinor: true, householdId: hof }, [hof])).toBe(false);
+    expect(isFamilyAdult({ role: "spouse", householdId: null }, [])).toBe(true);
+    expect(isFamilyAdult({ role: "spouse", householdId: "x" }, [null, undefined])).toBe(true);
+  });
+  it("invites only the adults of the head of family's household", () => {
+    const c = (id: string, role: string, hh: string, email: string) => ({ id, firstName: id, lastName: "x", email, role, isMinor: false, householdId: hh });
+    const out = inviteesOf([c("colleen", "head_of_family", hof, "c@x.com"), c("kaelen", "head_of_household", "h-singbeil", "k@x.com"), c("taylor", "spouse", "h-singbeil", "t@x.com"), c("partner", "spouse", hof, "p@x.com")]);
+    expect(out.map((o) => o.contactId)).toEqual(["colleen", "partner"]);
   });
 });

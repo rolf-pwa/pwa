@@ -48,11 +48,11 @@ Deno.serve(async (req) => {
 
     // 1. Keep each family's obligations in step with its tier.
     const { data: families } = await db.from("families").select("id, name, service_tier").not("service_tier", "is", null);
-    const { data: allContacts } = await db.from("contacts").select("id, family_id, first_name, last_name, email, family_role, is_minor").in("family_id", (families ?? []).map((f: any) => f.id));
+    const { data: allContacts } = await db.from("contacts").select("id, family_id, first_name, last_name, email, family_role, is_minor, household_id").in("family_id", (families ?? []).map((f: any) => f.id));
     const contactsOf = new Map<string, FamilyContact[]>();
     for (const p of allContacts ?? []) {
       const list = contactsOf.get(p.family_id) ?? [];
-      list.push({ id: p.id, firstName: p.first_name, lastName: p.last_name, email: p.email, role: p.family_role, isMinor: p.is_minor });
+      list.push({ id: p.id, firstName: p.first_name, lastName: p.last_name, email: p.email, role: p.family_role, isMinor: p.is_minor, householdId: p.household_id });
       contactsOf.set(p.family_id, list);
     }
     const year = Number(today.slice(0, 4));
