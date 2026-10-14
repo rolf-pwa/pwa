@@ -32,6 +32,7 @@ import { getPortalSession, setPortalSession, clearPortalSession } from "@/module
 import prosperwiseLogo from "@/assets/prosperwise-icon-paper.png";
 import { policyTypeLabel } from "@/shared/lib/insurance";
 import { PortalRebalancing, type RebalancingState } from "@/modules/portal/components/PortalRebalancing";
+import { PortalPortfolioReview } from "@/modules/portal/components/PortalPortfolioReview";
 import { withBookedMeetings } from "@/modules/portal/lib/bookedMeetings";
 import { PortalBookedMeetings, type BookedMeeting } from "@/modules/portal/components/PortalBookedMeetings";
 import { useBookingWatcher } from "@/modules/portal/lib/useBookingWatcher";
@@ -1137,6 +1138,10 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
             />
           )}
 
+
+          {isSelf && (data as any)?.portfolio_review && (
+            <PortalPortfolioReview view={(data as any).portfolio_review.view} publishedAt={(data as any).portfolio_review.publishedAt} />
+          )}
 
           {/* Main Tabs */}
           {/* Main Tabs: the bar spans the full width; the sidebar sits under it, beside the Action Items content. */}

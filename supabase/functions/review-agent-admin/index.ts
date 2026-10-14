@@ -7,6 +7,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { latestModels, portfolioPackFor } from "../_shared/portfolio-review-data.ts";
 import { pacificDate } from "../_shared/review-windows.ts";
 import { MODEL_PROMPT, validateModels } from "../_shared/ia-model-parse.ts";
+import { buildClientView, portfolioReviewReadyEmail, type ClientIncludes } from "../_shared/portfolio-review-client.ts";
+import { sendServiceEmailDetailed } from "../_shared/service-email.ts";
+import { AGENT_SENDER, PORTAL_URL } from "../_shared/onboarding-agent.ts";
 import { GEMINI_EXTRACT_MODEL, extractJson, generateVertexContent, parseServiceAccountKey, withThinking } from "../_shared/vertex-ai.ts";
 
 const ALLOWED_ORIGINS = [
@@ -126,7 +129,48 @@ Deno.serve(async (req) => {
       const { data: hh } = await db.from("households").select("id, label, family_id, service_tier, families(name)").eq("id", householdId).maybeSingle();
       if (!hh) return json({ error: "Household not found" }, 404);
       const { pack, profiles, models } = await portfolioPackFor(db, householdId, pacificDate(Date.now()));
-      return json({ household: { id: hh.id, label: hh.label, family_id: hh.family_id, family_name: (hh as any).families?.name ?? null, service_tier: hh.service_tier }, pack, profiles, models });
+      const { data: pub } = await db.from("portfolio_review_publications").select("id, published_at, published_by, note, includes").eq("household_id", householdId).is("unpublished_at", null).order("published_at", { ascending: false }).limit(1).maybeSingle();
+      return json({ household: { id: hh.id, label: hh.label, family_id: hh.family_id, family_name: (hh as any).families?.name ?? null, service_tier: hh.service_tier }, pack, profiles, models, publication: pub ?? null });
+    }
+    // ── Publish the Portfolio Review to the client's portal: the view is built here from the pack, frozen, and Georgia lets the household's adults know ──
+    if (action === "publishPortfolioReview") {
+      const householdId = String(body?.householdId ?? "");
+      if (!householdId) return json({ error: "householdId required" }, 400);
+      const inc = body?.includes ?? {};
+      const includes: ClientIncludes = { returns: inc.returns !== false, mix: inc.mix !== false, funds: inc.funds !== false, reset: inc.reset !== false };
+      const note = String(body?.note ?? "").slice(0, 2000);
+      const { data: hh } = await db.from("households").select("id, label").eq("id", householdId).maybeSingle();
+      if (!hh) return json({ error: "Household not found" }, 404);
+      const { pack } = await portfolioPackFor(db, householdId, pacificDate(Date.now()));
+      if (!pack.accounts.length) return json({ error: "There are no managed accounts to show." }, 400);
+      const view = buildClientView(pack, includes, note, hh.label ?? "Household");
+      const { data: prior } = await db.from("portfolio_review_publications").select("id, notified_at").eq("household_id", householdId).is("unpublished_at", null);
+      const firstTime = !(prior ?? []).some((p: any) => p.notified_at);
+      await db.from("portfolio_review_publications").update({ unpublished_at: new Date().toISOString() }).eq("household_id", householdId).is("unpublished_at", null);
+      const { data: row, error } = await db.from("portfolio_review_publications").insert({ household_id: householdId, published_by: staff.email, note: note || null, includes, view }).select("id").single();
+      if (error) return json({ error: error.message }, 400);
+      let notified = 0;
+      if (firstTime) {
+        const { data: adults } = await db.from("contacts").select("id, first_name, email, family_role, is_minor, no_automated_email").eq("household_id", householdId).in("family_role", ["head_of_household", "head_of_family", "spouse"]);
+        for (const a of adults ?? []) {
+          if (a.is_minor) continue;
+          await db.from("portal_client_notifications").insert({ contact_id: a.id, title: "Your Portfolio Review is ready", body: "Rolf has prepared your Portfolio Review. Sign in to read it.", source_type: "portfolio_review", link_tab: "dashboard" });
+          if (a.email && !a.no_automated_email) {
+            const { subject, html } = portfolioReviewReadyEmail(a.first_name ?? "", PORTAL_URL, "This is an automated email from Georgia, Rolf's AI Assistant. If you need to get in touch with Rolf, just reply to this email, and I'll make sure he gets it.");
+            const sent = await sendServiceEmailDetailed(db, { to: a.email, subject, html, from: Deno.env.get("ONBOARDING_AGENT_FROM") || AGENT_SENDER });
+            if (sent.ok) notified++;
+          }
+        }
+        await db.from("portfolio_review_publications").update({ notified_at: new Date().toISOString() }).eq("id", row.id);
+      }
+      await db.from("review_agent_events").insert({ family_id: null, mode: "live", kind: "portfolio_review_published", detail: { household_id: householdId, by: staff.email, emailed: notified, updated: !firstTime } });
+      return json({ ok: true, emailed: notified, updated: !firstTime });
+    }
+    if (action === "unpublishPortfolioReview") {
+      const householdId = String(body?.householdId ?? "");
+      await db.from("portfolio_review_publications").update({ unpublished_at: new Date().toISOString() }).eq("household_id", householdId).is("unpublished_at", null);
+      await db.from("review_agent_events").insert({ family_id: null, mode: "live", kind: "portfolio_review_unpublished", detail: { household_id: householdId, by: staff.email } });
+      return json({ ok: true });
     }
     // ── iA model portfolios: upload the published PDF, check what was read, then save it as a new dated set ──
     if (action === "readModelPdf") {

@@ -626,6 +626,18 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
       console.error("[portal-validate] rebalancing fetch error", e);
     }
 
+    // The household's Portfolio Review, once Rolf has published it: only to its own adults, as it was when he approved it.
+    let portfolio_review: { id: string; publishedAt: string; view: unknown } | null = null;
+    try {
+      const c = contactRes.data;
+      if (c?.household_id && !c.is_minor && ["head_of_household", "head_of_family", "spouse"].includes(String(c.family_role ?? ""))) {
+        const { data: pub } = await supabase.from("portfolio_review_publications").select("id, published_at, view").eq("household_id", c.household_id).is("unpublished_at", null).order("published_at", { ascending: false }).limit(1).maybeSingle();
+        if (pub) portfolio_review = { id: pub.id, publishedAt: pub.published_at, view: pub.view };
+      }
+    } catch (e) {
+      console.error("[portal-validate] portfolio review fetch error", e);
+    }
+
     return new Response(JSON.stringify({
       session_token: sessionToken,
       contact: contactRes.data,
@@ -654,6 +666,7 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
       meeting_types,
       booked_meetings,
       rebalancing,
+      portfolio_review,
       liabilities_total,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
