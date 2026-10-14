@@ -13,6 +13,7 @@ import { SNOOZE_DAYS_STAFF, cleanReply, inboundReplies, replyAction } from "../_
 import { triageReply } from "../_shared/reply-triage.ts";
 import { provisionClientFolderTree } from "../_shared/vault-provisioning.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
+import { UNCLICKED_TASK_AFTER_DAYS } from "../_shared/onboarding-invite.ts";
 import { CHECKLIST, COMPLETE_COMMENT, CONCIERGE_KEY, ESCALATED_COMMENT, NUDGE_COMMENT, newlyDone, parentTitle, progressFrom, type ChecklistKey } from "../_shared/onboarding-checklist.ts";
 import {
   AGENT_SENDER, DEFAULT_CONFIG, ESCALATION_TITLE, decideNext, escalationBody, nextNudgeCount, nudgeEmail,
@@ -52,6 +53,22 @@ Deno.serve(async (req) => {
       if (have.has(h.id)) continue;
       const { error } = await db.from("onboarding_cases").insert({ household_id: h.id, mode });
       if (!error) { summary.opened++; await event(h.id, null, mode, "case_opened", {}); }
+    }
+
+    // An invitation nobody has opened after a week: a task for Rolf to follow up personally (Georgia never writes to someone who has not engaged).
+    if (mode === "live") {
+      const cutoff = new Date(Date.now() - UNCLICKED_TASK_AFTER_DAYS * 86_400_000).toISOString();
+      const { data: stale } = await db.from("onboarding_invites").select("id, household_id, contact_id").is("first_clicked_at", null).is("revoked_at", null).is("unclicked_task_at", null).lte("created_at", cutoff).gt("expires_at", new Date().toISOString());
+      if (stale?.length) {
+        const { data: rolf } = await db.from("profiles").select("user_id").eq("email", ESCALATION_ASSIGNEE_EMAIL).maybeSingle();
+        for (const inv of stale) {
+          const { data: hh } = await db.from("households").select("label, family_id").eq("id", inv.household_id).maybeSingle();
+          if (rolf?.user_id) {
+            await db.from("pm_tasks").insert({ title: `Invitation not opened yet: ${hh?.label ?? "household"}`, status: "open", client_visible: false, assignee_id: rolf.user_id, created_by: rolf.user_id, household_id: inv.household_id, family_id: hh?.family_id ?? null, contact_id: inv.contact_id, description: `The onboarding invitation link you sent has not been opened after ${UNCLICKED_TASK_AFTER_DAYS} days. Georgia has not contacted them, since she only starts once they open it. A personal nudge from you may be all it takes. The link is on the household page under Onboarding invitation link.` });
+          }
+          await db.from("onboarding_invites").update({ unclicked_task_at: new Date().toISOString() }).eq("id", inv.id);
+        }
+      }
     }
 
     const { data: cases } = await db.from("onboarding_cases").select("*").eq("mode", mode).eq("status", "active").order("opened_at").limit(MAX_CASES);

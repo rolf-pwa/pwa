@@ -20,6 +20,7 @@ import {
   withThinking,
 } from "../_shared/vertex-ai.ts";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
+import { recordInviteClick } from "../_shared/onboarding-invite-click.ts";
 import { driveListChildren, matchVaultCategoryFolder } from "../_shared/vault-provisioning.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -1356,6 +1357,11 @@ serve(async (req) => {
     });
 
   try {
+    // The one public action: a click on an onboarding invitation link (there is no portal session yet).
+    if ((req.headers.get("content-type") ?? "").includes("application/json")) {
+      const peek = await req.clone().json().catch(() => null);
+      if (peek?.action === "invite_click") return json(await recordInviteClick(admin, String(peek.token ?? "")));
+    }
     const resolved = await resolveHousehold(req);
     if (!resolved) return json({ error: "Unauthorized" }, 401);
 
