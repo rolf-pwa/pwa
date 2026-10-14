@@ -208,7 +208,7 @@ export function PortalPortfolioReview({ view, publishedAt, preview = false }: { 
                 </li>
               ))}
             </ul>
-            <p className="text-[11px] text-muted-foreground">Navy: your guarantee today. Bronze: what it becomes after the reset.</p>
+            <p className="text-[11px] text-muted-foreground">Navy: your guarantee today. Bronze: what it becomes after the reset. These are estimates from your latest values: a reset locks in your value on the day I do it.</p>
           </Section>
         )}
 

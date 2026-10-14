@@ -80,16 +80,16 @@ describe("death benefit resets", () => {
     expect(ageOn("1955-10-14", "2026-10-14")).toBe(71);
   });
   it("lists the room on an eligible account, and totals it", () => {
-    const r = resetCheck([a(), a({ id: "a2", guarantee: g({ valueOfFunds: 10_486, guaranteedAtDeath: 9_711 }) })], "2026-10-14");
+    const r = resetCheck([a(), a({ id: "a2", value: 10_486, guarantee: g({ valueOfFunds: 10_486, guaranteedAtDeath: 9_711 }) })], "2026-10-14");
     expect(r.rows[0].status).toBe("reset");
-    expect(r.rows[0].room).toBeCloseTo(7_599, 0);
+    expect(r.rows[0].room).toBeCloseTo(7_532, 0);
     expect(r.toReset).toBe(2);
-    expect(r.totalRoom).toBeCloseTo(7_599 + 775, 0);
+    expect(r.totalRoom).toBeCloseTo(7_532 + 775, 0);
   });
   it("skips 75/75, anyone 85 or over, no room, and asks for a date of birth when missing", () => {
     expect(resetCheck([a({ guarantee: g({ series: "Series 75/75" }) })], "2026-10-14").rows[0].status).toBe("no_reset_series");
     expect(resetCheck([a({ ownerDob: "1940-01-01" })], "2026-10-14").rows[0].status).toBe("too_old");
-    expect(resetCheck([a({ guarantee: g({ valueOfFunds: 90_000 }) })], "2026-10-14").rows[0].status).toBe("no_room");
+    expect(resetCheck([a({ value: 90_000, guarantee: g({ valueOfFunds: 100_067 }) })], "2026-10-14").rows[0].status).toBe("no_room");
     expect(resetCheck([a({ ownerDob: null })], "2026-10-14").rows[0].status).toBe("needs_dob");
     expect(resetCheck([a({ guarantee: null })], "2026-10-14").rows).toEqual([]);
   });
@@ -177,5 +177,18 @@ describe("funds against the model, fund by fund", () => {
     const p = buildPortfolioPack({ accounts: [acct({ statement: { statementDate: "2026-09-30", funds } })], profiles: [{ accountNumber: null, label: null, incomePct: 40, equityPct: 60, bandPct: 0, profileKey: "balanced" }], today: "2026-10-14", models: [balanced] });
     expect(p.household.modelComparison!.offModelPct).toBe(30);
     expect(p.exceptions.some((e) => /not in the Balanced model \(Thematic Innovation \(iA\)\)/.test(e.text))).toBe(true);
+  });
+});
+
+describe("a reset is sized on the latest value, not the older statement's", () => {
+  it("uses the monthly import's value when it is newer than the statement's fund value", () => {
+    const acc: PackAccount = { ...acct(), value: 96_000, ownerDob: "1955-06-01", guarantee: { series: "Series 75/100", maturityDate: null, guaranteedAtMaturity: 1, guaranteedAtDeath: 92_000, lastQuarterFee: 1, valueOfFunds: 100_000 } };
+    const row = resetCheck([acc], "2026-10-14").rows[0];
+    expect(row.fundValue).toBe(96_000);
+    expect(row.room).toBe(4_000);
+  });
+  it("falls back to the statement's fund value when there is no import value", () => {
+    const acc: PackAccount = { ...acct(), value: null, ownerDob: "1955-06-01", guarantee: { series: "Series 75/100", maturityDate: null, guaranteedAtMaturity: 1, guaranteedAtDeath: 92_000, lastQuarterFee: 1, valueOfFunds: 100_000 } };
+    expect(resetCheck([acc], "2026-10-14").rows[0].room).toBe(8_000);
   });
 });

@@ -74,13 +74,14 @@ export function ageOn(dob: string, on: string): number {
 }
 
 /**
- * The death benefit reset check. The guaranteed value at death is the last reset amount, so what a reset adds is the fund value less that
- * guarantee. A reset is one click on iA's advisor site, costs nothing and changes no fee, so every eligible account with room is listed.
+ * The death benefit reset check. The guaranteed value at death is the last reset amount, so what a reset adds is the latest fund value less
+ * that guarantee (an estimate until the reset is done: the guarantee is set to the value on the day). A reset is one click on iA's advisor site, costs nothing and changes no fee, so every eligible account with room is listed.
  */
 export function resetCheck(accounts: PackAccount[], today: string): ResetSummary {
   const rows: ResetRow[] = accounts.filter((a) => a.guarantee || isResetSeries(a.guarantee?.series)).map((a) => {
     const g = a.guarantee!;
-    const fundValue = g.valueOfFunds ?? a.value;
+    // A reset locks in the value on the day it is done, so use the latest value we have (the monthly import), not the older statement's.
+    const fundValue = a.value ?? g.valueOfFunds;
     const deathGuarantee = g.guaranteedAtDeath;
     const age = a.ownerDob ? ageOn(a.ownerDob, today) : null;
     const turn85 = a.ownerDob ? `${Number(a.ownerDob.slice(0, 4)) + RESET_END_AGE}${a.ownerDob.slice(4)}` : null;
