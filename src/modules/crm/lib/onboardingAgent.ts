@@ -25,6 +25,14 @@ async function call<T>(action: string, payload: Record<string, unknown> = {}): P
   return json as T;
 }
 
+export interface OnboardingInvite {
+  id: string; url: string; state: "active" | "clicked" | "expired" | "revoked"; created_at: string; expires_at: string; first_clicked_at: string | null;
+  click_count: number; started_at: string | null; welcome_sent_to: number; invitee: string | null; recipients: string[]; no_email: boolean;
+}
+export const getInvite = (householdId: string) => call<{ invite: OnboardingInvite | null }>("getInvite", { householdId });
+export const createInvite = (householdId: string, regenerate = false) => call<{ invite: OnboardingInvite | null }>("createInvite", { householdId, regenerate });
+export const revokeInvite = (householdId: string) => call<{ invite: OnboardingInvite | null }>("revokeInvite", { householdId });
+
 export const getOverview = () => call<AgentOverview>("overview");
 export const getHouseholdCase = (householdId: string) => call<{ mode: AgentMode; cases: AgentCase[]; events: AgentEvent[] }>("getCase", { householdId });
 export const setMode = (mode: AgentMode, confirm = false) => call<{ ok: true; mode: AgentMode }>("setMode", { mode, confirm });
@@ -50,6 +58,12 @@ export function describeEvent(e: Pick<AgentEvent, "kind" | "detail">): string {
     case "reply_received": return d.summary ? `Client replied: ${d.summary}` : "Client replied to a reminder";
     case "reply_snoozed": return `Client acknowledged the reminder: Georgia will wait ${d.waitDays ?? 3} days`;
     case "staff_replied": return `A person replied to the client: Georgia will wait ${d.waitDays ?? 7} days`;
+    case "invite_created": return `Invitation link made for ${d.for ?? "the head of household"}`;
+    case "invite_revoked": return "Invitation link revoked";
+    case "invite_clicked": return "The invitation link was opened";
+    case "welcome_sent": return `Georgia sent the welcome email to ${d.to} ${d.to === 1 ? "person" : "people"}`;
+    case "welcome_would_send": return `Would send the welcome email to ${d.to} ${d.to === 1 ? "person" : "people"}`;
+    case "welcome_failed": return "The welcome email could not be sent";
     case "paused": return `Paused by ${d.by ?? "staff"}`;
     case "resumed": return `Resumed by ${d.by ?? "staff"}`;
     case "mode_changed": return `Mode changed from ${d.from ?? "?"} to ${d.to} by ${d.by ?? "staff"}`;

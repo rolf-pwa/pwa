@@ -46,6 +46,7 @@ import { SidebarSection } from "@/shared/components/SidebarSection";
 import { HoldingTank } from "@/modules/crm/components/HoldingTank";
 import { VaultView } from "@/modules/crm/pages/Vault";
 import { OnboardingAgentPanel } from "@/modules/crm/components/OnboardingAgentPanel";
+import { OnboardingInviteCard } from "@/modules/crm/components/OnboardingInviteCard";
 import { HouseholdLiabilities } from "@/modules/crm/components/HouseholdLiabilities";
 import { VaultScanButton } from "@/modules/crm/components/vault/VaultScanButton";
 import { ShoeboxToolbar } from "@/modules/crm/components/vault/ShoeboxReviewPanel";
@@ -1098,6 +1099,7 @@ const HouseholdDetail = () => {
               <ShieldCheck className="h-4 w-4 text-accent" />
               Household document vault — manage visibility and share with collaborators.
             </div>
+            <OnboardingInviteCard householdId={id!} />
             <OnboardingAgentPanel householdId={id!} />
             <VaultView
               forcedHouseholdId={id!}

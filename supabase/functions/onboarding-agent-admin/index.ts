@@ -5,6 +5,7 @@
 //   setCasePaused     pause or resume one household's case
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { INVITE_TTL_DAYS, inviteState, inviteUrl, newInviteToken, pickInvitee, welcomeRecipients, type InviteContact } from "../_shared/onboarding-invite.ts";
 import { CONCIERGE_KEY, PAUSED_COMMENT } from "../_shared/onboarding-checklist.ts";
 
 const ALLOWED_ORIGINS = [
@@ -80,6 +81,45 @@ Deno.serve(async (req) => {
       await db.from("onboarding_agent_config").update(patch).eq("id", true);
       await db.from("onboarding_agent_events").insert({ household_id: null, mode, kind: "mode_changed", detail: { from: before?.mode ?? null, to: mode, by: staff.email } });
       return json({ ok: true, mode });
+    }
+
+    // ── Invitation links: one per household, for the person Rolf is writing to ──
+    if (action === "getInvite" || action === "createInvite" || action === "revokeInvite") {
+      const householdId = String(body?.householdId ?? "");
+      if (!householdId) return json({ error: "householdId required" }, 400);
+      const view = async () => {
+        const { data: inv } = await db.from("onboarding_invites").select("*").eq("household_id", householdId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+        if (!inv) return { invite: null };
+        const { data: people } = await db.from("contacts").select("id, first_name, last_name, email, family_role, household_id, is_minor").eq("household_id", householdId);
+        const invitee = ((people ?? []) as any[]).find((p) => p.id === inv.contact_id);
+        const to = invitee ? welcomeRecipients(invitee as InviteContact, (people ?? []) as InviteContact[]) : [];
+        return {
+          invite: {
+            id: inv.id, url: inviteUrl(inv.token), state: inviteState(inv, Date.now()), created_at: inv.created_at, expires_at: inv.expires_at, first_clicked_at: inv.first_clicked_at,
+            click_count: inv.click_count, started_at: inv.started_at, welcome_sent_to: inv.welcome_sent_to,
+            invitee: invitee ? `${invitee.first_name ?? ""} ${invitee.last_name ?? ""}`.trim() : null,
+            recipients: to.map((r) => r.firstName),
+            no_email: !invitee?.email,
+          },
+        };
+      };
+      if (action === "getInvite") return json(await view());
+      if (action === "revokeInvite") {
+        await db.from("onboarding_invites").update({ revoked_at: new Date().toISOString() }).eq("household_id", householdId).is("revoked_at", null);
+        await db.from("onboarding_agent_events").insert({ household_id: householdId, mode: "live", kind: "invite_revoked", detail: { by: staff.email } });
+        return json(await view());
+      }
+      // createInvite: reuse a still-active one unless a new link is asked for
+      const { data: current } = await db.from("onboarding_invites").select("*").eq("household_id", householdId).is("revoked_at", null).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (current && inviteState(current, Date.now()) === "active" && body?.regenerate !== true) return json(await view());
+      const { data: people } = await db.from("contacts").select("id, first_name, email, family_role, household_id, is_minor").eq("household_id", householdId);
+      const invitee = pickInvitee((people ?? []) as InviteContact[]);
+      if (!invitee) return json({ error: "This household has no adult to invite." }, 400);
+      if (!invitee.email) return json({ error: `${invitee.first_name ?? "The head of household"} has no email address on file. Add one first, so Georgia has somewhere to write.` }, 400);
+      await db.from("onboarding_invites").update({ revoked_at: new Date().toISOString() }).eq("household_id", householdId).is("revoked_at", null);
+      await db.from("onboarding_invites").insert({ household_id: householdId, contact_id: invitee.id, token: newInviteToken(), created_by: staff.userId, expires_at: new Date(Date.now() + INVITE_TTL_DAYS * 86_400_000).toISOString() });
+      await db.from("onboarding_agent_events").insert({ household_id: householdId, mode: "live", kind: "invite_created", detail: { by: staff.email, for: invitee.first_name } });
+      return json(await view());
     }
 
     if (action === "setCasePaused") {
