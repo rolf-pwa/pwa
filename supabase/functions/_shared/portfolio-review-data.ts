@@ -1,0 +1,67 @@
+// portfolio-review-data.ts: gathers what a household's Portfolio Review pack is built from. The comparison itself is in portfolio-review.ts.
+
+// deno-lint-ignore-file no-explicit-any
+import { MANAGED_CUSTODIANS } from "./monthly-import.ts";
+import { buildPortfolioPack, type InvestorProfile, type PackAccount, type StatementFunds } from "./portfolio-review.ts";
+
+const norm = (s: string | null | undefined) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const num = (v: unknown) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
+
+export async function portfolioPackFor(db: any, householdId: string, today: string) {
+  const { data: people } = await db.from("contacts").select("id, first_name, last_name, full_name").eq("household_id", householdId);
+  const contactIds = (people ?? []).map((p: any) => p.id);
+  const ownerOf = new Map((people ?? []).map((p: any) => [p.id, p.full_name || `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim()]));
+
+  const [{ data: tankRows }, { data: vineRows }] = await Promise.all([
+    db.from("holding_tank").select("id, contact_id, account_name, account_number, account_type, custodian, current_value, book_value").or(`household_id.eq.${householdId}${contactIds.length ? `,contact_id.in.(${contactIds.join(",")})` : ""}`).neq("status", "moved"),
+    contactIds.length ? db.from("vineyard_accounts").select("id, contact_id, account_name, account_number, account_type, custodian, current_value, book_value").in("contact_id", contactIds) : Promise.resolve({ data: [] as any[] }),
+  ]);
+  const managed = (r: any) => r.custodian && MANAGED_CUSTODIANS.includes(r.custodian);
+  const rows = [
+    ...(tankRows ?? []).filter(managed).map((r: any) => ({ ...r, table: "holding_tank_id" })),
+    ...(vineRows ?? []).filter(managed).map((r: any) => ({ ...r, table: "vineyard_account_id" })),
+  ];
+  // The same account can sit in both tables: keep one per account number.
+  const seen = new Set<string>();
+  const accounts = rows.filter((r: any) => { const k = norm(r.account_number) || r.id; if (seen.has(k)) return false; seen.add(k); return true; });
+
+  const tankIds = accounts.filter((a: any) => a.table === "holding_tank_id").map((a: any) => a.id);
+  const vineIds = accounts.filter((a: any) => a.table === "vineyard_account_id").map((a: any) => a.id);
+  const [{ data: snapT }, { data: snapV }] = await Promise.all([
+    tankIds.length ? db.from("account_harvest_snapshots").select("holding_tank_id, snapshot_date, boy_value, current_value, ror_ytd, ror_6m, ror_1y, ror_3y, ror_5y, ror_since_inception").in("holding_tank_id", tankIds).order("snapshot_date", { ascending: false }) : Promise.resolve({ data: [] as any[] }),
+    vineIds.length ? db.from("account_harvest_snapshots").select("vineyard_account_id, snapshot_date, boy_value, current_value, ror_ytd, ror_6m, ror_1y, ror_3y, ror_5y, ror_since_inception").in("vineyard_account_id", vineIds).order("snapshot_date", { ascending: false }) : Promise.resolve({ data: [] as any[] }),
+  ]);
+  const snapsOf = (a: any) => [...(snapT ?? []), ...(snapV ?? [])].filter((s: any) => s[a.table] === a.id);
+
+  // Statements the advisor approved in the Vault scan: the latest one per account number.
+  const { data: audits } = await db.from("stage2_verification_audit").select("extracted_entities, created_at").eq("household_id", householdId).eq("review_status", "approved").order("created_at", { ascending: false });
+  const funds = new Map<string, StatementFunds & { at: string }>();
+  for (const au of audits ?? []) {
+    const ex = au.extracted_entities?.extraction;
+    for (const acc of ex?.accounts ?? []) {
+      const key = norm(acc.account_number);
+      if (!key || !Array.isArray(acc.funds) || !acc.funds.length) continue;
+      const date = ex?.statement_date ?? null;
+      const prev = funds.get(key);
+      if (prev && (prev.statementDate ?? "") >= (date ?? "")) continue;
+      funds.set(key, { statementDate: date, sourceFile: au.extracted_entities?.source?.file_name ?? null, at: au.created_at, funds: acc.funds.map((f: any) => ({ name: String(f.name ?? ""), category: f.category ?? null, value: num(f.value) ?? 0 })) });
+    }
+  }
+
+  const packAccounts: PackAccount[] = accounts.map((a: any) => {
+    const snaps = snapsOf(a);
+    const latest = snaps[0] ?? null;
+    const prior = latest ? snaps.find((s: any) => s.snapshot_date < latest.snapshot_date) ?? null : null;
+    return {
+      id: a.id, name: a.account_name ?? "", number: a.account_number ?? null, type: a.account_type ?? null, custodian: a.custodian ?? null, owner: ownerOf.get(a.contact_id) ?? null,
+      value: num(latest?.current_value) ?? num(a.current_value), boyValue: num(latest?.boy_value) ?? num(a.book_value), asOf: latest?.snapshot_date ?? null,
+      returns: { ytd: num(latest?.ror_ytd), sixMonth: num(latest?.ror_6m), oneYear: num(latest?.ror_1y), threeYear: num(latest?.ror_3y), fiveYear: num(latest?.ror_5y), sinceInception: num(latest?.ror_since_inception) },
+      priorValue: num(prior?.current_value), priorAsOf: prior?.snapshot_date ?? null,
+      statement: funds.get(norm(a.account_number)) ?? null,
+    };
+  });
+
+  const { data: profRows } = await db.from("investor_profiles").select("*").eq("household_id", householdId);
+  const profiles: InvestorProfile[] = (profRows ?? []).map((p: any) => ({ accountNumber: p.account_number, label: p.label, incomePct: num(p.income_pct), equityPct: num(p.equity_pct), bandPct: num(p.band_pct) ?? 5, asOf: p.as_of, source: p.source }));
+  return { pack: buildPortfolioPack({ accounts: packAccounts, profiles, today }), profiles: profRows ?? [] };
+}

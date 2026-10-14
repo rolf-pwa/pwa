@@ -186,6 +186,7 @@ export default function ReviewAgent() {
                             <div key={o.id} className="flex items-center justify-between gap-3 border-b border-border py-2 text-sm last:border-0">
                               <div className="min-w-0">
                                 <Link to={`/families/${o.family_id}`} className="truncate font-medium hover:underline">{familyTitle(o.family_name)}</Link>
+                                {o.kind === "annual_review" && o.household_id && <Link to={`/households/${o.household_id}/portfolio-review`} className="ml-2 text-xs text-accent hover:underline">Review pack</Link>}
                                 <div className="text-xs text-muted-foreground">{KIND_LABEL[o.kind]} · window {day(o.window_start)} to {day(o.window_end)}{o.booked_start ? ` · booked ${when(o.booked_start)}` : ""}{o.published_at && o.kind === "rebalancing" ? ` · published ${when(o.published_at)}` : ""}{o.acknowledged_at ? ` · acknowledged ${when(o.acknowledged_at)}` : ""}{o.completed_at ? ` · done ${when(o.completed_at)}` : ""}</div>
                               </div>
                               <div className="flex shrink-0 items-center gap-2">
