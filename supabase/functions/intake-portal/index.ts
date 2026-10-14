@@ -492,7 +492,7 @@ async function classifyDocument(
     // Load active checklist templates to ground the model's category choice.
     const { data: templates } = await admin
       .from("intake_checklist_templates")
-      .select("id, name, category, requirement, situations, description")
+      .select("id, name, category, requirement")
       .eq("is_active", true)
       .order("sort_order");
 
@@ -789,7 +789,7 @@ async function handleInhouseManifest(
   const [{ data: templates }, { data: classifications }] = await Promise.all([
     admin
       .from("intake_checklist_templates")
-      .select("id, name, category, requirement")
+      .select("id, name, category, requirement, situations, description")
       .eq("is_active", true)
       .order("sort_order"),
     admin
