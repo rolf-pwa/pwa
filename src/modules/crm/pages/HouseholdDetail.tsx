@@ -1099,6 +1099,13 @@ const HouseholdDetail = () => {
               <ShieldCheck className="h-4 w-4 text-accent" />
               Household document vault — manage visibility and share with collaborators.
             </div>
+            <Card>
+              <CardHeader className="pb-3"><CardTitle className="text-lg">Portfolio Review</CardTitle></CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <p className="text-muted-foreground">Allocation, returns and drift from the Investor Profile, ready before the meeting.</p>
+                <Button asChild size="sm" variant="outline"><Link to={`/households/${id}/portfolio-review`}>Open the review pack</Link></Button>
+              </CardContent>
+            </Card>
             <OnboardingInviteCard householdId={id!} />
             <OnboardingAgentPanel householdId={id!} />
             <VaultView

@@ -5,7 +5,7 @@ const URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/fun
 export type ReviewMode = "off" | "shadow" | "live";
 export type ReviewKind = "annual_review" | "sovereignty_review" | "governance_review" | "rebalancing";
 export interface ReviewObligation {
-  id: string; family_id: string; family_name: string | null; kind: ReviewKind; window_key: string; window_start: string; window_end: string; tier: string | null;
+  id: string; family_id: string; household_id?: string | null; family_name: string | null; kind: ReviewKind; window_key: string; window_start: string; window_end: string; tier: string | null;
   invite?: boolean; mode: "shadow" | "live"; status: "open" | "booked" | "held" | "escalated" | "paused" | "cancelled"; booked_start: string | null; acknowledged_at?: string | null; published_at?: string | null; completed_at?: string | null; proposal_summary?: string | null; nudge_count: number; escalation_reason: string | null;
 }
 export interface ReviewEvent { id: string; family_id: string | null; family_name: string | null; mode: string; kind: string; detail: Record<string, any>; created_at: string }
@@ -34,6 +34,17 @@ export const getReminderOverview = () => call<ReminderOverview>("reminderOvervie
 export const setReminderMode = (mode: ReviewMode, confirm = false) => call<{ ok: true; mode: ReviewMode }>("setReminderMode", { mode, confirm });
 
 export const getReviewOverview = () => call<ReviewOverview>("overview");
+
+import type { Pack } from "../../../../supabase/functions/_shared/portfolio-review";
+export type { Pack as PortfolioPack };
+export interface PortfolioPackResponse {
+  household: { id: string; label: string | null; family_id: string; family_name: string | null; service_tier: string | null };
+  pack: Pack;
+  profiles: { id: string; account_number: string | null; label: string | null; income_pct: number | null; equity_pct: number | null; band_pct: number; as_of: string | null; updated_by: string | null }[];
+}
+export const getPortfolioPack = (householdId: string) => call<PortfolioPackResponse>("portfolioPack", { householdId });
+export const saveInvestorProfile = (p: { householdId: string; accountNumber?: string | null; label?: string; incomePct: number; bandPct?: number }) => call<{ ok: true }>("saveInvestorProfile", p);
+export const deleteInvestorProfile = (householdId: string, accountNumber: string | null) => call<{ ok: true }>("deleteInvestorProfile", { householdId, accountNumber });
 export const setReviewMode = (mode: ReviewMode, confirm = false) => call<{ ok: true; mode: ReviewMode }>("setMode", { mode, confirm });
 export const setReviewPaused = (obligationId: string, paused: boolean) => call<{ ok: true }>("setPaused", { obligationId, paused });
 export const publishRebalancing = (obligationId: string, summary: string) => call<{ ok: true }>("publishRebalancing", { obligationId, summary });
