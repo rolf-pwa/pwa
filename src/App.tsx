@@ -117,9 +117,11 @@ const App = () => (
               <Route path="/vfo-onboarding/embed" element={<VfoOnboardingEmbed />} />
               <Route path="/portal" element={<Portal />} />
               <Route path="/portal/intake" element={<Portal intakeRoute />} />
+              <Route path="/portal/review" element={<Portal reviewRoute />} />
               <Route path="/portal/privacy" element={<PrivacyPolicy />} />
               <Route path="/portal/:token" element={<Portal />} />
               <Route path="/portal/:token/intake" element={<Portal intakeRoute />} />
+              <Route path="/portal/:token/review" element={<Portal reviewRoute />} />
               <Route path="/vfo/:token" element={<VfoPortal />} />
               <Route path="/pro-portal/login" element={<ProPortalLogin />} />
               <Route path="/pro-portal" element={<ProPortal />} />

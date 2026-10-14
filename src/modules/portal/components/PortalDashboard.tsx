@@ -8,6 +8,8 @@ interface Props {
   meetings: any[];
   taskCounts: { newCount: number; ongoingCount: number };
   onGo: (tab: string) => void;
+  /** A highlighted container at the top of the main column (the Portfolio Review pointer). */
+  highlight?: React.ReactNode;
   /** Ask Georgia and the household overview, shown beside the summary. */
   sidebar?: React.ReactNode;
   /** Placed under the summary tiles: the client's links (My Accounts, Family CFO Updates). */
@@ -19,7 +21,7 @@ interface Props {
 const startOf = (e: any): Date | null => (e?.start?.dateTime ? parseISO(e.start.dateTime) : e?.start?.date ? parseISO(e.start.date) : null);
 
 /** A client's landing page: where they stand, what is coming up, and what needs them. Summary only; detail lives in the other tabs. */
-export function PortalDashboard({ totals, meetings, taskCounts, onGo, sidebar, links, children }: Props) {
+export function PortalDashboard({ totals, meetings, taskCounts, onGo, highlight, sidebar, links, children }: Props) {
   const now = new Date();
   const next = (meetings ?? [])
     .filter((e) => e.status !== "cancelled" && (startOf(e)?.getTime() ?? 0) >= now.getTime())
@@ -38,6 +40,7 @@ export function PortalDashboard({ totals, meetings, taskCounts, onGo, sidebar, l
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
     <div className="min-w-0 space-y-4">
+      {highlight}
       {totals && (
         <div className="grid grid-cols-3 gap-4 rounded-lg border border-border bg-card px-5 py-4">
           {([["Total Assets", totals.assets, ""], ["Liabilities", totals.liabilities, "text-destructive"], ["Net Worth", totals.assets - totals.liabilities, ""]] as const).map(([label, value, tone]) => (
