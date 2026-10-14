@@ -8,16 +8,18 @@ import type { Pack, PackAccountOut } from "./portfolio-review.ts";
 export interface ClientIncludes { returns: boolean; mix: boolean; funds: boolean; reset: boolean }
 export const ALL_INCLUDED: ClientIncludes = { returns: true, mix: true, funds: true, reset: true };
 
-export interface ClientAccount { name: string; owner: string | null; last4: string | null; value: number | null; changeYtd: number | null; ytdPct: number | null; oneYearPct: number | null; threeYearPct: number | null }
+export interface ClientAccount { /** A short name for charts: the account type and the last four digits. */ label: string; name: string; owner: string | null; last4: string | null; value: number | null; changeYtd: number | null; ytdPct: number | null; oneYearPct: number | null; threeYearPct: number | null }
 export type MixStatus = "inside" | "below" | "above" | "unknown";
 export interface ClientView {
   householdLabel: string;
   valuesAsOf: string | null;
   note: string;
   summary: { value: number; changeYtd: number | null; ytdPct: number | null };
+  /** The household's value over time, oldest first (empty when there is not enough history). */
+  history: { date: string; value: number }[];
   accounts: ClientAccount[] | null;
-  mix: { profileLabel: string | null; incomePct: number | null; equityPct: number | null; rangeMin: number | null; rangeMax: number | null; targetIncomePct: number | null; status: MixStatus; accounts: { name: string; last4: string | null; incomePct: number | null; status: MixStatus }[] } | null;
-  funds: { modelLabel: string; modelAsOf: string; heldInModelPct: number; rows: { name: string; modelPct: number | null; heldPct: number; inModel: boolean }[] } | null;
+  mix: { /** What the chart means for this household, in plain sentences built in code from the numbers. */ commentary: string[]; classes: { key: string; label: string; pct: number }[]; profileLabel: string | null; incomePct: number | null; equityPct: number | null; rangeMin: number | null; rangeMax: number | null; targetIncomePct: number | null; status: MixStatus; accounts: { name: string; last4: string | null; incomePct: number | null; status: MixStatus }[] } | null;
+  funds: { commentary: string[]; modelLabel: string; modelAsOf: string; heldInModelPct: number; rows: { name: string; modelPct: number | null; heldPct: number; inModel: boolean }[] } | null;
   reset: { rows: { name: string; owner: string | null; last4: string | null; fundValue: number; currentGuarantee: number; newGuarantee: number; lift: number }[]; totalLift: number } | null;
   disclosures: string[];
 }
@@ -30,8 +32,74 @@ export const DISCLOSURES = [
 
 const last4 = (n: string | null) => (n ? n.replace(/[^0-9A-Za-z]/g, "").slice(-4) || null : null);
 const round1 = (n: number) => Math.round(n * 10) / 10;
+/** "iA Financial Group - IAG Savings and Retirement Plan - RRIF" becomes "RRIF", with the last four digits: "RRIF …0719". */
+export function shortAccountName(name: string, number: string | null): string {
+  const parts = String(name ?? "").split(" - ").map((s) => s.trim()).filter(Boolean);
+  const base = parts.length ? parts[parts.length - 1] : "Account";
+  const l4 = last4(number);
+  return l4 ? `${base} …${l4}` : base;
+}
 
 const mixStatus = (d: PackAccountOut["drift"]): MixStatus => (d.status === "within" ? "inside" : d.status === "too_little_income" ? "below" : d.status === "too_much_income" ? "above" : "unknown");
+
+const money0 = (n: number) => n.toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 });
+const nameList = (names: string[], max = 3) => {
+  const shown = names.slice(0, max);
+  const rest = names.length - shown.length;
+  const parts = rest > 0 ? [...shown, `${rest} other${rest === 1 ? "" : "s"}`] : shown;
+  return parts.length <= 1 ? (parts[0] ?? "") : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+};
+const accountName = (a: PackAccountOut) => shortAccountName(a.name, a.number);
+
+/**
+ * The sentences under the mix chart. Fixed templates filled from the numbers: nothing is written by a model, and nothing claims a cause
+ * the data cannot show. Rolf reads these in the preview before he publishes.
+ */
+export function mixCommentary(pack: Pack): string[] {
+  const d = pack.household.drift;
+  const label = d.profileLabel ?? "profile";
+  const out: string[] = [];
+  const actual = d.actualIncomePct;
+  if (actual === null || d.status === "no_data" || d.status === "no_target") return out;
+  const hasRange = d.rangeMin != null && d.rangeMax != null;
+  if (hasRange) {
+    const min = d.rangeMin as number, max = d.rangeMax as number;
+    if (d.status === "within") {
+      const pos = max > min ? (actual - min) / (max - min) : 0.5;
+      out.push(`Your household asset mix falls within your ${label} risk profile, which holds ${min}–${max}% in income funds.${pos <= 0.2 ? " Your income allocation is toward the lower end of that range." : pos >= 0.8 ? " Your income allocation is toward the upper end of that range." : ""}`);
+    } else {
+      out.push(`Your household asset mix is outside your ${label} risk profile: income is ${actual}% against a range of ${min}–${max}%, so you hold ${d.status === "too_little_income" ? "more in equities" : "more in income funds"} than the profile calls for.`);
+    }
+  } else {
+    out.push(`Your income allocation is ${actual}% against a target of ${d.targetIncomePct}%.`);
+  }
+  const heavyEquity = pack.accounts.filter((a) => a.classTotals && a.drift.status === "too_little_income");
+  const heavyIncome = pack.accounts.filter((a) => a.classTotals && a.drift.status === "too_much_income");
+  const total = pack.accounts.filter((a) => a.classTotals).length;
+  const rising = (pack.household.valueWeightedYtd ?? 0) >= 3;
+  if (heavyEquity.length) out.push(`${heavyEquity.length} of your ${total} accounts hold more in equities than your profile calls for (${nameList(heavyEquity.map(accountName))}).${rising ? " Equity funds grow faster than income funds when markets rise, which can move an account away from its profile." : ""}`);
+  if (heavyIncome.length) out.push(`${heavyIncome.length} of your ${total} accounts hold more in income funds than your profile calls for (${nameList(heavyIncome.map(accountName))}).`);
+  const off = [...heavyEquity, ...heavyIncome];
+  if (off.length) out.push(`We recommend rebalancing ${off.length === 1 ? "this account" : "these accounts"} back to your ${label} profile. Rolf will take you through the details at your meeting.`);
+  else if (d.status === "within") out.push("No change is needed to your mix at this time.");
+  else out.push(`We recommend rebalancing your portfolio back to your ${label} profile. Rolf will take you through the details at your meeting.`);
+  return out;
+}
+
+/** The sentences under the funds-against-the-model bars. */
+export function fundsCommentary(mc: NonNullable<Pack["household"]["modelComparison"]>): string[] {
+  const label = mc.modelLabel;
+  const off = mc.rows.filter((r) => !r.inModel).map((r) => r.name);
+  const roughly = Math.round(mc.moveValue / 100) * 100;
+  if (mc.offModelPct > 0) {
+    return [
+      `${round1(mc.offModelPct)}% of your portfolio is held in funds outside iA's ${label} model, including ${nameList(off)}.`,
+      `We recommend rebalancing the portfolio to the model. Matching it would move about ${money0(roughly)} (${round1(mc.activeSharePct)}% of your portfolio). Rolf will take you through the details at your meeting.`,
+    ];
+  }
+  if (mc.activeSharePct >= 5) return [`All of your funds are in iA's ${label} model, but they are held in different proportions. Matching the model would move about ${round1(mc.activeSharePct)}% of your portfolio, and we recommend bringing them back into line.`];
+  return [`Your funds line up closely with iA's ${label} model.`];
+}
 
 export function buildClientView(pack: Pack, includes: ClientIncludes, note: string, householdLabel: string): ClientView {
   const h = pack.household;
@@ -43,15 +111,23 @@ export function buildClientView(pack: Pack, includes: ClientIncludes, note: stri
     valuesAsOf: pack.asOf,
     note: note.trim(),
     summary: { value: pack.totalValue, changeYtd: h.changeYtd, ytdPct: h.valueWeightedYtd },
-    accounts: includes.returns ? pack.accounts.map((a) => ({ name: a.name, owner: a.owner, last4: last4(a.number), value: a.value, changeYtd: a.changeYtd, ytdPct: a.returns.ytd, oneYearPct: a.returns.oneYear, threeYearPct: a.returns.threeYear })) : null,
+    history: pack.history.length >= 2 ? pack.history : [],
+    accounts: includes.returns ? pack.accounts.map((a) => ({ label: shortAccountName(a.name, a.number), name: a.name, owner: a.owner, last4: last4(a.number), value: a.value, changeYtd: a.changeYtd, ytdPct: a.returns.ytd, oneYearPct: a.returns.oneYear, threeYearPct: a.returns.threeYear })) : null,
     mix: includes.mix && h.drift.status !== "no_data"
       ? {
+        commentary: mixCommentary(pack),
+        classes: [
+          { key: "income", label: "Income", pct: covered > 0 ? round1((h.classTotals.income / covered) * 100) : 0 },
+          { key: "canadian", label: "Canadian equity", pct: covered > 0 ? round1((h.classTotals.canadian_equity / covered) * 100) : 0 },
+          { key: "global", label: "U.S. and international equity", pct: covered > 0 ? round1((h.classTotals.us_intl_equity / covered) * 100) : 0 },
+          { key: "other", label: "Other equity", pct: covered > 0 ? round1((h.classTotals.equity_other / covered) * 100) : 0 },
+        ].filter((c) => c.pct > 0),
         profileLabel: h.drift.profileLabel ?? null, incomePct: h.drift.actualIncomePct, equityPct: equity, rangeMin: h.drift.rangeMin ?? null, rangeMax: h.drift.rangeMax ?? null, targetIncomePct: h.drift.targetIncomePct, status: mixStatus(h.drift),
         accounts: pack.accounts.filter((a) => a.classTotals).map((a) => ({ name: a.name, last4: last4(a.number), incomePct: a.incomePct, status: mixStatus(a.drift) })),
       }
       : null,
     funds: includes.funds && mc
-      ? { modelLabel: mc.modelLabel, modelAsOf: mc.modelAsOf, heldInModelPct: round1(100 - mc.offModelPct), rows: mc.rows.map((r) => ({ name: r.name, modelPct: r.modelPct, heldPct: r.actualPct, inModel: r.inModel })) }
+      ? { commentary: fundsCommentary(mc), modelLabel: mc.modelLabel, modelAsOf: mc.modelAsOf, heldInModelPct: round1(100 - mc.offModelPct), rows: mc.rows.map((r) => ({ name: r.name, modelPct: r.modelPct, heldPct: r.actualPct, inModel: r.inModel })) }
       : null,
     reset: includes.reset && pack.resets.toReset > 0
       ? {

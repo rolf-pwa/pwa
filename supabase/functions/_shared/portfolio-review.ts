@@ -208,6 +208,8 @@ export interface Pack {
   exceptions: PackException[];
   gaps: string[];
   resets: ResetSummary;
+  /** The household's managed value at each month-end the import has recorded, oldest first. */
+  history: { date: string; value: number }[];
 }
 
 export const STATEMENT_STALE_DAYS = 120;
@@ -216,7 +218,7 @@ const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00
 const money = (n: number) => n.toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 });
 const norm = (s: string | null | undefined) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
-export function buildPortfolioPack(input: { accounts: PackAccount[]; profiles: InvestorProfile[]; today: string; models?: ModelPortfolio[] }): Pack {
+export function buildPortfolioPack(input: { accounts: PackAccount[]; profiles: InvestorProfile[]; today: string; models?: ModelPortfolio[]; history?: { date: string; value: number }[] }): Pack {
   const { today } = input;
   const models = input.models ?? [];
   const profiles = input.profiles.map((p) => resolveProfile(p, models) as ResolvedProfile);
@@ -303,6 +305,7 @@ export function buildPortfolioPack(input: { accounts: PackAccount[]; profiles: I
     exceptions,
     gaps,
     resets: resetCheck(accounts, today),
+    history: input.history ?? [],
   };
 }
 

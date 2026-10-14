@@ -32,7 +32,7 @@ import { getPortalSession, setPortalSession, clearPortalSession } from "@/module
 import prosperwiseLogo from "@/assets/prosperwise-icon-paper.png";
 import { policyTypeLabel } from "@/shared/lib/insurance";
 import { PortalRebalancing, type RebalancingState } from "@/modules/portal/components/PortalRebalancing";
-import { PortalPortfolioReview } from "@/modules/portal/components/PortalPortfolioReview";
+import { PortalReviewTeaser, PortalReviewPage } from "@/modules/portal/components/PortalReviewTeaser";
 import { withBookedMeetings } from "@/modules/portal/lib/bookedMeetings";
 import { PortalBookedMeetings, type BookedMeeting } from "@/modules/portal/components/PortalBookedMeetings";
 import { useBookingWatcher } from "@/modules/portal/lib/useBookingWatcher";
@@ -94,7 +94,7 @@ interface DrilldownState {
 }
 
 
-const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
+const Portal = ({ intakeRoute = false, reviewRoute = false }: { intakeRoute?: boolean; reviewRoute?: boolean }) => {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
   const [data, setData] = useState<PortalData | null>(null);
@@ -1139,10 +1139,6 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
           )}
 
 
-          {isSelf && (data as any)?.portfolio_review && (
-            <PortalPortfolioReview view={(data as any).portfolio_review.view} publishedAt={(data as any).portfolio_review.publishedAt} />
-          )}
-
           {/* Main Tabs */}
           {/* Main Tabs: the bar spans the full width; the sidebar sits under it, beside the Action Items content. */}
           <Tabs value={effectiveTab} onValueChange={setActiveTab} className="w-full space-y-4">
@@ -1195,6 +1191,14 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
                   meetings={meetings}
                   taskCounts={taskCounts}
                   onGo={setActiveTab}
+                  highlight={(data as any)?.portfolio_review ? (
+                    <PortalReviewTeaser
+                      id={(data as any).portfolio_review.id}
+                      view={(data as any).portfolio_review.view}
+                      publishedAt={(data as any).portfolio_review.publishedAt}
+                      onOpen={() => navigate(token ? `/portal/${token}/review` : "/portal/review")}
+                    />
+                  ) : null}
                   sidebar={dashboardSidebar}
                   links={isSelf ? <PortalDynamicLinks contact={contact} layout="grid" /> : null}
                 />
@@ -1417,6 +1421,8 @@ const Portal = ({ intakeRoute = false }: { intakeRoute?: boolean }) => {
 
   // ─── Determine what to render based on drilldown ───
   const renderContent = () => {
+    // The Portfolio Review has a page of its own, so the dashboard stays clean.
+    if (reviewRoute) return <PortalReviewPage review={(data as any)?.portfolio_review ?? null} onBack={() => navigate(token ? `/portal/${token}` : "/portal")} />;
     if (intakeRoute) {
       return (
         <OnboardingShell

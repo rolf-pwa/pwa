@@ -85,7 +85,17 @@ export async function portfolioPackFor(db: any, householdId: string, today: stri
   const { data: profRows } = await db.from("investor_profiles").select("*").eq("household_id", householdId);
   const profiles: InvestorProfile[] = (profRows ?? []).map((p: any) => ({ accountNumber: p.account_number, label: p.label, incomePct: num(p.income_pct), equityPct: num(p.equity_pct), bandPct: num(p.band_pct) ?? 0, asOf: p.as_of, source: p.source, profileKey: p.profile_key ?? null }));
   const models = await latestModels(db);
-  return { pack: buildPortfolioPack({ accounts: packAccounts, profiles, today, models }), profiles: profRows ?? [], models };
+  // The household's value at each month-end: only dates where most accounts reported, so a thin month does not look like a fall.
+  const byDate = new Map<string, { sum: number; n: number }>();
+  for (const s of [...(snapT ?? []), ...(snapV ?? [])]) {
+    const v = num(s.current_value);
+    if (v === null) continue;
+    const cur = byDate.get(s.snapshot_date) ?? { sum: 0, n: 0 };
+    cur.sum += v; cur.n += 1; byDate.set(s.snapshot_date, cur);
+  }
+  const most = Math.max(0, ...[...byDate.values()].map((x) => x.n));
+  const history = [...byDate.entries()].filter(([, x]) => x.n >= Math.ceil(most * 0.8)).map(([date, x]) => ({ date, value: Math.round(x.sum) })).sort((a, b) => a.date.localeCompare(b.date)).slice(-13);
+  return { pack: buildPortfolioPack({ accounts: packAccounts, profiles, today, models, history }), profiles: profRows ?? [], models };
 }
 
 /** The newest published set of iA model portfolios. */
