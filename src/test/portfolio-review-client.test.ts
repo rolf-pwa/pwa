@@ -43,3 +43,38 @@ describe("the client's Portfolio Review", () => {
     expect(e.html).not.toMatch(/\$\d/);
   });
 });
+
+import { mixCommentary, fundsCommentary } from "../../supabase/functions/_shared/portfolio-review-client";
+import { compareToModel } from "../../supabase/functions/_shared/portfolio-review";
+
+describe("the commentary under the charts", () => {
+  const inc = (income: number, equity: number) => [{ name: "I", category: "Income Funds", value: income * 1000 }, { name: "E", category: "Canadian Equity funds", value: equity * 1000 }];
+  const prof = [{ accountNumber: null, label: null, incomePct: 40, equityPct: 60, bandPct: 0, profileKey: "balanced" }];
+  const mk = (accounts: PackAccount[], ytd = 5) => buildPortfolioPack({ accounts: accounts.map((a) => ({ ...a, returns: { ...a.returns, ytd } })), profiles: prof, today: "2026-10-14", models: [balanced] });
+
+  it("says the mix is inside the profile, toward the lower end, and recommends rebalancing the accounts that drifted", () => {
+    const p = mk([acct({ id: "a", number: "1111", value: 150_000, statement: { statementDate: "2026-09-30", funds: inc(36, 64) } }), acct({ id: "b", number: "2222", name: "iA TFSA", value: 100_000, statement: { statementDate: "2026-09-30", funds: inc(34, 66) } })]);
+    const c = mixCommentary(p);
+    expect(c[0]).toMatch(/falls within your Balanced risk profile, which holds 35–55% in income funds\. Your income allocation is toward the lower end/);
+    expect(c.join(" ")).toMatch(/1 of your 2 accounts hold more in equities than your profile calls for \(iA TFSA …2222\)/);
+    expect(c.join(" ")).toMatch(/Equity funds grow faster than income funds when markets rise/);
+    expect(c[c.length - 1]).toMatch(/We recommend rebalancing this account back to your Balanced profile/);
+  });
+  it("needs no change when everything is inside, and does not blame the market in a flat year", () => {
+    const p = mk([acct({ statement: { statementDate: "2026-09-30", funds: inc(45, 55) } })], 1);
+    expect(mixCommentary(p).join(" ")).toMatch(/No change is needed/);
+    expect(mixCommentary(p).join(" ")).not.toMatch(/markets rise/);
+  });
+  it("says so when the household itself is outside the range", () => {
+    const p = mk([acct({ statement: { statementDate: "2026-09-30", funds: inc(30, 70) } })]);
+    expect(mixCommentary(p)[0]).toMatch(/outside your Balanced risk profile: income is 30% against a range of 35–55%, so you hold more in equities/);
+  });
+  it("recommends rebalancing to the model when funds fall outside it, and says when they line up", () => {
+    const off = compareToModel([{ name: "3603H-NSC-Fixed Income Managed Portfolio (iA)", category: "Income Funds", value: 40_000 }, { name: "3233H-NSC-Thematic Innovation (iA)", category: "U.S. & International Equity Funds", value: 60_000 }], balanced)!;
+    const c = fundsCommentary(off);
+    expect(c[0]).toMatch(/60% of your portfolio is held in funds outside iA's Balanced model, including Thematic Innovation \(iA\)/);
+    expect(c[1]).toMatch(/We recommend rebalancing the portfolio to the model\. Matching it would move about \$\d/);
+    const on = compareToModel([{ name: "Fixed income managed portfolio (iA)", category: "Income Funds", value: 40_000 }, { name: "Fidelity Insights", category: "U.S. & International Equity Funds", value: 60_000 }], balanced)!;
+    expect(fundsCommentary(on)).toEqual(["Your funds line up closely with iA's Balanced model."]);
+  });
+});

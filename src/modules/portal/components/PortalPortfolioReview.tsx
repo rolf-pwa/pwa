@@ -9,15 +9,22 @@ const pct = (n: number | null | undefined) => (n === null || n === undefined ? "
 const day = (iso: string | null) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-CA", { timeZone: "UTC", month: "long", day: "numeric", year: "numeric" }) : "");
 const month = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-CA", { timeZone: "UTC", month: "short" });
 
-const MIX_CHIP: Record<MixStatus, { text: string; cls: string }> = {
-  inside: { text: "Inside your range", cls: "bg-emerald-100 text-emerald-800" },
-  below: { text: "More growth-oriented than your profile", cls: "bg-amber-100 text-amber-800" },
-  above: { text: "More conservative than your profile", cls: "bg-amber-100 text-amber-800" },
-  unknown: { text: "", cls: "" },
+// ProsperWise brand: Navy, Amber (bronze), Sand, Mist, Ash, Cloud (see the --pw-* variables in index.css).
+const B = { navy: "hsl(var(--pw-navy))", amber: "hsl(var(--pw-amber))", sand: "hsl(var(--pw-sand))", mist: "hsl(var(--pw-mist))", ash: "hsl(var(--pw-ash))", cloud: "hsl(var(--pw-cloud))" };
+const tint = (c: string, a: number) => `${c.slice(0, -1)} / ${a})`;
+const MIX_CHIP: Record<MixStatus, { text: string; good: boolean }> = {
+  inside: { text: "Inside your range", good: true },
+  below: { text: "More growth-oriented than your profile", good: false },
+  above: { text: "More conservative than your profile", good: false },
+  unknown: { text: "", good: true },
 };
-const DONUT = ["#0ea5e9", "#059669", "#34d399", "#a7f3d0"];
-const FUND_BG = ["bg-sky-500", "bg-emerald-600", "bg-emerald-400", "bg-amber-400", "bg-violet-400", "bg-rose-400"];
-const OTHER_BG = "bg-slate-300";
+const Chip = ({ good, children }: { good: boolean; children: ReactNode }) => (
+  <span className="inline-block rounded-full px-2.5 py-1 text-xs font-medium" style={good ? { background: B.cloud, color: B.navy } : { background: tint(B.amber, 0.18), color: "hsl(26 40% 30%)" }}>{children}</span>
+);
+const DONUT = [B.navy, B.amber, B.mist, B.sand];
+const FUND_COLORS = [B.navy, B.amber, B.mist, B.sand, B.ash, B.cloud];
+// Funds outside the model are hatched, so they stand out from the solid model colours.
+const OTHER_BG = `repeating-linear-gradient(45deg, ${B.amber} 0 4px, ${tint(B.amber, 0.35)} 4px 8px)`;
 
 const Section = ({ title, lead, children }: { title: string; lead?: string; children: ReactNode }) => (
   <section className="space-y-3 border-t border-border pt-5">
@@ -39,10 +46,10 @@ function ValueLine({ points }: { points: { date: string; value: number }[] }) {
   return (
     <div>
       <svg viewBox={`0 0 ${W} ${H}`} className="h-24 w-full" preserveAspectRatio="none" role="img" aria-label="Your portfolio value over time">
-        <defs><linearGradient id="pwArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#059669" stopOpacity="0.3" /><stop offset="100%" stopColor="#059669" stopOpacity="0" /></linearGradient></defs>
+        <defs><linearGradient id="pwArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" style={{ stopColor: B.navy, stopOpacity: 0.18 }} /><stop offset="100%" style={{ stopColor: B.navy, stopOpacity: 0 }} /></linearGradient></defs>
         <path d={area} fill="url(#pwArea)" />
-        <path d={line} fill="none" stroke="#059669" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
-        <circle cx={x(points.length - 1)} cy={y(points[points.length - 1].value)} r="3.5" fill="#059669" />
+        <path d={line} fill="none" style={{ stroke: B.navy }} strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+        <circle cx={x(points.length - 1)} cy={y(points[points.length - 1].value)} r="4" style={{ fill: B.amber }} />
       </svg>
       <div className="flex justify-between text-[10px] text-muted-foreground"><span>{month(points[0].date)}</span><span>{month(points[points.length - 1].date)}</span></div>
     </div>
@@ -57,10 +64,10 @@ function Donut({ parts, colors, centre, sub }: { parts: { pct: number }[]; color
   return (
     <div className="relative h-36 w-36 shrink-0">
       <svg viewBox="0 0 140 140" className="h-full w-full -rotate-90" role="img" aria-label={`${centre} ${sub}`}>
-        <circle cx="70" cy="70" r={R} fill="none" stroke="#e2e8f0" strokeWidth="18" />
+        <circle cx="70" cy="70" r={R} fill="none" style={{ stroke: B.cloud }} strokeWidth="18" />
         {parts.map((p, i) => {
           const len = (p.pct / total) * C;
-          const el = <circle key={i} cx="70" cy="70" r={R} fill="none" stroke={colors[i % colors.length]} strokeWidth="18" strokeDasharray={`${Math.max(0, len - 1.5)} ${C}`} strokeDashoffset={-offset} />;
+          const el = <circle key={i} cx="70" cy="70" r={R} fill="none" style={{ stroke: colors[i % colors.length] }} strokeWidth="18" strokeDasharray={`${Math.max(0, len - 1.5)} ${C}`} strokeDashoffset={-offset} />;
           offset += len;
           return el;
         })}
@@ -70,11 +77,19 @@ function Donut({ parts, colors, centre, sub }: { parts: { pct: number }[]; color
   );
 }
 
+/** The plain-language reading of a chart. */
+const Commentary = ({ lines }: { lines?: string[] }) =>
+  lines && lines.length ? (
+    <div className="space-y-1.5 rounded-lg p-3 text-sm leading-relaxed text-foreground" style={{ background: tint(B.sand, 0.35) }}>
+      {lines.map((l, i) => <p key={i}>{l}</p>)}
+    </div>
+  ) : null;
+
 /** A horizontal bar made of segments, each a share of 100. */
-function Segments({ parts, label }: { parts: { pct: number; cls: string; title: string }[]; label: string }) {
+function Segments({ parts, label }: { parts: { pct: number; bg: string; title: string }[]; label: string }) {
   return (
     <div className="flex h-7 w-full overflow-hidden rounded-md bg-muted" role="img" aria-label={label}>
-      {parts.filter((p) => p.pct > 0).map((p, i) => <div key={i} className={p.cls} style={{ width: `${p.pct}%` }} title={p.title} />)}
+      {parts.filter((p) => p.pct > 0).map((p, i) => <div key={i} style={{ width: `${p.pct}%`, background: p.bg }} title={p.title} />)}
     </div>
   );
 }
@@ -110,7 +125,7 @@ export function PortalPortfolioReview({ view, publishedAt, preview = false }: { 
               <p className="font-serif text-3xl font-semibold leading-none text-foreground">{money(view.summary.value)}</p>
             </div>
             <div className="text-right">
-              <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-medium ${up ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{up ? "▲" : "▼"} {pct(Math.abs(view.summary.ytdPct ?? 0))} this year</span>
+              <Chip good={up}>{up ? "▲" : "▼"} {pct(Math.abs(view.summary.ytdPct ?? 0))} this year</Chip>
               <p className="mt-1 text-xs text-muted-foreground">{signed(view.summary.changeYtd)} since January</p>
             </div>
           </div>
@@ -128,15 +143,16 @@ export function PortalPortfolioReview({ view, publishedAt, preview = false }: { 
                 {view.mix.rangeMin != null && view.mix.rangeMax != null && view.mix.incomePct != null && (
                   <div>
                     <div className="relative h-3 rounded-full bg-muted" role="img" aria-label={`Income ${pct(view.mix.incomePct)}; your profile's range is ${view.mix.rangeMin} to ${view.mix.rangeMax}%`}>
-                      <div className="absolute h-3 rounded-full bg-emerald-200" style={{ left: `${view.mix.rangeMin}%`, width: `${view.mix.rangeMax - view.mix.rangeMin}%` }} />
-                      <div className="absolute -top-1 h-5 w-1 rounded bg-foreground" style={{ left: `calc(${Math.min(100, Math.max(0, view.mix.incomePct))}% - 2px)` }} />
+                      <div className="absolute h-3 rounded-full" style={{ left: `${view.mix.rangeMin}%`, width: `${view.mix.rangeMax - view.mix.rangeMin}%`, background: tint(B.amber, 0.35) }} />
+                      <div className="absolute -top-1 h-5 w-1 rounded" style={{ left: `calc(${Math.min(100, Math.max(0, view.mix.incomePct))}% - 2px)`, background: B.navy }} />
                     </div>
                     <div className="mt-1 flex justify-between text-[10px] text-muted-foreground"><span>0% income</span><span>Your profile: {view.mix.rangeMin}–{view.mix.rangeMax}%</span><span>100%</span></div>
                   </div>
                 )}
-                {MIX_CHIP[view.mix.status].text && <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-medium ${MIX_CHIP[view.mix.status].cls}`}>{MIX_CHIP[view.mix.status].text}</span>}
+                {MIX_CHIP[view.mix.status].text && <Chip good={MIX_CHIP[view.mix.status].good}>{MIX_CHIP[view.mix.status].text}</Chip>}
               </div>
             </div>
+            <Commentary lines={view.mix.commentary} />
           </Section>
         )}
 
@@ -145,8 +161,8 @@ export function PortalPortfolioReview({ view, publishedAt, preview = false }: { 
             <ul className="space-y-2.5">
               {[...view.accounts].sort((a, b) => (b.value ?? 0) - (a.value ?? 0)).map((a, i) => (
                 <li key={i}>
-                  <div className="flex items-baseline justify-between gap-2 text-sm"><span className="font-medium text-foreground">{a.label}{a.owner ? <span className="font-normal text-muted-foreground"> · {a.owner.split(" ")[0]}</span> : null}</span><span className="text-xs"><span className="font-medium">{short(a.value ?? 0)}</span>{a.ytdPct != null && <span className={`ml-2 ${a.ytdPct >= 0 ? "text-emerald-700" : "text-amber-700"}`}>{a.ytdPct >= 0 ? "▲" : "▼"} {pct(Math.abs(a.ytdPct))}</span>}</span></div>
-                  <div className="mt-1 h-2 rounded-full bg-muted"><div className="h-2 rounded-full bg-emerald-500" style={{ width: `${Math.max(2, ((a.value ?? 0) / maxValue) * 100)}%` }} /></div>
+                  <div className="flex items-baseline justify-between gap-2 text-sm"><span className="font-medium text-foreground">{a.label}{a.owner ? <span className="font-normal text-muted-foreground"> · {a.owner.split(" ")[0]}</span> : null}</span><span className="text-xs"><span className="font-medium">{short(a.value ?? 0)}</span>{a.ytdPct != null && <span className="ml-2" style={{ color: a.ytdPct >= 0 ? B.navy : "hsl(26 40% 30%)" }}>{a.ytdPct >= 0 ? "▲" : "▼"} {pct(Math.abs(a.ytdPct))}</span>}</span></div>
+                  <div className="mt-1 h-2 rounded-full bg-muted"><div className="h-2 rounded-full" style={{ width: `${Math.max(2, ((a.value ?? 0) / maxValue) * 100)}%`, background: B.navy }} /></div>
                 </li>
               ))}
             </ul>
@@ -160,14 +176,15 @@ export function PortalPortfolioReview({ view, publishedAt, preview = false }: { 
         {funds && (
           <Section title={`Your funds and iA's ${funds.modelLabel} model`} lead={`${Math.round(funds.heldInModelPct)}% of what you hold is in the funds iA's model uses.`}>
             <div className="space-y-2.5">
-              <div><p className="mb-1 text-xs text-muted-foreground">iA's model</p><Segments label="The model's funds" parts={modelFunds.map((r, i) => ({ pct: r.modelPct ?? 0, cls: FUND_BG[i % FUND_BG.length], title: `${r.name} ${r.modelPct}%` }))} /></div>
-              <div><p className="mb-1 text-xs text-muted-foreground">Your portfolio</p><Segments label="Your funds" parts={[...modelFunds.map((r, i) => ({ pct: r.heldPct, cls: FUND_BG[i % FUND_BG.length], title: `${r.name} ${r.heldPct}%` })), { pct: otherHeld, cls: OTHER_BG, title: `Other funds ${otherHeld.toFixed(1)}%` }]} /></div>
+              <div><p className="mb-1 text-xs text-muted-foreground">iA's model</p><Segments label="The model's funds" parts={modelFunds.map((r, i) => ({ pct: r.modelPct ?? 0, bg: FUND_COLORS[i % FUND_COLORS.length], title: `${r.name} ${r.modelPct}%` }))} /></div>
+              <div><p className="mb-1 text-xs text-muted-foreground">Your portfolio</p><Segments label="Your funds" parts={[...modelFunds.map((r, i) => ({ pct: r.heldPct, bg: FUND_COLORS[i % FUND_COLORS.length], title: `${r.name} ${r.heldPct}%` })), { pct: otherHeld, bg: OTHER_BG, title: `Other funds ${otherHeld.toFixed(1)}%` }]} /></div>
               <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                {modelFunds.map((r, i) => <li key={r.name} className="flex items-center gap-1.5"><span className={`inline-block h-2.5 w-2.5 rounded-sm ${FUND_BG[i % FUND_BG.length]}`} />{r.name}</li>)}
-                {otherHeld > 0 && <li className="flex items-center gap-1.5"><span className={`inline-block h-2.5 w-2.5 rounded-sm ${OTHER_BG}`} />Other funds (not part of the model)</li>}
+                {modelFunds.map((r, i) => <li key={r.name} className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: FUND_COLORS[i % FUND_COLORS.length] }} />{r.name}</li>)}
+                {otherHeld > 0 && <li className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: OTHER_BG }} />Other funds (not part of the model)</li>}
               </ul>
             </div>
-            <p className="text-xs text-muted-foreground">iA's model as at {day(funds.modelAsOf)}. Rolf will talk through any differences with you.</p>
+            <Commentary lines={funds.commentary} />
+            <p className="text-xs text-muted-foreground">iA's model as at {day(funds.modelAsOf)}.</p>
             <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Each fund</summary>
               <table className="mt-2 w-full"><thead><tr className="text-left"><th className="py-1 pr-2 font-normal">Fund</th><th className="px-2 text-right font-normal">Model</th><th className="pl-2 text-right font-normal">You hold</th></tr></thead>
                 <tbody>{funds.rows.map((r) => <tr key={r.name} className="border-t border-border/60"><td className="py-1 pr-2">{r.name}{!r.inModel ? " (not part of the model)" : ""}</td><td className="px-2 text-right">{r.modelPct === null ? "—" : `${r.modelPct}%`}</td><td className="pl-2 text-right">{pct(r.heldPct)}</td></tr>)}</tbody></table>
@@ -177,19 +194,19 @@ export function PortalPortfolioReview({ view, publishedAt, preview = false }: { 
 
         {view.reset && (
           <Section title="Resetting your death benefit guarantee" lead="Each year Rolf can lift the guarantee on your segregated fund contracts to today's value. It costs nothing and does not change your fees.">
-            <div className="rounded-lg bg-emerald-50 p-4 text-center">
-              <p className="font-serif text-3xl font-semibold text-emerald-800">+{money(view.reset.totalLift)}</p>
-              <p className="text-xs text-emerald-900">added to your death benefit guarantee across {view.reset.rows.length} account{view.reset.rows.length === 1 ? "" : "s"}</p>
+            <div className="rounded-lg p-4 text-center" style={{ background: tint(B.sand, 0.45) }}>
+              <p className="font-serif text-3xl font-semibold" style={{ color: B.navy }}>+{money(view.reset.totalLift)}</p>
+              <p className="text-xs" style={{ color: B.navy }}>added to your death benefit guarantee across {view.reset.rows.length} account{view.reset.rows.length === 1 ? "" : "s"}</p>
             </div>
             <ul className="space-y-2.5">
               {view.reset.rows.map((r, i) => (
                 <li key={i}>
-                  <div className="flex items-baseline justify-between gap-2 text-xs"><span className="font-medium text-foreground">{r.name}{r.last4 ? ` …${r.last4}` : ""}</span><span className="text-muted-foreground">{short(r.currentGuarantee)} → <span className="font-medium text-emerald-700">{short(r.newGuarantee)}</span></span></div>
-                  <div className="relative mt-1 h-2 rounded-full bg-muted"><div className="absolute h-2 rounded-full bg-emerald-300" style={{ width: `${(r.newGuarantee / resetMax) * 100}%` }} /><div className="absolute h-2 rounded-full bg-emerald-600" style={{ width: `${(r.currentGuarantee / resetMax) * 100}%` }} /></div>
+                  <div className="flex items-baseline justify-between gap-2 text-xs"><span className="font-medium text-foreground">{r.name}{r.last4 ? ` …${r.last4}` : ""}</span><span className="text-muted-foreground">{short(r.currentGuarantee)} → <span className="font-medium" style={{ color: B.amber }}>{short(r.newGuarantee)}</span></span></div>
+                  <div className="relative mt-1 h-2 rounded-full bg-muted"><div className="absolute h-2 rounded-full" style={{ width: `${(r.newGuarantee / resetMax) * 100}%`, background: B.amber }} /><div className="absolute h-2 rounded-full" style={{ width: `${(r.currentGuarantee / resetMax) * 100}%`, background: B.navy }} /></div>
                 </li>
               ))}
             </ul>
-            <p className="text-[11px] text-muted-foreground">Dark bar: your guarantee now. Light bar: what it becomes after the reset.</p>
+            <p className="text-[11px] text-muted-foreground">Navy: your guarantee now. Bronze: what it becomes after the reset.</p>
           </Section>
         )}
 
