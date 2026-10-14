@@ -47,7 +47,12 @@ Deno.serve(async (req) => {
     const sinceDate = pacificDate(Date.parse(c.since));
 
     // 1. Keep each family's obligations in step with its tier.
-    const { data: families } = await db.from("families").select("id, name, service_tier").not("service_tier", "is", null);
+    const { data: allFamilies } = await db.from("families").select("id, name, service_tier").not("service_tier", "is", null);
+    // A family whose households have all ended their advisory relationship owes no meetings: it gets none, and the cancel step below clears any it already had.
+    const { data: hhs } = await db.from("households").select("family_id, relationship_ended_at");
+    const activeFamilies = new Set<string>((hhs ?? []).filter((h: any) => !h.relationship_ended_at).map((h: any) => h.family_id));
+    const hasHouseholds = new Set<string>((hhs ?? []).map((h: any) => h.family_id));
+    const families = (allFamilies ?? []).filter((f: any) => activeFamilies.has(f.id) || !hasHouseholds.has(f.id));
     const { data: allContacts } = await db.from("contacts").select("id, family_id, first_name, last_name, email, family_role, is_minor, household_id").in("family_id", (families ?? []).map((f: any) => f.id));
     const contactsOf = new Map<string, FamilyContact[]>();
     for (const p of allContacts ?? []) {
@@ -97,7 +102,7 @@ Deno.serve(async (req) => {
     for (const o of existing ?? []) {
       if (o.status === "open" && !wanted.has(`${o.family_id}|${o.window_key}`)) {
         await db.from("review_obligations").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("id", o.id);
-        await event(o.family_id, o.id, mode, "obligation_cancelled", { reason: "the family's tier no longer owes this meeting" });
+        await event(o.family_id, o.id, mode, "obligation_cancelled", { reason: "the family no longer owes this meeting (tier change or advisory relationship ended)" });
         summary.cancelled++;
       }
     }
