@@ -192,7 +192,7 @@ export default function PortfolioReview() {
                       </tbody>
                     </table>
                   </div>
-                  <p className="text-xs text-muted-foreground">Resets end at age 85. The death guarantee on the statement is the last reset amount, so a reset adds the fund value less that figure. Series 75/75 cannot be reset.</p>
+                  <p className="text-xs text-muted-foreground">Resets end at age 85. The death guarantee on the statement is the last reset amount, so a reset adds the latest fund value (from the monthly import) less that figure. An estimate until the reset is done. Series 75/75 cannot be reset.</p>
                 </CardContent>
               </Card>
             )}
