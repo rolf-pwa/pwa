@@ -7,7 +7,7 @@ import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/shared/components/ui/alert-dialog";
-import { KIND_LABEL, getRebalancingProposal, type ClientProposal, completeRebalancing, describeReviewEvent, statusLabel, getReminderOverview, groupByQuarter, getReviewOverview, publishRebalancing, rebalancingStage, setReminderMode, unpublishRebalancing, setReviewMode, setReviewPaused, type ReminderOverview, type ReviewMode, type ReviewObligation, type ReviewOverview } from "@/modules/crm/lib/reviewAgent";
+import { KIND_LABEL, getRebalancingProposal, type ClientProposal, completeRebalancing, markObligationComplete, describeReviewEvent, statusLabel, getReminderOverview, groupByQuarter, getReviewOverview, publishRebalancing, rebalancingStage, setReminderMode, unpublishRebalancing, setReviewMode, setReviewPaused, type ReminderOverview, type ReviewMode, type ReviewObligation, type ReviewOverview } from "@/modules/crm/lib/reviewAgent";
 import { familyTitle } from "@/shared/lib/utils";
 import { ReviewAgentGuide } from "@/modules/crm/components/ReviewAgentGuide";
 import { Textarea } from "@/shared/components/ui/textarea";
@@ -216,6 +216,9 @@ export default function ReviewAgent() {
                                     )}
                                     {rebalancingStage(o) === "toExecute" && <Button size="sm" className="h-7 text-xs" disabled={busy} onClick={() => runRebalancing(() => completeRebalancing(o.id), "Marked done: the family is told")}>Mark done</Button>}
                                   </>
+                                )}
+                                {["open", "booked", "paused", "escalated"].includes(o.status) && !(o.kind === "rebalancing" && rebalancingStage(o) === "toExecute") && (
+                                  <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={busy} onClick={() => { if (window.confirm(`Mark this ${KIND_LABEL[o.kind].toLowerCase()} complete? Georgia stops and nobody is emailed.`)) runRebalancing(() => markObligationComplete(o.id), "Marked complete"); }}>Mark complete</Button>
                                 )}
                                 {(o.status === "open" || o.status === "booked" || o.status === "paused") && (o.kind !== "rebalancing" || rebalancingStage(o) !== "toExecute") && (
                                   <Button size="icon" variant="ghost" className="h-7 w-7" aria-label={o.status === "paused" ? "Resume" : "Pause"} onClick={() => togglePause(o)}>

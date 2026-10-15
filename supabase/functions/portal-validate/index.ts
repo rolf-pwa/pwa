@@ -625,7 +625,8 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
         const { data: rebAcks } = ob?.id ? await supabase.from("rebalance_acknowledgements").select("items").eq("obligation_id", ob.id).eq("decision", "acknowledged") : { data: [] as any[] };
         const rebAuthorized = [...new Set((rebAcks ?? []).flatMap((a: any) => (Array.isArray(a.items) ? a.items.map((i: any) => String(i.id)) : [])))] as string[];
         // A completed one stays on the card for a month, then goes quiet; one still being worked on stays until it is done.
-        const recent = ob && (!ob.completed_at || Date.now() - Date.parse(ob.completed_at) < 30 * 86_400_000);
+        // Closed by Rolf before the client authorized it: nothing is left for the client to do.
+        const recent = ob && !(ob.completed_at && !ob.acknowledged_at) && (!ob.completed_at || Date.now() - Date.parse(ob.completed_at) < 30 * 86_400_000);
         if (ob && recent) rebalancing = { authorizedIds: rebAuthorized, viewerId: contactRes.data?.id ?? null, view: rebView, // The estimated gain is for Rolf's carry-out task only: it rests on book values that are not always the true cost.
 proposal: ob.proposal ? { ...ob.proposal, switches: (ob.proposal.switches ?? []).map(({ estGain: _g, ...rest }: any) => rest) } : null, label: windowLabel(ob.window_start, ob.window_end), summary: ob.proposal_summary ?? "", publishedAt: ob.published_at, acknowledgedAt: ob.acknowledged_at ?? null, completedAt: ob.completed_at ?? null, statement: REBALANCE_STATEMENT, statementVersion: REBALANCE_STATEMENT_VERSION };
       }
