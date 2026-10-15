@@ -235,7 +235,23 @@ describe("the rebalancing worksheet", () => {
     const p = buildPortfolioPack({ accounts: [acct({ type: "Non-registered", number: "1818713190", value: 100_000, ownerDob: "1955-06-01", guarantee: { series: "Series 75/100", maturityDate: null, guaranteedAtMaturity: 1, guaranteedAtDeath: 90_000, lastQuarterFee: 1, valueOfFunds: 100_000 }, statement: { statementDate: "2026-09-30", funds } })], profiles: [{ accountNumber: null, label: null, incomePct: 40, equityPct: 60, bandPct: 0, profileKey: "balanced" }], today: "2026-10-14", models: [bal] });
     const t = rebalancingWorksheet(p.rebalancing, "Parent Household", p.asOf);
     expect(t).toContain("Rebalancing worksheet: Parent Household");
-    expect(t).toMatch(/…3190 \(Sam\): switch about \$6,000 from equity into income funds \(34% income to 40%\)\. OUTSIDE RANGE; TAXABLE: check the gain first; then reset the death guarantee \(\+\$10,000\)/);
+    expect(t).toMatch(/…3190 \(Sam\): switch about \$6,000 from equity into income funds \(34% income to 40%\)\. OUTSIDE RANGE; TAXABLE: estimated gain about \$600 on book value \$90,000; then reset the death guarantee \(\+\$10,000\)/);
     expect(t).toContain("Total: $6,000 into income funds, $0 into equity funds. 1 reset adding $10,000.");
+  });
+});
+
+import { estimateSwitchGain } from "../../supabase/functions/_shared/portfolio-review";
+describe("estimated capital gain on a switch", () => {
+  it("is the switched share of the account's gain", () => {
+    expect(estimateSwitchGain(200_000, 100_000, 40_000)).toBe(20_000); // half the account is gain
+    expect(estimateSwitchGain(150_000, 120_000, 15_000)).toBe(3_000);
+  });
+  it("is a loss when the account is under its book value", () => {
+    expect(estimateSwitchGain(90_000, 100_000, 9_000)).toBe(-1_000);
+  });
+  it("is null when the figures are missing", () => {
+    expect(estimateSwitchGain(null, 100_000, 5_000)).toBeNull();
+    expect(estimateSwitchGain(100_000, null, 5_000)).toBeNull();
+    expect(estimateSwitchGain(100_000, 80_000, 0)).toBeNull();
   });
 });

@@ -179,7 +179,7 @@ export default function PortfolioReview() {
                             <td className="px-2 text-right">{pct(r.incomePct)}</td>
                             <td className="px-2 text-right">{pct(r.targetIncomePct)}</td>
                             <td className="px-2">{r.direction === "none" ? <span className="text-muted-foreground">On the model</span> : <><span className="font-medium">{money(r.amount)}</span> {r.direction === "to_income" ? "equity → income" : "income → equity"}{" "}<Badge variant={r.outsideRange ? "destructive" : "secondary"} className="text-[10px]">{r.outsideRange ? "Outside range" : "Optional"}</Badge></>}</td>
-                            <td className="pl-2 text-xs">{r.taxable && <Badge variant="outline" className="mr-1 text-[10px]">Taxable{r.ytdGain != null ? `: ${signed(r.ytdGain)} this year` : ""}</Badge>}{r.resetLift !== null && <Badge variant="outline" className="text-[10px]">Reset +{money(r.resetLift)}</Badge>}</td>
+                            <td className="pl-2 text-xs">{r.taxable && <Badge variant="outline" className="mr-1 text-[10px]">Taxable{r.estGain != null ? `: est. ${r.estGain < 0 ? "loss" : "gain"} ${money(Math.abs(r.estGain))}` : r.ytdGain != null ? `: ${signed(r.ytdGain)} this year` : ""}</Badge>}{r.resetLift !== null && <Badge variant="outline" className="text-[10px]">Reset +{money(r.resetLift)}</Badge>}</td>
                           </tr>
                         ))}
                       </tbody>

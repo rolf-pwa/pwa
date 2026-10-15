@@ -195,7 +195,7 @@ export function portfolioReviewReadyEmail(firstName: string, portalUrl: string, 
 // What a Tier 1 household reviews and authorizes in its portal: the switches by asset class (accounts outside their profile's range) and the
 // death benefit resets, each as an item the client acknowledges. Built from the pack when Rolf publishes, and frozen with the rebalancing.
 
-export interface ProposalSwitch { id: string; label: string; owner: string | null; /** The contact who owns the account: only they authorize changes to it. */ ownerId?: string | null; direction: "to_income" | "to_equity"; /** What the client sees, rounded to $100. */ amount: number; /** The pack's figure to the dollar, for Rolf's task. */ exactAmount?: number; taxable: boolean }
+export interface ProposalSwitch { id: string; label: string; owner: string | null; /** The contact who owns the account: only they authorize changes to it. */ ownerId?: string | null; direction: "to_income" | "to_equity"; /** What the client sees, rounded to $100. */ amount: number; /** The pack's figure to the dollar, for Rolf's task. */ exactAmount?: number; taxable: boolean; /** Estimated capital gain (negative: loss) from this switch, to the dollar, from the account's book value. Null when not known. */ estGain?: number | null }
 export interface ProposalReset { id: string; label: string; owner: string | null; ownerId?: string | null; currentGuarantee: number; newGuarantee: number; lift: number }
 export interface ClientProposal { switches: ProposalSwitch[]; resets: ProposalReset[]; totalLift: number; totalNow: number; totalAfter: number; hasTaxable: boolean }
 export type ProposalItem = (ProposalSwitch & { kind: "switch" }) | (ProposalReset & { kind: "reset" });
@@ -205,7 +205,7 @@ export function buildClientProposal(pack: Pack): ClientProposal | null {
   const rs = pack.resets.rows.filter((r) => r.status === "reset");
   if (!sw.length && !rs.length) return null;
   return {
-    switches: sw.map((r) => ({ id: `switch:${r.accountId}`, label: shortAccountName(r.name, r.number), owner: r.owner, ownerId: r.ownerId ?? null, direction: r.direction as "to_income" | "to_equity", amount: Math.round(r.amount / 100) * 100, exactAmount: Math.round(r.amount), taxable: r.taxable })),
+    switches: sw.map((r) => ({ id: `switch:${r.accountId}`, label: shortAccountName(r.name, r.number), owner: r.owner, ownerId: r.ownerId ?? null, direction: r.direction as "to_income" | "to_equity", amount: Math.round(r.amount / 100) * 100, exactAmount: Math.round(r.amount), taxable: r.taxable, estGain: r.estGain ?? null })),
     resets: rs.map((r) => ({ id: `reset:${r.accountId}`, label: shortAccountName(r.name, r.number), owner: r.owner, ownerId: r.ownerId ?? null, currentGuarantee: r.deathGuarantee as number, newGuarantee: r.fundValue as number, lift: r.room as number })),
     totalLift: Math.round(rs.reduce((n, r) => n + (r.room ?? 0), 0)),
     totalNow: Math.round(rs.reduce((n, r) => n + (r.deathGuarantee ?? 0), 0)),
@@ -258,10 +258,14 @@ export function checkAllAcknowledged(p: ClientProposal | null | undefined, itemI
   return { ok: true, items };
 }
 
+/** Rolf's wording for the estimated gain on a taxable switch. */
+export const gainPhrase = (g: number | null | undefined): string =>
+  g === null || g === undefined ? "check the gain first" : `estimated ${g < 0 ? "loss" : "gain"} about $${Math.abs(Math.round(g)).toLocaleString("en-CA")}, check it with the client first`;
+
 export const describeProposalItem = (i: ProposalItem): string => {
   const m = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
   return i.kind === "switch"
-    ? `${i.label}${i.owner ? ` (${i.owner})` : ""}: switch about ${m(i.amount)} ${i.direction === "to_income" ? "from equity into income funds" : "from income into equity funds"}${i.taxable ? " [TAXABLE: check the gain first]" : ""}`
+    ? `${i.label}${i.owner ? ` (${i.owner})` : ""}: switch about ${m(i.amount)} ${i.direction === "to_income" ? "from equity into income funds" : "from income into equity funds"}${i.taxable ? ` [TAXABLE: ${gainPhrase(i.estGain)}]` : ""}`
     : `${i.label}${i.owner ? ` (${i.owner})` : ""}: reset the death benefit guarantee from ${m(i.currentGuarantee)} to about ${m(i.newGuarantee)}`;
 };
 
@@ -284,7 +288,7 @@ export function rebalanceTaskPlan(items: ProposalItem[], opts: { clientName: str
   for (const i of items) { const k = itemAccountKey(i.id); groups.set(k, [...(groups.get(k) ?? []), i]); }
   const lines: string[] = [];
   for (const [, g] of groups) {
-    lines.push(`${g[0].label}${g[0].owner ? ` (${first(g[0].owner)})` : ""}${g.some((i) => i.kind === "switch" && i.taxable) ? "  [TAXABLE: check the gain first]" : ""}`);
+    lines.push(`${g[0].label}${g[0].owner ? ` (${first(g[0].owner)})` : ""}${g.some((i) => i.kind === "switch" && i.taxable) ? `  [TAXABLE: ${gainPhrase((g.find((x) => x.kind === "switch") as ProposalSwitch | undefined)?.estGain)}]` : ""}`);
     for (const i of g) lines.push(`  - ${itemAction(i).replace(/^./, (c) => c.toUpperCase())}`);
   }
   const description = [
@@ -299,7 +303,7 @@ export function rebalanceTaskPlan(items: ProposalItem[], opts: { clientName: str
   ].filter((l, idx, a) => !(l === "" && a[idx - 1] === "")).join("\n");
   const subtasks = items.map((i) => ({
     title: `${i.label}${i.owner ? ` (${first(i.owner)})` : ""}: ${itemAction(i)}`,
-    description: i.kind === "switch" && i.taxable ? "Taxable account: check the realised gain with the client before switching." : "Authorized by the client in the portal. Check this off when it is done.",
+    description: i.kind === "switch" && i.taxable ? `Taxable account: ${gainPhrase(i.estGain)}.` : "Authorized by the client in the portal. Check this off when it is done.",
   }));
   return { description, subtasks };
 }
