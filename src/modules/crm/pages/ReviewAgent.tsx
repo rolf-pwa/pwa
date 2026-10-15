@@ -137,23 +137,7 @@ export default function ReviewAgent() {
         {!data && !error && <Loader2 className="h-5 w-5 animate-spin" />}
         {data && (
           <>
-            <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-lg">Mode</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Mode">
-                  {MODES.map((m) => (
-                    <Button key={m.value} role="radio" aria-checked={mode === m.value} variant={mode === m.value ? "default" : "outline"} disabled={busy}
-                      onClick={() => (m.value === "live" && mode !== "live" ? setConfirmLive(true) : m.value !== mode && change(m.value))}>{m.label}</Button>
-                  ))}
-                </div>
-                <p className="text-sm text-muted-foreground">{MODES.find((m) => m.value === mode)?.blurb}</p>
-                {c && <p className="text-xs text-muted-foreground">Tier 1: a Portfolio Review in Q1 and a portfolio rebalancing in Q3. Tier 2A: Portfolio Reviews in Q2 and Q4. Tier 2B: a Portfolio Review in Q2 and a Sovereignty Review in Q4. Tier 3: Sovereignty Reviews in Q1–Q3 and a Governance Review in Q4. A family with no ratified Charter (and that is not a Virtual Family Office) is not one entity: each of its households is tiered on its own assets and owes its own meetings, shown as Family: Household. A rebalancing is prepared by you family by family, published to the portal when it is ready, and Georgia invites the family only then. Meeting invitations go out on the first day of each window, then a reminder every {c.remind_every_days} days (up to {c.max_nudges}); with {c.handoff_days_before_end} days left and nothing booked, the family comes to you. Only windows that start after {when(c.since)} are managed.</p>}
-              </CardContent>
-            </Card>
-
             <ReviewAgentGuide />
-
-            <MeetingReminderCard />
 
             <Card>
               <CardHeader className="pb-3">
@@ -248,6 +232,22 @@ export default function ReviewAgent() {
                 ))}
               </CardContent>
             </Card>
+
+            <Card>
+              <CardHeader className="pb-3"><CardTitle className="text-lg">Mode</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Mode">
+                  {MODES.map((m) => (
+                    <Button key={m.value} role="radio" aria-checked={mode === m.value} variant={mode === m.value ? "default" : "outline"} disabled={busy}
+                      onClick={() => (m.value === "live" && mode !== "live" ? setConfirmLive(true) : m.value !== mode && change(m.value))}>{m.label}</Button>
+                  ))}
+                </div>
+                <p className="text-sm text-muted-foreground">{MODES.find((m) => m.value === mode)?.blurb}</p>
+                {c && <p className="text-xs text-muted-foreground">Tier 1: a Portfolio Review in Q1 and a portfolio rebalancing in Q3. Tier 2A: Portfolio Reviews in Q2 and Q4. Tier 2B: a Portfolio Review in Q2 and a Sovereignty Review in Q4. Tier 3: Sovereignty Reviews in Q1–Q3 and a Governance Review in Q4. A family with no ratified Charter (and that is not a Virtual Family Office) is not one entity: each of its households is tiered on its own assets and owes its own meetings, shown as Family: Household. A rebalancing is prepared by you family by family, published to the portal when it is ready, and Georgia invites the family only then. Meeting invitations go out on the first day of each window, then a reminder every {c.remind_every_days} days (up to {c.max_nudges}); with {c.handoff_days_before_end} days left and nothing booked, the family comes to you. Only windows that start after {when(c.since)} are managed.</p>}
+              </CardContent>
+            </Card>
+
+            <MeetingReminderCard />
           </>
         )}
       </div>
