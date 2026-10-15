@@ -7,7 +7,7 @@ import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/shared/components/ui/alert-dialog";
-import { KIND_LABEL, completeRebalancing, describeReviewEvent, statusLabel, getReminderOverview, groupByQuarter, getReviewOverview, publishRebalancing, rebalancingStage, setReminderMode, unpublishRebalancing, setReviewMode, setReviewPaused, type ReminderOverview, type ReviewMode, type ReviewObligation, type ReviewOverview } from "@/modules/crm/lib/reviewAgent";
+import { KIND_LABEL, getRebalancingProposal, type ClientProposal, completeRebalancing, describeReviewEvent, statusLabel, getReminderOverview, groupByQuarter, getReviewOverview, publishRebalancing, rebalancingStage, setReminderMode, unpublishRebalancing, setReviewMode, setReviewPaused, type ReminderOverview, type ReviewMode, type ReviewObligation, type ReviewOverview } from "@/modules/crm/lib/reviewAgent";
 import { familyTitle } from "@/shared/lib/utils";
 import { ReviewAgentGuide } from "@/modules/crm/components/ReviewAgentGuide";
 import { Textarea } from "@/shared/components/ui/textarea";
@@ -88,6 +88,15 @@ export default function ReviewAgent() {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [publishing, setPublishing] = useState<ReviewObligation | null>(null);
   const [summary, setSummary] = useState("");
+  // What the engine proposes for the rebalancing being published (switches by asset class and death benefit resets), shown before it goes out.
+  const [proposalInfo, setProposalInfo] = useState<{ proposal: ClientProposal | null; householdId: string | null; frozen?: boolean; reason?: string | null } | null>(null);
+  useEffect(() => {
+    setProposalInfo(null);
+    if (!publishing) return;
+    let live = true;
+    getRebalancingProposal(publishing.id).then((r) => { if (live) setProposalInfo(r); }).catch(() => { if (live) setProposalInfo({ proposal: null, householdId: null, reason: "Could not load the engine's proposal." }); });
+    return () => { live = false; };
+  }, [publishing]);
 
   const load = useCallback(async () => {
     try { setData(await getReviewOverview()); setError(null); } catch (e: any) { setError(e?.message ?? "Couldn't load"); }
@@ -244,6 +253,18 @@ export default function ReviewAgent() {
               Write what the client should review: what will change and why, in plain words. Also put the full proposal in their Documents. It appears on their portal now, and Georgia emails both adults to review it. They acknowledge only after reading it.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="rounded-md border bg-muted/30 p-3 text-xs" data-testid="engine-proposal">
+            <p className="mb-1 font-medium text-foreground">{proposalInfo?.frozen ? "The proposal the client is reviewing (frozen)" : "What the client will be asked to authorize, item by item"}</p>
+            {!proposalInfo && <p className="text-muted-foreground">Working it out…</p>}
+            {proposalInfo && !proposalInfo.proposal && <p className="text-muted-foreground">{proposalInfo.reason ?? "No engine proposal."}</p>}
+            {proposalInfo?.proposal && (
+              <ul className="space-y-0.5 text-muted-foreground">
+                {proposalInfo.proposal.switches.map((s) => <li key={s.id}>{s.label}{s.owner ? ` (${s.owner.split(" ")[0]})` : ""}: about ${s.amount.toLocaleString("en-CA")} {s.direction === "to_income" ? "equity into income" : "income into equity"}{s.taxable ? " · taxable" : ""}</li>)}
+                {proposalInfo.proposal.resets.map((r) => <li key={r.id}>Reset {r.label}{r.owner ? ` (${r.owner.split(" ")[0]})` : ""}: guarantee ${Math.round(r.currentGuarantee).toLocaleString("en-CA")} to about ${Math.round(r.newGuarantee).toLocaleString("en-CA")}</li>)}
+              </ul>
+            )}
+            {proposalInfo?.householdId && <a className="mt-1 inline-block text-accent hover:underline" href={`/households/${proposalInfo.householdId}/portfolio-review`} target="_blank" rel="noreferrer">Open the review pack</a>}
+          </div>
           <Textarea rows={6} value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="For example: We are moving your TFSA and RRSP back to the 60/40 target after this year's equity gains, and topping up your cash reserve. Details are in the proposal in your Documents." aria-label="Summary for the client" />
           <AlertDialogFooter>
             <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>

@@ -8,7 +8,7 @@ import { latestModels, portfolioPackFor } from "../_shared/portfolio-review-data
 import { pacificDate } from "../_shared/review-windows.ts";
 import { MODEL_PROMPT, validateModels } from "../_shared/ia-model-parse.ts";
 import { isPooledFamily } from "../_shared/review-units.ts";
-import { buildClientView, portfolioReviewReadyEmail, type ClientIncludes } from "../_shared/portfolio-review-client.ts";
+import { buildClientProposal, buildClientView, portfolioReviewReadyEmail, type ClientIncludes } from "../_shared/portfolio-review-client.ts";
 import { sendServiceEmailDetailed } from "../_shared/service-email.ts";
 import { AGENT_SENDER, PORTAL_URL } from "../_shared/onboarding-agent.ts";
 import { GEMINI_EXTRACT_MODEL, extractJson, generateVertexContent, parseServiceAccountKey, withThinking } from "../_shared/vertex-ai.ts";
@@ -82,6 +82,18 @@ Deno.serve(async (req) => {
       return json({ ok: true, mode });
     }
 
+    // ── What the engine proposes for a Tier 1 rebalancing (household-level obligations): switches by asset class and death benefit resets ──
+    if (action === "rebalancingProposal") {
+      const { data: o } = await db.from("review_obligations").select("id, kind, household_id, proposal, published_at").eq("id", String(body?.obligationId ?? "")).maybeSingle();
+      if (!o || o.kind !== "rebalancing") return json({ error: "That is not a rebalancing." }, 404);
+      // Once published the client's proposal is frozen: show that, not a fresh calculation.
+      if (o.published_at && o.proposal) return json({ proposal: o.proposal, frozen: true, householdId: o.household_id });
+      if (!o.household_id) return json({ proposal: null, householdId: null, reason: "This rebalancing is for a whole family, not a single household, so there is no engine proposal. Write the summary by hand." });
+      const { pack } = await portfolioPackFor(db, o.household_id, pacificDate(Date.now()));
+      const proposal = buildClientProposal(pack);
+      return json({ proposal, householdId: o.household_id, reason: proposal ? null : "Nothing to propose: every account is inside its profile's range and there is no reset due, or the household has no profile or fund detail yet." });
+    }
+
     // ── Portfolio rebalancing: prepared by Rolf family by family, published to the portal, then carried out after the client acknowledges ──
     if (action === "publishRebalancing" || action === "unpublishRebalancing" || action === "completeRebalancing") {
       const id = String(body?.obligationId ?? "");
@@ -93,13 +105,19 @@ Deno.serve(async (req) => {
         const summary = String(body?.summary ?? "").trim();
         if (summary.length < 10) return json({ error: "Write a short summary of the rebalancing for the client (at least a sentence)." }, 400);
         if (o.acknowledged_at) return json({ error: "The client has already acknowledged this one." }, 400);
-        await db.from("review_obligations").update({ published_at: o.published_at ?? new Date().toISOString(), published_by: staff.userId, proposal_summary: summary, updated_at: new Date().toISOString() }).eq("id", id);
+        // The engine's proposal is frozen with the first publish (and refreshed if Rolf takes it back and republishes).
+        let proposal = o.proposal ?? null;
+        if (!o.published_at && o.household_id) {
+          const { pack } = await portfolioPackFor(db, o.household_id, pacificDate(Date.now()));
+          proposal = buildClientProposal(pack);
+        }
+        await db.from("review_obligations").update({ published_at: o.published_at ?? new Date().toISOString(), published_by: staff.userId, proposal_summary: summary, proposal, updated_at: new Date().toISOString() }).eq("id", id);
         await log(o.published_at ? "rebalancing_republished" : "rebalancing_published");
         return json({ ok: true });
       }
       if (action === "unpublishRebalancing") {
         if (o.acknowledged_at) return json({ error: "The client has already acknowledged this one, so it can't be taken back." }, 400);
-        await db.from("review_obligations").update({ published_at: null, proposal_summary: null, updated_at: new Date().toISOString() }).eq("id", id);
+        await db.from("review_obligations").update({ published_at: null, proposal_summary: null, proposal: null, updated_at: new Date().toISOString() }).eq("id", id);
         await log("rebalancing_unpublished");
         return json({ ok: true });
       }

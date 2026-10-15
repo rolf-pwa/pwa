@@ -98,3 +98,38 @@ describe("what the client sees of the rebalancing proposal", () => {
     expect(buildClientView(p, ALL_INCLUDED, "", "H").rebalance).toBeNull();
   });
 });
+
+import { buildClientProposal, checkAllAcknowledged, describeProposalItem, proposalItems } from "../../supabase/functions/_shared/portfolio-review-client";
+describe("the Tier 1 rebalancing proposal", () => {
+  const inc = (income: number, equity: number) => [{ name: "I", category: "Income Funds", value: income * 1000 }, { name: "E", category: "Canadian Equity funds", value: equity * 1000 }];
+  const prof = [{ accountNumber: null, label: null, incomePct: 40, equityPct: 60, bandPct: 0, profileKey: "balanced" }];
+  const gtee = { series: "Series 75/100", maturityDate: null, guaranteedAtMaturity: 1, guaranteedAtDeath: 90_000, lastQuarterFee: 1, valueOfFunds: 100_000 };
+  const pack = () => buildPortfolioPack({ accounts: [
+    acct({ id: "a", name: "iA Financial Group - SRP - TFSA", number: "1111", type: "TFSA", value: 100_000, ownerDob: "1955-06-01", guarantee: gtee, statement: { statementDate: "2026-09-30", funds: inc(34, 66) } }),
+    acct({ id: "b", number: "2222", value: 80_000, statement: { statementDate: "2026-09-30", funds: inc(36, 64) } }),
+  ], profiles: prof, today: "2026-10-14", models: [balanced] });
+
+  it("holds the switches for accounts outside the range and the death benefit resets, each with an id", () => {
+    const p = buildClientProposal(pack())!;
+    expect(p.switches.map((s) => [s.id, s.amount])).toEqual([["switch:a", 6_000]]);
+    expect(p.resets.map((r) => [r.id, r.lift])).toEqual([["reset:a", 10_000]]);
+    expect(p).toMatchObject({ totalLift: 10_000, totalNow: 90_000, totalAfter: 100_000 });
+    expect(proposalItems(p).map((i) => i.id)).toEqual(["switch:a", "reset:a"]);
+  });
+  it("is null when there is nothing to propose", () => {
+    const none = buildPortfolioPack({ accounts: [acct({ guarantee: null, statement: { statementDate: "2026-09-30", funds: inc(42, 58) } })], profiles: prof, today: "2026-10-14", models: [balanced] });
+    expect(buildClientProposal(none)).toBeNull();
+  });
+  it("is authorized as a whole: every item ticked, and nothing that is not in it", () => {
+    const p = buildClientProposal(pack())!;
+    expect(checkAllAcknowledged(p, ["switch:a", "reset:a"]).ok).toBe(true);
+    expect(checkAllAcknowledged(p, ["switch:a"])).toEqual({ ok: false, error: "Tick every change you have reviewed before authorizing, or ask to talk it through." });
+    expect(checkAllAcknowledged(p, ["switch:a", "reset:a", "switch:zzz"])).toEqual({ ok: false, error: "That item is not part of this rebalancing." });
+    expect(checkAllAcknowledged(null, []).ok).toBe(true);
+  });
+  it("describes each item for Rolf's task", () => {
+    const items = proposalItems(buildClientProposal(pack())!);
+    expect(describeProposalItem(items[0])).toMatch(/TFSA …1111 \(Doreen\): switch about \$6,000 from equity into income funds/);
+    expect(describeProposalItem(items[1])).toMatch(/reset the death benefit guarantee from \$90,000 to about \$100,000/);
+  });
+});

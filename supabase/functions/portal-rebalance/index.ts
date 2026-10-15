@@ -9,6 +9,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validatePortalContact } from "../_shared/portal-auth.ts";
 import { REBALANCE_STATEMENT, REBALANCE_STATEMENT_VERSION, isFamilyAdult, pacificDate, windowLabel } from "../_shared/review-windows.ts";
 import { scopeToUnit, viewerUnit } from "../_shared/review-unit-for-contact.ts";
+import { checkAllAcknowledged, describeProposalItem } from "../_shared/portfolio-review-client.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -35,7 +36,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors(req) });
   const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers });
   try {
-    const { portal_token, action } = await req.json().catch(() => ({}));
+    const reqBody = await req.json().catch(() => ({}));
+    const { portal_token, action } = reqBody;
     const who = await validatePortalContact(db, portal_token);
     if (!who) return json({ error: "Unauthorized" }, 401);
     if (action !== "acknowledge" && action !== "talk_first") return json({ error: "unknown_action" }, 400);
@@ -59,7 +61,15 @@ Deno.serve(async (req) => {
     const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || null;
     const ua = req.headers.get("user-agent");
 
+    // A rebalancing that carries the engine's proposal is authorized as a whole: every item must have been ticked.
+    let items: ReturnType<typeof checkAllAcknowledged> | null = null;
+    if (action === "acknowledge" && ob.proposal) {
+      items = checkAllAcknowledged(ob.proposal, Array.isArray(reqBody?.item_ids) ? reqBody.item_ids.map(String) : []);
+      if (!items.ok) return json({ error: items.error }, 400);
+    }
+
     await db.from("rebalance_acknowledgements").insert({
+      items: items && items.ok ? items.items : null,
       obligation_id: ob.id, family_id: me.family_id, contact_id: me.id, decision: action === "acknowledge" ? "acknowledged" : "wants_meeting",
       statement_version: REBALANCE_STATEMENT_VERSION, statement_text: REBALANCE_STATEMENT, proposal_summary: ob.proposal_summary ?? null, ip, user_agent: ua,
     });
@@ -72,7 +82,7 @@ Deno.serve(async (req) => {
 
     if (action === "acknowledge") {
       await db.from("review_obligations").update({ acknowledged_at: new Date().toISOString(), status: "held", updated_at: new Date().toISOString() }).eq("id", ob.id);
-      await task(`Rebalance ${family}: acknowledged`, `${name} reviewed the ${label} rebalancing you published and acknowledged it in the portal on ${today}. Carry it out, then mark it done on Georgia Reviews so the family is told.\n\nThe acknowledgement (wording version ${REBALANCE_STATEMENT_VERSION}, with the proposal they saw) is stored with the family's records.`, 3);
+      await task(`Rebalance ${family}: acknowledged`, `${name} reviewed the ${label} rebalancing you published and acknowledged it in the portal on ${today}. Carry it out, then mark it done on Georgia Reviews so the family is told.${items && items.ok && items.items.length ? `\n\nThey ticked and authorized each of these:\n${items.items.map((i) => `- ${describeProposalItem(i)}`).join("\n")}\n\nConfirm the amounts with them first, as they move with markets.` : ""}\n\nThe acknowledgement (wording version ${REBALANCE_STATEMENT_VERSION}, with the proposal they saw) is stored with the family's records.`, 3);
       await db.from("staff_notifications").insert({ title: `Rebalancing acknowledged: ${family}`, body: `${name} acknowledged the ${label} rebalancing.`, link: `/families/${me.family_id}`, contact_id: me.id, source_type: "rebalancing" });
       await db.from("review_agent_events").insert({ family_id: me.family_id, obligation_id: ob.id, mode: "live", kind: "rebalancing_acknowledged", detail: { by: name, label } });
       return json({ ok: true });
