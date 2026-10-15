@@ -1,6 +1,8 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { CheckCircle2 } from "lucide-react";
 import { Card, CardContent } from "@/shared/components/ui/card";
-import type { ClientView, MixStatus } from "../../../../supabase/functions/_shared/portfolio-review-client";
+import { REVIEW_AUTHORIZE_STATEMENT, type ClientProposal, type ClientView, type MixStatus } from "../../../../supabase/functions/_shared/portfolio-review-client";
+import { Button } from "@/shared/components/ui/button";
 
 const money = (n: number | null | undefined) => (n === null || n === undefined ? "—" : n.toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }));
 const short = (n: number) => (Math.abs(n) >= 1000 ? `$${Math.round(n / 100) / 10}k` : money(n));
@@ -94,18 +96,109 @@ function Segments({ parts, label }: { parts: { pct: number; bg: string; title: s
   );
 }
 
+const dayShort = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { month: "long", day: "numeric", year: "numeric" });
+
+/**
+ * What I propose: the switches and the death benefit resets, each with a tick to acknowledge it, then Authorize (records consent with the exact
+ * wording) or Talk it through. Highlighted, and last in the review. In a staff preview the controls are shown but cannot be used.
+ */
+function ProposalSection({ p, response, onAuthorize, onTalk }: { p: ClientProposal; response?: ReviewResponse | null; onAuthorize?: (ids: string[]) => Promise<void>; onTalk?: () => Promise<void> }) {
+  const authorized = new Set(response?.authorizedIds ?? []);
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const interactive = Boolean(onAuthorize);
+  const all = [...p.switches, ...p.resets];
+  const open = all.filter((i) => !authorized.has(i.id));
+  useEffect(() => { setChecked(new Set()); }, [response?.authorizedIds?.join(",")]);
+  const toggle = (id: string) => setChecked((c) => { const n = new Set(c); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const run = async (fn?: () => Promise<void>) => { if (!fn) return; setBusy(true); try { await fn(); } finally { setBusy(false); } };
+
+  const Check = ({ id, label }: { id: string; label: string }) => authorized.has(id)
+    ? <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded" style={{ background: B.navy }} title="Authorized"><CheckCircle2 className="h-4 w-4 text-white" /></span>
+    : <input type="checkbox" aria-label={`Acknowledge ${label}`} checked={checked.has(id)} disabled={!interactive || busy} onChange={() => toggle(id)} className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer accent-[hsl(var(--pw-navy))] disabled:cursor-not-allowed" />;
+
+  return (
+    <section className="space-y-4 rounded-xl border-2 p-4 sm:p-5" style={{ borderColor: B.amber, background: tint(B.sand, 0.4) }} data-testid="proposal">
+      <div>
+        <h4 className="font-serif text-lg font-semibold text-foreground">What I propose</h4>
+        <p className="mt-0.5 text-sm text-muted-foreground">Tick each change you have reviewed. Then authorize them, or ask to talk it through first. Nothing is done until I have confirmed the amounts with you.</p>
+      </div>
+
+      {p.switches.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Switches inside your accounts</p>
+          <ul className="space-y-2.5">
+            {p.switches.map((r) => (
+              <li key={r.id} className="flex items-start gap-3 rounded-lg bg-card/80 p-3">
+                <Check id={r.id} label={r.label} />
+                <div className="min-w-0 flex-1 text-sm">
+                  <div className="flex items-baseline justify-between gap-3"><span className="font-medium text-foreground">{r.label}{r.owner ? <span className="font-normal text-muted-foreground"> · {r.owner.split(" ")[0]}</span> : null}</span><span className="shrink-0 font-serif text-base font-semibold" style={{ color: B.navy }}>about {money(r.amount)}</span></div>
+                  <p className="text-xs text-muted-foreground">{r.direction === "to_income" ? "From equity funds into income funds" : "From income funds into equity funds"}{r.taxable ? " · taxable account: a switch can create a gain, and I will review that with you first" : ""}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {p.resets.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Death benefit guarantee resets</p>
+          <div className="rounded-lg p-3 text-center" style={{ background: tint(B.cloud, 0.6) }}>
+            <p className="text-xs" style={{ color: B.navy }}>Your death benefit guarantee after this year's reset</p>
+            <p className="font-serif text-2xl font-semibold" style={{ color: B.navy }}>{money(p.totalAfter)}</p>
+            <p className="text-xs" style={{ color: B.navy }}>up {money(p.totalLift)} from {money(p.totalNow)} today. A reset costs nothing and does not change your fees.</p>
+          </div>
+          <ul className="space-y-2.5">
+            {p.resets.map((r) => (
+              <li key={r.id} className="flex items-start gap-3 rounded-lg bg-card/80 p-3">
+                <Check id={r.id} label={`reset ${r.label}`} />
+                <div className="min-w-0 flex-1 text-sm">
+                  <div className="flex items-baseline justify-between gap-3"><span className="font-medium text-foreground">Reset {r.label}{r.owner ? <span className="font-normal text-muted-foreground"> · {r.owner.split(" ")[0]}</span> : null}</span><span className="shrink-0 font-serif text-base font-semibold" style={{ color: B.navy }}>{money(r.newGuarantee)}</span></div>
+                  <p className="text-xs text-muted-foreground">Guarantee today {money(r.currentGuarantee)} · up {money(r.lift)}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <p className="text-[11px] text-muted-foreground">These are estimates from your latest values: a reset locks in your value on the day it is done.</p>
+        </div>
+      )}
+
+      {open.length === 0 ? (
+        <div className="flex items-start gap-2 rounded-lg p-3 text-sm" style={{ background: tint(B.cloud, 0.6), color: B.navy }}>
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>You have authorized everything{response?.authorizedAt ? ` on ${dayShort(response.authorizedAt)}` : ""}. I will confirm the amounts with you and let you know when each change is done.</p>
+        </div>
+      ) : (
+        <div className="space-y-3 border-t pt-3" style={{ borderColor: tint(B.amber, 0.4) }}>
+          {response?.talkFirstAt && <p className="text-xs text-muted-foreground">You asked to talk it through on {dayShort(response.talkFirstAt)}. I will be in touch. You can still authorize below.</p>}
+          {authorized.size > 0 && <p className="text-xs text-muted-foreground">{authorized.size} of {all.length} authorized{response?.authorizedAt ? ` on ${dayShort(response.authorizedAt)}` : ""}.</p>}
+          <p className="text-[11px] leading-snug text-muted-foreground">{REVIEW_AUTHORIZE_STATEMENT}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button disabled={!interactive || busy || checked.size === 0} onClick={() => run(() => onAuthorize!([...checked]))}>Authorize{checked.size > 0 ? ` ${checked.size} ${checked.size === 1 ? "change" : "changes"}` : ""}</Button>
+            <Button variant="outline" disabled={!interactive || busy} onClick={() => run(onTalk)}>Talk it through</Button>
+            {interactive && open.length > checked.size && <button type="button" className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground" onClick={() => setChecked(new Set(open.map((i) => i.id)))}>Tick all</button>}
+          </div>
+          {!interactive && <p className="text-[11px] italic text-muted-foreground">Preview: the client can tick items and use these buttons.</p>}
+        </div>
+      )}
+    </section>
+  );
+}
+
 /**
  * The household's Portfolio Review, as Rolf approved it. Every figure was worked out in code and frozen when he published; the client sees
  * exactly that. Built to be looked at, not read: charts first, the numbers behind them one tap away. Staff see it too, as a preview.
  */
-export function PortalPortfolioReview({ view, publishedAt, preview = false }: { view: ClientView; publishedAt?: string; preview?: boolean }) {
+export interface ReviewResponse { authorizedIds: string[]; authorizedAt: string | null; talkFirstAt: string | null }
+
+export function PortalPortfolioReview({ view, publishedAt, preview = false, response, onAuthorize, onTalk }: { view: ClientView; publishedAt?: string; preview?: boolean; response?: ReviewResponse | null; onAuthorize?: (ids: string[]) => Promise<void>; onTalk?: () => Promise<void> }) {
   const history = view.history ?? [];
   const up = (view.summary.ytdPct ?? 0) >= 0;
   const maxValue = Math.max(1, ...(view.accounts ?? []).map((a) => a.value ?? 0));
   const funds = view.funds;
   const modelFunds = funds ? funds.rows.filter((r) => r.inModel) : [];
   const otherHeld = funds ? funds.rows.filter((r) => !r.inModel).reduce((s, r) => s + r.heldPct, 0) : 0;
-  const resetMax = Math.max(1, ...(view.reset?.rows ?? []).map((r) => r.newGuarantee));
 
   return (
     <Card data-testid="portfolio-review">
@@ -192,39 +285,7 @@ export function PortalPortfolioReview({ view, publishedAt, preview = false }: { 
           </Section>
         )}
 
-        {view.rebalance && (
-          <Section title="What I propose" lead="To bring these accounts back in line with your profile, I propose switching between funds inside each account. No money moves between accounts.">
-            <ul className="space-y-2.5">
-              {view.rebalance.rows.map((r, i) => (
-                <li key={i} className="flex items-baseline justify-between gap-3 text-sm">
-                  <span className="min-w-0"><span className="font-medium text-foreground">{r.label}</span>{r.owner ? <span className="text-muted-foreground"> · {r.owner.split(" ")[0]}</span> : null}<span className="block text-xs text-muted-foreground">{r.direction === "to_income" ? "From equity funds into income funds" : "From income funds into equity funds"}{r.taxable ? " · taxable account" : ""}</span></span>
-                  <span className="shrink-0 font-serif text-base font-semibold" style={{ color: B.navy }}>about {money(r.amount)}</span>
-                </li>
-              ))}
-            </ul>
-            <p className="text-xs text-muted-foreground">These amounts move with markets, so I will confirm them with you before anything is done.{view.rebalance.hasTaxable ? " In a non-registered account a switch can create a taxable gain, and I will review that with you first." : ""}</p>
-          </Section>
-        )}
-
-        {view.reset && (
-          <Section title="Your death benefit guarantee" lead="Each year I can reset the death benefit guarantee on your segregated fund contracts to today's value. It costs nothing and does not change your fees.">
-            <div className="rounded-lg p-4 text-center" style={{ background: tint(B.sand, 0.45) }}>
-              <p className="text-xs" style={{ color: B.navy }}>Your death benefit guarantee after this year's reset</p>
-              <p className="font-serif text-3xl font-semibold" style={{ color: B.navy }}>{money(view.reset.totalAfter ?? view.reset.rows.reduce((n, r) => n + r.newGuarantee, 0))}</p>
-              <p className="text-xs" style={{ color: B.navy }}>up {money(view.reset.totalLift)} from {money(view.reset.totalNow ?? view.reset.rows.reduce((n, r) => n + r.currentGuarantee, 0))} today, across {view.reset.rows.length} account{view.reset.rows.length === 1 ? "" : "s"}</p>
-            </div>
-            <ul className="space-y-3">
-              {view.reset.rows.map((r, i) => (
-                <li key={i}>
-                  <div className="flex items-baseline justify-between gap-2 text-sm"><span className="font-medium text-foreground">{r.name}{r.last4 ? ` …${r.last4}` : ""}{r.owner ? <span className="font-normal text-muted-foreground"> · {r.owner.split(" ")[0]}</span> : null}</span><span className="font-serif font-semibold" style={{ color: B.navy }}>{money(r.newGuarantee)}</span></div>
-                  <div className="relative mt-1 h-2 rounded-full bg-muted"><div className="absolute h-2 rounded-full" style={{ width: `${(r.newGuarantee / resetMax) * 100}%`, background: B.amber }} /><div className="absolute h-2 rounded-full" style={{ width: `${(r.currentGuarantee / resetMax) * 100}%`, background: B.navy }} /></div>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">Guarantee today {money(r.currentGuarantee)} · up {money(r.lift)}</p>
-                </li>
-              ))}
-            </ul>
-            <p className="text-[11px] text-muted-foreground">Navy: your guarantee today. Bronze: what it becomes after the reset. These are estimates from your latest values: a reset locks in your value on the day I do it.</p>
-          </Section>
-        )}
+        {view.proposal && <ProposalSection p={view.proposal} response={response} onAuthorize={onAuthorize} onTalk={onTalk} />}
 
         <div className="space-y-1 border-t border-border pt-3">
           {view.disclosures.map((d, i) => <p key={i} className="text-[11px] leading-snug text-muted-foreground">{d}</p>)}

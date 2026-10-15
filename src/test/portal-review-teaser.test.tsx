@@ -4,7 +4,7 @@ import { PortalReviewTeaser, PortalReviewPage, reviewSeen } from "@/modules/port
 import type { ClientView } from "../../supabase/functions/_shared/portfolio-review-client";
 
 const view = (): ClientView => ({
-  householdLabel: "Parent Household", valuesAsOf: "2026-09-30", note: "", summary: { value: 532_937, changeYtd: -9_616, ytdPct: 5 }, history: [], accounts: null, mix: null, funds: null, reset: null, disclosures: ["Past performance does not guarantee future results."],
+  householdLabel: "Parent Household", valuesAsOf: "2026-09-30", note: "", summary: { value: 532_937, changeYtd: -9_616, ytdPct: 5 }, history: [], accounts: null, mix: null, funds: null, proposal: null, disclosures: ["Past performance does not guarantee future results."],
 });
 
 describe("the dashboard pointer to the Portfolio Review", () => {

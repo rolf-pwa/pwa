@@ -9,6 +9,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validatePortalContact } from "../_shared/portal-auth.ts";
 import { REBALANCE_STATEMENT, REBALANCE_STATEMENT_VERSION, isFamilyAdult, pacificDate, windowLabel } from "../_shared/review-windows.ts";
 import { scopeToUnit, viewerUnit } from "../_shared/review-unit-for-contact.ts";
+import { recordReviewDecision } from "../_shared/portfolio-review-decisions.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -35,10 +36,19 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors(req) });
   const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers });
   try {
-    const { portal_token, action } = await req.json().catch(() => ({}));
+    const reqBody = await req.json().catch(() => ({}));
+    const { portal_token, action } = reqBody;
     const who = await validatePortalContact(db, portal_token);
     if (!who) return json({ error: "Unauthorized" }, 401);
-    if (action !== "acknowledge" && action !== "talk_first") return json({ error: "unknown_action" }, 400);
+    const isReviewDecision = action === "review_authorize" || action === "review_talk_first";
+    if (action !== "acknowledge" && action !== "talk_first" && !isReviewDecision) return json({ error: "unknown_action" }, 400);
+
+    // A response to the proposal on a published Portfolio Review (authorize some changes, or talk it through).
+    if (isReviewDecision) {
+      const { data: c } = await db.from("contacts").select("id, first_name, last_name, family_id, family_role, is_minor, household_id").eq("id", who.contactId).maybeSingle();
+      const r = await recordReviewDecision(db, c, reqBody, { ip: (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || null, ua: req.headers.get("user-agent"), today: pacificDate(Date.now()), assigneeEmail: ASSIGNEE_EMAIL });
+      return json(r.body, r.status);
+    }
 
     const { data: me } = await db.from("contacts").select("id, first_name, last_name, family_id, family_role, is_minor, household_id").eq("id", who.contactId).maybeSingle();
     if (!me?.family_id) return json({ error: "Not available" }, 403);

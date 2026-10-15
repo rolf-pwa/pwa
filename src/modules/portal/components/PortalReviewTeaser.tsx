@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, CalendarCheck, ChevronLeft, LineChart } from "lucide-react";
-import { PortalPortfolioReview } from "./PortalPortfolioReview";
+import { PortalPortfolioReview, type ReviewResponse } from "./PortalPortfolioReview";
+import { supabase } from "@/shared/integrations/supabase/client";
+import { toast } from "sonner";
 import { Button } from "@/shared/components/ui/button";
 import type { ClientView } from "../../../../supabase/functions/_shared/portfolio-review-client";
 
@@ -46,12 +48,25 @@ const whenLong = (iso: string) => new Date(iso).toLocaleString("en-CA", { weekda
  * opens the scheduler right here when it can be embedded. If the meeting is already booked it says when instead. Opening the page
  * clears the "New" badge.
  */
-export function PortalReviewPage({ review, onBack, meetingTypes = [], booked = [] }: { review: { id: string; view: ClientView; publishedAt: string; booking?: ReviewMeetingType | null } | null; onBack: () => void; meetingTypes?: ReviewMeetingType[]; booked?: ReviewBooked[] }) {
+export function PortalReviewPage({ review, onBack, meetingTypes = [], booked = [], portalToken, onChanged }: { review: { id: string; view: ClientView; publishedAt: string; booking?: ReviewMeetingType | null; response?: ReviewResponse | null } | null; onBack: () => void; meetingTypes?: ReviewMeetingType[]; booked?: ReviewBooked[]; portalToken?: string; onChanged?: () => void }) {
   useEffect(() => { if (review) markReviewSeen(review.id); }, [review]);
   const [embedded, setEmbedded] = useState<ReviewMeetingType | null>(null);
   const already = booked.find((b) => /portfolio review/i.test(b.label));
   // The Portfolio Review scheduler (always offered from the review); failing that one that can be booked now, or an Interim Strategy Session.
   const type = review?.booking ?? meetingTypes.find((t) => /portfolio review/i.test(t.label)) ?? meetingTypes.find((t) => /interim strategy/i.test(t.label)) ?? null;
+  const send = async (action: "review_authorize" | "review_talk_first", itemIds?: string[]) => {
+    const { data, error } = await supabase.functions.invoke("portal-rebalance", { body: { portal_token: portalToken, action, publication_id: review?.id, item_ids: itemIds } });
+    if (error || data?.error) throw new Error(data?.error ?? "Something went wrong. Please try again.");
+  };
+  const authorize = async (ids: string[]) => {
+    try { await send("review_authorize", ids); toast.success(ids.length === 1 ? "Thank you. That change is authorized." : "Thank you. Those changes are authorized."); onChanged?.(); }
+    catch (e: any) { toast.error(e?.message ?? "Something went wrong. Please try again."); }
+  };
+  const talk = async () => {
+    try { await send("review_talk_first"); toast.success("Thank you. I will be in touch."); onChanged?.(); if (type) openBooking(type); }
+    catch (e: any) { toast.error(e?.message ?? "Something went wrong. Please try again."); }
+  };
+  const openBooking = (t: ReviewMeetingType) => { if (t.embedUrl && t.embedUrl !== t.url) setEmbedded(t); else window.open(t.url, "_blank", "noopener,noreferrer"); };
   const open = () => {
     if (!type) return;
     if (type.embedUrl && type.embedUrl !== type.url) setEmbedded(type); else window.open(type.url, "_blank", "noopener,noreferrer");
@@ -59,7 +74,7 @@ export function PortalReviewPage({ review, onBack, meetingTypes = [], booked = [
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <button onClick={onBack} className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-accent"><ChevronLeft className="h-3.5 w-3.5" /> Back to your portal</button>
-      {review ? <PortalPortfolioReview view={review.view} publishedAt={review.publishedAt} /> : <div className="rounded-lg border border-border bg-muted/30 p-8 text-center text-sm text-muted-foreground">There is no Portfolio Review to show right now.</div>}
+      {review ? <PortalPortfolioReview view={review.view} publishedAt={review.publishedAt} response={review.response} onAuthorize={portalToken ? authorize : undefined} onTalk={portalToken ? talk : undefined} /> : <div className="rounded-lg border border-border bg-muted/30 p-8 text-center text-sm text-muted-foreground">There is no Portfolio Review to show right now.</div>}
       {review && (
         <div className="rounded-lg border border-accent/40 p-5 text-center" style={{ background: "hsl(var(--pw-sand) / 0.35)" }} data-testid="review-booking">
           {already ? (

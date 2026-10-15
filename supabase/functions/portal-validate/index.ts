@@ -627,7 +627,7 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
     }
 
     // The household's Portfolio Review, once Rolf has published it: only to its own adults, as it was when he approved it.
-    let portfolio_review: { id: string; publishedAt: string; view: unknown; booking: { label: string; url: string; embedUrl: string } | null } | null = null;
+    let portfolio_review: { id: string; publishedAt: string; view: unknown; booking: { label: string; url: string; embedUrl: string } | null; response: { authorizedIds: string[]; authorizedAt: string | null; talkFirstAt: string | null } } | null = null;
     try {
       const c = contactRes.data;
       if (c?.household_id && !c.is_minor && ["head_of_household", "head_of_family", "spouse"].includes(String(c.family_role ?? ""))) {
@@ -635,7 +635,12 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
         if (pub) {
           // The meeting to talk it through is always the Portfolio Review scheduler, whether or not that meeting is "owed" right now.
           const { data: mt } = await supabase.from("meeting_types").select("label, client_label, url, embed_url").eq("active", true).ilike("label", "portfolio review").limit(1).maybeSingle();
-          portfolio_review = { id: pub.id, publishedAt: pub.published_at, view: pub.view, booking: mt ? { label: mt.client_label || mt.label, url: mt.url, embedUrl: mt.embed_url || mt.url } : null };
+          // The household's response so far: what has been authorized, and whether they asked to talk it through.
+          const { data: decs } = await supabase.from("portfolio_review_decisions").select("decision, item_ids, created_at").eq("publication_id", pub.id).order("created_at", { ascending: true });
+          const authorized = (decs ?? []).filter((d: any) => d.decision === "authorized");
+          const talks = (decs ?? []).filter((d: any) => d.decision === "talk_first");
+          const response = { authorizedIds: [...new Set(authorized.flatMap((d: any) => d.item_ids ?? []))] as string[], authorizedAt: authorized.length ? authorized[authorized.length - 1].created_at : null, talkFirstAt: talks.length ? talks[talks.length - 1].created_at : null };
+          portfolio_review = { id: pub.id, publishedAt: pub.published_at, view: pub.view, booking: mt ? { label: mt.client_label || mt.label, url: mt.url, embedUrl: mt.embed_url || mt.url } : null, response };
         }
       }
     } catch (e) {

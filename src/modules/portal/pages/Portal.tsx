@@ -1422,7 +1422,7 @@ const Portal = ({ intakeRoute = false, reviewRoute = false }: { intakeRoute?: bo
   // ─── Determine what to render based on drilldown ───
   const renderContent = () => {
     // The Portfolio Review has a page of its own, so the dashboard stays clean.
-    if (reviewRoute) return <PortalReviewPage review={(data as any)?.portfolio_review ?? null} onBack={() => navigate(token ? `/portal/${token}` : "/portal")} meetingTypes={(data as any)?.meeting_types ?? []} booked={(data as any)?.booked_meetings ?? []} />;
+    if (reviewRoute) return <PortalReviewPage review={(data as any)?.portfolio_review ?? null} onBack={() => navigate(token ? `/portal/${token}` : "/portal")} meetingTypes={(data as any)?.meeting_types ?? []} booked={(data as any)?.booked_meetings ?? []} portalToken={portalToken} onChanged={() => refreshData(portalToken)} />;
     if (intakeRoute) {
       return (
         <OnboardingShell

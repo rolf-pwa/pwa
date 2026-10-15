@@ -42,6 +42,7 @@ export interface PortfolioPackResponse {
   pack: Pack;
   profiles: { id: string; account_number: string | null; label: string | null; income_pct: number | null; equity_pct: number | null; band_pct: number; as_of: string | null; updated_by: string | null; profile_key: string | null }[];
   models: ModelPortfolio[];
+  decisions: { decision: "authorized" | "talk_first"; item_ids: string[]; items: { id: string; kind: string; label: string }[]; created_at: string; by: string | null }[];
   publication: { id: string; published_at: string; published_by: string; note: string | null; includes: { returns: boolean; mix: boolean; funds: boolean; reset: boolean; rebalancing?: boolean } } | null;
 }
 export const getPortfolioPack = (householdId: string) => call<PortfolioPackResponse>("portfolioPack", { householdId });

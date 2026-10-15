@@ -20,8 +20,8 @@ describe("the client's Portfolio Review", () => {
     expect(v.mix!.classes.map((c) => c.key)).toEqual(["income", "global"]);
     expect(shortAccountName("iA Financial Group - IAG Savings and Retirement Plan - RRIF", "1818710719")).toBe("RRIF …0719");
     expect(v.mix).toMatchObject({ profileLabel: "Balanced", status: "below", rangeMin: 35, rangeMax: 55 });
-    expect(v.reset!.rows[0]).toMatchObject({ currentGuarantee: 92_000, newGuarantee: 100_000, lift: 8_000 });
-    expect(v.reset).toMatchObject({ totalNow: 92_000, totalAfter: 100_000, totalLift: 8_000 });
+    expect(v.proposal!.resets[0]).toMatchObject({ id: "reset:a1", currentGuarantee: 92_000, newGuarantee: 100_000, lift: 8_000 });
+    expect(v.proposal).toMatchObject({ totalNow: 92_000, totalAfter: 100_000, totalLift: 8_000 });
     expect(v.disclosures.length).toBeGreaterThan(1);
   });
   it("shows how much is in the model's funds, without staff language", () => {
@@ -31,11 +31,11 @@ describe("the client's Portfolio Review", () => {
   });
   it("leaves out any section Rolf did not include", () => {
     const v = buildClientView(pack(), { returns: false, mix: false, funds: false, reset: false, rebalancing: false }, "", "H");
-    expect([v.accounts, v.mix, v.funds, v.reset, v.rebalance]).toEqual([null, null, null, null, null]);
+    expect([v.accounts, v.mix, v.funds, v.proposal]).toEqual([null, null, null, null]);
   });
   it("never includes a reset for an account that cannot be reset", () => {
     const p = buildPortfolioPack({ accounts: [acct({ ownerDob: "1930-01-01" })], profiles: [], today: "2026-10-14", models: [] });
-    expect(buildClientView(p, ALL_INCLUDED, "", "H").reset).toBeNull();
+    expect(buildClientView(p, ALL_INCLUDED, "", "H").proposal).toBeNull();
   });
   it("sends a ready email that carries no figures", () => {
     const e = portfolioReviewReadyEmail("<b>x</b>", "https://app.prosperwise.ca/portal", "reply and I will make sure Rolf gets it");
@@ -89,12 +89,34 @@ describe("what the client sees of the rebalancing proposal", () => {
       acct({ id: "b", name: "iA Financial Group - SRP - Non-registered", number: "2222", type: "Non-registered", value: 50_000, statement: { statementDate: "2026-09-30", funds: inc(30, 70) } }),
       acct({ id: "c", number: "3333", value: 80_000, statement: { statementDate: "2026-09-30", funds: inc(36, 64) } }),
     ], profiles: prof, today: "2026-10-14", models: [balanced] });
-    const r = buildClientView(p, ALL_INCLUDED, "", "H").rebalance!;
-    expect(r.rows.map((x) => [x.label, x.direction, x.amount])).toEqual([["TFSA …1111", "to_income", 6_000], ["Non-registered …2222", "to_income", 5_000]]);
+    const r = buildClientView(p, ALL_INCLUDED, "", "H").proposal!;
+    expect(r.switches.map((x) => [x.id, x.label, x.direction, x.amount])).toEqual([["switch:a", "TFSA …1111", "to_income", 6_000], ["switch:b", "Non-registered …2222", "to_income", 5_000]]);
     expect(r.hasTaxable).toBe(true);
   });
   it("is left out when nothing is outside the range", () => {
     const p = buildPortfolioPack({ accounts: [acct({ statement: { statementDate: "2026-09-30", funds: inc(42, 58) } })], profiles: prof, today: "2026-10-14", models: [balanced] });
-    expect(buildClientView(p, ALL_INCLUDED, "", "H").rebalance).toBeNull();
+    expect(buildClientView(p, { ...ALL_INCLUDED, reset: false }, "", "H").proposal).toBeNull();
+  });
+});
+
+import { checkAuthorization, proposalItems, REVIEW_AUTHORIZE_STATEMENT, REVIEW_AUTHORIZE_STATEMENT_VERSION } from "../../supabase/functions/_shared/portfolio-review-client";
+describe("authorizing items on the proposal", () => {
+  const view = { proposal: { switches: [{ id: "switch:a", label: "TFSA", owner: null, direction: "to_income" as const, amount: 6_000, taxable: false }], resets: [{ id: "reset:a", label: "TFSA", owner: null, currentGuarantee: 1, newGuarantee: 2, lift: 1 }], totalLift: 1, totalNow: 1, totalAfter: 2, hasTaxable: false } };
+  it("lists every item with its kind and id", () => {
+    expect(proposalItems(view).map((i) => [i.kind, i.id])).toEqual([["switch", "switch:a"], ["reset", "reset:a"]]);
+  });
+  it("accepts ticked items from the published proposal and refuses anything else", () => {
+    expect(checkAuthorization(view, [], ["switch:a"]).ok).toBe(true);
+    expect(checkAuthorization(view, [], [])).toEqual({ ok: false, error: "Tick at least one item to authorize." });
+    expect(checkAuthorization(view, [], ["switch:zzz"])).toEqual({ ok: false, error: "That item is not part of this review." });
+  });
+  it("leaves out items already authorized, and refuses when nothing new is left", () => {
+    const r = checkAuthorization(view, ["switch:a"], ["switch:a", "reset:a"]);
+    expect(r.ok && r.items.map((i) => i.id)).toEqual(["reset:a"]);
+    expect(checkAuthorization(view, ["switch:a", "reset:a"], ["switch:a"])).toEqual({ ok: false, error: "Those items are already authorized." });
+  });
+  it("carries a versioned statement of what the client agrees to", () => {
+    expect(REVIEW_AUTHORIZE_STATEMENT_VERSION).toBe("v1");
+    expect(REVIEW_AUTHORIZE_STATEMENT).toMatch(/I authorize ProsperWise to carry them out inside my accounts/);
   });
 });

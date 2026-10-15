@@ -20,10 +20,32 @@ export interface ClientView {
   accounts: ClientAccount[] | null;
   mix: { /** What the chart means for this household, in plain sentences built in code from the numbers. */ commentary: string[]; classes: { key: string; label: string; pct: number }[]; profileLabel: string | null; incomePct: number | null; equityPct: number | null; rangeMin: number | null; rangeMax: number | null; targetIncomePct: number | null; status: MixStatus; accounts: { name: string; last4: string | null; incomePct: number | null; status: MixStatus }[] } | null;
   funds: { commentary: string[]; modelLabel: string; modelAsOf: string; heldInModelPct: number; rows: { name: string; modelPct: number | null; heldPct: number; inModel: boolean }[] } | null;
-  /** What I propose to switch, by asset class, inside each account that is outside its profile's range. */
-  rebalance?: { rows: { label: string; owner: string | null; direction: "to_income" | "to_equity"; amount: number; taxable: boolean }[]; hasTaxable: boolean } | null;
-  reset: { rows: { name: string; owner: string | null; last4: string | null; fundValue: number; currentGuarantee: number; newGuarantee: number; lift: number }[]; totalLift: number; /** The death guarantee across these accounts today, and after the reset. */ totalNow: number; totalAfter: number } | null;
+  /** What I propose, for the client to acknowledge item by item: switches by asset class inside accounts outside their profile's range, and death benefit resets. */
+  proposal?: ClientProposal | null;
   disclosures: string[];
+}
+
+export interface ProposalSwitch { id: string; label: string; owner: string | null; direction: "to_income" | "to_equity"; amount: number; taxable: boolean }
+export interface ProposalReset { id: string; label: string; owner: string | null; currentGuarantee: number; newGuarantee: number; lift: number }
+export interface ClientProposal { switches: ProposalSwitch[]; resets: ProposalReset[]; totalLift: number; totalNow: number; totalAfter: number; hasTaxable: boolean }
+export type ProposalItem = (ProposalSwitch & { kind: "switch" }) | (ProposalReset & { kind: "reset" });
+
+/** The exact wording the client agrees to when they authorize. Stored with the decision. Change the version when the wording changes. */
+export const REVIEW_AUTHORIZE_STATEMENT_VERSION = "v1";
+export const REVIEW_AUTHORIZE_STATEMENT = "I have reviewed the changes I have ticked, including the amounts shown, and I authorize ProsperWise to carry them out inside my accounts. I understand that the amounts will change with markets, that a switch in a non-registered account can create a taxable gain, that I can talk to Rolf before anything is done, and that I can change my mind until the changes are made.";
+
+export const proposalItems = (v: { proposal?: ClientProposal | null }): ProposalItem[] =>
+  v.proposal ? [...v.proposal.switches.map((s) => ({ ...s, kind: "switch" as const })), ...v.proposal.resets.map((r) => ({ ...r, kind: "reset" as const }))] : [];
+
+/** Can this client authorize these items? They must be in the published proposal, not already authorized, and at least one. */
+export function checkAuthorization(view: { proposal?: ClientProposal | null }, alreadyAuthorized: string[], itemIds: string[]): { ok: true; items: ProposalItem[] } | { ok: false; error: string } {
+  const ids = [...new Set(itemIds)];
+  if (!ids.length) return { ok: false, error: "Tick at least one item to authorize." };
+  const all = new Map(proposalItems(view).map((i) => [i.id, i]));
+  if (ids.some((id) => !all.has(id))) return { ok: false, error: "That item is not part of this review." };
+  const fresh = ids.filter((id) => !alreadyAuthorized.includes(id));
+  if (!fresh.length) return { ok: false, error: "Those items are already authorized." };
+  return { ok: true, items: fresh.map((id) => all.get(id) as ProposalItem) };
 }
 
 export const DISCLOSURES = [
@@ -131,20 +153,19 @@ export function buildClientView(pack: Pack, includes: ClientIncludes, note: stri
     funds: includes.funds && mc
       ? { commentary: fundsCommentary(mc), modelLabel: mc.modelLabel, modelAsOf: mc.modelAsOf, heldInModelPct: round1(100 - mc.offModelPct), rows: mc.rows.map((r) => ({ name: r.name, modelPct: r.modelPct, heldPct: r.actualPct, inModel: r.inModel })) }
       : null,
-    rebalance: includes.rebalancing && pack.rebalancing.rows.some((r) => r.outsideRange && r.direction !== "none")
-      ? (() => {
-        const rows = pack.rebalancing.rows.filter((r) => r.outsideRange && r.direction !== "none");
-        return { rows: rows.map((r) => ({ label: shortAccountName(r.name, r.number), owner: r.owner, direction: r.direction as "to_income" | "to_equity", amount: Math.round(r.amount / 100) * 100, taxable: r.taxable })), hasTaxable: rows.some((r) => r.taxable) };
-      })()
-      : null,
-    reset: includes.reset && pack.resets.toReset > 0
-      ? {
-        rows: pack.resets.rows.filter((r) => r.status === "reset").map((r) => ({ name: r.name, owner: r.owner, last4: last4(r.number), fundValue: r.fundValue as number, currentGuarantee: r.deathGuarantee as number, newGuarantee: r.fundValue as number, lift: r.room as number })),
-        totalLift: pack.resets.totalRoom,
-        totalNow: Math.round(pack.resets.rows.filter((r) => r.status === "reset").reduce((n, r) => n + (r.deathGuarantee ?? 0), 0)),
-        totalAfter: Math.round(pack.resets.rows.filter((r) => r.status === "reset").reduce((n, r) => n + (r.fundValue ?? 0), 0)),
-      }
-      : null,
+    proposal: (() => {
+      const sw = includes.rebalancing ? pack.rebalancing.rows.filter((r) => r.outsideRange && r.direction !== "none") : [];
+      const rs = includes.reset ? pack.resets.rows.filter((r) => r.status === "reset") : [];
+      if (!sw.length && !rs.length) return null;
+      return {
+        switches: sw.map((r) => ({ id: `switch:${r.accountId}`, label: shortAccountName(r.name, r.number), owner: r.owner, direction: r.direction as "to_income" | "to_equity", amount: Math.round(r.amount / 100) * 100, taxable: r.taxable })),
+        resets: rs.map((r) => ({ id: `reset:${r.accountId}`, label: shortAccountName(r.name, r.number), owner: r.owner, currentGuarantee: r.deathGuarantee as number, newGuarantee: r.fundValue as number, lift: r.room as number })),
+        totalLift: Math.round(rs.reduce((n, r) => n + (r.room ?? 0), 0)),
+        totalNow: Math.round(rs.reduce((n, r) => n + (r.deathGuarantee ?? 0), 0)),
+        totalAfter: Math.round(rs.reduce((n, r) => n + (r.fundValue ?? 0), 0)),
+        hasTaxable: sw.some((r) => r.taxable),
+      };
+    })(),
     disclosures: DISCLOSURES,
   };
 }

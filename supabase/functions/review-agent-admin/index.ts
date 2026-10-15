@@ -131,7 +131,12 @@ Deno.serve(async (req) => {
       if (!hh) return json({ error: "Household not found" }, 404);
       const { pack, profiles, models } = await portfolioPackFor(db, householdId, pacificDate(Date.now()));
       const { data: pub } = await db.from("portfolio_review_publications").select("id, published_at, published_by, note, includes").eq("household_id", householdId).is("unpublished_at", null).order("published_at", { ascending: false }).limit(1).maybeSingle();
-      return json({ household: { id: hh.id, label: hh.label, family_id: hh.family_id, family_name: (hh as any).families?.name ?? null, service_tier: hh.service_tier }, pack, profiles, models, publication: pub ?? null });
+      const { data: decRows } = pub ? await db.from("portfolio_review_decisions").select("decision, item_ids, items, created_at, contact_id").eq("publication_id", pub.id).order("created_at", { ascending: true }) : { data: [] as any[] };
+      const decContacts = [...new Set((decRows ?? []).map((d: any) => d.contact_id))];
+      const { data: decPeople } = decContacts.length ? await db.from("contacts").select("id, first_name, last_name").in("id", decContacts) : { data: [] as any[] };
+      const decName = new Map((decPeople ?? []).map((c: any) => [c.id, `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim()]));
+      const decisions = (decRows ?? []).map((d: any) => ({ decision: d.decision, item_ids: d.item_ids ?? [], items: d.items ?? [], created_at: d.created_at, by: decName.get(d.contact_id) ?? null }));
+      return json({ household: { id: hh.id, label: hh.label, family_id: hh.family_id, family_name: (hh as any).families?.name ?? null, service_tier: hh.service_tier }, pack, profiles, models, publication: pub ?? null, decisions });
     }
     // ── Publish the Portfolio Review to the client's portal: the view is built here from the pack, frozen, and Georgia lets the household's adults know ──
     if (action === "publishPortfolioReview") {

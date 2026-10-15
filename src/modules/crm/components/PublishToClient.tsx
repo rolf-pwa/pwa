@@ -17,7 +17,7 @@ const SECTIONS: { key: keyof ClientIncludes; label: string }[] = [
 ];
 
 /** Publish the household's Portfolio Review to their portal. Nothing is shown to the client until Rolf does this. */
-export function PublishToClient({ householdId, householdLabel, pack, publication, onChanged }: { householdId: string; householdLabel: string; pack: PortfolioPack; publication: PortfolioPackResponse["publication"]; onChanged: () => void }) {
+export function PublishToClient({ householdId, householdLabel, pack, publication, decisions = [], onChanged }: { householdId: string; householdLabel: string; pack: PortfolioPack; publication: PortfolioPackResponse["publication"]; decisions?: PortfolioPackResponse["decisions"]; onChanged: () => void }) {
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
   const [includes, setIncludes] = useState<ClientIncludes>({ returns: true, mix: true, funds: true, reset: true, rebalancing: true });
@@ -38,6 +38,15 @@ export function PublishToClient({ householdId, householdLabel, pack, publication
           {publication
             ? <p>Published {when(publication.published_at)} by {publication.published_by}. The household can read it on their portal dashboard.</p>
             : <p className="text-muted-foreground">Nothing is shown to the client yet. Prepare it, add a short note, check the preview, then publish.</p>}
+          {decisions.length > 0 && (
+            <ul className="space-y-1 rounded-md border bg-muted/30 p-2 text-xs">
+              {decisions.map((d, i) => (
+                <li key={i}>{d.decision === "authorized"
+                  ? <><span className="font-medium">{d.by ?? "A client"} authorized {d.item_ids.length} {d.item_ids.length === 1 ? "change" : "changes"}</span> on {when(d.created_at)}: {d.items.map((x) => x.label).join(", ")}. A task is on your list to carry them out.</>
+                  : <><span className="font-medium">{d.by ?? "A client"} asked to talk it through</span> on {when(d.created_at)}.</>}</li>
+              ))}
+            </ul>
+          )}
           <div className="flex gap-2">
             <Button size="sm" onClick={start}>{publication ? "Update what they see" : "Publish to the client…"}</Button>
             {publication && <Button size="sm" variant="ghost" disabled={busy} onClick={() => run(() => unpublishPortfolioReview(householdId), "Taken back from the portal")}>Take back</Button>}
