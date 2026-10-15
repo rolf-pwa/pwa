@@ -5,8 +5,8 @@
 
 import type { Pack, PackAccountOut } from "./portfolio-review.ts";
 
-export interface ClientIncludes { returns: boolean; mix: boolean; funds: boolean; reset: boolean }
-export const ALL_INCLUDED: ClientIncludes = { returns: true, mix: true, funds: true, reset: true };
+export interface ClientIncludes { returns: boolean; mix: boolean; funds: boolean; reset: boolean; rebalancing: boolean }
+export const ALL_INCLUDED: ClientIncludes = { returns: true, mix: true, funds: true, reset: true, rebalancing: true };
 
 export interface ClientAccount { /** A short name for charts: the account type and the last four digits. */ label: string; name: string; owner: string | null; last4: string | null; value: number | null; changeYtd: number | null; ytdPct: number | null; oneYearPct: number | null; threeYearPct: number | null }
 export type MixStatus = "inside" | "below" | "above" | "unknown";
@@ -20,6 +20,8 @@ export interface ClientView {
   accounts: ClientAccount[] | null;
   mix: { /** What the chart means for this household, in plain sentences built in code from the numbers. */ commentary: string[]; classes: { key: string; label: string; pct: number }[]; profileLabel: string | null; incomePct: number | null; equityPct: number | null; rangeMin: number | null; rangeMax: number | null; targetIncomePct: number | null; status: MixStatus; accounts: { name: string; last4: string | null; incomePct: number | null; status: MixStatus }[] } | null;
   funds: { commentary: string[]; modelLabel: string; modelAsOf: string; heldInModelPct: number; rows: { name: string; modelPct: number | null; heldPct: number; inModel: boolean }[] } | null;
+  /** What I propose to switch, by asset class, inside each account that is outside its profile's range. */
+  rebalance?: { rows: { label: string; owner: string | null; direction: "to_income" | "to_equity"; amount: number; taxable: boolean }[]; hasTaxable: boolean } | null;
   reset: { rows: { name: string; owner: string | null; last4: string | null; fundValue: number; currentGuarantee: number; newGuarantee: number; lift: number }[]; totalLift: number; /** The death guarantee across these accounts today, and after the reset. */ totalNow: number; totalAfter: number } | null;
   disclosures: string[];
 }
@@ -128,6 +130,12 @@ export function buildClientView(pack: Pack, includes: ClientIncludes, note: stri
       : null,
     funds: includes.funds && mc
       ? { commentary: fundsCommentary(mc), modelLabel: mc.modelLabel, modelAsOf: mc.modelAsOf, heldInModelPct: round1(100 - mc.offModelPct), rows: mc.rows.map((r) => ({ name: r.name, modelPct: r.modelPct, heldPct: r.actualPct, inModel: r.inModel })) }
+      : null,
+    rebalance: includes.rebalancing && pack.rebalancing.rows.some((r) => r.outsideRange && r.direction !== "none")
+      ? (() => {
+        const rows = pack.rebalancing.rows.filter((r) => r.outsideRange && r.direction !== "none");
+        return { rows: rows.map((r) => ({ label: shortAccountName(r.name, r.number), owner: r.owner, direction: r.direction as "to_income" | "to_equity", amount: Math.round(r.amount / 100) * 100, taxable: r.taxable })), hasTaxable: rows.some((r) => r.taxable) };
+      })()
       : null,
     reset: includes.reset && pack.resets.toReset > 0
       ? {

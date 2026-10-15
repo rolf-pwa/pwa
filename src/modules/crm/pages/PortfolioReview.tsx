@@ -8,7 +8,7 @@ import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { Input } from "@/shared/components/ui/input";
 import { deleteInvestorProfile, getPortfolioPack, saveGuaranteeReset, saveInvestorProfile, type PortfolioPackResponse } from "@/modules/crm/lib/reviewAgent";
-import { CLASS_LABEL, type AssetClass, type DriftStatus, type ModelComparison } from "../../../../supabase/functions/_shared/portfolio-review";
+import { CLASS_LABEL, rebalancingWorksheet, type AssetClass, type DriftStatus, type ModelComparison } from "../../../../supabase/functions/_shared/portfolio-review";
 import { SERVICE_TIER_LABEL, type ServiceTier } from "@/shared/lib/serviceTier";
 import { IaModelUpload } from "@/modules/crm/components/IaModelUpload";
 import { PublishToClient } from "@/modules/crm/components/PublishToClient";
@@ -153,6 +153,42 @@ export default function PortfolioReview() {
                 ) : <p className="text-muted-foreground">Choose an iA profile below (Prudent to Aggressive) and the funds on the statements are compared with that model.</p>}
               </CardContent>
             </Card>
+
+            {p.rebalancing.rows.length > 0 && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle className="text-lg">Rebalancing proposal</CardTitle>
+                    <Button size="sm" variant="outline" onClick={async () => { try { await navigator.clipboard.writeText(rebalancingWorksheet(p.rebalancing, data.household.label ?? "Household", p.asOf)); toast.success("Worksheet copied"); } catch { toast.error("Couldn't copy"); } }}>Copy worksheet</Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  <p>
+                    <span className="font-medium">{money(p.rebalancing.toIncome)} into income funds and {money(p.rebalancing.toEquity)} into equity funds</span> to bring the accounts to the model mix.
+                    {p.rebalancing.needed > 0 ? ` ${p.rebalancing.needed} ${p.rebalancing.needed === 1 ? "account is" : "accounts are"} outside the profile's range.` : " Every account is inside its range; these are optional trims to the model."}
+                    {p.rebalancing.taxable > 0 ? ` ${p.rebalancing.taxable} taxable: check the gain first.` : ""}
+                    {p.rebalancing.resets > 0 ? ` ${p.rebalancing.resets} also ${p.rebalancing.resets === 1 ? "has" : "have"} a guarantee reset (+${money(p.rebalancing.resetLift)}).` : ""}
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead><tr className="border-b text-left text-xs text-muted-foreground"><th className="py-2 pr-2">Account</th><th className="px-2 text-right">Income now</th><th className="px-2 text-right">Model</th><th className="px-2">Switch</th><th className="pl-2">Also</th></tr></thead>
+                      <tbody>
+                        {p.rebalancing.rows.map((r) => (
+                          <tr key={r.accountId} className="border-b align-top last:border-0">
+                            <td className="py-2 pr-2"><div className="font-medium">{r.name || r.number}</div><div className="text-xs text-muted-foreground">{[r.owner, r.accountType, r.number].filter(Boolean).join(" · ")}</div></td>
+                            <td className="px-2 text-right">{pct(r.incomePct)}</td>
+                            <td className="px-2 text-right">{pct(r.targetIncomePct)}</td>
+                            <td className="px-2">{r.direction === "none" ? <span className="text-muted-foreground">On the model</span> : <><span className="font-medium">{money(r.amount)}</span> {r.direction === "to_income" ? "equity → income" : "income → equity"}{" "}<Badge variant={r.outsideRange ? "destructive" : "secondary"} className="text-[10px]">{r.outsideRange ? "Outside range" : "Optional"}</Badge></>}</td>
+                            <td className="pl-2 text-xs">{r.taxable && <Badge variant="outline" className="mr-1 text-[10px]">Taxable{r.ytdGain != null ? `: ${signed(r.ytdGain)} this year` : ""}</Badge>}{r.resetLift !== null && <Badge variant="outline" className="text-[10px]">Reset +{money(r.resetLift)}</Badge>}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Switches stay inside each account and nothing is executed here. Amounts use the latest value and move with markets. A non-registered switch can realise a gain: the cost of each fund is not stored, so the year's change is an indicator only.</p>
+                </CardContent>
+              </Card>
+            )}
 
             {(p.exceptions.length > 0 || p.gaps.length > 0) && (
               <Card>

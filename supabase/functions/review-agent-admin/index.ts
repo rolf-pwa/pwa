@@ -138,7 +138,7 @@ Deno.serve(async (req) => {
       const householdId = String(body?.householdId ?? "");
       if (!householdId) return json({ error: "householdId required" }, 400);
       const inc = body?.includes ?? {};
-      const includes: ClientIncludes = { returns: inc.returns !== false, mix: inc.mix !== false, funds: inc.funds !== false, reset: inc.reset !== false };
+      const includes: ClientIncludes = { returns: inc.returns !== false, mix: inc.mix !== false, funds: inc.funds !== false, reset: inc.reset !== false, rebalancing: inc.rebalancing !== false };
       const note = String(body?.note ?? "").slice(0, 2000);
       const { data: hh } = await db.from("households").select("id, label").eq("id", householdId).maybeSingle();
       if (!hh) return json({ error: "Household not found" }, 404);

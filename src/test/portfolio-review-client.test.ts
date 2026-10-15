@@ -30,8 +30,8 @@ describe("the client's Portfolio Review", () => {
     expect(v.funds!.rows.find((r) => !r.inModel)!.name).toBe("Thematic Innovation (iA)");
   });
   it("leaves out any section Rolf did not include", () => {
-    const v = buildClientView(pack(), { returns: false, mix: false, funds: false, reset: false }, "", "H");
-    expect([v.accounts, v.mix, v.funds, v.reset]).toEqual([null, null, null, null]);
+    const v = buildClientView(pack(), { returns: false, mix: false, funds: false, reset: false, rebalancing: false }, "", "H");
+    expect([v.accounts, v.mix, v.funds, v.reset, v.rebalance]).toEqual([null, null, null, null, null]);
   });
   it("never includes a reset for an account that cannot be reset", () => {
     const p = buildPortfolioPack({ accounts: [acct({ ownerDob: "1930-01-01" })], profiles: [], today: "2026-10-14", models: [] });
@@ -77,5 +77,24 @@ describe("the commentary under the charts", () => {
     expect(c[1]).toMatch(/I recommend rebalancing the portfolio to the model\. Matching it would move about \$\d/);
     const on = compareToModel([{ name: "Fixed income managed portfolio (iA)", category: "Income Funds", value: 40_000 }, { name: "Fidelity Insights", category: "U.S. & International Equity Funds", value: 60_000 }], balanced)!;
     expect(fundsCommentary(on)).toEqual(["Your funds line up closely with our Balanced model portfolio."]);
+  });
+});
+
+describe("what the client sees of the rebalancing proposal", () => {
+  const inc = (income: number, equity: number) => [{ name: "I", category: "Income Funds", value: income * 1000 }, { name: "E", category: "Canadian Equity funds", value: equity * 1000 }];
+  const prof = [{ accountNumber: null, label: null, incomePct: 40, equityPct: 60, bandPct: 0, profileKey: "balanced" }];
+  it("lists only the accounts outside their profile's range, by asset class, rounded, with a note on taxable accounts", () => {
+    const p = buildPortfolioPack({ accounts: [
+      acct({ id: "a", name: "iA Financial Group - SRP - TFSA", number: "1111", type: "TFSA", value: 100_000, statement: { statementDate: "2026-09-30", funds: inc(34, 66) } }),
+      acct({ id: "b", name: "iA Financial Group - SRP - Non-registered", number: "2222", type: "Non-registered", value: 50_000, statement: { statementDate: "2026-09-30", funds: inc(30, 70) } }),
+      acct({ id: "c", number: "3333", value: 80_000, statement: { statementDate: "2026-09-30", funds: inc(36, 64) } }),
+    ], profiles: prof, today: "2026-10-14", models: [balanced] });
+    const r = buildClientView(p, ALL_INCLUDED, "", "H").rebalance!;
+    expect(r.rows.map((x) => [x.label, x.direction, x.amount])).toEqual([["TFSA …1111", "to_income", 6_000], ["Non-registered …2222", "to_income", 5_000]]);
+    expect(r.hasTaxable).toBe(true);
+  });
+  it("is left out when nothing is outside the range", () => {
+    const p = buildPortfolioPack({ accounts: [acct({ statement: { statementDate: "2026-09-30", funds: inc(42, 58) } })], profiles: prof, today: "2026-10-14", models: [balanced] });
+    expect(buildClientView(p, ALL_INCLUDED, "", "H").rebalance).toBeNull();
   });
 });

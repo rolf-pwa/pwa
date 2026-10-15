@@ -211,6 +211,8 @@ export interface Pack {
   resets: ResetSummary;
   /** The household's managed value at each month-end the import has recorded, oldest first. */
   history: { date: string; value: number }[];
+  /** Switches by asset class to bring each account to its profile's model mix, with the guarantee resets. */
+  rebalancing: RebalancingProposal;
 }
 
 export const STATEMENT_STALE_DAYS = 120;
@@ -307,6 +309,7 @@ export function buildPortfolioPack(input: { accounts: PackAccount[]; profiles: I
     gaps,
     resets: resetCheck(accounts, today),
     history: input.history ?? [],
+    rebalancing: proposeRebalancing(out, resetCheck(accounts, today)),
   };
 }
 
@@ -320,4 +323,76 @@ function householdModelComparison(accounts: PackAccountOut[]): ModelComparison |
   const first = withModel[0].modelComparison!;
   const model: ModelPortfolio = { asOf: first.modelAsOf, key: first.modelKey, label: first.modelLabel, incomeMin: 0, incomeMax: 0, equityMin: 0, equityMax: 0, incomeTarget: 0, funds: first.rows.filter((r) => r.inModel).map((r) => ({ name: r.name, weight: r.modelPct as number })) };
   return compareToModel(withModel.flatMap((a) => a.statement!.funds), model);
+}
+
+// ───── Rebalancing proposal ─────
+// What to switch, by asset class, to bring each account to its profile's model mix. Switches stay inside the account (no money moves
+// between accounts), nothing is executed, and the guarantee reset on a segregated fund account is listed with it. The amounts are computed in
+// code from the latest value; they are a starting point for Rolf to adjust.
+
+export type SwitchDirection = "to_income" | "to_equity" | "none";
+export interface SwitchRow {
+  accountId: string; name: string; number: string | null; owner: string | null; accountType: string | null;
+  value: number; incomePct: number; targetIncomePct: number; rangeMin: number | null; rangeMax: number | null;
+  /** True when the account is outside its profile's range (a move is needed), false when it is inside but off the model mix (optional). */
+  outsideRange: boolean;
+  direction: SwitchDirection;
+  /** Dollars to switch, inside the account. */
+  amount: number;
+  afterIncomePct: number;
+  /** A non-registered account: a switch can realise a gain. */
+  taxable: boolean;
+  /** Value less the start-of-year value, an indicator only (the book cost of each fund is not stored). */
+  ytdGain: number | null;
+  /** Death benefit reset on this account: what it adds, when a reset is available. */
+  resetLift: number | null;
+}
+export interface RebalancingProposal { rows: SwitchRow[]; toIncome: number; toEquity: number; needed: number; taxable: number; resets: number; resetLift: number }
+
+const isTaxable = (type: string | null | undefined) => /non[\s-]?registered|joint|margin|cash account/i.test(String(type ?? ""));
+
+export function proposeRebalancing(accounts: PackAccountOut[], resets: ResetSummary): RebalancingProposal {
+  const resetBy = new Map(resets.rows.filter((r) => r.status === "reset").map((r) => [r.accountId, r.room ?? 0]));
+  const rows: SwitchRow[] = [];
+  for (const a of accounts) {
+    const d = a.drift;
+    if (!a.classTotals || a.incomePct === null || d.targetIncomePct == null || a.value === null || a.value <= 0) continue;
+    const diff = d.targetIncomePct - a.incomePct; // positive: needs more income
+    const amount = Math.round((Math.abs(diff) / 100) * a.value);
+    const aligned = Math.abs(diff) < HARD_LINE_TOLERANCE;
+    const outside = d.status === "too_little_income" || d.status === "too_much_income";
+    const lift = resetBy.get(a.id) ?? null;
+    if (aligned && lift === null) continue;
+    rows.push({
+      accountId: a.id, name: a.name, number: a.number, owner: a.owner, accountType: a.type, value: a.value, incomePct: a.incomePct, targetIncomePct: d.targetIncomePct,
+      rangeMin: d.rangeMin ?? null, rangeMax: d.rangeMax ?? null, outsideRange: outside,
+      direction: aligned ? "none" : diff > 0 ? "to_income" : "to_equity", amount: aligned ? 0 : amount, afterIncomePct: aligned ? a.incomePct : d.targetIncomePct,
+      taxable: isTaxable(a.type), ytdGain: a.changeYtd, resetLift: lift,
+    });
+  }
+  rows.sort((x, y) => Number(y.outsideRange) - Number(x.outsideRange) || y.amount - x.amount);
+  const moving = rows.filter((r) => r.direction !== "none");
+  return {
+    rows,
+    toIncome: moving.filter((r) => r.direction === "to_income").reduce((n, r) => n + r.amount, 0),
+    toEquity: moving.filter((r) => r.direction === "to_equity").reduce((n, r) => n + r.amount, 0),
+    needed: moving.filter((r) => r.outsideRange).length,
+    taxable: moving.filter((r) => r.taxable).length,
+    resets: rows.filter((r) => r.resetLift !== null).length,
+    resetLift: Math.round(rows.reduce((n, r) => n + (r.resetLift ?? 0), 0) * 100) / 100,
+  };
+}
+
+/** The proposal as plain text, for working through the switches on the iA advisor site. */
+export function rebalancingWorksheet(p: RebalancingProposal, household: string, asOf: string | null): string {
+  const m = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
+  const lines = [`Rebalancing worksheet: ${household}${asOf ? ` (values as of ${asOf})` : ""}`, ""];
+  for (const r of p.rows) {
+    const who = `${r.name || "Account"}${r.number ? ` …${String(r.number).replace(/[^0-9A-Za-z]/g, "").slice(-4)}` : ""}${r.owner ? ` (${r.owner})` : ""}`;
+    const move = r.direction === "none" ? "mix already on the model" : `switch about ${m(r.amount)} from ${r.direction === "to_income" ? "equity into income" : "income into equity"} funds (${r.incomePct}% income to ${r.afterIncomePct}%)`;
+    const notes = [r.outsideRange ? "OUTSIDE RANGE" : r.direction === "none" ? "" : "inside range, optional", r.taxable ? "TAXABLE: check the gain first" : "", r.resetLift !== null ? `then reset the death guarantee (+${m(r.resetLift)})` : ""].filter(Boolean);
+    lines.push(`- ${who}: ${move}${notes.length ? `. ${notes.join("; ")}` : ""}`);
+  }
+  lines.push("", `Total: ${m(p.toIncome)} into income funds, ${m(p.toEquity)} into equity funds. ${p.resets} reset${p.resets === 1 ? "" : "s"} adding ${m(p.resetLift)}.`);
+  return lines.join("\n");
 }
