@@ -192,6 +192,20 @@ export function PortalPortfolioReview({ view, publishedAt, preview = false }: { 
           </Section>
         )}
 
+        {view.rebalance && (
+          <Section title="What I propose" lead="To bring these accounts back in line with your profile, I propose switching between funds inside each account. No money moves between accounts.">
+            <ul className="space-y-2.5">
+              {view.rebalance.rows.map((r, i) => (
+                <li key={i} className="flex items-baseline justify-between gap-3 text-sm">
+                  <span className="min-w-0"><span className="font-medium text-foreground">{r.label}</span>{r.owner ? <span className="text-muted-foreground"> · {r.owner.split(" ")[0]}</span> : null}<span className="block text-xs text-muted-foreground">{r.direction === "to_income" ? "From equity funds into income funds" : "From income funds into equity funds"}{r.taxable ? " · taxable account" : ""}</span></span>
+                  <span className="shrink-0 font-serif text-base font-semibold" style={{ color: B.navy }}>about {money(r.amount)}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-muted-foreground">These amounts move with markets, so I will confirm them with you before anything is done.{view.rebalance.hasTaxable ? " In a non-registered account a switch can create a taxable gain, and I will review that with you first." : ""}</p>
+          </Section>
+        )}
+
         {view.reset && (
           <Section title="Your death benefit guarantee" lead="Each year I can reset the death benefit guarantee on your segregated fund contracts to today's value. It costs nothing and does not change your fees.">
             <div className="rounded-lg p-4 text-center" style={{ background: tint(B.sand, 0.45) }}>

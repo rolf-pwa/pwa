@@ -13,17 +13,17 @@ import { PortalPortfolioReview } from "@/modules/portal/components/PortalPortfol
 const when = (iso: string) => new Date(iso).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 const SECTIONS: { key: keyof ClientIncludes; label: string }[] = [
   { key: "returns", label: "Values and returns by account" }, { key: "mix", label: "Mix against their Investor Profile" },
-  { key: "funds", label: "Funds against the iA model" }, { key: "reset", label: "Death benefit reset" },
+  { key: "funds", label: "Funds against our model portfolio" }, { key: "rebalancing", label: "What I propose to switch" }, { key: "reset", label: "Death benefit reset" },
 ];
 
 /** Publish the household's Portfolio Review to their portal. Nothing is shown to the client until Rolf does this. */
 export function PublishToClient({ householdId, householdLabel, pack, publication, onChanged }: { householdId: string; householdLabel: string; pack: PortfolioPack; publication: PortfolioPackResponse["publication"]; onChanged: () => void }) {
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
-  const [includes, setIncludes] = useState<ClientIncludes>({ returns: true, mix: true, funds: true, reset: true });
+  const [includes, setIncludes] = useState<ClientIncludes>({ returns: true, mix: true, funds: true, reset: true, rebalancing: true });
   const [busy, setBusy] = useState(false);
 
-  const start = () => { setNote(publication?.note ?? ""); setIncludes(publication?.includes ?? { returns: true, mix: true, funds: true, reset: true }); setOpen(true); };
+  const start = () => { setNote(publication?.note ?? ""); setIncludes({ returns: true, mix: true, funds: true, reset: true, rebalancing: true, ...(publication?.includes ?? {}) }); setOpen(true); };
   const run = async (fn: () => Promise<unknown>, ok: string) => {
     setBusy(true);
     try { await fn(); toast.success(ok); setOpen(false); onChanged(); } catch (e: any) { toast.error(e?.message ?? "Couldn't update"); } finally { setBusy(false); }

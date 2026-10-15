@@ -192,3 +192,50 @@ describe("a reset is sized on the latest value, not the older statement's", () =
     expect(resetCheck([acc], "2026-10-14").rows[0].room).toBe(8_000);
   });
 });
+
+describe("the rebalancing proposal", () => {
+  const bal: ModelPortfolio = { asOf: "2026-05-31", key: "balanced", label: "Balanced", incomeMin: 35, incomeMax: 55, equityMin: 45, equityMax: 65, incomeTarget: 40, funds: [] };
+  const inc = (income: number, equity: number) => [{ name: "I", category: "Income Funds", value: income * 1000 }, { name: "E", category: "Canadian Equity funds", value: equity * 1000 }];
+  const pr = [{ accountNumber: null, label: null, incomePct: 40, equityPct: 60, bandPct: 0, profileKey: "balanced" }];
+  const withGuarantee = (over: Partial<PackAccount>): PackAccount => acct({ ownerDob: "1955-06-01", guarantee: { series: "Series 75/100", maturityDate: null, guaranteedAtMaturity: 1, guaranteedAtDeath: 90_000, lastQuarterFee: 1, valueOfFunds: 100_000 }, ...over });
+
+  it("switches by asset class inside the account to reach the model mix, and says which are outside the range", () => {
+    const p = buildPortfolioPack({ accounts: [acct({ id: "a", number: "1111", value: 100_000, type: "TFSA", statement: { statementDate: "2026-09-30", funds: inc(34, 66) } }), acct({ id: "b", number: "2222", value: 50_000, type: "RRIF", statement: { statementDate: "2026-09-30", funds: inc(36, 64) } })], profiles: pr, today: "2026-10-14", models: [bal] });
+    const [a, b] = p.rebalancing.rows;
+    expect(a).toMatchObject({ accountId: "a", direction: "to_income", amount: 6_000, outsideRange: true, afterIncomePct: 40, taxable: false });
+    expect(b).toMatchObject({ accountId: "b", direction: "to_income", amount: 2_000, outsideRange: false });
+    expect(p.rebalancing.toIncome).toBe(8_000);
+    expect(p.rebalancing.needed).toBe(1);
+  });
+  it("moves into equity when an account holds too much income", () => {
+    const p = buildPortfolioPack({ accounts: [acct({ value: 100_000, statement: { statementDate: "2026-09-30", funds: inc(60, 40) } })], profiles: pr, today: "2026-10-14", models: [bal] });
+    expect(p.rebalancing.rows[0]).toMatchObject({ direction: "to_equity", amount: 20_000 });
+    expect(p.rebalancing.toEquity).toBe(20_000);
+  });
+  it("flags non-registered accounts as taxable and lists the guarantee reset with the switch", () => {
+    const p = buildPortfolioPack({ accounts: [withGuarantee({ id: "n", type: "Non-registered", value: 100_000, boyValue: 90_000, statement: { statementDate: "2026-09-30", funds: inc(34, 66) } })], profiles: pr, today: "2026-10-14", models: [bal] });
+    expect(p.rebalancing.rows[0]).toMatchObject({ taxable: true, ytdGain: 10_000, resetLift: 10_000 });
+    expect(p.rebalancing.taxable).toBe(1);
+    expect(p.rebalancing.resets).toBe(1);
+    expect(p.rebalancing.resetLift).toBe(10_000);
+  });
+  it("lists an aligned account only when it has a reset, and leaves out accounts with no profile or no funds", () => {
+    const p = buildPortfolioPack({ accounts: [withGuarantee({ id: "ok", value: 100_000, statement: { statementDate: "2026-09-30", funds: inc(40, 60) } }), acct({ id: "plain", statement: { statementDate: "2026-09-30", funds: inc(40, 60) } }), acct({ id: "nofunds", statement: null })], profiles: pr, today: "2026-10-14", models: [bal] });
+    expect(p.rebalancing.rows.map((r) => [r.accountId, r.direction])).toEqual([["ok", "none"]]);
+    const none = buildPortfolioPack({ accounts: [acct({ statement: { statementDate: "2026-09-30", funds: inc(30, 70) } })], profiles: [], today: "2026-10-14", models: [] });
+    expect(none.rebalancing.rows).toEqual([]);
+  });
+});
+
+import { rebalancingWorksheet } from "../../supabase/functions/_shared/portfolio-review";
+describe("the rebalancing worksheet", () => {
+  it("lists each switch, the flags and the totals as plain text", () => {
+    const bal: ModelPortfolio = { asOf: "2026-05-31", key: "balanced", label: "Balanced", incomeMin: 35, incomeMax: 55, equityMin: 45, equityMax: 65, incomeTarget: 40, funds: [] };
+    const funds = [{ name: "I", category: "Income Funds", value: 34_000 }, { name: "E", category: "Canadian Equity funds", value: 66_000 }];
+    const p = buildPortfolioPack({ accounts: [acct({ type: "Non-registered", number: "1818713190", value: 100_000, ownerDob: "1955-06-01", guarantee: { series: "Series 75/100", maturityDate: null, guaranteedAtMaturity: 1, guaranteedAtDeath: 90_000, lastQuarterFee: 1, valueOfFunds: 100_000 }, statement: { statementDate: "2026-09-30", funds } })], profiles: [{ accountNumber: null, label: null, incomePct: 40, equityPct: 60, bandPct: 0, profileKey: "balanced" }], today: "2026-10-14", models: [bal] });
+    const t = rebalancingWorksheet(p.rebalancing, "Parent Household", p.asOf);
+    expect(t).toContain("Rebalancing worksheet: Parent Household");
+    expect(t).toMatch(/…3190 \(Sam\): switch about \$6,000 from equity into income funds \(34% income to 40%\)\. OUTSIDE RANGE; TAXABLE: check the gain first; then reset the death guarantee \(\+\$10,000\)/);
+    expect(t).toContain("Total: $6,000 into income funds, $0 into equity funds. 1 reset adding $10,000.");
+  });
+});
