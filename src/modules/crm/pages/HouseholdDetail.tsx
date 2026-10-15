@@ -661,6 +661,10 @@ const HouseholdDetail = () => {
                 />
               </div>
             </div>
+            {/* Starting a new household: the link Rolf sends. Gone for good once onboarding is complete. */}
+            {!household.onboarding_completed_at && (
+              <div className="mt-4"><OnboardingInviteCard householdId={id!} embedded /></div>
+            )}
           </CardContent>
         </Card>
 
@@ -873,6 +877,20 @@ const HouseholdDetail = () => {
                           A Quarterly Review for chartered households, or a Sovereignty Survey from the records on file when there is no Charter yet.
                         </p>
                         <QuarterlySystemReviewButton householdId={id} />
+                      </div>
+                    </div>
+
+                    {/* Portfolio Review — the prep pack and what the client sees */}
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-semibold text-muted-foreground">
+                        P
+                      </div>
+                      <div className="flex-1 space-y-1.5">
+                        <p className="text-sm font-medium text-foreground">Portfolio Review</p>
+                        <p className="text-xs text-muted-foreground">
+                          Allocation against the Investor Profile and iA's model portfolio, returns, death benefit resets, and what the client sees.
+                        </p>
+                        <Button asChild size="sm" variant="outline"><Link to={`/households/${id}/portfolio-review`}>Open the review pack</Link></Button>
                       </div>
                     </div>
 
@@ -1099,14 +1117,6 @@ const HouseholdDetail = () => {
               <ShieldCheck className="h-4 w-4 text-accent" />
               Household document vault — manage visibility and share with collaborators.
             </div>
-            <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-lg">Portfolio Review</CardTitle></CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <p className="text-muted-foreground">Allocation, returns and drift from the Investor Profile, ready before the meeting.</p>
-                <Button asChild size="sm" variant="outline"><Link to={`/households/${id}/portfolio-review`}>Open the review pack</Link></Button>
-              </CardContent>
-            </Card>
-            <OnboardingInviteCard householdId={id!} />
             <OnboardingAgentPanel householdId={id!} />
             <VaultView
               forcedHouseholdId={id!}

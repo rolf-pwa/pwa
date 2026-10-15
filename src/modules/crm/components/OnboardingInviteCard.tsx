@@ -11,7 +11,7 @@ const when = (iso: string) => new Date(iso).toLocaleString("en-CA", { month: "sh
  * An invitation link for the household's head of household, for a personal email from Rolf. When they open it they land on the
  * website, and Georgia emails them (and their spouse, if there is an email) their onboarding link straight away.
  */
-export function OnboardingInviteCard({ householdId }: { householdId: string }) {
+export function OnboardingInviteCard({ householdId, embedded = false }: { householdId: string; embedded?: boolean }) {
   const [invite, setInvite] = useState<OnboardingInvite | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
 
@@ -32,10 +32,8 @@ export function OnboardingInviteCard({ householdId }: { householdId: string }) {
 
   if (invite === undefined) return null;
   const live = invite && (invite.state === "active" || invite.state === "clicked");
-  return (
-    <Card>
-      <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg"><Link2 className="h-5 w-5 text-accent" /> Onboarding invitation link</CardTitle></CardHeader>
-      <CardContent className="space-y-3 text-sm">
+  const body = (
+    <>
         {!invite && <p className="text-muted-foreground">Make a link for {`the head of household`} to use in your own email. When they open it they land on your website, and Georgia emails them their onboarding link straight away.</p>}
         {live && (
           <>
@@ -59,7 +57,23 @@ export function OnboardingInviteCard({ householdId }: { householdId: string }) {
           {live && invite.state === "active" && <Button size="sm" variant="outline" disabled={busy} onClick={() => run(() => revokeInvite(householdId), "Link revoked")}>Revoke</Button>}
           {live && <Button size="sm" variant="ghost" disabled={busy} onClick={() => run(() => createInvite(householdId, true), "New link made; the old one no longer works")}>Make a new link</Button>}
         </div>
-      </CardContent>
+      </>
+  );
+  if (embedded) {
+    // Prominent on the household information card: a highlighted strip, not a card of its own.
+    return (
+      <div className="rounded-lg border border-accent/40" style={{ background: "hsl(var(--pw-sand) / 0.35)" }} data-testid="invite-strip">
+        <div className="space-y-3 border-l-4 border-accent px-4 py-3 text-sm">
+          <h3 className="flex items-center gap-2 font-serif text-base font-semibold text-foreground"><Link2 className="h-4 w-4 text-accent" /> Onboarding link</h3>
+          {body}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <Card>
+      <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg"><Link2 className="h-5 w-5 text-accent" /> Onboarding invitation link</CardTitle></CardHeader>
+      <CardContent className="space-y-3 text-sm">{body}</CardContent>
     </Card>
   );
 }
