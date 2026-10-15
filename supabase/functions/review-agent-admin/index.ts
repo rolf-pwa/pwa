@@ -125,7 +125,14 @@ Deno.serve(async (req) => {
       if (!o.acknowledged_at) return json({ error: "The client has not acknowledged this one yet." }, 400);
       if (o.completed_at) return json({ ok: true });
       await db.from("review_obligations").update({ completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", id);
-      await db.from("pm_tasks").update({ status: "done", completed_at: new Date().toISOString() }).eq("family_id", o.family_id).eq("status", "open").like("title", "Rebalance %: acknowledged");
+      // Close Rolf's task to carry it out (old and new titles) and its subtasks.
+      const { data: carry } = await db.from("pm_tasks").select("id").eq("family_id", o.family_id).eq("status", "open").or("title.like.Rebalance %: acknowledged,title.like.Rebalance %: carry out%");
+      const carryIds = (carry ?? []).map((t: any) => t.id);
+      if (carryIds.length) {
+        const doneAt = new Date().toISOString();
+        await db.from("pm_tasks").update({ status: "done", completed_at: doneAt }).in("id", carryIds);
+        await db.from("pm_tasks").update({ status: "done", completed_at: doneAt }).in("parent_task_id", carryIds).eq("status", "open");
+      }
       const { data: adults } = await db.from("contacts").select("id").eq("family_id", o.family_id).in("family_role", ["head_of_family", "spouse"]);
       for (const a of adults ?? []) await db.from("portal_client_notifications").insert({ contact_id: a.id, title: "Your portfolio rebalancing is complete", body: "Your portfolio has been rebalanced. Sign in to see your accounts.", source_type: "rebalancing_complete", link_tab: "financials" });
       await log("rebalancing_completed");
