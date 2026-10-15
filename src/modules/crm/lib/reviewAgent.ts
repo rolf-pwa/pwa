@@ -53,6 +53,7 @@ export const readModelPdf = (pdfBase64: string) => call<{ validation: ModelValid
 export const saveModels = (asOf: string, models: ParsedModel[], sourceFile: string) => call<{ ok: true; asOf: string }>("saveModels", { asOf, models, sourceFile });
 export const publishPortfolioReview = (householdId: string, note: string, includes: { returns: boolean; mix: boolean; funds: boolean; reset: boolean }) => call<{ ok: true; emailed: number; updated: boolean }>("publishPortfolioReview", { householdId, note, includes });
 export const unpublishPortfolioReview = (householdId: string) => call<{ ok: true }>("unpublishPortfolioReview", { householdId });
+export const getWorkbenchFacts = (householdId: string) => call<import("./workbenchSteps").WorkbenchFacts>("workbenchFacts", { householdId });
 export const deleteInvestorProfile = (householdId: string, accountNumber: string | null) => call<{ ok: true }>("deleteInvestorProfile", { householdId, accountNumber });
 export const setReviewMode = (mode: ReviewMode, confirm = false) => call<{ ok: true; mode: ReviewMode }>("setMode", { mode, confirm });
 export const setReviewPaused = (obligationId: string, paused: boolean) => call<{ ok: true }>("setPaused", { obligationId, paused });
