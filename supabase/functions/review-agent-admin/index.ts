@@ -8,7 +8,7 @@ import { latestModels, portfolioPackFor } from "../_shared/portfolio-review-data
 import { pacificDate } from "../_shared/review-windows.ts";
 import { MODEL_PROMPT, validateModels } from "../_shared/ia-model-parse.ts";
 import { isPooledFamily } from "../_shared/review-units.ts";
-import { buildClientProposal, buildClientView, portfolioReviewReadyEmail, type ClientIncludes } from "../_shared/portfolio-review-client.ts";
+import { buildClientProposal, buildClientView, narrativeParagraphs, portfolioReviewReadyEmail, type ClientIncludes } from "../_shared/portfolio-review-client.ts";
 import { sendServiceEmailDetailed } from "../_shared/service-email.ts";
 import { AGENT_SENDER, PORTAL_URL } from "../_shared/onboarding-agent.ts";
 import { GEMINI_EXTRACT_MODEL, extractJson, generateVertexContent, parseServiceAccountKey, withThinking } from "../_shared/vertex-ai.ts";
@@ -161,11 +161,14 @@ Deno.serve(async (req) => {
       const includes: ClientIncludes = { returns: inc.returns !== false, mix: inc.mix !== false, funds: inc.funds !== false, reset: inc.reset !== false, rebalancing: inc.rebalancing !== false };
       const note = String(body?.note ?? "").slice(0, 2000);
       const kind: "review" | "rebalance" = body?.kind === "rebalance" ? "rebalance" : "review";
+      // The advisor may have rewritten the shaded commentary boxes; an empty box means the suggested wording.
+      const narratives = { mix: narrativeParagraphs(body?.narratives?.mix)?.join("\n\n") ?? null, funds: narrativeParagraphs(body?.narratives?.funds)?.join("\n\n") ?? null };
+      const storedIncludes = { ...includes, narratives };
       const { data: hh } = await db.from("households").select("id, label, family_id").eq("id", householdId).maybeSingle();
       if (!hh) return json({ error: "Household not found" }, 404);
       const { pack } = await portfolioPackFor(db, householdId, pacificDate(Date.now()));
       if (!pack.accounts.length) return json({ error: "There are no managed accounts to show." }, 400);
-      const view = buildClientView(pack, includes, note, hh.label ?? "Household", kind);
+      const view = buildClientView(pack, includes, note, hh.label ?? "Household", kind, narratives);
 
       // The Tier 1 rebalancing: the same page and pack, tied to the household's rebalancing obligation so Georgia's reminders, the task and "to carry out" keep working.
       if (kind === "rebalance") {
@@ -178,7 +181,7 @@ Deno.serve(async (req) => {
         const wasPublished = Boolean(ob.published_at);
         await db.from("review_obligations").update({ published_at: ob.published_at ?? nowIso, published_by: staff.userId, proposal_summary: note.trim(), proposal: view.proposal ?? null, updated_at: nowIso }).eq("id", ob.id);
         await db.from("portfolio_review_publications").update({ unpublished_at: nowIso }).eq("household_id", householdId).eq("kind", "rebalance").is("unpublished_at", null);
-        const { error: pe } = await db.from("portfolio_review_publications").insert({ household_id: householdId, kind: "rebalance", obligation_id: ob.id, published_by: staff.email, note: note.trim(), includes, view });
+        const { error: pe } = await db.from("portfolio_review_publications").insert({ household_id: householdId, kind: "rebalance", obligation_id: ob.id, published_by: staff.email, note: note.trim(), includes: storedIncludes, view });
         if (pe) return json({ error: pe.message }, 400);
         if (!wasPublished) {
           const { data: adults } = await db.from("contacts").select("id").eq("household_id", householdId).in("family_role", ["head_of_household", "head_of_family", "spouse"]).eq("is_minor", false);
@@ -190,7 +193,7 @@ Deno.serve(async (req) => {
       const { data: prior } = await db.from("portfolio_review_publications").select("id, notified_at").eq("household_id", householdId).eq("kind", "review").is("unpublished_at", null);
       const firstTime = !(prior ?? []).some((p: any) => p.notified_at);
       await db.from("portfolio_review_publications").update({ unpublished_at: new Date().toISOString() }).eq("household_id", householdId).eq("kind", "review").is("unpublished_at", null);
-      const { data: row, error } = await db.from("portfolio_review_publications").insert({ household_id: householdId, kind: "review", published_by: staff.email, note: note || null, includes, view }).select("id").single();
+      const { data: row, error } = await db.from("portfolio_review_publications").insert({ household_id: householdId, kind: "review", published_by: staff.email, note: note || null, includes: storedIncludes, view }).select("id").single();
       if (error) return json({ error: error.message }, 400);
       let notified = 0;
       if (firstTime) {

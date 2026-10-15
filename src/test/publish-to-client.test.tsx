@@ -30,3 +30,17 @@ describe("PublishToClient for a rebalance", () => {
     expect(screen.queryByRole("button", { name: /Publish the rebalancing/ })).toBeNull();
   });
 });
+
+describe("editing the narrative boxes before publishing", () => {
+  it("shows the suggested commentary in editable boxes and lets the advisor go back to it", () => {
+    const withFunds: any = { ...pack, accounts: [{ id: "a", name: "iA TFSA", number: "1111", type: "TFSA", custodian: "iA", owner: "Sam", value: 100_000, boyValue: 90_000, asOf: "2026-09-30", returns: { ytd: 5, sixMonth: null, oneYear: null, threeYear: null, fiveYear: null, sinceInception: null }, priorValue: null, priorAsOf: null, statement: null, changeYtd: 10_000, changeSincePrior: null, changeSincePriorPct: null, classTotals: { income: 34_000, canadian_equity: 66_000, us_intl_equity: 0, equity_other: 0, other: 0 }, incomePct: 34, drift: { status: "too_little_income", targetIncomePct: 40, actualIncomePct: 34, bandPct: 0, rangeMin: 35, rangeMax: 55, profileLabel: "Balanced", moveToIncome: 6_000 }, statementAgeDays: 10, modelComparison: null }], totalValue: 100_000, household: { ...pack.household, classTotals: { income: 34_000, canadian_equity: 66_000, us_intl_equity: 0, equity_other: 0, other: 0 }, drift: { status: "too_little_income", targetIncomePct: 40, actualIncomePct: 34, bandPct: 0, rangeMin: 35, rangeMax: 55, profileLabel: "Balanced", moveToIncome: 6_000 } } };
+    render(<PublishToClient householdId="h" householdLabel="H" pack={withFunds} publication={null} onChanged={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: /Publish to the client/ }));
+    const mix = screen.getByLabelText("Commentary under Your mix") as HTMLTextAreaElement;
+    expect(mix.value).toMatch(/outside your Balanced risk profile/);
+    fireEvent.change(mix, { target: { value: "My own words." } });
+    expect((screen.getByLabelText("Commentary under Your mix") as HTMLTextAreaElement).value).toBe("My own words.");
+    fireEvent.click(screen.getByText("Use the suggested wording"));
+    expect((screen.getByLabelText("Commentary under Your mix") as HTMLTextAreaElement).value).toMatch(/outside your Balanced risk profile/);
+  });
+});
