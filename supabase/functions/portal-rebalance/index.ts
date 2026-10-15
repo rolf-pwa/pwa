@@ -9,7 +9,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validatePortalContact } from "../_shared/portal-auth.ts";
 import { REBALANCE_STATEMENT, REBALANCE_STATEMENT_VERSION, isFamilyAdult, pacificDate, windowLabel } from "../_shared/review-windows.ts";
 import { scopeToUnit, viewerUnit } from "../_shared/review-unit-for-contact.ts";
-import { checkAllAcknowledged, describeProposalItem } from "../_shared/portfolio-review-client.ts";
+import { checkAllAcknowledged, rebalanceTaskPlan } from "../_shared/portfolio-review-client.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -75,14 +75,24 @@ Deno.serve(async (req) => {
     });
 
     const { data: rolf } = await db.from("profiles").select("user_id").eq("email", ASSIGNEE_EMAIL).maybeSingle();
-    const task = async (title: string, description: string, dueInDays: number) => {
-      if (!rolf?.user_id) return;
-      await db.from("pm_tasks").insert({ title, description, status: "open", client_visible: false, assignee_id: rolf.user_id, created_by: rolf.user_id, family_id: me.family_id, contact_id: me.id, due_date: addDays(today, dueInDays) });
+    const taskHousehold = unit.householdId ?? me.household_id ?? null;
+    const task = async (title: string, description: string, dueInDays: number, parentId?: string): Promise<string | null> => {
+      if (!rolf?.user_id) return null;
+      const { data } = await db.from("pm_tasks").insert({ title, description, status: "open", client_visible: false, assignee_id: rolf.user_id, created_by: rolf.user_id, family_id: me.family_id, household_id: taskHousehold, contact_id: me.id, due_date: addDays(today, dueInDays), ...(parentId ? { parent_task_id: parentId } : {}) }).select("id").maybeSingle();
+      return data?.id ?? null;
     };
 
     if (action === "acknowledge") {
       await db.from("review_obligations").update({ acknowledged_at: new Date().toISOString(), status: "held", updated_at: new Date().toISOString() }).eq("id", ob.id);
-      await task(`Rebalance ${family}: acknowledged`, `${name} reviewed the ${label} rebalancing you published and acknowledged it in the portal on ${today}. Carry it out, then mark it done on Georgia Reviews so the family is told.${items && items.ok && items.items.length ? `\n\nThey ticked and authorized each of these:\n${items.items.map((i) => `- ${describeProposalItem(i)}`).join("\n")}\n\nConfirm the amounts with them first, as they move with markets.` : ""}\n\nThe acknowledgement (wording version ${REBALANCE_STATEMENT_VERSION}, with the proposal they saw) is stored with the family's records.`, 3);
+      const authorized = items && items.ok ? items.items : [];
+      if (authorized.length) {
+        // The proposal's items grouped by account with the pack's exact figures, a link to the pack, and a subtask per item to check off.
+        const plan = rebalanceTaskPlan(authorized, { clientName: name, label, today, packUrl: taskHousehold ? `https://app.prosperwise.ca/households/${taskHousehold}/portfolio-review` : null, stored: `The authorization, with the exact wording they agreed to (version ${REBALANCE_STATEMENT_VERSION}) and the items as they saw them, is stored with the family's records.` });
+        const parentId = await task(`Rebalance ${family}: carry out ${authorized.length} authorized change${authorized.length === 1 ? "" : "s"}`, plan.description, 3);
+        if (parentId) for (const st of plan.subtasks) await task(st.title, st.description, 3, parentId);
+      } else {
+        await task(`Rebalance ${family}: acknowledged`, `${name} reviewed the ${label} rebalancing you published and acknowledged it in the portal on ${today}. Carry it out, then mark it done on Georgia Reviews so the family is told.\n\nThe acknowledgement (wording version ${REBALANCE_STATEMENT_VERSION}, with the proposal they saw) is stored with the family's records.`, 3);
+      }
       await db.from("staff_notifications").insert({ title: `Rebalancing acknowledged: ${family}`, body: `${name} acknowledged the ${label} rebalancing.`, link: `/families/${me.family_id}`, contact_id: me.id, source_type: "rebalancing" });
       await db.from("review_agent_events").insert({ family_id: me.family_id, obligation_id: ob.id, mode: "live", kind: "rebalancing_acknowledged", detail: { by: name, label } });
       return json({ ok: true });

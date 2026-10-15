@@ -195,7 +195,7 @@ export function portfolioReviewReadyEmail(firstName: string, portalUrl: string, 
 // What a Tier 1 household reviews and authorizes in its portal: the switches by asset class (accounts outside their profile's range) and the
 // death benefit resets, each as an item the client acknowledges. Built from the pack when Rolf publishes, and frozen with the rebalancing.
 
-export interface ProposalSwitch { id: string; label: string; owner: string | null; direction: "to_income" | "to_equity"; amount: number; taxable: boolean }
+export interface ProposalSwitch { id: string; label: string; owner: string | null; direction: "to_income" | "to_equity"; /** What the client sees, rounded to $100. */ amount: number; /** The pack's figure to the dollar, for Rolf's task. */ exactAmount?: number; taxable: boolean }
 export interface ProposalReset { id: string; label: string; owner: string | null; currentGuarantee: number; newGuarantee: number; lift: number }
 export interface ClientProposal { switches: ProposalSwitch[]; resets: ProposalReset[]; totalLift: number; totalNow: number; totalAfter: number; hasTaxable: boolean }
 export type ProposalItem = (ProposalSwitch & { kind: "switch" }) | (ProposalReset & { kind: "reset" });
@@ -205,7 +205,7 @@ export function buildClientProposal(pack: Pack): ClientProposal | null {
   const rs = pack.resets.rows.filter((r) => r.status === "reset");
   if (!sw.length && !rs.length) return null;
   return {
-    switches: sw.map((r) => ({ id: `switch:${r.accountId}`, label: shortAccountName(r.name, r.number), owner: r.owner, direction: r.direction as "to_income" | "to_equity", amount: Math.round(r.amount / 100) * 100, taxable: r.taxable })),
+    switches: sw.map((r) => ({ id: `switch:${r.accountId}`, label: shortAccountName(r.name, r.number), owner: r.owner, direction: r.direction as "to_income" | "to_equity", amount: Math.round(r.amount / 100) * 100, exactAmount: Math.round(r.amount), taxable: r.taxable })),
     resets: rs.map((r) => ({ id: `reset:${r.accountId}`, label: shortAccountName(r.name, r.number), owner: r.owner, currentGuarantee: r.deathGuarantee as number, newGuarantee: r.fundValue as number, lift: r.room as number })),
     totalLift: Math.round(rs.reduce((n, r) => n + (r.room ?? 0), 0)),
     totalNow: Math.round(rs.reduce((n, r) => n + (r.deathGuarantee ?? 0), 0)),
@@ -233,3 +233,42 @@ export const describeProposalItem = (i: ProposalItem): string => {
     ? `${i.label}${i.owner ? ` (${i.owner})` : ""}: switch about ${m(i.amount)} ${i.direction === "to_income" ? "from equity into income funds" : "from income into equity funds"}${i.taxable ? " [TAXABLE: check the gain first]" : ""}`
     : `${i.label}${i.owner ? ` (${i.owner})` : ""}: reset the death benefit guarantee from ${m(i.currentGuarantee)} to about ${m(i.newGuarantee)}`;
 };
+
+// ───── Rolf's task to carry out an authorized rebalancing ─────
+
+export interface RebalanceTaskPlan { description: string; subtasks: { title: string; description: string }[] }
+const dollars = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
+const first = (name: string | null) => (name ? name.split(" ")[0] : null);
+const itemAccountKey = (id: string) => id.split(":")[1] ?? id;
+const itemAction = (i: ProposalItem) => i.kind === "switch"
+  ? `switch ${dollars(i.exactAmount ?? i.amount)} ${i.direction === "to_income" ? "from equity into income funds" : "from income into equity funds"}`
+  : `reset the death benefit guarantee from ${dollars(i.currentGuarantee)} to ${dollars(i.newGuarantee)} (up ${dollars(i.lift)})`;
+
+/**
+ * The main task grouped by account (the switch and the reset for an account are done together on the iA advisor site) with the pack's exact
+ * figures and a link to the pack, plus one subtask per authorized item to check off as each is done.
+ */
+export function rebalanceTaskPlan(items: ProposalItem[], opts: { clientName: string; label: string; today: string; packUrl: string | null; stored?: string }): RebalanceTaskPlan {
+  const groups = new Map<string, ProposalItem[]>();
+  for (const i of items) { const k = itemAccountKey(i.id); groups.set(k, [...(groups.get(k) ?? []), i]); }
+  const lines: string[] = [];
+  for (const [, g] of groups) {
+    lines.push(`${g[0].label}${g[0].owner ? ` (${first(g[0].owner)})` : ""}${g.some((i) => i.kind === "switch" && i.taxable) ? "  [TAXABLE: check the gain first]" : ""}`);
+    for (const i of g) lines.push(`  - ${itemAction(i).replace(/^./, (c) => c.toUpperCase())}`);
+  }
+  const description = [
+    `${opts.clientName} reviewed the ${opts.label} rebalancing you published and authorized every change below in the portal on ${opts.today}.`,
+    opts.packUrl ? `Advisor pack: ${opts.packUrl}` : "",
+    "",
+    "Confirm the amounts with them first, as they move with markets. Do the switches and resets on the iA advisor site, check off each subtask as you go, then mark the rebalancing done on Georgia Reviews so the family is told. The figures are to the dollar as of the day you published; the client saw them rounded.",
+    "",
+    ...lines,
+    "",
+    opts.stored ?? "The authorization, with the exact wording they agreed to and the items as they saw them, is stored with the family's records.",
+  ].filter((l, idx, a) => !(l === "" && a[idx - 1] === "")).join("\n");
+  const subtasks = items.map((i) => ({
+    title: `${i.label}${i.owner ? ` (${first(i.owner)})` : ""}: ${itemAction(i)}`,
+    description: i.kind === "switch" && i.taxable ? "Taxable account: check the realised gain with the client before switching." : "Authorized by the client in the portal. Check this off when it is done.",
+  }));
+  return { description, subtasks };
+}

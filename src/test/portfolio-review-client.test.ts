@@ -181,3 +181,32 @@ describe("the advisor's own wording for the commentary boxes", () => {
     expect(suggested.mix!.commentary[0]).toMatch(/risk profile/);
   });
 });
+
+import { rebalanceTaskPlan } from "../../supabase/functions/_shared/portfolio-review-client";
+describe("Rolf's task to carry out an authorized rebalancing", () => {
+  const items = proposalItems({
+    switches: [{ id: "switch:a", label: "TFSA …3190", owner: "Albert Parent", direction: "to_income", amount: 9_400, exactAmount: 9_366, taxable: false }, { id: "switch:b", label: "Non-registered …6067", owner: "Albert Parent", direction: "to_income", amount: 7_500, exactAmount: 7_512, taxable: true }],
+    resets: [{ id: "reset:a", label: "TFSA …3190", owner: "Albert Parent", currentGuarantee: 136_018, newGuarantee: 145_261, lift: 9_243 }], totalLift: 9_243, totalNow: 136_018, totalAfter: 145_261, hasTaxable: true });
+  const plan = rebalanceTaskPlan(items, { clientName: "Albert Parent", label: "Q3 2027", today: "2027-08-12", packUrl: "https://app.prosperwise.ca/households/h1/portfolio-review" });
+
+  it("links the pack, and groups each account's switch and reset together with the exact figures", () => {
+    expect(plan.description).toContain("Advisor pack: https://app.prosperwise.ca/households/h1/portfolio-review");
+    expect(plan.description).toMatch(/TFSA …3190 \(Albert\)\n  - Switch \$9,366 from equity into income funds\n  - Reset the death benefit guarantee from \$136,018 to \$145,261 \(up \$9,243\)/);
+    expect(plan.description).toMatch(/Non-registered …6067 \(Albert\)  \[TAXABLE: check the gain first\]\n  - Switch \$7,512/);
+    expect(plan.description).not.toContain("$9,400");
+    expect(plan.description).toContain("check off each subtask");
+  });
+  it("makes one subtask per authorized item, with the taxable caution where it applies", () => {
+    expect(plan.subtasks.map((s) => s.title)).toEqual([
+      "TFSA …3190 (Albert): switch $9,366 from equity into income funds",
+      "Non-registered …6067 (Albert): switch $7,512 from equity into income funds",
+      "TFSA …3190 (Albert): reset the death benefit guarantee from $136,018 to $145,261 (up $9,243)",
+    ]);
+    expect(plan.subtasks[1].description).toMatch(/Taxable account/);
+    expect(plan.subtasks[0].description).toMatch(/Check this off/);
+  });
+  it("falls back to the rounded amount for a proposal frozen before the exact figures were kept", () => {
+    const old = proposalItems({ switches: [{ id: "switch:z", label: "TFSA", owner: null, direction: "to_equity", amount: 2_000, taxable: false }], resets: [], totalLift: 0, totalNow: 0, totalAfter: 0, hasTaxable: false });
+    expect(rebalanceTaskPlan(old, { clientName: "A", label: "Q3", today: "2027-01-01", packUrl: null }).subtasks[0].title).toBe("TFSA: switch $2,000 from income into equity funds");
+  });
+});
