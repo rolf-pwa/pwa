@@ -346,10 +346,22 @@ export interface SwitchRow {
   taxable: boolean;
   /** Value less the start-of-year value, an indicator only (the book cost of each fund is not stored). */
   ytdGain: number | null;
+  /** The account's book value (what the pack holds as its cost) and the gain this switch would likely realise on it. Taxable accounts only. */
+  bookValue: number | null;
+  estGain: number | null;
   /** Death benefit reset on this account: what it adds, when a reset is available. */
   resetLift: number | null;
 }
 export interface RebalancingProposal { rows: SwitchRow[]; toIncome: number; toEquity: number; needed: number; taxable: number; resets: number; resetLift: number }
+
+/**
+ * Estimated capital gain from switching `amount` out of an account worth `value` that cost `bookValue`: the switched share of the account
+ * times the account's gain. An estimate only: the real gain depends on the cost of the particular units sold. Negative is a loss.
+ */
+export function estimateSwitchGain(value: number | null, bookValue: number | null, amount: number): number | null {
+  if (value === null || bookValue === null || !(value > 0) || !(bookValue > 0) || !(amount > 0)) return null;
+  return Math.round(amount * ((value - bookValue) / value));
+}
 
 const isTaxable = (type: string | null | undefined) => /non[\s-]?registered|joint|margin|cash account/i.test(String(type ?? ""));
 
@@ -370,6 +382,8 @@ export function proposeRebalancing(accounts: PackAccountOut[], resets: ResetSumm
       rangeMin: d.rangeMin ?? null, rangeMax: d.rangeMax ?? null, outsideRange: outside,
       direction: aligned ? "none" : diff > 0 ? "to_income" : "to_equity", amount: aligned ? 0 : amount, afterIncomePct: aligned ? a.incomePct : d.targetIncomePct,
       taxable: isTaxable(a.type), ytdGain: a.changeYtd, resetLift: lift,
+      bookValue: isTaxable(a.type) ? a.boyValue : null,
+      estGain: isTaxable(a.type) && !aligned ? estimateSwitchGain(a.value, a.boyValue, amount) : null,
     });
   }
   rows.sort((x, y) => Number(y.outsideRange) - Number(x.outsideRange) || y.amount - x.amount);
@@ -392,7 +406,7 @@ export function rebalancingWorksheet(p: RebalancingProposal, household: string, 
   for (const r of p.rows) {
     const who = `${r.name || "Account"}${r.number ? ` …${String(r.number).replace(/[^0-9A-Za-z]/g, "").slice(-4)}` : ""}${r.owner ? ` (${r.owner})` : ""}`;
     const move = r.direction === "none" ? "mix already on the model" : `switch about ${m(r.amount)} from ${r.direction === "to_income" ? "equity into income" : "income into equity"} funds (${r.incomePct}% income to ${r.afterIncomePct}%)`;
-    const notes = [r.outsideRange ? "OUTSIDE RANGE" : r.direction === "none" ? "" : "inside range, optional", r.taxable ? "TAXABLE: check the gain first" : "", r.resetLift !== null ? `then reset the death guarantee (+${m(r.resetLift)})` : ""].filter(Boolean);
+    const notes = [r.outsideRange ? "OUTSIDE RANGE" : r.direction === "none" ? "" : "inside range, optional", r.taxable ? (r.estGain !== null ? `TAXABLE: estimated ${r.estGain < 0 ? "loss" : "gain"} about ${m(Math.abs(r.estGain))} on book value ${m(r.bookValue as number)}` : "TAXABLE: check the gain first") : "", r.resetLift !== null ? `then reset the death guarantee (+${m(r.resetLift)})` : ""].filter(Boolean);
     lines.push(`- ${who}: ${move}${notes.length ? `. ${notes.join("; ")}` : ""}`);
   }
   lines.push("", `Total: ${m(p.toIncome)} into income funds, ${m(p.toEquity)} into equity funds. ${p.resets} reset${p.resets === 1 ? "" : "s"} adding ${m(p.resetLift)}.`);
