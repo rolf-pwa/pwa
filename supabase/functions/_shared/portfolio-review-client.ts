@@ -11,6 +11,10 @@ export const ALL_INCLUDED: ClientIncludes = { returns: true, mix: true, funds: t
 export interface ClientAccount { /** A short name for charts: the account type and the last four digits. */ label: string; name: string; owner: string | null; last4: string | null; value: number | null; changeYtd: number | null; ytdPct: number | null; oneYearPct: number | null; threeYearPct: number | null }
 export type MixStatus = "inside" | "below" | "above" | "unknown";
 export interface ClientView {
+  /** Which page this is. Absent on views published before rebalances used the same page: treat as a review. */
+  kind?: ViewKind;
+  /** The Tier 1 rebalancing: the switches and the death benefit resets as items the client ticks and authorizes. */
+  proposal?: ClientProposal | null;
   householdLabel: string;
   valuesAsOf: string | null;
   note: string;
@@ -103,12 +107,23 @@ export function fundsCommentary(mc: NonNullable<Pack["household"]["modelComparis
   return [`Your funds line up closely with our ${label} model portfolio.`];
 }
 
-export function buildClientView(pack: Pack, includes: ClientIncludes, note: string, householdLabel: string): ClientView {
+/**
+ * "review" is the Portfolio Review (Tier 2: the proposal is shown for discussion at the meeting). "rebalance" is the Tier 1 rebalancing: the same
+ * page and the same pack, but the client sees only the funds against the model, the death benefit reset and the proposal, and the proposal is
+ * theirs to tick and authorize.
+ */
+export type ViewKind = "review" | "rebalance";
+export const REBALANCE_SECTIONS: ClientIncludes = { returns: false, mix: false, funds: true, reset: true, rebalancing: true };
+
+export function buildClientView(pack: Pack, includesIn: ClientIncludes, note: string, householdLabel: string, kind: ViewKind = "review"): ClientView {
+  // A rebalance never shows the values and the mix; the three other sections can still be switched off.
+  const includes: ClientIncludes = kind === "rebalance" ? { ...REBALANCE_SECTIONS, funds: includesIn.funds, reset: includesIn.reset, rebalancing: includesIn.rebalancing } : includesIn;
   const h = pack.household;
   const covered = h.classTotals.income + h.classTotals.canadian_equity + h.classTotals.us_intl_equity + h.classTotals.equity_other;
   const equity = covered > 0 ? 100 - round1((h.classTotals.income / covered) * 100) : null;
   const mc = h.modelComparison;
   return {
+    kind,
     householdLabel,
     valuesAsOf: pack.asOf,
     note: note.trim(),
@@ -131,7 +146,8 @@ export function buildClientView(pack: Pack, includes: ClientIncludes, note: stri
     funds: includes.funds && mc
       ? { commentary: fundsCommentary(mc), modelLabel: mc.modelLabel, modelAsOf: mc.modelAsOf, heldInModelPct: round1(100 - mc.offModelPct), rows: mc.rows.map((r) => ({ name: r.name, modelPct: r.modelPct, heldPct: r.actualPct, inModel: r.inModel })) }
       : null,
-    rebalance: includes.rebalancing && pack.rebalancing.rows.some((r) => r.outsideRange && r.direction !== "none")
+    proposal: kind === "rebalance" && includes.rebalancing ? buildClientProposal(pack) : null,
+    rebalance: kind === "review" && includes.rebalancing && pack.rebalancing.rows.some((r) => r.outsideRange && r.direction !== "none")
       ? (() => {
         const rows = pack.rebalancing.rows.filter((r) => r.outsideRange && r.direction !== "none");
         return { rows: rows.map((r) => ({ label: shortAccountName(r.name, r.number), owner: r.owner, direction: r.direction as "to_income" | "to_equity", amount: Math.round(r.amount / 100) * 100, taxable: r.taxable })), hasTaxable: rows.some((r) => r.taxable) };

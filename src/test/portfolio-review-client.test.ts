@@ -133,3 +133,32 @@ describe("the Tier 1 rebalancing proposal", () => {
     expect(describeProposalItem(items[1])).toMatch(/reset the death benefit guarantee from \$90,000 to about \$100,000/);
   });
 });
+
+describe("the rebalance: the same page as the review, three sections", () => {
+  const inc = (income: number, equity: number) => [{ name: "I", category: "Income Funds", value: income * 1000 }, { name: "E", category: "Canadian Equity funds", value: equity * 1000 }];
+  const prof = [{ accountNumber: null, label: null, incomePct: 40, equityPct: 60, bandPct: 0, profileKey: "balanced" }];
+  const gtee = { series: "Series 75/100", maturityDate: null, guaranteedAtMaturity: 1, guaranteedAtDeath: 90_000, lastQuarterFee: 1, valueOfFunds: 100_000 };
+  const pk = () => buildPortfolioPack({ accounts: [acct({ id: "a", number: "1111", type: "TFSA", value: 100_000, ownerDob: "1955-06-01", guarantee: gtee, statement: { statementDate: "2026-09-30", funds: inc(34, 66) } })], profiles: prof, today: "2026-10-14", models: [balanced] });
+
+  it("shows only the funds against the model, the death benefit reset and the proposal, whatever else is asked for", () => {
+    const v = buildClientView(pk(), ALL_INCLUDED, "Moving back to the Balanced mix.", "H", "rebalance");
+    expect(v.kind).toBe("rebalance");
+    expect([v.accounts, v.mix]).toEqual([null, null]);
+    expect(v.funds).not.toBeNull();
+    expect(v.proposal!.resets.length).toBe(1);
+    expect(v.proposal!.switches.map((s) => s.id)).toEqual(["switch:a"]);
+    expect(v.rebalance).toBeNull();
+  });
+  it("lets the three sections be switched off one by one", () => {
+    const v = buildClientView(pk(), { ...ALL_INCLUDED, funds: false, reset: false }, "x", "H", "rebalance");
+    expect([v.funds, v.reset]).toEqual([null, null]);
+    expect(v.proposal).not.toBeNull();
+  });
+  it("leaves the Portfolio Review as it was: everything on offer, the proposal for discussion only", () => {
+    const v = buildClientView(pk(), ALL_INCLUDED, "", "H");
+    expect(v.kind).toBe("review");
+    expect(v.proposal).toBeNull();
+    expect(v.accounts).not.toBeNull();
+    expect(v.rebalance).not.toBeNull();
+  });
+});

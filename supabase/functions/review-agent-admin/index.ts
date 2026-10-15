@@ -148,8 +148,10 @@ Deno.serve(async (req) => {
       const { data: hh } = await db.from("households").select("id, label, family_id, service_tier, families(name)").eq("id", householdId).maybeSingle();
       if (!hh) return json({ error: "Household not found" }, 404);
       const { pack, profiles, models } = await portfolioPackFor(db, householdId, pacificDate(Date.now()));
-      const { data: pub } = await db.from("portfolio_review_publications").select("id, published_at, published_by, note, includes").eq("household_id", householdId).is("unpublished_at", null).order("published_at", { ascending: false }).limit(1).maybeSingle();
-      return json({ household: { id: hh.id, label: hh.label, family_id: hh.family_id, family_name: (hh as any).families?.name ?? null, service_tier: hh.service_tier }, pack, profiles, models, publication: pub ?? null });
+      const { data: pub } = await db.from("portfolio_review_publications").select("id, published_at, published_by, note, includes").eq("household_id", householdId).eq("kind", "review").is("unpublished_at", null).order("published_at", { ascending: false }).limit(1).maybeSingle();
+      const { data: rebPub } = await db.from("portfolio_review_publications").select("id, published_at, published_by, note, includes").eq("household_id", householdId).eq("kind", "rebalance").is("unpublished_at", null).order("published_at", { ascending: false }).limit(1).maybeSingle();
+      const { data: rebOb } = await db.from("review_obligations").select("id, window_start, window_end, status, published_at, acknowledged_at, completed_at").eq("household_id", householdId).eq("kind", "rebalancing").eq("mode", "live").neq("status", "cancelled").is("completed_at", null).order("window_start", { ascending: false }).limit(1).maybeSingle();
+      return json({ household: { id: hh.id, label: hh.label, family_id: hh.family_id, family_name: (hh as any).families?.name ?? null, service_tier: hh.service_tier }, pack, profiles, models, publication: pub ?? null, rebalancePublication: rebPub ?? null, rebalancingObligation: rebOb ?? null });
     }
     // ── Publish the Portfolio Review to the client's portal: the view is built here from the pack, frozen, and Georgia lets the household's adults know ──
     if (action === "publishPortfolioReview") {
@@ -158,15 +160,37 @@ Deno.serve(async (req) => {
       const inc = body?.includes ?? {};
       const includes: ClientIncludes = { returns: inc.returns !== false, mix: inc.mix !== false, funds: inc.funds !== false, reset: inc.reset !== false, rebalancing: inc.rebalancing !== false };
       const note = String(body?.note ?? "").slice(0, 2000);
-      const { data: hh } = await db.from("households").select("id, label").eq("id", householdId).maybeSingle();
+      const kind: "review" | "rebalance" = body?.kind === "rebalance" ? "rebalance" : "review";
+      const { data: hh } = await db.from("households").select("id, label, family_id").eq("id", householdId).maybeSingle();
       if (!hh) return json({ error: "Household not found" }, 404);
       const { pack } = await portfolioPackFor(db, householdId, pacificDate(Date.now()));
       if (!pack.accounts.length) return json({ error: "There are no managed accounts to show." }, 400);
-      const view = buildClientView(pack, includes, note, hh.label ?? "Household");
-      const { data: prior } = await db.from("portfolio_review_publications").select("id, notified_at").eq("household_id", householdId).is("unpublished_at", null);
+      const view = buildClientView(pack, includes, note, hh.label ?? "Household", kind);
+
+      // The Tier 1 rebalancing: the same page and pack, tied to the household's rebalancing obligation so Georgia's reminders, the task and "to carry out" keep working.
+      if (kind === "rebalance") {
+        if (note.trim().length < 10) return json({ error: "Write a short note for the client (at least a sentence)." }, 400);
+        const { data: ob } = await db.from("review_obligations").select("*").eq("household_id", householdId).eq("kind", "rebalancing").eq("mode", "live").neq("status", "cancelled").is("completed_at", null).order("window_start", { ascending: false }).limit(1).maybeSingle();
+        if (!ob) return json({ error: "No rebalancing is due for this household." }, 400);
+        if (ob.acknowledged_at) return json({ error: "The client has already authorized this rebalancing." }, 400);
+        if (!view.proposal && !view.funds) return json({ error: "There is nothing to show: the household has no fund detail or nothing to propose." }, 400);
+        const nowIso = new Date().toISOString();
+        const wasPublished = Boolean(ob.published_at);
+        await db.from("review_obligations").update({ published_at: ob.published_at ?? nowIso, published_by: staff.userId, proposal_summary: note.trim(), proposal: view.proposal ?? null, updated_at: nowIso }).eq("id", ob.id);
+        await db.from("portfolio_review_publications").update({ unpublished_at: nowIso }).eq("household_id", householdId).eq("kind", "rebalance").is("unpublished_at", null);
+        const { error: pe } = await db.from("portfolio_review_publications").insert({ household_id: householdId, kind: "rebalance", obligation_id: ob.id, published_by: staff.email, note: note.trim(), includes, view });
+        if (pe) return json({ error: pe.message }, 400);
+        if (!wasPublished) {
+          const { data: adults } = await db.from("contacts").select("id").eq("household_id", householdId).in("family_role", ["head_of_household", "head_of_family", "spouse"]).eq("is_minor", false);
+          for (const a of adults ?? []) await db.from("portal_client_notifications").insert({ contact_id: a.id, title: "Your rebalancing is ready to review", body: "Rolf has prepared a rebalancing for you. Sign in to review it.", source_type: "rebalancing", link_tab: "dashboard" });
+        }
+        await db.from("review_agent_events").insert({ family_id: ob.family_id, obligation_id: ob.id, mode: ob.mode, kind: wasPublished ? "rebalancing_republished" : "rebalancing_published", detail: { by: staff.email, via: "pack" } });
+        return json({ ok: true, emailed: 0, updated: wasPublished });
+      }
+      const { data: prior } = await db.from("portfolio_review_publications").select("id, notified_at").eq("household_id", householdId).eq("kind", "review").is("unpublished_at", null);
       const firstTime = !(prior ?? []).some((p: any) => p.notified_at);
-      await db.from("portfolio_review_publications").update({ unpublished_at: new Date().toISOString() }).eq("household_id", householdId).is("unpublished_at", null);
-      const { data: row, error } = await db.from("portfolio_review_publications").insert({ household_id: householdId, published_by: staff.email, note: note || null, includes, view }).select("id").single();
+      await db.from("portfolio_review_publications").update({ unpublished_at: new Date().toISOString() }).eq("household_id", householdId).eq("kind", "review").is("unpublished_at", null);
+      const { data: row, error } = await db.from("portfolio_review_publications").insert({ household_id: householdId, kind: "review", published_by: staff.email, note: note || null, includes, view }).select("id").single();
       if (error) return json({ error: error.message }, 400);
       let notified = 0;
       if (firstTime) {
@@ -187,7 +211,15 @@ Deno.serve(async (req) => {
     }
     if (action === "unpublishPortfolioReview") {
       const householdId = String(body?.householdId ?? "");
-      await db.from("portfolio_review_publications").update({ unpublished_at: new Date().toISOString() }).eq("household_id", householdId).is("unpublished_at", null);
+      if (body?.kind === "rebalance") {
+        const { data: ob } = await db.from("review_obligations").select("id, acknowledged_at").eq("household_id", householdId).eq("kind", "rebalancing").eq("mode", "live").neq("status", "cancelled").is("completed_at", null).order("window_start", { ascending: false }).limit(1).maybeSingle();
+        if (ob?.acknowledged_at) return json({ error: "The client has already authorized this one, so it can't be taken back." }, 400);
+        if (ob) await db.from("review_obligations").update({ published_at: null, proposal_summary: null, proposal: null, updated_at: new Date().toISOString() }).eq("id", ob.id);
+        await db.from("portfolio_review_publications").update({ unpublished_at: new Date().toISOString() }).eq("household_id", householdId).eq("kind", "rebalance").is("unpublished_at", null);
+        await db.from("review_agent_events").insert({ family_id: null, mode: "live", kind: "rebalancing_unpublished", detail: { household_id: householdId, by: staff.email, via: "pack" } });
+        return json({ ok: true });
+      }
+      await db.from("portfolio_review_publications").update({ unpublished_at: new Date().toISOString() }).eq("household_id", householdId).eq("kind", "review").is("unpublished_at", null);
       await db.from("review_agent_events").insert({ family_id: null, mode: "live", kind: "portfolio_review_unpublished", detail: { household_id: householdId, by: staff.email } });
       return json({ ok: true });
     }
@@ -203,7 +235,7 @@ Deno.serve(async (req) => {
       let q = db.from("review_obligations").select("kind, window_start, window_end, status").eq("family_id", hh.family_id).eq("mode", mode).neq("status", "cancelled");
       q = pooled ? q.is("household_id", null) : q.eq("household_id", householdId);
       const { data: obligations } = await q;
-      const { count } = await db.from("portfolio_review_publications").select("id", { count: "exact", head: true }).eq("household_id", householdId).is("unpublished_at", null);
+      const { count } = await db.from("portfolio_review_publications").select("id", { count: "exact", head: true }).eq("household_id", householdId).eq("kind", "review").is("unpublished_at", null);
       return json({ tier: pooled ? fam?.service_tier ?? null : hh.service_tier ?? null, hasRatifiedCharter: Boolean(fam?.has_ratified_charter), obligations: obligations ?? [], publishedReview: (count ?? 0) > 0 });
     }
 

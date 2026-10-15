@@ -11,7 +11,7 @@ const tint = (c: string, a: number) => `${c.slice(0, -1)} / ${a})`;
  * What I propose, for the client to review: the switches and the death benefit resets, each with a tick. The whole rebalancing is authorized
  * once every item is ticked ("Authorize"), or the client asks to talk it through first. Highlighted. In a staff preview the controls cannot be used.
  */
-export function PortalProposal({ proposal: p, statement, onAuthorize, onTalk, title = "What I propose" }: { proposal: ClientProposal; statement: string; onAuthorize?: (ids: string[]) => Promise<void>; onTalk?: () => Promise<void>; title?: string }) {
+export function PortalProposal({ proposal: p, statement, onAuthorize, onTalk, title = "What I propose", showResetHeadline = true }: { proposal: ClientProposal; statement: string; onAuthorize?: (ids: string[]) => Promise<void>; onTalk?: () => Promise<void>; title?: string; showResetHeadline?: boolean }) {
   const all = [...p.switches, ...p.resets];
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -51,11 +51,11 @@ export function PortalProposal({ proposal: p, statement, onAuthorize, onTalk, ti
       {p.resets.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Death benefit guarantee resets</p>
-          <div className="rounded-lg p-3 text-center" style={{ background: tint(B.cloud, 0.6) }}>
+          {showResetHeadline && <div className="rounded-lg p-3 text-center" style={{ background: tint(B.cloud, 0.6) }}>
             <p className="text-xs" style={{ color: B.navy }}>Your death benefit guarantee after this year's reset</p>
             <p className="font-serif text-2xl font-semibold" style={{ color: B.navy }}>{money(p.totalAfter)}</p>
             <p className="text-xs" style={{ color: B.navy }}>up {money(p.totalLift)} from {money(p.totalNow)} today. A reset costs nothing and does not change your fees.</p>
-          </div>
+          </div>}
           <ul className="space-y-2.5">
             {p.resets.map((r) => (
               <li key={r.id} className="flex items-start gap-3 rounded-lg bg-card/80 p-3">
