@@ -23,9 +23,9 @@ const REBALANCE_CHOICES: (keyof ClientIncludes)[] = ["funds", "reset", "rebalanc
  * Publish to the client's portal from the one advisor pack. Two kinds, the same page: the Portfolio Review (Tier 2, discussed at the meeting) and
  * the Tier 1 rebalancing (the client sees only the funds against the model, the death benefit reset and the proposal, and authorizes it).
  */
-export function PublishToClient({ householdId, householdLabel, pack, publication, rebalancePublication = null, rebalancingObligation = null, onChanged }: {
+export function PublishToClient({ householdId, householdLabel, pack, publication, rebalancePublication = null, rebalancingObligation = null, rebalanceProgress = [], onChanged }: {
   householdId: string; householdLabel: string; pack: PortfolioPack; publication: PortfolioPackResponse["publication"];
-  rebalancePublication?: PortfolioPackResponse["rebalancePublication"]; rebalancingObligation?: PortfolioPackResponse["rebalancingObligation"]; onChanged: () => void;
+  rebalancePublication?: PortfolioPackResponse["rebalancePublication"]; rebalancingObligation?: PortfolioPackResponse["rebalancingObligation"]; rebalanceProgress?: PortfolioPackResponse["rebalanceProgress"]; onChanged: () => void;
 }) {
   const [open, setOpen] = useState<ViewKind | null>(null);
   const [note, setNote] = useState("");
@@ -74,7 +74,14 @@ export function PublishToClient({ householdId, householdLabel, pack, publication
               {authorized
                 ? <p>The client authorized it on {when(ob!.acknowledged_at!)}. A task is on your list to carry it out; mark it done on Georgia Reviews.</p>
                 : rebalancePublication
-                  ? <p>Published {when(rebalancePublication.published_at)} by {rebalancePublication.published_by}. Waiting for the client to review and authorize it.</p>
+                  ? <div className="space-y-1">
+                      <p>Published {when(rebalancePublication.published_at)} by {rebalancePublication.published_by}. Each account holder authorizes the changes to their own accounts from their own portal.</p>
+                      {rebalanceProgress.length > 0 && (
+                        <ul className="space-y-0.5 text-xs" data-testid="rebalance-progress">
+                          {rebalanceProgress.map((p) => <li key={p.owner}><span className="font-medium">{p.owner}</span>: {p.authorized === p.total ? `authorized all ${p.total}${p.at ? ` on ${when(p.at)}` : ""}` : p.authorized > 0 ? `${p.authorized} of ${p.total} authorized` : `waiting (${p.total} ${p.total === 1 ? "change" : "changes"})`}</li>)}
+                        </ul>
+                      )}
+                    </div>
                   : <p className="text-muted-foreground">The client sees only the funds against our model portfolio, the death benefit reset and what you propose, and authorizes it item by item.</p>}
               {!authorized && (
                 <div className="flex gap-2">

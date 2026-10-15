@@ -157,8 +157,24 @@ Deno.serve(async (req) => {
       const { pack, profiles, models } = await portfolioPackFor(db, householdId, pacificDate(Date.now()));
       const { data: pub } = await db.from("portfolio_review_publications").select("id, published_at, published_by, note, includes").eq("household_id", householdId).eq("kind", "review").is("unpublished_at", null).order("published_at", { ascending: false }).limit(1).maybeSingle();
       const { data: rebPub } = await db.from("portfolio_review_publications").select("id, published_at, published_by, note, includes").eq("household_id", householdId).eq("kind", "rebalance").is("unpublished_at", null).order("published_at", { ascending: false }).limit(1).maybeSingle();
-      const { data: rebOb } = await db.from("review_obligations").select("id, window_start, window_end, status, published_at, acknowledged_at, completed_at").eq("household_id", householdId).eq("kind", "rebalancing").eq("mode", "live").neq("status", "cancelled").is("completed_at", null).gte("window_end", pacificDate(Date.now())).order("window_start", { ascending: true }).limit(1).maybeSingle();
-      return json({ household: { id: hh.id, label: hh.label, family_id: hh.family_id, family_name: (hh as any).families?.name ?? null, service_tier: hh.service_tier }, pack, profiles, models, publication: pub ?? null, rebalancePublication: rebPub ?? null, rebalancingObligation: rebOb ?? null });
+      const { data: rebOb } = await db.from("review_obligations").select("id, window_start, window_end, status, published_at, acknowledged_at, completed_at, proposal").eq("household_id", householdId).eq("kind", "rebalancing").eq("mode", "live").neq("status", "cancelled").is("completed_at", null).gte("window_end", pacificDate(Date.now())).order("window_start", { ascending: true }).limit(1).maybeSingle();
+      // How far each account holder has got with authorizing the changes to their own accounts.
+      let rebalanceProgress: { owner: string; total: number; authorized: number; at: string | null }[] = [];
+      if (rebOb?.proposal && rebOb.published_at) {
+        const { data: acks } = await db.from("rebalance_acknowledgements").select("items, created_at").eq("obligation_id", rebOb.id).eq("decision", "acknowledged");
+        const doneAt = new Map<string, string>();
+        for (const a of acks ?? []) for (const i of Array.isArray(a.items) ? a.items : []) doneAt.set(String(i.id), a.created_at);
+        const byOwner = new Map<string, { owner: string; total: number; authorized: number; at: string | null }>();
+        for (const i of [...(rebOb.proposal.switches ?? []), ...(rebOb.proposal.resets ?? [])]) {
+          const key = i.ownerId ?? i.owner ?? "owner";
+          const row = byOwner.get(key) ?? { owner: i.owner ?? "Account holder", total: 0, authorized: 0, at: null };
+          row.total++;
+          if (doneAt.has(i.id)) { row.authorized++; row.at = doneAt.get(i.id) ?? row.at; }
+          byOwner.set(key, row);
+        }
+        rebalanceProgress = [...byOwner.values()];
+      }
+      return json({ household: { id: hh.id, label: hh.label, family_id: hh.family_id, family_name: (hh as any).families?.name ?? null, service_tier: hh.service_tier }, pack, profiles, models, publication: pub ?? null, rebalancePublication: rebPub ?? null, rebalancingObligation: rebOb ? { id: rebOb.id, window_start: rebOb.window_start, window_end: rebOb.window_end, status: rebOb.status, published_at: rebOb.published_at, acknowledged_at: rebOb.acknowledged_at, completed_at: rebOb.completed_at } : null, rebalanceProgress });
     }
     // ── Publish the Portfolio Review to the client's portal: the view is built here from the pack, frozen, and Georgia lets the household's adults know ──
     if (action === "publishPortfolioReview") {

@@ -43,6 +43,7 @@ export interface PortfolioPackResponse {
   profiles: { id: string; account_number: string | null; label: string | null; income_pct: number | null; equity_pct: number | null; band_pct: number; as_of: string | null; updated_by: string | null; profile_key: string | null }[];
   models: ModelPortfolio[];
   rebalancePublication: { id: string; published_at: string; published_by: string; note: string | null; includes: { returns: boolean; mix: boolean; funds: boolean; reset: boolean; rebalancing?: boolean; narratives?: { mix?: string | null; funds?: string | null } } } | null;
+  rebalanceProgress: { owner: string; total: number; authorized: number; at: string | null }[];
   rebalancingObligation: { id: string; window_start: string; window_end: string; status: string; published_at: string | null; acknowledged_at: string | null; completed_at: string | null } | null;
   publication: { id: string; published_at: string; published_by: string; note: string | null; includes: { returns: boolean; mix: boolean; funds: boolean; reset: boolean; rebalancing?: boolean; narratives?: { mix?: string | null; funds?: string | null } } } | null;
 }

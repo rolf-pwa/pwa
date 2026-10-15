@@ -418,7 +418,8 @@ function MyTasksWidget() {
       for (const p of projects as PmProject[]) names[p.id] = p.name;
       setProjectNames(names);
 
-      const incomplete = myTasks.filter((t) => t.status !== "done");
+      // Subtasks sit under their parent (open the parent to see and check them off); the list shows the tasks themselves.
+      const incomplete = myTasks.filter((t) => t.status !== "done" && !t.parent_task_id);
       setEntityLinks(await resolveTaskEntityLinks(incomplete));
       const sorted = [...incomplete].sort((a, b) => {
         if (!a.due_date && !b.due_date) return 0;

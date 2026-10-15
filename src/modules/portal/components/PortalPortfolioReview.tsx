@@ -101,7 +101,7 @@ function Segments({ parts, label }: { parts: { pct: number; bg: string; title: s
  * The household's Portfolio Review, as Rolf approved it. Every figure was worked out in code and frozen when he published; the client sees
  * exactly that. Built to be looked at, not read: charts first, the numbers behind them one tap away. Staff see it too, as a preview.
  */
-export function PortalPortfolioReview({ view, publishedAt, preview = false, statement, onAuthorize, onTalk, authorized }: { view: ClientView; publishedAt?: string; preview?: boolean; statement?: string; onAuthorize?: (ids: string[]) => Promise<void>; onTalk?: () => Promise<void>; authorized?: { at: string } | null }) {
+export function PortalPortfolioReview({ view, publishedAt, preview = false, statement, onAuthorize, onTalk, authorized, viewerId, authorizedIds }: { view: ClientView; publishedAt?: string; preview?: boolean; statement?: string; onAuthorize?: (ids: string[]) => Promise<void>; onTalk?: () => Promise<void>; authorized?: { at: string } | null; viewerId?: string | null; authorizedIds?: string[] }) {
   const isRebalance = view.kind === "rebalance";
   const history = view.history ?? [];
   const up = (view.summary.ytdPct ?? 0) >= 0;
@@ -236,7 +236,7 @@ export function PortalPortfolioReview({ view, publishedAt, preview = false, stat
 
         {view.proposal && isRebalance && (authorized
           ? <div className="flex items-start gap-2 rounded-lg p-3 text-sm" style={{ background: tint(B.cloud, 0.6), color: B.navy }}><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /><p>You authorized this on {dayShort(authorized.at)}. I will confirm the amounts with you, carry it out, and let you know when it is done.</p></div>
-          : <PortalProposal proposal={view.proposal} statement={statement ?? ""} onAuthorize={onAuthorize} onTalk={onTalk} showResetHeadline={!view.reset} />)}
+          : <PortalProposal proposal={view.proposal} statement={statement ?? ""} onAuthorize={onAuthorize} onTalk={onTalk} showResetHeadline={!view.reset} viewerId={viewerId} authorizedIds={authorizedIds} />)}
 
         <div className="space-y-1 border-t border-border pt-3">
           {view.disclosures.map((d, i) => <p key={i} className="text-[11px] leading-snug text-muted-foreground">{d}</p>)}

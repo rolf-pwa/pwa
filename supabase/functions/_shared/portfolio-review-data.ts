@@ -70,7 +70,7 @@ export async function portfolioPackFor(db: any, householdId: string, today: stri
     const latest = snaps[0] ?? null;
     const prior = latest ? snaps.find((s: any) => s.snapshot_date < latest.snapshot_date) ?? null : null;
     return {
-      id: a.id, name: a.account_name ?? "", number: a.account_number ?? null, type: a.account_type ?? null, custodian: a.custodian ?? null, owner: ownerOf.get(a.contact_id) ?? null,
+      id: a.id, name: a.account_name ?? "", number: a.account_number ?? null, type: a.account_type ?? null, custodian: a.custodian ?? null, owner: ownerOf.get(a.contact_id) ?? null, ownerId: a.contact_id ?? null,
       value: num(latest?.current_value) ?? num(a.current_value), boyValue: num(latest?.boy_value) ?? num(a.book_value), asOf: latest?.snapshot_date ?? null,
       returns: { ytd: num(latest?.ror_ytd), sixMonth: num(latest?.ror_6m), oneYear: num(latest?.ror_1y), threeYear: num(latest?.ror_3y), fiveYear: num(latest?.ror_5y), sinceInception: num(latest?.ror_since_inception) },
       priorValue: num(prior?.current_value), priorAsOf: prior?.snapshot_date ?? null,

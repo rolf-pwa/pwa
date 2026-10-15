@@ -610,7 +610,7 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
     }
 
     // The family's portfolio rebalancing, when its window is open: only for adults, and only once Georgia has made it live.
-    let rebalancing: { view: unknown; proposal: unknown; label: string; summary: string; publishedAt: string; acknowledgedAt: string | null; completedAt: string | null; statement: string; statementVersion: string } | null = null;
+    let rebalancing: { authorizedIds: string[]; viewerId: string | null; view: unknown; proposal: unknown; label: string; summary: string; publishedAt: string; acknowledgedAt: string | null; completedAt: string | null; statement: string; statementVersion: string } | null = null;
     try {
       const { data: rHeads } = familyId ? await supabase.from("contacts").select("household_id").eq("family_id", familyId).eq("family_role", "head_of_family") : { data: [] as any[] };
       if (familyId && isFamilyAdult({ role: contactRes.data?.family_role ?? null, isMinor: contactRes.data?.is_minor, householdId: contactRes.data?.household_id }, (rHeads ?? []).map((h: any) => h.household_id))) {
@@ -620,10 +620,13 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
         // The rebalance page (the same format as the review, fewer sections), frozen when Rolf published it.
         const { data: rebPub } = contactRes.data?.household_id ? await supabase.from("portfolio_review_publications").select("view").eq("household_id", contactRes.data.household_id).eq("kind", "rebalance").is("unpublished_at", null).order("published_at", { ascending: false }).limit(1).maybeSingle() : { data: null as any };
         const rebView = rebPub?.view ?? null;
-        const { data: ob } = await scopeToUnit(supabase.from("review_obligations").select("window_start, window_end, published_at, proposal_summary, proposal, acknowledged_at, completed_at").eq("family_id", familyId).eq("kind", "rebalancing").eq("mode", "live").neq("status", "cancelled").not("published_at", "is", null).lte("window_start", today), rUnit).order("window_start", { ascending: false }).limit(1).maybeSingle();
+        const { data: ob } = await scopeToUnit(supabase.from("review_obligations").select("id, window_start, window_end, published_at, proposal_summary, proposal, acknowledged_at, completed_at").eq("family_id", familyId).eq("kind", "rebalancing").eq("mode", "live").neq("status", "cancelled").not("published_at", "is", null).lte("window_start", today), rUnit).order("window_start", { ascending: false }).limit(1).maybeSingle();
+        // Which items have been authorized so far, by whichever account holder: each person authorizes the changes to their own accounts.
+        const { data: rebAcks } = ob?.id ? await supabase.from("rebalance_acknowledgements").select("items").eq("obligation_id", ob.id).eq("decision", "acknowledged") : { data: [] as any[] };
+        const rebAuthorized = [...new Set((rebAcks ?? []).flatMap((a: any) => (Array.isArray(a.items) ? a.items.map((i: any) => String(i.id)) : [])))] as string[];
         // A completed one stays on the card for a month, then goes quiet; one still being worked on stays until it is done.
         const recent = ob && (!ob.completed_at || Date.now() - Date.parse(ob.completed_at) < 30 * 86_400_000);
-        if (ob && recent) rebalancing = { view: rebView, proposal: ob.proposal ?? null, label: windowLabel(ob.window_start, ob.window_end), summary: ob.proposal_summary ?? "", publishedAt: ob.published_at, acknowledgedAt: ob.acknowledged_at ?? null, completedAt: ob.completed_at ?? null, statement: REBALANCE_STATEMENT, statementVersion: REBALANCE_STATEMENT_VERSION };
+        if (ob && recent) rebalancing = { authorizedIds: rebAuthorized, viewerId: contactRes.data?.id ?? null, view: rebView, proposal: ob.proposal ?? null, label: windowLabel(ob.window_start, ob.window_end), summary: ob.proposal_summary ?? "", publishedAt: ob.published_at, acknowledgedAt: ob.acknowledged_at ?? null, completedAt: ob.completed_at ?? null, statement: REBALANCE_STATEMENT, statementVersion: REBALANCE_STATEMENT_VERSION };
       }
     } catch (e) {
       console.error("[portal-validate] rebalancing fetch error", e);
