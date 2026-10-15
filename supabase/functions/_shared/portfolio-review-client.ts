@@ -165,3 +165,46 @@ export function portfolioReviewReadyEmail(firstName: string, portalUrl: string, 
     </div>`.trim(),
   };
 }
+
+// ───── The Tier 1 rebalancing proposal ─────
+// What a Tier 1 household reviews and authorizes in its portal: the switches by asset class (accounts outside their profile's range) and the
+// death benefit resets, each as an item the client acknowledges. Built from the pack when Rolf publishes, and frozen with the rebalancing.
+
+export interface ProposalSwitch { id: string; label: string; owner: string | null; direction: "to_income" | "to_equity"; amount: number; taxable: boolean }
+export interface ProposalReset { id: string; label: string; owner: string | null; currentGuarantee: number; newGuarantee: number; lift: number }
+export interface ClientProposal { switches: ProposalSwitch[]; resets: ProposalReset[]; totalLift: number; totalNow: number; totalAfter: number; hasTaxable: boolean }
+export type ProposalItem = (ProposalSwitch & { kind: "switch" }) | (ProposalReset & { kind: "reset" });
+
+export function buildClientProposal(pack: Pack): ClientProposal | null {
+  const sw = pack.rebalancing.rows.filter((r) => r.outsideRange && r.direction !== "none");
+  const rs = pack.resets.rows.filter((r) => r.status === "reset");
+  if (!sw.length && !rs.length) return null;
+  return {
+    switches: sw.map((r) => ({ id: `switch:${r.accountId}`, label: shortAccountName(r.name, r.number), owner: r.owner, direction: r.direction as "to_income" | "to_equity", amount: Math.round(r.amount / 100) * 100, taxable: r.taxable })),
+    resets: rs.map((r) => ({ id: `reset:${r.accountId}`, label: shortAccountName(r.name, r.number), owner: r.owner, currentGuarantee: r.deathGuarantee as number, newGuarantee: r.fundValue as number, lift: r.room as number })),
+    totalLift: Math.round(rs.reduce((n, r) => n + (r.room ?? 0), 0)),
+    totalNow: Math.round(rs.reduce((n, r) => n + (r.deathGuarantee ?? 0), 0)),
+    totalAfter: Math.round(rs.reduce((n, r) => n + (r.fundValue ?? 0), 0)),
+    hasTaxable: sw.some((r) => r.taxable),
+  };
+}
+
+export const proposalItems = (p: ClientProposal | null | undefined): ProposalItem[] =>
+  p ? [...p.switches.map((s) => ({ ...s, kind: "switch" as const })), ...p.resets.map((r) => ({ ...r, kind: "reset" as const }))] : [];
+
+/** A rebalancing is authorized as a whole: every item in the proposal must be acknowledged, and nothing that is not in it. */
+export function checkAllAcknowledged(p: ClientProposal | null | undefined, itemIds: string[]): { ok: true; items: ProposalItem[] } | { ok: false; error: string } {
+  const items = proposalItems(p);
+  const ids = new Set(itemIds);
+  if (!items.length) return { ok: true, items };
+  if (itemIds.some((id) => !items.some((i) => i.id === id))) return { ok: false, error: "That item is not part of this rebalancing." };
+  if (items.some((i) => !ids.has(i.id))) return { ok: false, error: "Tick every change you have reviewed before authorizing, or ask to talk it through." };
+  return { ok: true, items };
+}
+
+export const describeProposalItem = (i: ProposalItem): string => {
+  const m = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
+  return i.kind === "switch"
+    ? `${i.label}${i.owner ? ` (${i.owner})` : ""}: switch about ${m(i.amount)} ${i.direction === "to_income" ? "from equity into income funds" : "from income into equity funds"}${i.taxable ? " [TAXABLE: check the gain first]" : ""}`
+    : `${i.label}${i.owner ? ` (${i.owner})` : ""}: reset the death benefit guarantee from ${m(i.currentGuarantee)} to about ${m(i.newGuarantee)}`;
+};

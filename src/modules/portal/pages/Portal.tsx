@@ -31,7 +31,7 @@ import { Grape, ScrollText, Clock, Calendar, FolderOpen, CheckSquare, ShieldChec
 import { getPortalSession, setPortalSession, clearPortalSession } from "@/modules/portal/lib/portalSession";
 import prosperwiseLogo from "@/assets/prosperwise-icon-paper.png";
 import { policyTypeLabel } from "@/shared/lib/insurance";
-import { PortalRebalancing, type RebalancingState } from "@/modules/portal/components/PortalRebalancing";
+import { PortalRebalancing, PortalRebalancingPage, PortalRebalancingTeaser, type RebalancingState } from "@/modules/portal/components/PortalRebalancing";
 import { PortalReviewTeaser, PortalReviewPage } from "@/modules/portal/components/PortalReviewTeaser";
 import { withBookedMeetings } from "@/modules/portal/lib/bookedMeetings";
 import { PortalBookedMeetings, type BookedMeeting } from "@/modules/portal/components/PortalBookedMeetings";
@@ -94,7 +94,7 @@ interface DrilldownState {
 }
 
 
-const Portal = ({ intakeRoute = false, reviewRoute = false }: { intakeRoute?: boolean; reviewRoute?: boolean }) => {
+const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = false }: { intakeRoute?: boolean; reviewRoute?: boolean; rebalancingRoute?: boolean }) => {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
   const [data, setData] = useState<PortalData | null>(null);
@@ -1079,7 +1079,9 @@ const Portal = ({ intakeRoute = false, reviewRoute = false }: { intakeRoute?: bo
 
     // The Dashboard's sidebar: household, quick links, the Charter, and open requests with Ask Georgia.
     const charterUrl = charter?.draft_status === "ratified" ? (contact.charter_url || family?.charter_document_url) : null;
-    const rebalancingCard = isSelf && (data as any)?.rebalancing ? (
+    const rebalancingState = (data as any)?.rebalancing as RebalancingState | undefined;
+    const rebalancingAwaiting = Boolean(rebalancingState?.proposal && !rebalancingState.acknowledgedAt && !rebalancingState.completedAt);
+    const rebalancingCard = isSelf && (data as any)?.rebalancing && !rebalancingAwaiting ? (
       <PortalRebalancing
         rebalancing={(data as any).rebalancing as RebalancingState}
         portalToken={portalToken}
@@ -1191,13 +1193,18 @@ const Portal = ({ intakeRoute = false, reviewRoute = false }: { intakeRoute?: bo
                   meetings={meetings}
                   taskCounts={taskCounts}
                   onGo={setActiveTab}
-                  highlight={(data as any)?.portfolio_review ? (
-                    <PortalReviewTeaser
-                      id={(data as any).portfolio_review.id}
-                      view={(data as any).portfolio_review.view}
-                      publishedAt={(data as any).portfolio_review.publishedAt}
-                      onOpen={() => navigate(token ? `/portal/${token}/review` : "/portal/review")}
-                    />
+                  highlight={(rebalancingAwaiting || (data as any)?.portfolio_review) ? (
+                    <>
+                      {rebalancingAwaiting && rebalancingState && <PortalRebalancingTeaser rebalancing={rebalancingState} onOpen={() => navigate(token ? `/portal/${token}/rebalancing` : "/portal/rebalancing")} />}
+                      {(data as any)?.portfolio_review ? (
+                        <PortalReviewTeaser
+                          id={(data as any).portfolio_review.id}
+                          view={(data as any).portfolio_review.view}
+                          publishedAt={(data as any).portfolio_review.publishedAt}
+                          onOpen={() => navigate(token ? `/portal/${token}/review` : "/portal/review")}
+                        />
+                      ) : null}
+                    </>
                   ) : null}
                   sidebar={dashboardSidebar}
                   links={isSelf ? <PortalDynamicLinks contact={contact} layout="grid" /> : null}
@@ -1422,6 +1429,7 @@ const Portal = ({ intakeRoute = false, reviewRoute = false }: { intakeRoute?: bo
   // ─── Determine what to render based on drilldown ───
   const renderContent = () => {
     // The Portfolio Review has a page of its own, so the dashboard stays clean.
+    if (rebalancingRoute) return <PortalRebalancingPage rebalancing={((data as any)?.rebalancing as RebalancingState) ?? null} portalToken={portalToken} onChanged={() => refreshData(portalToken)} onBack={() => navigate(token ? `/portal/${token}` : "/portal")} meetingTypes={(data as any)?.meeting_types ?? []} />;
     if (reviewRoute) return <PortalReviewPage review={(data as any)?.portfolio_review ?? null} onBack={() => navigate(token ? `/portal/${token}` : "/portal")} meetingTypes={(data as any)?.meeting_types ?? []} booked={(data as any)?.booked_meetings ?? []} />;
     if (intakeRoute) {
       return (

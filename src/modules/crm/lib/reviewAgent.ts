@@ -54,6 +54,9 @@ export const saveModels = (asOf: string, models: ParsedModel[], sourceFile: stri
 export const publishPortfolioReview = (householdId: string, note: string, includes: { returns: boolean; mix: boolean; funds: boolean; reset: boolean; rebalancing: boolean }) => call<{ ok: true; emailed: number; updated: boolean }>("publishPortfolioReview", { householdId, note, includes });
 export const unpublishPortfolioReview = (householdId: string) => call<{ ok: true }>("unpublishPortfolioReview", { householdId });
 export const getWorkbenchFacts = (householdId: string) => call<import("./workbenchSteps").WorkbenchFacts>("workbenchFacts", { householdId });
+import type { ClientProposal } from "../../../../supabase/functions/_shared/portfolio-review-client";
+export type { ClientProposal };
+export const getRebalancingProposal = (obligationId: string) => call<{ proposal: ClientProposal | null; householdId: string | null; frozen?: boolean; reason?: string | null }>("rebalancingProposal", { obligationId });
 export const deleteInvestorProfile = (householdId: string, accountNumber: string | null) => call<{ ok: true }>("deleteInvestorProfile", { householdId, accountNumber });
 export const setReviewMode = (mode: ReviewMode, confirm = false) => call<{ ok: true; mode: ReviewMode }>("setMode", { mode, confirm });
 export const setReviewPaused = (obligationId: string, paused: boolean) => call<{ ok: true }>("setPaused", { obligationId, paused });
