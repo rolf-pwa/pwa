@@ -65,6 +65,7 @@ export const setReviewMode = (mode: ReviewMode, confirm = false) => call<{ ok: t
 export const setReviewPaused = (obligationId: string, paused: boolean) => call<{ ok: true }>("setPaused", { obligationId, paused });
 export const publishRebalancing = (obligationId: string, summary: string) => call<{ ok: true }>("publishRebalancing", { obligationId, summary });
 export const unpublishRebalancing = (obligationId: string) => call<{ ok: true }>("unpublishRebalancing", { obligationId });
+export const markObligationComplete = (obligationId: string) => call<{ ok: true }>("markComplete", { obligationId });
 export const completeRebalancing = (obligationId: string) => call<{ ok: true }>("completeRebalancing", { obligationId });
 
 export const KIND_LABEL: Record<ReviewKind, string> = { annual_review: "Portfolio Review", sovereignty_review: "Sovereignty Review", governance_review: "Governance Review", rebalancing: "Portfolio Rebalancing" };

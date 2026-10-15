@@ -335,6 +335,28 @@ Deno.serve(async (req) => {
       return json({ ok: true, mode });
     }
 
+    // Rolf closes a review or rebalancing himself (done outside the flow, or no longer needed): Georgia stops, nobody is emailed.
+    if (action === "markComplete") {
+      const id = String(body?.obligationId ?? "");
+      const { data: o } = await db.from("review_obligations").select("*").eq("id", id).maybeSingle();
+      if (!o) return json({ error: "not found" }, 404);
+      if (!["open", "booked", "paused", "escalated"].includes(o.status)) return json({ ok: true });
+      const now = new Date().toISOString();
+      const patch: Record<string, unknown> = { status: "held", updated_at: now };
+      if (o.kind === "rebalancing" && !o.completed_at) patch.completed_at = now;
+      await db.from("review_obligations").update(patch).eq("id", id);
+      if (o.kind === "rebalancing") {
+        const { data: carry } = await db.from("pm_tasks").select("id").eq("family_id", o.family_id).eq("status", "open").or("title.like.Rebalance %: acknowledged,title.like.Rebalance %: carry out%");
+        const carryIds = (carry ?? []).map((t: any) => t.id);
+        if (carryIds.length) {
+          await db.from("pm_tasks").update({ status: "done", completed_at: now }).in("id", carryIds);
+          await db.from("pm_tasks").update({ status: "done", completed_at: now }).in("parent_task_id", carryIds).eq("status", "open");
+        }
+      }
+      await db.from("review_agent_events").insert({ family_id: o.family_id, obligation_id: id, mode: o.mode, kind: "marked_complete", detail: { by: staff.email, kind: o.kind, was: o.status } });
+      return json({ ok: true });
+    }
+
     if (action === "setPaused") {
       const id = String(body?.obligationId ?? "");
       const paused = body?.paused === true;
