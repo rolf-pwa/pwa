@@ -237,3 +237,19 @@ describe("each account holder authorizes their own changes", () => {
     expect(proposalFullyAuthorized(p, ["switch:a", "switch:b", "reset:b"])).toBe(true);
   });
 });
+
+import { suggestedRebalanceNote } from "../../supabase/functions/_shared/portfolio-review-client";
+describe("the suggested rebalancing note", () => {
+  const sw = (over: object) => ({ id: "switch:a", label: "Non-reg …7017", owner: "Annette Isbester", direction: "to_income" as const, amount: 6000, taxable: true, estGain: 2_340, ...over });
+  const prop = (switches: any[]): ClientProposal => ({ switches, resets: [], totalLift: 0, totalNow: 0, totalAfter: 0, hasTaxable: true });
+  it("states the estimated gain for each taxable switch, for Rolf to edit", () => {
+    const n = suggestedRebalanceNote(prop([sw({})]));
+    expect(n).toContain("Non-reg …7017 (Annette): an estimated capital gain of about $2,300");
+    expect(n).toMatch(/I will go over this with you/);
+  });
+  it("says loss when negative, and is empty with nothing taxable", () => {
+    expect(suggestedRebalanceNote(prop([sw({ estGain: -800 })]))).toContain("an estimated loss of about $800");
+    expect(suggestedRebalanceNote(prop([sw({ taxable: false, estGain: null })]))).toBe("");
+    expect(suggestedRebalanceNote(null)).toBe("");
+  });
+});

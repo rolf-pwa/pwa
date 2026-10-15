@@ -262,6 +262,18 @@ export function checkAllAcknowledged(p: ClientProposal | null | undefined, itemI
 export const gainPhrase = (g: number | null | undefined): string =>
   g === null || g === undefined ? "check the gain first" : `estimated ${g < 0 ? "loss" : "gain"} about $${Math.abs(Math.round(g)).toLocaleString("en-CA")}, check it with the client first`;
 
+/**
+ * A starting note for the rebalancing, written for Rolf to edit before he publishes: the estimated capital gain on each switch in a
+ * non-registered account. Empty when there is nothing taxable to say.
+ */
+export function suggestedRebalanceNote(p: ClientProposal | null | undefined): string {
+  const taxable = (p?.switches ?? []).filter((s) => s.taxable && s.estGain !== null && s.estGain !== undefined);
+  if (!taxable.length) return "";
+  const m = (n: number) => `$${Math.abs(Math.round(n / 100) * 100).toLocaleString("en-CA")}`;
+  const lines = taxable.map((s) => `${s.label}${s.owner ? ` (${s.owner.split(" ")[0]})` : ""}: ${(s.estGain as number) < 0 ? "an estimated loss" : "an estimated capital gain"} of about ${m(s.estGain as number)}`);
+  return `Switching in a non-registered account can realise a capital gain. My estimate, from the account's book value and the share being switched: ${lines.join("; ")}. I will go over this with you before anything is done.`;
+}
+
 export const describeProposalItem = (i: ProposalItem): string => {
   const m = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
   return i.kind === "switch"

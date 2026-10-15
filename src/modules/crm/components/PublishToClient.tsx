@@ -7,7 +7,7 @@ import { Checkbox } from "@/shared/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/shared/components/ui/dialog";
 import { Textarea } from "@/shared/components/ui/textarea";
 import { publishPortfolioReview, unpublishPortfolioReview, type PortfolioPackResponse, type PortfolioPack } from "@/modules/crm/lib/reviewAgent";
-import { buildClientView, REBALANCE_SECTIONS, type ClientIncludes, type ViewKind } from "../../../../supabase/functions/_shared/portfolio-review-client";
+import { buildClientView, buildClientProposal, suggestedRebalanceNote, REBALANCE_SECTIONS, type ClientIncludes, type ViewKind } from "../../../../supabase/functions/_shared/portfolio-review-client";
 import { PortalPortfolioReview } from "@/modules/portal/components/PortalPortfolioReview";
 
 const when = (iso: string) => new Date(iso).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -38,7 +38,7 @@ export function PublishToClient({ householdId, householdLabel, pack, publication
 
   const start = (k: ViewKind) => {
     const existing = k === "rebalance" ? rebalancePublication : publication;
-    setNote(existing?.note ?? "");
+    setNote(existing?.note ?? (k === "rebalance" ? suggestedRebalanceNote(buildClientProposal(pack as any)) : ""));
     setIncludes(k === "rebalance" ? { ...REBALANCE_SECTIONS, ...(existing?.includes ? { funds: existing.includes.funds, reset: existing.includes.reset, rebalancing: existing.includes.rebalancing ?? true } : {}) } : { ...ALL, ...(existing?.includes ?? {}) });
     setNarr({ mix: existing?.includes?.narratives?.mix ?? null, funds: existing?.includes?.narratives?.funds ?? null });
     setOpen(k);
