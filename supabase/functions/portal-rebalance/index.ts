@@ -9,7 +9,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validatePortalContact } from "../_shared/portal-auth.ts";
 import { REBALANCE_STATEMENT, REBALANCE_STATEMENT_VERSION, isFamilyAdult, pacificDate, windowLabel } from "../_shared/review-windows.ts";
 import { scopeToUnit, viewerUnit } from "../_shared/review-unit-for-contact.ts";
-import { checkAllAcknowledged, rebalanceTaskPlan } from "../_shared/portfolio-review-client.ts";
+import { checkOwnAcknowledged, proposalFullyAuthorized, rebalanceTaskPlan } from "../_shared/portfolio-review-client.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -61,10 +61,14 @@ Deno.serve(async (req) => {
     const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || null;
     const ua = req.headers.get("user-agent");
 
-    // A rebalancing that carries the engine's proposal is authorized as a whole: every item must have been ticked.
-    let items: ReturnType<typeof checkAllAcknowledged> | null = null;
+    // A rebalancing that carries the engine's proposal is authorized person by person: each signed-in account holder ticks and authorizes the changes to
+    // their own accounts (a spouse does theirs separately, from their own portal). It is fully authorized when every owner has.
+    let items: ReturnType<typeof checkOwnAcknowledged> | null = null;
+    let authorizedBefore: string[] = [];
     if (action === "acknowledge" && ob.proposal) {
-      items = checkAllAcknowledged(ob.proposal, Array.isArray(reqBody?.item_ids) ? reqBody.item_ids.map(String) : []);
+      const { data: prior } = await db.from("rebalance_acknowledgements").select("items").eq("obligation_id", ob.id).eq("decision", "acknowledged");
+      authorizedBefore = (prior ?? []).flatMap((a: any) => (Array.isArray(a.items) ? a.items.map((i: any) => String(i.id)) : []));
+      items = checkOwnAcknowledged(ob.proposal, me.id, authorizedBefore, Array.isArray(reqBody?.item_ids) ? reqBody.item_ids.map(String) : []);
       if (!items.ok) return json({ error: items.error }, 400);
     }
 
@@ -83,19 +87,22 @@ Deno.serve(async (req) => {
     };
 
     if (action === "acknowledge") {
-      await db.from("review_obligations").update({ acknowledged_at: new Date().toISOString(), status: "held", updated_at: new Date().toISOString() }).eq("id", ob.id);
       const authorized = items && items.ok ? items.items : [];
+      // The whole rebalancing is acknowledged once every owner has authorized theirs (or at once when there is no per-item proposal).
+      const everyone = !ob.proposal || proposalFullyAuthorized(ob.proposal, [...authorizedBefore, ...authorized.map((i) => i.id)]);
+      if (everyone) await db.from("review_obligations").update({ acknowledged_at: new Date().toISOString(), status: "held", updated_at: new Date().toISOString() }).eq("id", ob.id);
+      const first = me.first_name ?? "client";
       if (authorized.length) {
-        // The proposal's items grouped by account with the pack's exact figures, a link to the pack, and a subtask per item to check off.
+        // This person's changes grouped by account with the pack's exact figures and a link to the pack, and a subtask per item to check off.
         const plan = rebalanceTaskPlan(authorized, { clientName: name, label, today, packUrl: taskHousehold ? `https://app.prosperwise.ca/households/${taskHousehold}/portfolio-review` : null, stored: `The authorization, with the exact wording they agreed to (version ${REBALANCE_STATEMENT_VERSION}) and the items as they saw them, is stored with the family's records.` });
-        const parentId = await task(`Rebalance ${family}: carry out ${authorized.length} authorized change${authorized.length === 1 ? "" : "s"}`, plan.description, 3);
+        const parentId = await task(`Rebalance ${family}: carry out ${authorized.length} authorized change${authorized.length === 1 ? "" : "s"} for ${first}`, plan.description, 3);
         if (parentId) for (const st of plan.subtasks) await task(st.title, st.description, 3, parentId);
       } else {
         await task(`Rebalance ${family}: acknowledged`, `${name} reviewed the ${label} rebalancing you published and acknowledged it in the portal on ${today}. Carry it out, then mark it done on Georgia Reviews so the family is told.\n\nThe acknowledgement (wording version ${REBALANCE_STATEMENT_VERSION}, with the proposal they saw) is stored with the family's records.`, 3);
       }
-      await db.from("staff_notifications").insert({ title: `Rebalancing acknowledged: ${family}`, body: `${name} acknowledged the ${label} rebalancing.`, link: `/families/${me.family_id}`, contact_id: me.id, source_type: "rebalancing" });
-      await db.from("review_agent_events").insert({ family_id: me.family_id, obligation_id: ob.id, mode: "live", kind: "rebalancing_acknowledged", detail: { by: name, label } });
-      return json({ ok: true });
+      await db.from("staff_notifications").insert({ title: everyone ? `Rebalancing authorized: ${family}` : `${first} authorized their rebalancing changes: ${family}`, body: everyone ? `${name} authorized the ${label} rebalancing.` : `${name} authorized the changes to their accounts. The other account holder has not yet authorized theirs.`, link: `/families/${me.family_id}`, contact_id: me.id, source_type: "rebalancing" });
+      await db.from("review_agent_events").insert({ family_id: me.family_id, obligation_id: ob.id, mode: "live", kind: "rebalancing_acknowledged", detail: { by: name, label, items: authorized.length, complete: everyone } });
+      return json({ ok: true, complete: everyone });
     }
 
     // talk_first: pause Georgia's reminders for two weeks and tell Rolf.

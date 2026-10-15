@@ -195,8 +195,8 @@ export function portfolioReviewReadyEmail(firstName: string, portalUrl: string, 
 // What a Tier 1 household reviews and authorizes in its portal: the switches by asset class (accounts outside their profile's range) and the
 // death benefit resets, each as an item the client acknowledges. Built from the pack when Rolf publishes, and frozen with the rebalancing.
 
-export interface ProposalSwitch { id: string; label: string; owner: string | null; direction: "to_income" | "to_equity"; /** What the client sees, rounded to $100. */ amount: number; /** The pack's figure to the dollar, for Rolf's task. */ exactAmount?: number; taxable: boolean }
-export interface ProposalReset { id: string; label: string; owner: string | null; currentGuarantee: number; newGuarantee: number; lift: number }
+export interface ProposalSwitch { id: string; label: string; owner: string | null; /** The contact who owns the account: only they authorize changes to it. */ ownerId?: string | null; direction: "to_income" | "to_equity"; /** What the client sees, rounded to $100. */ amount: number; /** The pack's figure to the dollar, for Rolf's task. */ exactAmount?: number; taxable: boolean }
+export interface ProposalReset { id: string; label: string; owner: string | null; ownerId?: string | null; currentGuarantee: number; newGuarantee: number; lift: number }
 export interface ClientProposal { switches: ProposalSwitch[]; resets: ProposalReset[]; totalLift: number; totalNow: number; totalAfter: number; hasTaxable: boolean }
 export type ProposalItem = (ProposalSwitch & { kind: "switch" }) | (ProposalReset & { kind: "reset" });
 
@@ -205,8 +205,8 @@ export function buildClientProposal(pack: Pack): ClientProposal | null {
   const rs = pack.resets.rows.filter((r) => r.status === "reset");
   if (!sw.length && !rs.length) return null;
   return {
-    switches: sw.map((r) => ({ id: `switch:${r.accountId}`, label: shortAccountName(r.name, r.number), owner: r.owner, direction: r.direction as "to_income" | "to_equity", amount: Math.round(r.amount / 100) * 100, exactAmount: Math.round(r.amount), taxable: r.taxable })),
-    resets: rs.map((r) => ({ id: `reset:${r.accountId}`, label: shortAccountName(r.name, r.number), owner: r.owner, currentGuarantee: r.deathGuarantee as number, newGuarantee: r.fundValue as number, lift: r.room as number })),
+    switches: sw.map((r) => ({ id: `switch:${r.accountId}`, label: shortAccountName(r.name, r.number), owner: r.owner, ownerId: r.ownerId ?? null, direction: r.direction as "to_income" | "to_equity", amount: Math.round(r.amount / 100) * 100, exactAmount: Math.round(r.amount), taxable: r.taxable })),
+    resets: rs.map((r) => ({ id: `reset:${r.accountId}`, label: shortAccountName(r.name, r.number), owner: r.owner, ownerId: r.ownerId ?? null, currentGuarantee: r.deathGuarantee as number, newGuarantee: r.fundValue as number, lift: r.room as number })),
     totalLift: Math.round(rs.reduce((n, r) => n + (r.room ?? 0), 0)),
     totalNow: Math.round(rs.reduce((n, r) => n + (r.deathGuarantee ?? 0), 0)),
     totalAfter: Math.round(rs.reduce((n, r) => n + (r.fundValue ?? 0), 0)),
@@ -216,6 +216,37 @@ export function buildClientProposal(pack: Pack): ClientProposal | null {
 
 export const proposalItems = (p: ClientProposal | null | undefined): ProposalItem[] =>
   p ? [...p.switches.map((s) => ({ ...s, kind: "switch" as const })), ...p.resets.map((r) => ({ ...r, kind: "reset" as const }))] : [];
+
+/**
+ * Each person authorizes the changes to the accounts they own, from their own portal login. A proposal frozen before owners were recorded has no
+ * owner ids on its items: then every item belongs to whoever is signed in (as it did before).
+ */
+export function itemsOwnedBy(p: ClientProposal | null | undefined, contactId: string): ProposalItem[] {
+  const all = proposalItems(p);
+  if (all.every((i) => !i.ownerId)) return all;
+  return all.filter((i) => i.ownerId === contactId);
+}
+
+/** Everything in the proposal has been authorized by its owners. */
+export const proposalFullyAuthorized = (p: ClientProposal | null | undefined, authorizedIds: string[]): boolean => {
+  const all = proposalItems(p);
+  return all.length > 0 && all.every((i) => authorizedIds.includes(i.id));
+};
+
+/**
+ * Can this signed-in person authorize these items? They must tick every change to their own accounts that is still open, and nothing that is
+ * not theirs: a spouse authorizes their own changes separately, from their own portal.
+ */
+export function checkOwnAcknowledged(p: ClientProposal | null | undefined, contactId: string, alreadyAuthorized: string[], itemIds: string[]): { ok: true; items: ProposalItem[] } | { ok: false; error: string } {
+  const mine = itemsOwnedBy(p, contactId);
+  const open = mine.filter((i) => !alreadyAuthorized.includes(i.id));
+  if (!mine.length) return { ok: false, error: "There are no changes to your accounts to authorize. Each person authorizes the changes to their own accounts." };
+  if (!open.length) return { ok: false, error: "You have already authorized your changes." };
+  const ids = new Set(itemIds);
+  if (itemIds.some((id) => !mine.some((i) => i.id === id))) return { ok: false, error: "You can only authorize changes to your own accounts. The other account holder authorizes theirs from their own portal." };
+  if (open.some((i) => !ids.has(i.id))) return { ok: false, error: "Tick every change you have reviewed before authorizing, or ask to talk it through." };
+  return { ok: true, items: open };
+}
 
 /** A rebalancing is authorized as a whole: every item in the proposal must be acknowledged, and nothing that is not in it. */
 export function checkAllAcknowledged(p: ClientProposal | null | undefined, itemIds: string[]): { ok: true; items: ProposalItem[] } | { ok: false; error: string } {

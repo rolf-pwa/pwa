@@ -6,7 +6,7 @@ import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent } from "@/shared/components/ui/card";
 import { PortalProposal } from "./PortalProposal";
 import { PortalPortfolioReview } from "./PortalPortfolioReview";
-import type { ClientProposal, ClientView } from "../../../../supabase/functions/_shared/portfolio-review-client";
+import { itemsOwnedBy, type ClientProposal, type ClientView } from "../../../../supabase/functions/_shared/portfolio-review-client";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/shared/components/ui/alert-dialog";
 
 export interface RebalancingState {
@@ -21,6 +21,9 @@ export interface RebalancingState {
   proposal?: ClientProposal | null;
   /** The page Rolf published from the pack (the same format as the Portfolio Review, fewer sections), frozen. When present it is what the client reads. */
   view?: ClientView | null;
+  /** Items authorized so far, by whichever account holder, and the signed-in person. Each person authorizes the changes to their own accounts. */
+  authorizedIds?: string[];
+  viewerId?: string | null;
 }
 
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { month: "long", day: "numeric", year: "numeric" });
@@ -94,9 +97,34 @@ export function PortalRebalancing({ rebalancing, portalToken, onChanged, onTalkF
   );
 }
 
-/** The dashboard's pointer to a rebalancing that has a proposal to review: one highlighted container. Gone once it has been authorized. */
+/** Does the signed-in person still have changes of their own to authorize? (A spouse's changes are theirs to authorize, from their own portal.) */
+export function rebalancingNeedsMe(r: RebalancingState | null | undefined): boolean {
+  if (!r || !r.proposal || r.completedAt || r.acknowledgedAt) return false;
+  const mine = r.viewerId ? itemsOwnedBy(r.proposal, r.viewerId) : [...r.proposal.switches, ...r.proposal.resets];
+  return mine.some((i) => !(r.authorizedIds ?? []).includes(i.id));
+}
+
+/** Shown once the signed-in person has authorized their own changes but someone else's are still open. */
+export function PortalRebalancingWaiting({ rebalancing, onOpen }: { rebalancing: RebalancingState; onOpen: () => void }) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-border shadow-sm" style={{ background: "hsl(var(--pw-sand) / 0.2)" }} data-testid="rebalancing-waiting">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-l-4 border-accent/50 px-5 py-4">
+        <div className="flex min-w-0 items-start gap-3">
+          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
+          <div className="min-w-0">
+            <h3 className="font-serif text-base font-semibold text-foreground">You have authorized your {rebalancing.label} rebalancing changes</h3>
+            <p className="mt-0.5 text-sm text-muted-foreground">The changes to the other account holder's accounts are theirs to authorize, from their own portal. I will let you know when it is done.</p>
+          </div>
+        </div>
+        <Button variant="outline" onClick={onOpen}>See where it stands</Button>
+      </div>
+    </div>
+  );
+}
+
+/** The dashboard's pointer to a rebalancing that has a proposal to review: one highlighted container. Gone once the signed-in person has authorized theirs. */
 export function PortalRebalancingTeaser({ rebalancing, onOpen }: { rebalancing: RebalancingState; onOpen: () => void }) {
-  if (rebalancing.completedAt || rebalancing.acknowledgedAt || !rebalancing.proposal) return null;
+  if (!rebalancingNeedsMe(rebalancing)) return null;
   return (
     <div className="overflow-hidden rounded-lg border border-accent/40 shadow-sm" style={{ background: "hsl(var(--pw-sand) / 0.35)" }} data-testid="rebalancing-teaser">
       <div className="flex flex-wrap items-center justify-between gap-4 border-l-4 border-accent px-5 py-4">
@@ -144,7 +172,7 @@ export function PortalRebalancingPage({ rebalancing, portalToken, onChanged, onB
         <div className="rounded-lg border border-border bg-muted/30 p-8 text-center text-sm text-muted-foreground">There is no rebalancing to review right now.</div>
       ) : (
         rebalancing.view ? (
-          <PortalPortfolioReview view={rebalancing.view} publishedAt={rebalancing.publishedAt} statement={rebalancing.statement} onAuthorize={authorize} onTalk={talk} authorized={rebalancing.completedAt || rebalancing.acknowledgedAt ? { at: (rebalancing.acknowledgedAt ?? rebalancing.completedAt) as string } : null} />
+          <PortalPortfolioReview view={rebalancing.view} publishedAt={rebalancing.publishedAt} statement={rebalancing.statement} viewerId={rebalancing.viewerId} authorizedIds={rebalancing.authorizedIds} onAuthorize={authorize} onTalk={talk} authorized={rebalancing.completedAt || rebalancing.acknowledgedAt ? { at: (rebalancing.acknowledgedAt ?? rebalancing.completedAt) as string } : null} />
         ) : (
         <Card>
           <CardContent className="space-y-4 p-5 sm:p-6">

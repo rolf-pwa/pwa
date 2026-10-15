@@ -35,6 +35,8 @@ export interface PackAccount {
   type: string | null;
   custodian: string | null;
   owner: string | null;
+  /** The contact who owns the account (the person who authorizes changes to it). */
+  ownerId?: string | null;
   value: number | null;
   boyValue: number | null;
   asOf: string | null;
@@ -59,7 +61,7 @@ export interface Guarantee { series: string | null; maturityDate: string | null;
 export const RESET_END_AGE = 85;
 export type ResetStatus = "reset" | "no_room" | "no_reset_series" | "too_old" | "needs_dob" | "no_guarantee_data";
 export interface ResetRow {
-  accountId: string; name: string; number: string | null; owner: string | null; series: string | null; age: number | null; turns85On: string | null; lastChance: boolean;
+  accountId: string; name: string; number: string | null; owner: string | null; ownerId?: string | null; series: string | null; age: number | null; turns85On: string | null; lastChance: boolean;
   fundValue: number | null; deathGuarantee: number | null; /** What a reset would add to the death guarantee. */ room: number | null; status: ResetStatus; lastResetDate: string | null;
 }
 export interface ResetSummary { rows: ResetRow[]; toReset: number; totalRoom: number }
@@ -93,7 +95,7 @@ export function resetCheck(accounts: PackAccount[], today: string): ResetSummary
     else if (age >= RESET_END_AGE) status = "too_old";
     else status = room !== null && room > 0 ? "reset" : "no_room";
     const lastChance = status === "reset" && turn85 !== null && turn85 <= `${today.slice(0, 4)}-12-31`;
-    return { accountId: a.id, name: a.name, number: a.number, owner: a.owner, series: g.series, age, turns85On: turn85, lastChance, fundValue, deathGuarantee, room, status, lastResetDate: a.lastResetDate ?? null };
+    return { accountId: a.id, name: a.name, number: a.number, owner: a.owner, ownerId: a.ownerId ?? null, series: g.series, age, turns85On: turn85, lastChance, fundValue, deathGuarantee, room, status, lastResetDate: a.lastResetDate ?? null };
   });
   const due = rows.filter((r) => r.status === "reset");
   return { rows, toReset: due.length, totalRoom: Math.round(due.reduce((s, r) => s + (r.room ?? 0), 0) * 100) / 100 };
@@ -332,7 +334,7 @@ function householdModelComparison(accounts: PackAccountOut[]): ModelComparison |
 
 export type SwitchDirection = "to_income" | "to_equity" | "none";
 export interface SwitchRow {
-  accountId: string; name: string; number: string | null; owner: string | null; accountType: string | null;
+  accountId: string; name: string; number: string | null; owner: string | null; ownerId?: string | null; accountType: string | null;
   value: number; incomePct: number; targetIncomePct: number; rangeMin: number | null; rangeMax: number | null;
   /** True when the account is outside its profile's range (a move is needed), false when it is inside but off the model mix (optional). */
   outsideRange: boolean;
@@ -364,7 +366,7 @@ export function proposeRebalancing(accounts: PackAccountOut[], resets: ResetSumm
     const lift = resetBy.get(a.id) ?? null;
     if (aligned && lift === null) continue;
     rows.push({
-      accountId: a.id, name: a.name, number: a.number, owner: a.owner, accountType: a.type, value: a.value, incomePct: a.incomePct, targetIncomePct: d.targetIncomePct,
+      accountId: a.id, name: a.name, number: a.number, owner: a.owner, ownerId: a.ownerId ?? null, accountType: a.type, value: a.value, incomePct: a.incomePct, targetIncomePct: d.targetIncomePct,
       rangeMin: d.rangeMin ?? null, rangeMax: d.rangeMax ?? null, outsideRange: outside,
       direction: aligned ? "none" : diff > 0 ? "to_income" : "to_equity", amount: aligned ? 0 : amount, afterIncomePct: aligned ? a.incomePct : d.targetIncomePct,
       taxable: isTaxable(a.type), ytdGain: a.changeYtd, resetLift: lift,

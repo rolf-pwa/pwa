@@ -31,7 +31,7 @@ import { Grape, ScrollText, Clock, Calendar, FolderOpen, CheckSquare, ShieldChec
 import { getPortalSession, setPortalSession, clearPortalSession } from "@/modules/portal/lib/portalSession";
 import prosperwiseLogo from "@/assets/prosperwise-icon-paper.png";
 import { policyTypeLabel } from "@/shared/lib/insurance";
-import { PortalRebalancing, PortalRebalancingPage, PortalRebalancingTeaser, type RebalancingState } from "@/modules/portal/components/PortalRebalancing";
+import { PortalRebalancing, PortalRebalancingPage, PortalRebalancingTeaser, PortalRebalancingWaiting, rebalancingNeedsMe, type RebalancingState } from "@/modules/portal/components/PortalRebalancing";
 import { PortalReviewTeaser, PortalReviewPage } from "@/modules/portal/components/PortalReviewTeaser";
 import { withBookedMeetings } from "@/modules/portal/lib/bookedMeetings";
 import { PortalBookedMeetings, type BookedMeeting } from "@/modules/portal/components/PortalBookedMeetings";
@@ -1080,8 +1080,12 @@ const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = f
     // The Dashboard's sidebar: household, quick links, the Charter, and open requests with Ask Georgia.
     const charterUrl = charter?.draft_status === "ratified" ? (contact.charter_url || family?.charter_document_url) : null;
     const rebalancingState = (data as any)?.rebalancing as RebalancingState | undefined;
-    const rebalancingAwaiting = Boolean(rebalancingState?.proposal && !rebalancingState.acknowledgedAt && !rebalancingState.completedAt);
-    const rebalancingCard = isSelf && (data as any)?.rebalancing && !rebalancingAwaiting ? (
+    const rebalancingAwaiting = rebalancingNeedsMe(rebalancingState);
+    // Their own changes are authorized but the rebalancing is not complete: someone else's are still open.
+    const rebalancingWaiting = Boolean(rebalancingState?.proposal && !rebalancingState.acknowledgedAt && !rebalancingState.completedAt && !rebalancingAwaiting);
+    // The older summary-and-acknowledge card is only for a rebalancing with no per-item proposal, or one that is done. With a proposal, each person
+    // authorizes their own accounts' changes on its page; once theirs are done they just see where it stands.
+    const rebalancingCard = isSelf && (data as any)?.rebalancing && (!rebalancingState?.proposal || rebalancingState.acknowledgedAt || rebalancingState.completedAt) ? (
       <PortalRebalancing
         rebalancing={(data as any).rebalancing as RebalancingState}
         portalToken={portalToken}
@@ -1193,9 +1197,10 @@ const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = f
                   meetings={meetings}
                   taskCounts={taskCounts}
                   onGo={setActiveTab}
-                  highlight={(rebalancingAwaiting || (data as any)?.portfolio_review) ? (
+                  highlight={(rebalancingAwaiting || rebalancingWaiting || (data as any)?.portfolio_review) ? (
                     <>
                       {rebalancingAwaiting && rebalancingState && <PortalRebalancingTeaser rebalancing={rebalancingState} onOpen={() => navigate(token ? `/portal/${token}/rebalancing` : "/portal/rebalancing")} />}
+                      {rebalancingWaiting && rebalancingState && <PortalRebalancingWaiting rebalancing={rebalancingState} onOpen={() => navigate(token ? `/portal/${token}/rebalancing` : "/portal/rebalancing")} />}
                       {(data as any)?.portfolio_review ? (
                         <PortalReviewTeaser
                           id={(data as any).portfolio_review.id}

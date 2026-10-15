@@ -210,3 +210,30 @@ describe("Rolf's task to carry out an authorized rebalancing", () => {
     expect(rebalanceTaskPlan(old, { clientName: "A", label: "Q3", today: "2027-01-01", packUrl: null }).subtasks[0].title).toBe("TFSA: switch $2,000 from income into equity funds");
   });
 });
+
+import { checkOwnAcknowledged, proposalFullyAuthorized, type ClientProposal } from "../../supabase/functions/_shared/portfolio-review-client";
+describe("each account holder authorizes their own changes", () => {
+  const p: ClientProposal = {
+    switches: [
+      { id: "switch:a", label: "TFSA …1111", owner: "Albert", ownerId: "alb", direction: "to_income", amount: 6000, taxable: false },
+      { id: "switch:b", label: "RRSP …2222", owner: "Doreen", ownerId: "dor", direction: "to_equity", amount: 3000, taxable: false },
+    ],
+    resets: [{ id: "reset:b", label: "RRSP …2222", owner: "Doreen", ownerId: "dor", currentGuarantee: 90_000, newGuarantee: 100_000, lift: 10_000 }],
+    totalLift: 10_000, totalNow: 90_000, totalAfter: 100_000, hasTaxable: false,
+  };
+  it("lets a person authorize only their own items, all of them", () => {
+    const ok = checkOwnAcknowledged(p, "alb", [], ["switch:a"]);
+    expect(ok.ok && ok.items.map((i) => i.id)).toEqual(["switch:a"]);
+    expect(checkOwnAcknowledged(p, "dor", [], ["switch:b"]).ok).toBe(false);
+    expect(checkOwnAcknowledged(p, "dor", [], ["switch:b", "reset:b"]).ok).toBe(true);
+  });
+  it("refuses someone else's items, double authorization and strangers", () => {
+    expect(checkOwnAcknowledged(p, "alb", [], ["switch:a", "switch:b"])).toMatchObject({ ok: false, error: expect.stringMatching(/own accounts/) });
+    expect(checkOwnAcknowledged(p, "alb", ["switch:a"], ["switch:a"])).toMatchObject({ ok: false, error: expect.stringMatching(/already authorized/) });
+    expect(checkOwnAcknowledged(p, "nobody", [], [])).toMatchObject({ ok: false });
+  });
+  it("is fully authorized only when every owner has authorized", () => {
+    expect(proposalFullyAuthorized(p, ["switch:a"])).toBe(false);
+    expect(proposalFullyAuthorized(p, ["switch:a", "switch:b", "reset:b"])).toBe(true);
+  });
+});
