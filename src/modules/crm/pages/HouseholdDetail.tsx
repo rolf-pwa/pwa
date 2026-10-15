@@ -47,6 +47,7 @@ import { HoldingTank } from "@/modules/crm/components/HoldingTank";
 import { VaultView } from "@/modules/crm/pages/Vault";
 import { OnboardingAgentPanel } from "@/modules/crm/components/OnboardingAgentPanel";
 import { OnboardingInviteCard } from "@/modules/crm/components/OnboardingInviteCard";
+import { HouseholdWorkbench } from "@/modules/crm/components/HouseholdWorkbench";
 import { HouseholdLiabilities } from "@/modules/crm/components/HouseholdLiabilities";
 import { VaultScanButton } from "@/modules/crm/components/vault/VaultScanButton";
 import { ShoeboxToolbar } from "@/modules/crm/components/vault/ShoeboxReviewPanel";
@@ -830,138 +831,26 @@ const HouseholdDetail = () => {
               <div className="min-w-0 space-y-3">
 
 
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base">AI Workbench</CardTitle>
-                    <p className="text-xs text-muted-foreground">
-                      The household workflow, in order.
-                    </p>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {/* Step 2 — Stabilization Map */}
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-semibold text-muted-foreground">
-                        1
-                      </div>
-                      <div className="flex-1 space-y-1.5">
-                        <p className="text-sm font-medium text-foreground">Stabilization Map</p>
-                        <p className="text-xs text-muted-foreground">
-                          Generate or review the household's one-page Sovereignty Survey.
-                        </p>
-                        <StabilizationMapButton householdId={id} />
-                      </div>
-                    </div>
-
-                    {/* Step 3 — Quarterly Governance Audit */}
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-semibold text-muted-foreground">
-                        2
-                      </div>
-                      <div className="flex-1 space-y-1.5">
-                        <p className="text-sm font-medium text-foreground">Quarterly Governance Audit</p>
-                        <p className="text-xs text-muted-foreground">
-                          Generate or review the household's full Sovereignty Governance Audit.
-                        </p>
-                        <GovernanceAuditButton householdId={id} />
-                      </div>
-                    </div>
-
-                    {/* Quarterly Review — alignment of the whole system with the Charter, in the Stabilization Map format */}
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-semibold text-muted-foreground">
-                        Q
-                      </div>
-                      <div className="flex-1 space-y-1.5">
-                        <p className="text-sm font-medium text-foreground">Sovereignty Review</p>
-                        <p className="text-xs text-muted-foreground">
-                          A Quarterly Review for chartered households, or a Sovereignty Survey from the records on file when there is no Charter yet.
-                        </p>
-                        <QuarterlySystemReviewButton householdId={id} />
-                      </div>
-                    </div>
-
-                    {/* Portfolio Review — the prep pack and what the client sees */}
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-semibold text-muted-foreground">
-                        P
-                      </div>
-                      <div className="flex-1 space-y-1.5">
-                        <p className="text-sm font-medium text-foreground">Portfolio Review</p>
-                        <p className="text-xs text-muted-foreground">
-                          Allocation against the Investor Profile and iA's model portfolio, returns, death benefit resets, and what the client sees.
-                        </p>
-                        <Button asChild size="sm" variant="outline"><Link to={`/households/${id}/portfolio-review`}>Open the review pack</Link></Button>
-                      </div>
-                    </div>
-
-                    {/* Step 4 — Enroll in Guided Intake. Hidden once the
-                        household has actually finished onboarding — nothing
-                        left to enroll them into at that point. */}
-                    {!household.onboarding_completed_at && (
-                      <div className="flex items-start gap-3">
-                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-semibold text-muted-foreground">
-                          3
-                        </div>
-                        <div className="flex-1 space-y-1.5">
-                          <p className="text-sm font-medium text-foreground">Enroll in guided intake</p>
-                          <p className="text-xs text-muted-foreground">
-                            Send an existing client through the same guided wizard as a new client — no
-                            payment required.
-                          </p>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={enrollExistingClientInIntake}
-                            disabled={enrollingIntake || members.length === 0}
-                          >
-                            {enrollingIntake ? (
-                              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                            ) : (
-                              <UserCheck className="h-3.5 w-3.5 mr-1.5" />
-                            )}
-                            Enroll in Guided Intake
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Step 5 — Sovereignty Charter v2.0 (Foundational Bedrock).
-                        Never hidden once complete, unlike the intake step — staff
-                        will plausibly want to revisit and edit this content. */}
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-semibold text-muted-foreground">
-                        4
-                      </div>
-                      <div className="flex-1 space-y-1.5">
-                        <p className="text-sm font-medium text-foreground">Sovereignty Charter v2.0</p>
-                        <p className="text-xs text-muted-foreground">
-                          Capture Family Vision, Core Values, and System Grounding Principles — the
-                          Foundational Bedrock of this household's Charter.
-                        </p>
-                        <StartCharterIntakeButton householdId={id} status={charterV2Status} />
-                      </div>
-                    </div>
-
-                    {/* Step 6 — Causal AI Platform. One stepped Workbench
-                        (Ontology Assessment, Meeting Transcripts, Delta
-                        Reconciliation, Review & Lock) — separate from the
-                        Charter itself, never client-facing. */}
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-semibold text-muted-foreground">
-                        5
-                      </div>
-                      <div className="flex-1 space-y-1.5">
-                        <p className="text-sm font-medium text-foreground">Causal AI Workbench</p>
-                        <p className="text-xs text-muted-foreground">
-                          Staff assessment of the household's financial, relational, and emotional state,
-                          reconciled against real meeting transcripts — the Causal AI Platform's Hub &amp;
-                          Spoke model.
-                        </p>
-                        <CausalAIWorkbenchButton householdId={id} />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <HouseholdWorkbench
+                  householdId={id!}
+                  onboardingComplete={Boolean(household.onboarding_completed_at)}
+                  charterStarted={charterV2Status !== null}
+                  today={new Date().toLocaleDateString("en-CA", { timeZone: "America/Vancouver" })}
+                  actions={{
+                    guided_intake: (
+                      <Button size="sm" variant="outline" onClick={enrollExistingClientInIntake} disabled={enrollingIntake || members.length === 0}>
+                        {enrollingIntake ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <UserCheck className="h-3.5 w-3.5 mr-1.5" />}
+                        Enroll in Guided Intake
+                      </Button>
+                    ),
+                    stabilization_map: <StabilizationMapButton householdId={id} />,
+                    portfolio_review: <Button asChild size="sm" variant="outline"><Link to={`/households/${id}/portfolio-review`}>Open the review pack</Link></Button>,
+                    sovereignty_review: <QuarterlySystemReviewButton householdId={id} />,
+                    governance_audit: <GovernanceAuditButton householdId={id} />,
+                    charter: <StartCharterIntakeButton householdId={id} status={charterV2Status} />,
+                    causal_ai: <CausalAIWorkbenchButton householdId={id} />,
+                  }}
+                />
                 <SidebarSection title="Georgia Diagnostic"><GeorgiaDiagnosticCard householdId={id!} /></SidebarSection>
                 {(household?.vision_notes || household?.values_notes || household?.purpose_notes ||
                   household?.anchor_transfer_amount != null || household?.spousal_alignment_score != null ||

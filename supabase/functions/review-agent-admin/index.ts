@@ -7,6 +7,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { latestModels, portfolioPackFor } from "../_shared/portfolio-review-data.ts";
 import { pacificDate } from "../_shared/review-windows.ts";
 import { MODEL_PROMPT, validateModels } from "../_shared/ia-model-parse.ts";
+import { isPooledFamily } from "../_shared/review-units.ts";
 import { buildClientView, portfolioReviewReadyEmail, type ClientIncludes } from "../_shared/portfolio-review-client.ts";
 import { sendServiceEmailDetailed } from "../_shared/service-email.ts";
 import { AGENT_SENDER, PORTAL_URL } from "../_shared/onboarding-agent.ts";
@@ -172,6 +173,22 @@ Deno.serve(async (req) => {
       await db.from("review_agent_events").insert({ family_id: null, mode: "live", kind: "portfolio_review_unpublished", detail: { household_id: householdId, by: staff.email } });
       return json({ ok: true });
     }
+    // ── What the household's AI Workbench should show: its governing tier, Charter status, review windows and whether a review is published ──
+    if (action === "workbenchFacts") {
+      const householdId = String(body?.householdId ?? "");
+      const { data: hh } = await db.from("households").select("id, family_id, service_tier").eq("id", householdId).maybeSingle();
+      if (!hh) return json({ error: "Household not found" }, 404);
+      const { data: fam } = await db.from("families").select("service_tier, vfo_enabled, has_ratified_charter, service_tier_source").eq("id", hh.family_id).maybeSingle();
+      const pooled = !fam || isPooledFamily(fam);
+      const { data: cfg } = await db.from("review_agent_config").select("mode").eq("id", true).maybeSingle();
+      const mode = cfg?.mode === "shadow" ? "shadow" : "live";
+      let q = db.from("review_obligations").select("kind, window_start, window_end, status").eq("family_id", hh.family_id).eq("mode", mode).neq("status", "cancelled");
+      q = pooled ? q.is("household_id", null) : q.eq("household_id", householdId);
+      const { data: obligations } = await q;
+      const { count } = await db.from("portfolio_review_publications").select("id", { count: "exact", head: true }).eq("household_id", householdId).is("unpublished_at", null);
+      return json({ tier: pooled ? fam?.service_tier ?? null : hh.service_tier ?? null, hasRatifiedCharter: Boolean(fam?.has_ratified_charter), obligations: obligations ?? [], publishedReview: (count ?? 0) > 0 });
+    }
+
     // ── iA model portfolios: upload the published PDF, check what was read, then save it as a new dated set ──
     if (action === "readModelPdf") {
       const b64 = String(body?.pdfBase64 ?? "");
