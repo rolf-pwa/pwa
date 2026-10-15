@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
+import { CheckCircle2 } from "lucide-react";
 import { Card, CardContent } from "@/shared/components/ui/card";
+import { PortalProposal } from "./PortalProposal";
 import type { ClientView, MixStatus } from "../../../../supabase/functions/_shared/portfolio-review-client";
 
 const money = (n: number | null | undefined) => (n === null || n === undefined ? "—" : n.toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }));
@@ -7,6 +9,7 @@ const short = (n: number) => (Math.abs(n) >= 1000 ? `$${Math.round(n / 100) / 10
 const signed = (n: number | null | undefined) => (n === null || n === undefined ? "—" : `${n >= 0 ? "+" : "-"}${money(Math.abs(n))}`);
 const pct = (n: number | null | undefined) => (n === null || n === undefined ? "—" : `${n.toFixed(1)}%`);
 const day = (iso: string | null) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-CA", { timeZone: "UTC", month: "long", day: "numeric", year: "numeric" }) : "");
+const dayShort = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { month: "long", day: "numeric", year: "numeric" });
 const month = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-CA", { timeZone: "UTC", month: "short" });
 
 // ProsperWise brand: Navy, Amber (bronze), Sand, Mist, Ash, Cloud (see the --pw-* variables in index.css).
@@ -98,7 +101,8 @@ function Segments({ parts, label }: { parts: { pct: number; bg: string; title: s
  * The household's Portfolio Review, as Rolf approved it. Every figure was worked out in code and frozen when he published; the client sees
  * exactly that. Built to be looked at, not read: charts first, the numbers behind them one tap away. Staff see it too, as a preview.
  */
-export function PortalPortfolioReview({ view, publishedAt, preview = false }: { view: ClientView; publishedAt?: string; preview?: boolean }) {
+export function PortalPortfolioReview({ view, publishedAt, preview = false, statement, onAuthorize, onTalk, authorized }: { view: ClientView; publishedAt?: string; preview?: boolean; statement?: string; onAuthorize?: (ids: string[]) => Promise<void>; onTalk?: () => Promise<void>; authorized?: { at: string } | null }) {
+  const isRebalance = view.kind === "rebalance";
   const history = view.history ?? [];
   const up = (view.summary.ytdPct ?? 0) >= 0;
   const maxValue = Math.max(1, ...(view.accounts ?? []).map((a) => a.value ?? 0));
@@ -111,12 +115,14 @@ export function PortalPortfolioReview({ view, publishedAt, preview = false }: { 
     <Card data-testid="portfolio-review">
       <CardContent className="space-y-5 p-5 sm:p-6">
         <div>
-          <h3 className="font-serif text-lg font-semibold text-foreground">{preview ? "Preview: " : ""}Your Portfolio Review</h3>
+          <h3 className="font-serif text-lg font-semibold text-foreground">{preview ? "Preview: " : ""}{isRebalance ? "Your portfolio rebalancing" : "Your Portfolio Review"}</h3>
           <p className="text-xs text-muted-foreground">{view.householdLabel}{view.valuesAsOf ? ` · as of ${day(view.valuesAsOf)}` : ""}{publishedAt ? ` · shared ${day(publishedAt.slice(0, 10))}` : ""}</p>
         </div>
 
         {view.note && <blockquote className="whitespace-pre-line border-l-2 border-accent pl-3 text-sm text-foreground">{view.note}<footer className="mt-1 text-xs text-muted-foreground">Rolf</footer></blockquote>}
 
+        {!isRebalance && (
+          <>
         {/* The headline */}
         <div className="space-y-2">
           <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
@@ -131,6 +137,8 @@ export function PortalPortfolioReview({ view, publishedAt, preview = false }: { 
           </div>
           {history.length >= 2 && <ValueLine points={history} />}
         </div>
+          </>
+        )}
 
         {view.accounts && (
           <Section title="Your accounts">
@@ -225,6 +233,10 @@ export function PortalPortfolioReview({ view, publishedAt, preview = false }: { 
             <p className="text-[11px] text-muted-foreground">Navy: your guarantee today. Bronze: what it becomes after the reset. These are estimates from your latest values: a reset locks in your value on the day I do it.</p>
           </Section>
         )}
+
+        {view.proposal && isRebalance && (authorized
+          ? <div className="flex items-start gap-2 rounded-lg p-3 text-sm" style={{ background: tint(B.cloud, 0.6), color: B.navy }}><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /><p>You authorized this on {dayShort(authorized.at)}. I will confirm the amounts with you, carry it out, and let you know when it is done.</p></div>
+          : <PortalProposal proposal={view.proposal} statement={statement ?? ""} onAuthorize={onAuthorize} onTalk={onTalk} showResetHeadline={!view.reset} />)}
 
         <div className="space-y-1 border-t border-border pt-3">
           {view.disclosures.map((d, i) => <p key={i} className="text-[11px] leading-snug text-muted-foreground">{d}</p>)}

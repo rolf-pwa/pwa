@@ -79,3 +79,36 @@ describe("the Tier 1 rebalancing page and pointer", () => {
     expect(screen.getByText(/Completed on/)).toBeTruthy();
   });
 });
+
+import { PortalPortfolioReview } from "@/modules/portal/components/PortalPortfolioReview";
+import type { ClientView } from "../../supabase/functions/_shared/portfolio-review-client";
+
+describe("the rebalance page uses the review's format", () => {
+  const view: ClientView = {
+    kind: "rebalance", householdLabel: "Tier1 Household", valuesAsOf: "2026-09-30", note: "Moving back to the Balanced mix.", summary: { value: 189_270, changeYtd: 0, ytdPct: 5 }, history: [{ date: "2026-06-30", value: 1 }, { date: "2026-09-30", value: 2 }],
+    accounts: null, mix: null,
+    funds: { commentary: ["27% of your portfolio is held in funds outside our Balanced model portfolio."], modelLabel: "Balanced", modelAsOf: "2026-05-31", heldInModelPct: 73, rows: [{ name: "Fidelity Insights", modelPct: 20, heldPct: 8.2, inModel: true }] },
+    reset: { rows: [{ name: "TFSA", owner: "Albert", last4: "3190", fundValue: 145_261, currentGuarantee: 136_018, newGuarantee: 145_261, lift: 9_243 }], totalLift: 9_243, totalNow: 136_018, totalAfter: 145_261 },
+    proposal, disclosures: ["Past performance does not guarantee future results."],
+  };
+  it("shows the funds against the model, the death benefit reset and the proposal, and none of the values and returns", () => {
+    render(<PortalPortfolioReview view={view} statement="I authorize." onAuthorize={async () => {}} onTalk={async () => {}} />);
+    expect(screen.getByText("Your portfolio rebalancing")).toBeTruthy();
+    expect(screen.getByText(/Your funds and our Balanced model portfolio/)).toBeTruthy();
+    expect(screen.getAllByText(/Your death benefit guarantee/).length).toBeGreaterThan(0);
+    expect(screen.getByTestId("proposal")).toBeTruthy();
+    expect(screen.queryByText("Your accounts")).toBeNull();
+    expect(screen.queryByText("Your mix")).toBeNull();
+    expect(screen.queryByText("$189,270")).toBeNull();
+    expect(screen.queryByText(/this year$/)).toBeNull();
+  });
+  it("leaves out the guarantee headline inside the proposal when the death benefit section is already above it", () => {
+    render(<PortalPortfolioReview view={view} statement="I authorize." onAuthorize={async () => {}} onTalk={async () => {}} />);
+    expect(screen.getByTestId("proposal").textContent).not.toContain("after this year's reset");
+  });
+  it("shows that it was authorized instead of the buttons", () => {
+    render(<PortalPortfolioReview view={view} statement="I authorize." authorized={{ at: "2026-10-21T16:00:00Z" }} onAuthorize={async () => {}} onTalk={async () => {}} />);
+    expect(screen.getByText(/You authorized this on/)).toBeTruthy();
+    expect(screen.queryByTestId("proposal")).toBeNull();
+  });
+});

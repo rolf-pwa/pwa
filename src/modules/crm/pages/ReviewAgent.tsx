@@ -203,8 +203,12 @@ export default function ReviewAgent() {
                                 <Badge variant={o.status === "escalated" ? "destructive" : "secondary"}>{statusLabel(o)}{o.invite === false && o.kind !== "rebalancing" ? " (tracking only)" : ""}{o.mode === "shadow" ? " (shadow)" : ""}</Badge>
                                 {o.kind === "rebalancing" && (
                                   <>
-                                    {rebalancingStage(o) === "preparing" && <Button size="sm" className="h-7 text-xs" onClick={() => { setPublishing(o); setSummary(o.proposal_summary ?? ""); }}>Publish to portal</Button>}
-                                    {rebalancingStage(o) === "waiting" && (
+                                    {/* A household's rebalancing is prepared and published from its advisor pack, the same pack as the Portfolio Review. */}
+                                    {o.household_id && (rebalancingStage(o) === "preparing" || rebalancingStage(o) === "waiting") && (
+                                      <Button asChild size="sm" variant={rebalancingStage(o) === "preparing" ? "default" : "outline"} className="h-7 text-xs"><Link to={`/households/${o.household_id}/portfolio-review`}>{rebalancingStage(o) === "preparing" ? "Prepare in the pack" : "Open the pack"}</Link></Button>
+                    )}
+                                    {!o.household_id && rebalancingStage(o) === "preparing" && <Button size="sm" className="h-7 text-xs" onClick={() => { setPublishing(o); setSummary(o.proposal_summary ?? ""); }}>Publish to portal</Button>}
+                                    {!o.household_id && rebalancingStage(o) === "waiting" && (
                                       <>
                                         <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setPublishing(o); setSummary(o.proposal_summary ?? ""); }}>Edit</Button>
                                         <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={busy} onClick={() => runRebalancing(() => unpublishRebalancing(o.id), "Taken back from the portal")}>Take back</Button>

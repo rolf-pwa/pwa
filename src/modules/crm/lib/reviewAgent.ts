@@ -42,6 +42,8 @@ export interface PortfolioPackResponse {
   pack: Pack;
   profiles: { id: string; account_number: string | null; label: string | null; income_pct: number | null; equity_pct: number | null; band_pct: number; as_of: string | null; updated_by: string | null; profile_key: string | null }[];
   models: ModelPortfolio[];
+  rebalancePublication: { id: string; published_at: string; published_by: string; note: string | null; includes: { returns: boolean; mix: boolean; funds: boolean; reset: boolean; rebalancing?: boolean } } | null;
+  rebalancingObligation: { id: string; window_start: string; window_end: string; status: string; published_at: string | null; acknowledged_at: string | null; completed_at: string | null } | null;
   publication: { id: string; published_at: string; published_by: string; note: string | null; includes: { returns: boolean; mix: boolean; funds: boolean; reset: boolean; rebalancing?: boolean } } | null;
 }
 export const getPortfolioPack = (householdId: string) => call<PortfolioPackResponse>("portfolioPack", { householdId });
@@ -51,8 +53,8 @@ import type { ModelValidation, ParsedModel } from "../../../../supabase/function
 export type { ModelValidation, ParsedModel };
 export const readModelPdf = (pdfBase64: string) => call<{ validation: ModelValidation }>("readModelPdf", { pdfBase64 });
 export const saveModels = (asOf: string, models: ParsedModel[], sourceFile: string) => call<{ ok: true; asOf: string }>("saveModels", { asOf, models, sourceFile });
-export const publishPortfolioReview = (householdId: string, note: string, includes: { returns: boolean; mix: boolean; funds: boolean; reset: boolean; rebalancing: boolean }) => call<{ ok: true; emailed: number; updated: boolean }>("publishPortfolioReview", { householdId, note, includes });
-export const unpublishPortfolioReview = (householdId: string) => call<{ ok: true }>("unpublishPortfolioReview", { householdId });
+export const publishPortfolioReview = (householdId: string, note: string, includes: { returns: boolean; mix: boolean; funds: boolean; reset: boolean; rebalancing: boolean }, kind: "review" | "rebalance" = "review") => call<{ ok: true; emailed: number; updated: boolean }>("publishPortfolioReview", { householdId, note, includes, kind });
+export const unpublishPortfolioReview = (householdId: string, kind: "review" | "rebalance" = "review") => call<{ ok: true }>("unpublishPortfolioReview", { householdId, kind });
 export const getWorkbenchFacts = (householdId: string) => call<import("./workbenchSteps").WorkbenchFacts>("workbenchFacts", { householdId });
 import type { ClientProposal } from "../../../../supabase/functions/_shared/portfolio-review-client";
 export type { ClientProposal };

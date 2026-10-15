@@ -5,7 +5,8 @@ import { supabase } from "@/shared/integrations/supabase/client";
 import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent } from "@/shared/components/ui/card";
 import { PortalProposal } from "./PortalProposal";
-import type { ClientProposal } from "../../../../supabase/functions/_shared/portfolio-review-client";
+import { PortalPortfolioReview } from "./PortalPortfolioReview";
+import type { ClientProposal, ClientView } from "../../../../supabase/functions/_shared/portfolio-review-client";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/shared/components/ui/alert-dialog";
 
 export interface RebalancingState {
@@ -18,6 +19,8 @@ export interface RebalancingState {
   statementVersion: string;
   /** The engine's proposal (switches and death benefit resets), frozen when Rolf published. When present it is reviewed item by item on its own page. */
   proposal?: ClientProposal | null;
+  /** The page Rolf published from the pack (the same format as the Portfolio Review, fewer sections), frozen. When present it is what the client reads. */
+  view?: ClientView | null;
 }
 
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { month: "long", day: "numeric", year: "numeric" });
@@ -140,6 +143,9 @@ export function PortalRebalancingPage({ rebalancing, portalToken, onChanged, onB
       {!rebalancing ? (
         <div className="rounded-lg border border-border bg-muted/30 p-8 text-center text-sm text-muted-foreground">There is no rebalancing to review right now.</div>
       ) : (
+        rebalancing.view ? (
+          <PortalPortfolioReview view={rebalancing.view} publishedAt={rebalancing.publishedAt} statement={rebalancing.statement} onAuthorize={authorize} onTalk={talk} authorized={rebalancing.completedAt || rebalancing.acknowledgedAt ? { at: (rebalancing.acknowledgedAt ?? rebalancing.completedAt) as string } : null} />
+        ) : (
         <Card>
           <CardContent className="space-y-4 p-5 sm:p-6">
             <div>
@@ -157,6 +163,7 @@ export function PortalRebalancingPage({ rebalancing, portalToken, onChanged, onB
             )}
           </CardContent>
         </Card>
+        )
       )}
       {embedded && (
         <div className="overflow-hidden rounded-lg border border-border bg-card">

@@ -95,7 +95,7 @@ export default function PortfolioReview() {
               <Badge variant="outline" className="text-[10px]">Staff only</Badge>
             </div>
 
-            <PublishToClient householdId={data.household.id} householdLabel={data.household.label ?? "Household"} pack={p} publication={data.publication} onChanged={load} />
+            <PublishToClient householdId={data.household.id} householdLabel={data.household.label ?? "Household"} pack={p} publication={data.publication} rebalancePublication={data.rebalancePublication} rebalancingObligation={data.rebalancingObligation} onChanged={load} />
 
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               {[["Managed value", money(p.totalValue)], ["Year to date (weighted)", pct(p.household.valueWeightedYtd)], ["Since last month", signed(p.household.changeSincePrior)], ["Change this year", signed(p.household.changeYtd)]].map(([k, v]) => (
