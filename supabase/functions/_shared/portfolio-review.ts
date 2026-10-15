@@ -78,7 +78,7 @@ export function ageOn(dob: string, on: string): number {
  * that guarantee (an estimate until the reset is done: the guarantee is set to the value on the day). A reset is one click on iA's advisor site, costs nothing and changes no fee, so every eligible account with room is listed.
  */
 export function resetCheck(accounts: PackAccount[], today: string): ResetSummary {
-  const rows: ResetRow[] = accounts.filter((a) => a.guarantee || isResetSeries(a.guarantee?.series)).map((a) => {
+  const rows: ResetRow[] = accounts.filter((a) => a.guarantee).map((a) => {
     const g = a.guarantee!;
     // A reset locks in the value on the day it is done, so use the latest value we have (the monthly import), not the older statement's.
     const fundValue = a.value ?? g.valueOfFunds;
