@@ -219,6 +219,15 @@ Guidelines:
       .filter((item) => item.account_number)
       .map((item) => [normalizeAccountToken(item.account_number), item]));
     const vineyardByName = new Map((existingVineyard || []).map((item) => [normalizeAccountToken(item.account_name), item]));
+    // Accounts still waiting in the Holding Tank: a new statement for one of them updates it, never adds a second copy.
+    const { data: existingTank } = await adminClient
+      .from("holding_tank")
+      .select("id, account_number")
+      .eq("contact_id", contactId)
+      .neq("status", "moved");
+    const tankByNumber = new Map((existingTank || [])
+      .filter((item) => item.account_number)
+      .map((item) => [normalizeAccountToken(item.account_number), item]));
     const storehouseByName = new Map((existingStorehouses || []).flatMap((item) => {
       const tokens = [item.label, item.asset_type].filter(Boolean).map((value) => normalizeAccountToken(value));
       return tokens.map((token) => [token, item] as const);
@@ -274,6 +283,27 @@ Guidelines:
             .from(sourceTable)
             .update({ book_value: boyValue, current_value: currentValue })
             .eq("id", matchedAccount.id);
+          continue;
+        }
+      }
+
+      const matchedTank = normalizedNumber ? tankByNumber.get(normalizedNumber) : undefined;
+      if (matchedTank) {
+        const { data: tankSnapshot } = await adminClient
+          .from("account_harvest_snapshots")
+          .select("id")
+          .eq("holding_tank_id", matchedTank.id)
+          .eq("snapshot_date", snapshotDate)
+          .maybeSingle();
+        const tankPayload = { contact_id: contactId, snapshot_date: snapshotDate, boy_value: boyValue, ytd_value: currentValue, current_harvest: currentHarvest, current_value: currentValue, notes: account.notes || null, holding_tank_id: matchedTank.id };
+        const { error: tankErr } = tankSnapshot?.id
+          ? await adminClient.from("account_harvest_snapshots").update(tankPayload).eq("id", tankSnapshot.id)
+          : await adminClient.from("account_harvest_snapshots").insert(tankPayload);
+        if (!tankErr) {
+          snapshotUpdates += 1;
+          // Only a statement newer than the stored figures may move the account's current value.
+          const { data: newer } = await adminClient.from("account_harvest_snapshots").select("id").eq("holding_tank_id", matchedTank.id).gt("snapshot_date", snapshotDate).limit(1);
+          await adminClient.from("holding_tank").update(newer?.length ? { book_value: boyValue } : { book_value: boyValue, current_value: currentValue }).eq("id", matchedTank.id);
           continue;
         }
       }
