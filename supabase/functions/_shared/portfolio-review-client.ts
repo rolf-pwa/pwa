@@ -115,7 +115,16 @@ export function fundsCommentary(mc: NonNullable<Pack["household"]["modelComparis
 export type ViewKind = "review" | "rebalance";
 export const REBALANCE_SECTIONS: ClientIncludes = { returns: false, mix: false, funds: true, reset: true, rebalancing: true };
 
-export function buildClientView(pack: Pack, includesIn: ClientIncludes, note: string, householdLabel: string, kind: ViewKind = "review"): ClientView {
+/** The advisor's own wording for the shaded commentary boxes, replacing the suggested text. Paragraphs are separated by a blank line. */
+export interface Narratives { mix?: string | null; funds?: string | null }
+export const MAX_NARRATIVE = 2000;
+/** Splits the advisor's text into paragraphs, trimmed and capped. An empty text means "use the suggested wording". */
+export function narrativeParagraphs(text: string | null | undefined): string[] | null {
+  const t = String(text ?? "").slice(0, MAX_NARRATIVE).split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  return t.length ? t : null;
+}
+
+export function buildClientView(pack: Pack, includesIn: ClientIncludes, note: string, householdLabel: string, kind: ViewKind = "review", narratives: Narratives = {}): ClientView {
   // A rebalance never shows the values and the mix; the three other sections can still be switched off.
   const includes: ClientIncludes = kind === "rebalance" ? { ...REBALANCE_SECTIONS, funds: includesIn.funds, reset: includesIn.reset, rebalancing: includesIn.rebalancing } : includesIn;
   const h = pack.household;
@@ -132,7 +141,7 @@ export function buildClientView(pack: Pack, includesIn: ClientIncludes, note: st
     accounts: includes.returns ? pack.accounts.map((a) => ({ label: shortAccountName(a.name, a.number), name: a.name, owner: a.owner, last4: last4(a.number), value: a.value, changeYtd: a.changeYtd, ytdPct: a.returns.ytd, oneYearPct: a.returns.oneYear, threeYearPct: a.returns.threeYear })) : null,
     mix: includes.mix && h.drift.status !== "no_data"
       ? {
-        commentary: mixCommentary(pack),
+        commentary: narrativeParagraphs(narratives.mix) ?? mixCommentary(pack),
         classes: [
           { key: "income", label: "Income", pct: covered > 0 ? round1((h.classTotals.income / covered) * 100) : 0 },
           { key: "canadian", label: "Canadian equity", pct: covered > 0 ? round1((h.classTotals.canadian_equity / covered) * 100) : 0 },
@@ -144,7 +153,7 @@ export function buildClientView(pack: Pack, includesIn: ClientIncludes, note: st
       }
       : null,
     funds: includes.funds && mc
-      ? { commentary: fundsCommentary(mc), modelLabel: mc.modelLabel, modelAsOf: mc.modelAsOf, heldInModelPct: round1(100 - mc.offModelPct), rows: mc.rows.map((r) => ({ name: r.name, modelPct: r.modelPct, heldPct: r.actualPct, inModel: r.inModel })) }
+      ? { commentary: narrativeParagraphs(narratives.funds) ?? fundsCommentary(mc), modelLabel: mc.modelLabel, modelAsOf: mc.modelAsOf, heldInModelPct: round1(100 - mc.offModelPct), rows: mc.rows.map((r) => ({ name: r.name, modelPct: r.modelPct, heldPct: r.actualPct, inModel: r.inModel })) }
       : null,
     proposal: kind === "rebalance" && includes.rebalancing ? buildClientProposal(pack) : null,
     rebalance: kind === "review" && includes.rebalancing && pack.rebalancing.rows.some((r) => r.outsideRange && r.direction !== "none")

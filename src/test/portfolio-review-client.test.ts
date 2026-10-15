@@ -162,3 +162,22 @@ describe("the rebalance: the same page as the review, three sections", () => {
     expect(v.rebalance).not.toBeNull();
   });
 });
+
+import { narrativeParagraphs, MAX_NARRATIVE } from "../../supabase/functions/_shared/portfolio-review-client";
+describe("the advisor's own wording for the commentary boxes", () => {
+  const inc = (income: number, equity: number) => [{ name: "I", category: "Income Funds", value: income * 1000 }, { name: "E", category: "Canadian Equity funds", value: equity * 1000 }];
+  const pk = () => buildPortfolioPack({ accounts: [acct({ value: 100_000, statement: { statementDate: "2026-09-30", funds: inc(34, 66) } })], profiles: [{ accountNumber: null, label: null, incomePct: 40, equityPct: 60, bandPct: 0, profileKey: "balanced" }], today: "2026-10-14", models: [balanced] });
+  it("splits the text into paragraphs, and treats an empty box as the suggested wording", () => {
+    expect(narrativeParagraphs("One.\n\n  Two.  \n\n\n")).toEqual(["One.", "Two."]);
+    expect(narrativeParagraphs("   ")).toBeNull();
+    expect(narrativeParagraphs(null)).toBeNull();
+    expect(narrativeParagraphs("x".repeat(MAX_NARRATIVE + 500))![0].length).toBe(MAX_NARRATIVE);
+  });
+  it("uses the advisor's wording in the view, and the suggested wording otherwise", () => {
+    const suggested = buildClientView(pk(), ALL_INCLUDED, "", "H");
+    const edited = buildClientView(pk(), ALL_INCLUDED, "", "H", "review", { mix: "I am happy with this mix.\n\nLet's talk in March.", funds: "" });
+    expect(edited.mix!.commentary).toEqual(["I am happy with this mix.", "Let's talk in March."]);
+    expect(edited.funds!.commentary).toEqual(suggested.funds!.commentary);
+    expect(suggested.mix!.commentary[0]).toMatch(/risk profile/);
+  });
+});

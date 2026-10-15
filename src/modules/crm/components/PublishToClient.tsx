@@ -31,6 +31,8 @@ export function PublishToClient({ householdId, householdLabel, pack, publication
   const [note, setNote] = useState("");
   const [includes, setIncludes] = useState<ClientIncludes>(ALL);
   const [busy, setBusy] = useState(false);
+  // The advisor's own wording for the shaded commentary boxes. Null means the suggested wording.
+  const [narr, setNarr] = useState<{ mix: string | null; funds: string | null }>({ mix: null, funds: null });
   const kind: ViewKind = open ?? "review";
   const rebalance = kind === "rebalance";
 
@@ -38,13 +40,15 @@ export function PublishToClient({ householdId, householdLabel, pack, publication
     const existing = k === "rebalance" ? rebalancePublication : publication;
     setNote(existing?.note ?? "");
     setIncludes(k === "rebalance" ? { ...REBALANCE_SECTIONS, ...(existing?.includes ? { funds: existing.includes.funds, reset: existing.includes.reset, rebalancing: existing.includes.rebalancing ?? true } : {}) } : { ...ALL, ...(existing?.includes ?? {}) });
+    setNarr({ mix: existing?.includes?.narratives?.mix ?? null, funds: existing?.includes?.narratives?.funds ?? null });
     setOpen(k);
   };
   const run = async (fn: () => Promise<unknown>, ok: string) => {
     setBusy(true);
     try { await fn(); toast.success(ok); setOpen(null); onChanged(); } catch (e: any) { toast.error(e?.message ?? "Couldn't update"); } finally { setBusy(false); }
   };
-  const view = buildClientView(pack, includes, note, householdLabel, kind);
+  const suggested = buildClientView(pack, includes, note, householdLabel, kind);
+  const view = buildClientView(pack, includes, note, householdLabel, kind, narr);
   const ob = rebalancingObligation;
   const canRebalance = Boolean(ob && !ob.completed_at);
   const authorized = Boolean(ob?.acknowledged_at);
@@ -102,12 +106,21 @@ export function PublishToClient({ householdId, householdLabel, pack, publication
                 );
               })}
             </div>
+            {[
+              { key: "mix" as const, title: "Commentary under Your mix", text: suggested.mix?.commentary.join("\n\n") },
+              { key: "funds" as const, title: "Commentary under Funds against our model portfolio", text: suggested.funds?.commentary.join("\n\n") },
+            ].filter((n) => n.text !== undefined).map((n) => (
+              <div key={n.key} className="space-y-1" data-testid={`narrative-${n.key}`}>
+                <div className="flex items-center justify-between"><p className="text-xs font-medium">{n.title}</p>{narr[n.key] !== null && <button type="button" className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground" onClick={() => setNarr((s) => ({ ...s, [n.key]: null }))}>Use the suggested wording</button>}</div>
+                <Textarea value={narr[n.key] ?? n.text ?? ""} onChange={(e) => setNarr((s) => ({ ...s, [n.key]: e.target.value }))} rows={4} aria-label={n.title} />
+              </div>
+            ))}
             <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={4} placeholder={rebalance ? "Tell the client what you are proposing and why, in your own words." : "A short note from you, in your own words (optional)."} />
             <PortalPortfolioReview view={view} preview />
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setOpen(null)}>Cancel</Button>
-            <Button disabled={busy || (rebalance && note.trim().length < 10)} onClick={() => run(async () => { const r = await publishPortfolioReview(householdId, note, includes, kind); if (r.emailed) toast.message(`Georgia emailed ${r.emailed} ${r.emailed === 1 ? "person" : "people"}`); }, (rebalance ? rebalancePublication : publication) ? "Updated" : "Published to the portal")}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : (rebalance ? rebalancePublication : publication) ? "Save changes" : "Publish"}</Button>
+            <Button disabled={busy || (rebalance && note.trim().length < 10)} onClick={() => run(async () => { const r = await publishPortfolioReview(householdId, note, includes, kind, narr); if (r.emailed) toast.message(`Georgia emailed ${r.emailed} ${r.emailed === 1 ? "person" : "people"}`); }, (rebalance ? rebalancePublication : publication) ? "Updated" : "Published to the portal")}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : (rebalance ? rebalancePublication : publication) ? "Save changes" : "Publish"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
