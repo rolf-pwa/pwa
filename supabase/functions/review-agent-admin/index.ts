@@ -9,6 +9,7 @@ import { pacificDate } from "../_shared/review-windows.ts";
 import { MODEL_PROMPT, validateModels } from "../_shared/ia-model-parse.ts";
 import { isPooledFamily } from "../_shared/review-units.ts";
 import { buildClientProposal, buildClientView, narrativeParagraphs, portfolioReviewReadyEmail, type ClientIncludes } from "../_shared/portfolio-review-client.ts";
+import { packReadiness } from "../_shared/pack-readiness.ts";
 import { sendServiceEmailDetailed } from "../_shared/service-email.ts";
 import { AGENT_SENDER, PORTAL_URL } from "../_shared/onboarding-agent.ts";
 import { GEMINI_EXTRACT_MODEL, extractJson, generateVertexContent, parseServiceAccountKey, withThinking } from "../_shared/vertex-ai.ts";
@@ -176,6 +177,35 @@ Deno.serve(async (req) => {
       }
       return json({ household: { id: hh.id, label: hh.label, family_id: hh.family_id, family_name: (hh as any).families?.name ?? null, service_tier: hh.service_tier }, pack, profiles, models, publication: pub ?? null, rebalancePublication: rebPub ?? null, rebalancingObligation: rebOb ? { id: rebOb.id, window_start: rebOb.window_start, window_end: rebOb.window_end, status: rebOb.status, published_at: rebOb.published_at, acknowledged_at: rebOb.acknowledged_at, completed_at: rebOb.completed_at } : null, rebalanceProgress });
     }
+    // ── Which households with open reviews or rebalancings are ready for Rolf to prepare, and what each is missing ──
+    if (action === "packReadiness") {
+      const today = pacificDate(Date.now());
+      const { data: obs } = await db.from("review_obligations").select("family_id, household_id, kind, window_end, status").eq("mode", "live").in("kind", ["annual_review", "rebalancing"]).in("status", ["open", "booked", "paused", "escalated"]).gte("window_end", today);
+      const { data: hhs } = await db.from("households").select("id, label, family_id, service_tier, relationship_ended_at, families(name)");
+      const byId = new Map((hhs ?? []).map((h: any) => [h.id as string, h]));
+      const wanted = new Map<string, Set<string>>();
+      for (const o of obs ?? []) {
+        const ids = o.household_id ? [o.household_id] : (hhs ?? []).filter((h: any) => h.family_id === o.family_id && !h.relationship_ended_at).map((h: any) => h.id);
+        for (const id of ids) wanted.set(id, (wanted.get(id) ?? new Set()).add(o.kind === "rebalancing" ? "Rebalancing" : "Portfolio Review"));
+      }
+      const ids = [...wanted.keys()].filter((id) => byId.has(id));
+      const rows: any[] = [];
+      for (let i = 0; i < ids.length; i += 5) {
+        await Promise.all(ids.slice(i, i + 5).map(async (id) => {
+          const h: any = byId.get(id);
+          try {
+            const { pack } = await portfolioPackFor(db, id, today);
+            const r = packReadiness(pack);
+            rows.push({ householdId: id, household: h.label, family: h.families?.name ?? null, tier: h.service_tier, needs: [...wanted.get(id)!].sort(), accounts: pack.accounts.length, ...r });
+          } catch (e) {
+            rows.push({ householdId: id, household: h.label, family: h.families?.name ?? null, tier: h.service_tier, needs: [...wanted.get(id)!].sort(), accounts: 0, ready: false, todo: [`Could not build the pack: ${e instanceof Error ? e.message : String(e)}`], notes: [] });
+          }
+        }));
+      }
+      rows.sort((a, b) => Number(a.ready) - Number(b.ready) || String(a.family).localeCompare(String(b.family)));
+      return json({ rows });
+    }
+
     // ── Publish the Portfolio Review to the client's portal: the view is built here from the pack, frozen, and Georgia lets the household's adults know ──
     if (action === "publishPortfolioReview") {
       const householdId = String(body?.householdId ?? "");
