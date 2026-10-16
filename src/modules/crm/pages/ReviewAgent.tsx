@@ -128,7 +128,9 @@ export default function ReviewAgent() {
   const sections = useMemo(() => groupByQuarter(rows, new Date().toLocaleDateString("en-CA", { timeZone: "America/Vancouver" })), [rows]);
   const matches = (o: ReviewObligation) =>
     filter === "all" ? true : filter === "attention" ? o.status === "escalated" : filter === "booked" ? o.status === "booked" || o.status === "held" : o.status === "open" || o.status === "paused";
-  const isCollapsed = (key: string, past: boolean) => collapsed[key] ?? past;
+  // Only the current quarter is open by default: past and future quarters are collapsed.
+  const isCollapsed = (key: string, current: boolean) => collapsed[key] ?? !current;
+  const [activityOpen, setActivityOpen] = useState(false);
   const FILTERS: { value: typeof filter; label: string }[] = [{ value: "all", label: "All" }, { value: "attention", label: "Needs a person" }, { value: "notBooked", label: "Not booked yet" }, { value: "booked", label: "Booked or done" }];
 
   return (
@@ -141,9 +143,10 @@ export default function ReviewAgent() {
           <>
             <ReviewAgentGuide />
 
-            <PackReadinessCard />
-
-            <VaultCatchUpCard />
+            <div className="grid items-start gap-6 md:grid-cols-2">
+              <PackReadinessCard />
+              <VaultCatchUpCard />
+            </div>
 
             <Card>
               <CardHeader className="pb-3">
@@ -161,7 +164,7 @@ export default function ReviewAgent() {
                 {sections.map((sec) => {
                   const items = sec.items.filter(matches);
                   if (filter !== "all" && items.length === 0) return null;
-                  const closed = isCollapsed(sec.key, sec.isPast);
+                  const closed = isCollapsed(sec.key, sec.isCurrent);
                   return (
                     <section key={sec.key} aria-label={sec.label} className={`rounded-lg border ${sec.isCurrent ? "border-accent/50" : "border-border"}`}>
                       <button type="button" onClick={() => setCollapsed((c) => ({ ...c, [sec.key]: !closed }))} className="flex w-full items-center gap-3 px-3 py-2.5 text-left" aria-expanded={!closed}>
@@ -227,8 +230,8 @@ export default function ReviewAgent() {
             </Card>
 
             <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-lg">Recent activity</CardTitle></CardHeader>
-              <CardContent className="space-y-1">
+              <CardHeader className="pb-3"><button type="button" onClick={() => setActivityOpen((o) => !o)} aria-expanded={activityOpen} className="flex items-center gap-1.5 text-left">{activityOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}<CardTitle className="text-lg">Recent activity</CardTitle></button></CardHeader>
+              {activityOpen && <CardContent className="space-y-1">
                 {data.events.length === 0 && <p className="text-sm text-muted-foreground">Nothing yet.</p>}
                 {data.events.map((e) => (
                   <div key={e.id} className="flex items-baseline justify-between gap-3 border-b border-border py-1.5 text-sm last:border-0">
@@ -236,7 +239,7 @@ export default function ReviewAgent() {
                     <span className="shrink-0 text-xs text-muted-foreground">{when(e.created_at)}</span>
                   </div>
                 ))}
-              </CardContent>
+              </CardContent>}
             </Card>
 
             <Card>
