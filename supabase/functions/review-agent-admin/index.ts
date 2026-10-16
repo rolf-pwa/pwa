@@ -182,9 +182,9 @@ Deno.serve(async (req) => {
     }
     // ── One-time catch-up: bring existing households into the Drive Vault structure (idempotent; creates folders only) ──
     if (action === "vaultCatchUp") {
-      const { data: hhs } = await db.from("households").select("id, label, service_tier, relationship_ended_at, vault_root_folder_id, families(name)");
+      const { data: hhs } = await db.from("households").select("id, label, service_tier, relationship_ended_at, vault_root_folder_id, vault_folder_id, families(name)");
       const { data: people } = await db.from("contacts").select("household_id, family_role, is_minor, personal_vault_folder_id").not("household_id", "is", null);
-      const plan = planVaultCatchUp((hhs ?? []).map((h: any) => ({ id: h.id, label: h.label, familyName: h.families?.name ?? null, serviceTier: h.service_tier, relationshipEnded: !!h.relationship_ended_at, vaultRoot: h.vault_root_folder_id })), (people ?? []).map((p: any) => ({ householdId: p.household_id, role: p.family_role, isMinor: p.is_minor, personalDrawer: p.personal_vault_folder_id })));
+      const plan = planVaultCatchUp((hhs ?? []).map((h: any) => ({ id: h.id, label: h.label, familyName: h.families?.name ?? null, serviceTier: h.service_tier, relationshipEnded: !!h.relationship_ended_at, vaultRoot: h.vault_root_folder_id, vaultFolder: h.vault_folder_id })), (people ?? []).map((p: any) => ({ householdId: p.household_id, role: p.family_role, isMinor: p.is_minor, personalDrawer: p.personal_vault_folder_id })));
       if (body?.dryRun !== false) return json({ plan });
       // A few households per call: each builds a couple of dozen Drive folders. The page calls again until nothing is left.
       const done: { name: string; kind: string; ok: boolean; detail: string }[] = [];
@@ -192,7 +192,32 @@ Deno.serve(async (req) => {
         const r = await provisionClientFolderTree(db, h.id, "vault_catchup", { requestedBy: { id: staff.userId, email: staff.email } });
         done.push({ name: h.name, kind: "Vault", ok: r.ok, detail: r.ok ? `Vault created${r.personalDrawers ? `, ${r.personalDrawers} personal drawer${r.personalDrawers === 1 ? "" : "s"}` : ""}` : String(r.error) });
       }
-      if (!plan.provision.length) {
+      if (!plan.provision.length && plan.legacy.length) {
+        // An older Vault: if its Household Vault folder already holds Advisor Files it is the current layout with the column unset, so just
+        // record it. Otherwise build the new structure beside it. The old folders and every file in them are left exactly as they were.
+        const token = await getServiceGoogleAccessToken(db);
+        const gj = async (u: string) => { const r = await fetch(u, { headers: { Authorization: `Bearer ${token}` } }); return r.ok ? await r.json() : null; };
+        for (const h of plan.legacy.slice(0, 2)) {
+          try {
+            const { data: row } = await db.from("households").select("vault_root_folder_id").eq("id", h.id).maybeSingle();
+            const oldRoot = row?.vault_root_folder_id as string;
+            const meta = await gj(`https://www.googleapis.com/drive/v3/files/${oldRoot}?supportsAllDrives=true&fields=id,parents`);
+            const parent: string | null = meta?.parents?.[0] ?? null;
+            const sibs = parent ? await gj(`https://www.googleapis.com/drive/v3/files?supportsAllDrives=true&includeItemsFromAllDrives=true&q=${encodeURIComponent(`'${parent}' in parents and trashed=false`)}&fields=files(name)`) : null;
+            if ((sibs?.files ?? []).some((f: any) => /^advisor files$/i.test(String(f.name).trim()))) {
+              await db.from("households").update({ vault_folder_id: parent }).eq("id", h.id);
+              done.push({ name: h.name, kind: "Older Vault", ok: true, detail: "Already the current layout: recorded its Household Vault folder" });
+              continue;
+            }
+            const r = await provisionClientFolderTree(db, h.id, "vault_catchup", { rebuild: true, requestedBy: { id: staff.userId, email: staff.email } });
+            if (r.ok) {
+              await db.from("vault_audit_log").insert({ household_id: h.id, actor_type: "staff", actor_id: staff.userId, actor_label: "staff", actor_email: staff.email, action: "reprovision", drive_id: r.vaultRootFolderId ?? null, drive_name: null, metadata: { household_id: h.id, via: "vault_catchup", previous_root: r.previousRoot ?? oldRoot, note: "A new Vault structure was built beside the old one. The old Drive folders were not changed." } });
+            }
+            done.push({ name: h.name, kind: "Older Vault", ok: r.ok, detail: r.ok ? `New structure built${r.personalDrawers ? `, ${r.personalDrawers} personal drawer${r.personalDrawers === 1 ? "" : "s"}` : ""}. Old folder untouched: https://drive.google.com/drive/folders/${r.previousRoot ?? oldRoot}` : String(r.error) });
+          } catch (e) { done.push({ name: h.name, kind: "Older Vault", ok: false, detail: e instanceof Error ? e.message : String(e) }); }
+        }
+      }
+      if (!plan.provision.length && !plan.legacy.length) {
         const token = plan.drawers.length ? await getServiceGoogleAccessToken(db) : "";
         for (const h of plan.drawers.slice(0, 6)) {
           try { const n = await ensurePersonalDrawers(db, h.id, token, "vault_catchup"); done.push({ name: h.name, kind: "Drawers", ok: true, detail: `${n} personal drawer${n === 1 ? "" : "s"} created` }); }
