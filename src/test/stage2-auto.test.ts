@@ -38,3 +38,33 @@ describe("an older statement does not set an account back", () => {
     expect(update.values).toEqual({ book_value: 40_000 });
   });
 });
+
+import { looksLikeInsurancePolicy } from "../../supabase/functions/_shared/vault-apply";
+describe("a statement never duplicates, collides with, or mislabels an account", () => {
+  const base = (over: any = {}) => ({ householdId: "hh", members: [{ id: "c1", first_name: "A", last_name: "B", family_role: "head_of_family" }], vineyard: [], storehouses: [], holdingTank: [], sourceFile: null, statementDate: "2026-08-10", ...over }) as any;
+  const acct = (over: any = {}) => ({ account_name: "iA Financial - Universal Life", account_number: "9572047153", current_value: 1000, book_value: 900, ...over });
+
+  it("does not treat two contracts that share a name as one account", () => {
+    const ctx = base({ holdingTank: [{ id: "h1", account_name: "iA Financial - Universal Life", account_number: "9572047145", contact_id: "c1" }] });
+    const plan = planInvestmentApply([acct({ account_name: "iA Financial - TFSA", account_number: "111" })], base({ holdingTank: [{ id: "h1", account_name: "iA Financial - TFSA", account_number: "222", contact_id: "c1" }] }));
+    expect(plan.some((w) => w.op === "update")).toBe(false); // a different number is a different account
+    expect(plan.some((w) => w.op === "insert")).toBe(true);
+    // the same name still matches when the live row has no number of its own
+    const unnumbered = planInvestmentApply([acct({ account_name: "iA Financial - TFSA", account_number: "111" })], base({ holdingTank: [{ id: "h2", account_name: "iA Financial - TFSA", account_number: null, contact_id: "c1" }] }));
+    expect(unnumbered.some((w) => w.op === "update" && (w as any).id === "h2")).toBe(true);
+    expect(ctx).toBeTruthy();
+  });
+  it("skips an account that was already moved into a Vineyard or Storehouse, instead of adding it again", () => {
+    const plan = planInvestmentApply([acct({ account_name: "iA Financial - RESP", account_number: "1819025742" })], base({ movedNumbers: ["1819025742"] }));
+    expect(plan).toEqual([{ op: "skip", label: "iA Financial - RESP", reason: expect.stringMatching(/already been moved/) }]);
+    expect(autoApproveDecision("investment", "VERIFIED", [], plan)).toMatchObject({ ok: false, reason: expect.stringMatching(/already been moved/) });
+  });
+  it("skips an insurance contract read as an investment account", () => {
+    expect(looksLikeInsurancePolicy({ account_name: "iA Financial - Whole Life Insurance (iA PAR Wealth)" })).toBe(true);
+    expect(looksLikeInsurancePolicy({ account_name: "iA Financial - Universal Life" })).toBe(true);
+    expect(looksLikeInsurancePolicy({ account_name: "iA Financial - TFSA" })).toBe(false);
+    expect(looksLikeInsurancePolicy({ account_name: "iA RRSP · Life cycle fund", account_type: "RRSP" })).toBe(false);
+    const plan = planInvestmentApply([acct()], base());
+    expect(plan[0]).toMatchObject({ op: "skip", reason: expect.stringMatching(/insurance policy/) });
+  });
+});

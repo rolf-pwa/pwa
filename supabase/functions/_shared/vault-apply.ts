@@ -99,7 +99,9 @@ export type PlannedWrite =
   | { op: "update"; table: "vineyard_accounts" | "storehouses" | "holding_tank" | "insurance_policies"; id: string; values: Record<string, unknown>; label: string }
   | { op: "insert"; table: "holding_tank" | "insurance_policies"; values: Record<string, unknown>; label: string; key?: string }
   | { op: "snapshot"; target: { table: "vineyard_accounts" | "storehouses" | "holding_tank"; id?: string; key?: string }; values: Record<string, unknown>; label: string }
-  | { op: "upsert"; table: "estate_documents"; onConflict: string; values: Record<string, unknown>; label: string };
+  | { op: "upsert"; table: "estate_documents"; onConflict: string; values: Record<string, unknown>; label: string }
+  /** Nothing is written: the account needs a person (it was already moved, or it is an insurance policy). */
+  | { op: "skip"; label: string; reason: string };
 
 export interface InvestmentContext {
   householdId: string;
@@ -112,7 +114,13 @@ export interface InvestmentContext {
   statementDate?: string | null;
   /** The latest value date held for each account (`table:id`). A statement older than that never overwrites the account's current value. */
   valueDates?: Record<string, string>;
+  /** Account numbers of Holding Tank rows already moved into a Vineyard or Storehouse: a statement for one must update that account, never add a second copy. */
+  movedNumbers?: string[];
 }
+
+/** A statement for an insurance contract (whole life, universal life, PAR, term) is read as an insurance policy, not as an investment account. */
+export const looksLikeInsurancePolicy = (a: { account_name?: string | null; account_type?: string | null }) =>
+  /(life insurance|universal life|whole life|par estate|par wealth|term life|critical illness)/i.test(`${a.account_name ?? ""}`) && !/(rrsp|tfsa|resp|rrif|lira|non-?registered|fhsa)/i.test(`${a.account_name ?? ""} ${a.account_type ?? ""}`);
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const dayAfter = (iso: string) => new Date(Date.parse(`${iso}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
@@ -177,7 +185,9 @@ export function planInvestmentApply(accounts: Record<string, any>[], ctx: Invest
       ? { withdrawals_ytd: av.withdrawals_ytd, withdrawals_as_of: ctx.statementDate as string }
       : {};
 
-    const live = (num && vByNum.get(num)) || vByName.get(name) || sByName.get(name);
+    // The same name on two contracts is not the same account: fall back to the name only when the account has no number of its own to compare.
+    const sameOrUnnumbered = <T extends { account_number?: string | null }>(row: T | undefined) => (row && (!num || !normalizeToken(row.account_number) || normalizeToken(row.account_number) === num) ? row : undefined);
+    const live = (num && vByNum.get(num)) || sameOrUnnumbered(vByName.get(name)) || sByName.get(name);
     if (live) {
       const isVineyard = "account_name" in live;
       const table = isVineyard ? "vineyard_accounts" : "storehouses";
@@ -186,7 +196,15 @@ export function planInvestmentApply(accounts: Record<string, any>[], ctx: Invest
       if ((live as any).contact_id) for (const snap of boySnapshots(a, ctx.statementDate)) writes.push({ op: "snapshot", target: { table: isVineyard ? "vineyard_accounts" : "storehouses", id: live.id }, values: { ...snap, contact_id: (live as any).contact_id }, label });
       continue;
     }
-    const tank = (num && hByNum.get(num)) || hByName.get(name);
+    const tank = (num && hByNum.get(num)) || sameOrUnnumbered(hByName.get(name));
+    if (!tank && looksLikeInsurancePolicy(a)) {
+      writes.push({ op: "skip", label, reason: "This is an insurance policy, not an investment account. Approve it from the insurance reading." });
+      continue;
+    }
+    if (!tank && num && (ctx.movedNumbers ?? []).map(normalizeToken).includes(num)) {
+      writes.push({ op: "skip", label, reason: "This account has already been moved into a Vineyard or Storehouse. Update it there; adding it again would duplicate it." });
+      continue;
+    }
     if (tank) {
       const values = withoutStaleValue({ ...figures, ...income, ...withdrawals }, "holding_tank", tank.id, ctx);
       if (Object.keys(values).length) writes.push({ op: "update", table: "holding_tank", id: tank.id, values, label });
@@ -330,6 +348,7 @@ export async function applyPlan(admin: any, plan: PlannedWrite[]): Promise<Apply
       result.writes.push({ op: w.op, table: w.table, label: w.label });
       continue;
     }
+    if (w.op === "skip") { result.writes.push({ op: "skip", table: "", label: `${w.label}: ${w.reason}` }); continue; }
     const q = w.op === "update" ? admin.from(w.table).update(w.values).eq("id", w.id) : admin.from(w.table).upsert(w.values, { onConflict: w.onConflict });
     const { error } = await q;
     if (error) throw new Error(`${w.op} ${w.table} (${w.label}) failed: ${error.message}`);
