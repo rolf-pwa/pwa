@@ -110,6 +110,8 @@ export interface InvestmentContext {
   sourceFile: string | null;
   /** The statement's date (YYYY-MM-DD), recorded as the as-of date of the income funds figure. */
   statementDate?: string | null;
+  /** The latest value date held for each account (`table:id`). A statement older than that never overwrites the account's current value. */
+  valueDates?: Record<string, string>;
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -141,6 +143,14 @@ export function boySnapshots(a: Record<string, any>, statementDate: string | nul
 
 const numericOnly = (o: Record<string, unknown>) => Object.fromEntries(Object.entries(o).filter(([, v]) => typeof v === "number"));
 
+/** An older statement must not set an account back: drop its current value when a newer value date is already held. */
+export function withoutStaleValue(values: Record<string, unknown>, table: string, id: string, ctx: { statementDate?: string | null; valueDates?: Record<string, string> }) {
+  const held = ctx.valueDates?.[`${table}:${id}`];
+  if (!held || !ctx.statementDate || held <= ctx.statementDate) return values;
+  const { current_value: _drop, ...rest } = values;
+  return rest;
+}
+
 export function planInvestmentApply(accounts: Record<string, any>[], ctx: InvestmentContext): PlannedWrite[] {
   const vByNum = new Map(ctx.vineyard.filter((a) => a.account_number).map((a) => [normalizeToken(a.account_number), a]));
   const vByName = new Map(ctx.vineyard.map((a) => [normalizeToken(a.account_name), a]));
@@ -170,14 +180,15 @@ export function planInvestmentApply(accounts: Record<string, any>[], ctx: Invest
     const live = (num && vByNum.get(num)) || vByName.get(name) || sByName.get(name);
     if (live) {
       const isVineyard = "account_name" in live;
-      const values = isVineyard ? { ...figures, ...income, ...withdrawals } : figures;
-      if (Object.keys(values).length) writes.push({ op: "update", table: isVineyard ? "vineyard_accounts" : "storehouses", id: live.id, values, label });
+      const table = isVineyard ? "vineyard_accounts" : "storehouses";
+      const values = withoutStaleValue(isVineyard ? { ...figures, ...income, ...withdrawals } : figures, table, live.id, ctx);
+      if (Object.keys(values).length) writes.push({ op: "update", table, id: live.id, values, label });
       if ((live as any).contact_id) for (const snap of boySnapshots(a, ctx.statementDate)) writes.push({ op: "snapshot", target: { table: isVineyard ? "vineyard_accounts" : "storehouses", id: live.id }, values: { ...snap, contact_id: (live as any).contact_id }, label });
       continue;
     }
     const tank = (num && hByNum.get(num)) || hByName.get(name);
     if (tank) {
-      const values = { ...figures, ...income, ...withdrawals };
+      const values = withoutStaleValue({ ...figures, ...income, ...withdrawals }, "holding_tank", tank.id, ctx);
       if (Object.keys(values).length) writes.push({ op: "update", table: "holding_tank", id: tank.id, values, label });
       if ((tank as any).contact_id) for (const snap of boySnapshots(a, ctx.statementDate)) writes.push({ op: "snapshot", target: { table: "holding_tank", id: tank.id }, values: { ...snap, contact_id: (tank as any).contact_id }, label });
       continue;

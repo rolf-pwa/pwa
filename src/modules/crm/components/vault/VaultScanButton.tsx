@@ -4,7 +4,7 @@ import { Loader2, ScanSearch } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { Button } from "@/shared/components/ui/button";
-import { heldForReviewMessage, isHeldForReview } from "@/modules/crm/lib/vaultScanMessage";
+import { v2ScanOutcome } from "@/modules/crm/lib/vaultScanMessage";
 
 /** Reads new investment statements, insurance policies and estate documents filed in the Vault. V2 households get the results in Glass-Box Review. */
 export function VaultScanButton({ householdId, onDone }: { householdId: string; onDone?: () => void }) {
@@ -19,11 +19,12 @@ export function VaultScanButton({ householdId, onDone }: { householdId: string; 
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      if (isHeldForReview(data)) {
-        // V2 household: nothing was written; the extractions wait for approval in Glass-Box Review.
-        toast.success(heldForReviewMessage(data.v2HeldForReview), {
+      const v2 = v2ScanOutcome(data);
+      if (v2) {
+        // V2 household: verified items were approved automatically; anything else waits in Glass-Box Review.
+        toast.success(v2.message, {
           duration: 15000,
-          action: { label: "Review now", onClick: () => navigate("/glass-box-review") },
+          ...(v2.needsReview ? { action: { label: "Review now", onClick: () => navigate("/glass-box-review") } } : {}),
         });
         if (data.errors?.length) {
           console.error("vault-statement-scan file errors:", data.errors);
