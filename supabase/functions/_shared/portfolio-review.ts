@@ -117,11 +117,11 @@ export function resolveProfile(p: InvestorProfile | null, models: ModelPortfolio
 
 /** Statements print whole percentages, so a mix within half a point of the target is on target. */
 export const HARD_LINE_TOLERANCE = 0.5;
-/** A fund's name without the statement's series and sales-charge prefix ("3603H-NSC-" or "3233B-DSC-"), so it can be matched to a model's fund. */
+/** A fund's name without the statement's series and sales-charge prefix ("3603H-NSC-", "3233B-DSC-" or the F-series "47258-F-"), so it can be matched to a model's fund. */
 export function normalizeFundName(raw: string | null | undefined): string {
-  return String(raw ?? "").replace(/^\s*\d+[A-Za-z]?-[A-Za-z]{3}-/, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return String(raw ?? "").replace(/^\s*\d+[A-Za-z]?-[A-Za-z0-9]{1,4}-/, "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
-const cleanFundName = (raw: string) => raw.replace(/^\s*\d+[A-Za-z]?-[A-Za-z]{3}-/, "").trim();
+const cleanFundName = (raw: string) => raw.replace(/^\s*\d+[A-Za-z]?-[A-Za-z0-9]{1,4}-/, "").trim();
 
 export interface FundDeviationRow { name: string; modelPct: number | null; actualPct: number; actualValue: number; /** Actual less model, in points. Positive: holds more than the model. */ diffPts: number; inModel: boolean }
 export interface ModelComparison {
@@ -163,7 +163,8 @@ export function compareToModel(funds: FundRow[], model: ModelPortfolio): ModelCo
   return { modelKey: model.key, modelLabel: model.label, modelAsOf: model.asOf, rows, offModelPct, activeSharePct, totalValue: Math.round(total), moveValue: Math.round((activeSharePct / 100) * total) };
 }
 
-export type DriftStatus = "within" | "too_much_income" | "too_little_income" | "no_target" | "no_data";
+/** "by_account": the accounts are set to different profiles, so the household as a whole has no single target; each account is measured against its own. */
+export type DriftStatus = "within" | "too_much_income" | "too_little_income" | "no_target" | "no_data" | "by_account";
 export interface Drift { status: DriftStatus; targetIncomePct: number | null; actualIncomePct: number | null; bandPct: number; /** iA's income range for the profile, when the profile is one of its models. */ rangeMin?: number | null; rangeMax?: number | null; profileLabel?: string | null; /** Dollars to move out of income (positive) or into income (negative) to reach target. */ moveToIncome: number | null }
 
 export interface ClassTotals { income: number; canadian_equity: number; us_intl_equity: number; equity_other: number; other: number }
@@ -204,7 +205,7 @@ export interface Pack {
   asOf: string | null;
   totalValue: number;
   accounts: PackAccountOut[];
-  household: { modelComparison: ModelComparison | null; classTotals: ClassTotals; coveredValue: number; coveragePct: number | null; drift: Drift; valueWeightedYtd: number | null; changeSincePrior: number | null; changeYtd: number | null };
+  household: { modelComparison: ModelComparison | null; /** One per model when the accounts are set to different profiles. */ modelComparisons: ModelComparison[]; classTotals: ClassTotals; coveredValue: number; coveragePct: number | null; drift: Drift; valueWeightedYtd: number | null; changeSincePrior: number | null; changeYtd: number | null };
   profile: { household: InvestorProfile | null; byAccount: number };
   /** The iA model set in use (null when no profile points at one). */
   modelAsOf: string | null;
@@ -289,6 +290,8 @@ export function buildPortfolioPack(input: { accounts: PackAccount[]; profiles: I
     const keys = new Set(withTarget.map((a) => profileFor(a)?.model?.key ?? "custom"));
     const only = keys.size === 1 && !keys.has("custom") ? profileFor(withTarget[0]) : null;
     hhDrift = driftFor(hhTotals, only ? only : tgt === null ? null : { incomePct: round1(tgt), bandPct: 0 });
+    // Different profiles on different accounts: no household target, each account is held to its own.
+    if (!only && keys.size > 1) hhDrift = { ...hhDrift, status: "by_account", rangeMin: null, rangeMax: null, profileLabel: null };
   } else hhDrift = driftFor(hhTotals, null);
 
   const ytdW = out.filter((a) => a.returns.ytd !== null && (a.value ?? 0) > 0);
@@ -333,6 +336,7 @@ export function buildPortfolioPack(input: { accounts: PackAccount[]; profiles: I
     accounts: out,
     household: {
       modelComparison: householdModelComparison(out),
+      modelComparisons: householdModelComparisons(out),
       classTotals: hhTotals, coveredValue, coveragePct: totalValue > 0 ? round1((coveredValue / totalValue) * 100) : null, drift: hhDrift, valueWeightedYtd,
       changeSincePrior: priorKnown.length ? priorKnown.reduce((s, a) => s + (a.changeSincePrior as number), 0) : null,
       changeYtd: ytdKnown.length ? ytdKnown.reduce((s, a) => s + (a.changeYtd as number), 0) : null,
@@ -349,6 +353,21 @@ export function buildPortfolioPack(input: { accounts: PackAccount[]; profiles: I
 }
 
 /** The household's funds against one model, when every profiled account points at the same model; otherwise null. */
+/** One comparison per model: the accounts on the same model are compared together against it. */
+function householdModelComparisons(accounts: PackAccountOut[]): ModelComparison[] {
+  const withModel = accounts.filter((a) => a.modelComparison && a.statement);
+  const keys = [...new Set(withModel.map((a) => a.modelComparison!.modelKey))];
+  const out: ModelComparison[] = [];
+  for (const k of keys) {
+    const group = withModel.filter((a) => a.modelComparison!.modelKey === k);
+    const first = group[0].modelComparison!;
+    const model: ModelPortfolio = { asOf: first.modelAsOf, key: first.modelKey, label: first.modelLabel, incomeMin: 0, incomeMax: 0, equityMin: 0, equityMax: 0, incomeTarget: 0, funds: first.rows.filter((r) => r.inModel).map((r) => ({ name: r.name, weight: r.modelPct as number })) };
+    const mc = compareToModel(group.flatMap((a) => a.statement!.funds), model);
+    if (mc) out.push(mc);
+  }
+  return out;
+}
+
 function householdModelComparison(accounts: PackAccountOut[]): ModelComparison | null {
   const withModel = accounts.filter((a) => a.modelComparison && a.statement);
   if (!withModel.length) return null;

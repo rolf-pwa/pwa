@@ -261,3 +261,40 @@ describe("the suggested rebalancing note", () => {
     expect(suggestedRebalanceNote(null)).toBe("");
   });
 });
+
+import { normalizeFundName } from "../../supabase/functions/_shared/portfolio-review";
+describe("accounts on different profiles", () => {
+  const growth: ModelPortfolio = { asOf: "2026-05-31", key: "growth", label: "Growth", incomeMin: 15, incomeMax: 35, equityMin: 65, equityMax: 85, incomeTarget: 25, funds: [{ name: "Fixed income managed portfolio (iA)", weight: 25 }, { name: "Fidelity Insights", weight: 75 }] };
+  const aggressive: ModelPortfolio = { asOf: "2026-05-31", key: "aggressive", label: "Aggressive", incomeMin: 0, incomeMax: 10, equityMin: 90, equityMax: 100, incomeTarget: 0, funds: [{ name: "Fidelity Insights", weight: 100 }] };
+  const fundsOf = (income: number, equity: number) => [{ name: "46035-F-Fixed Income Managed Portfolio (iA)", category: "Income Funds", value: income * 1000 }, { name: "41068-F-Fidelity Insights", category: "U.S. & International Equity Funds", value: equity * 1000 }];
+  const mixed = () => buildPortfolioPack({
+    accounts: [
+      acct({ id: "g", number: "1111", name: "iA RRSP", value: 100_000, guarantee: null, statement: { statementDate: "2026-08-10", funds: fundsOf(25, 75) } }),
+      acct({ id: "a", number: "2222", name: "iA TFSA", value: 50_000, guarantee: null, statement: { statementDate: "2026-08-10", funds: fundsOf(5, 45) } }),
+    ],
+    profiles: [{ accountNumber: "1111", label: null, incomePct: 25, equityPct: 75, bandPct: 0, profileKey: "growth" }, { accountNumber: "2222", label: null, incomePct: 0, equityPct: 100, bandPct: 0, profileKey: "aggressive" }],
+    today: "2026-10-16", models: [growth, aggressive],
+  });
+
+  it("strips the F-series code so those funds match the model", () => {
+    expect(normalizeFundName("41068-F-Fidelity Insights")).toBe(normalizeFundName("Fidelity Insights"));
+    expect(normalizeFundName("46035-FEL-Fixed Income Managed Portfolio (iA)")).toBe(normalizeFundName("Fixed income managed portfolio (iA)"));
+    expect(normalizeFundName("40193-NSC-Global Opportunities (Loomis Sayles)")).toBe(normalizeFundName("Global Opportunities (Loomis Sayles)"));
+  });
+  it("has no single household target, and one funds comparison per model", () => {
+    const p = mixed();
+    expect(p.household.drift.status).toBe("by_account");
+    expect(p.household.modelComparison).toBeNull();
+    expect(p.household.modelComparisons.map((m) => m.modelLabel).sort()).toEqual(["Aggressive", "Growth"]);
+    expect(p.household.modelComparisons.find((m) => m.modelLabel === "Growth")!.offModelPct).toBe(0); // F-series funds are the model's funds
+  });
+  it("tells the client each account is measured against its own profile, with a funds set per model", () => {
+    const v = buildClientView(mixed(), ALL_INCLUDED, "n", "Smith", "review");
+    expect(v.mix!.commentary[0]).toMatch(/different risk profiles.*2 of your 2 accounts are inside/);
+    expect(v.mix!.commentary.join(" ")).not.toMatch(/profile profile|target of/);
+    expect(v.mix!.targetIncomePct).toBeNull(); // no single household target
+    expect(v.funds).toBeNull();
+    expect(v.fundsSets!.map((f) => f.modelLabel).sort()).toEqual(["Aggressive", "Growth"]);
+    expect(v.fundsSets!.find((f) => f.modelLabel === "Growth")!.accounts).toEqual(["iA RRSP …1111"]);
+  });
+});

@@ -102,14 +102,36 @@ function Segments({ parts, label }: { parts: { pct: number; bg: string; title: s
  * The household's Portfolio Review, as Rolf approved it. Every figure was worked out in code and frozen when he published; the client sees
  * exactly that. Built to be looked at, not read: charts first, the numbers behind them one tap away. Staff see it too, as a preview.
  */
+/** Your funds against one model portfolio. With accounts on different profiles there is one of these per model. */
+const FundsSection = ({ funds, accounts }: { funds: NonNullable<ClientView["funds"]>; accounts?: string[] }) => {
+  const modelFunds = funds.rows.filter((r) => r.inModel);
+  const otherHeld = funds.rows.filter((r) => !r.inModel).reduce((s, r) => s + r.heldPct, 0);
+  return (
+    <Section title={`Your funds and our ${funds.modelLabel} model portfolio`} lead={`${accounts?.length ? `${accounts.join(", ")}: ` : ""}${Math.round(funds.heldInModelPct)}% of what you hold is in the funds our model portfolio uses.`}>
+            <div className="space-y-2.5">
+              <div><p className="mb-1 text-xs text-muted-foreground">Our model portfolio</p><Segments label="Our model portfolio's funds" parts={modelFunds.map((r, i) => ({ pct: r.modelPct ?? 0, bg: FUND_COLORS[i % FUND_COLORS.length], title: `${r.name} ${r.modelPct}%` }))} /></div>
+              <div><p className="mb-1 text-xs text-muted-foreground">Your portfolio</p><Segments label="Your funds" parts={[...modelFunds.map((r, i) => ({ pct: r.heldPct, bg: FUND_COLORS[i % FUND_COLORS.length], title: `${r.name} ${r.heldPct}%` })), { pct: otherHeld, bg: OTHER_BG, title: `Other funds ${otherHeld.toFixed(1)}%` }]} /></div>
+              <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                {modelFunds.map((r, i) => <li key={r.name} className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: FUND_COLORS[i % FUND_COLORS.length] }} />{r.name}</li>)}
+                {otherHeld > 0 && <li className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: OTHER_BG }} />Other funds (not part of the model)</li>}
+              </ul>
+            </div>
+            <Commentary lines={funds.commentary} />
+            <p className="text-xs text-muted-foreground">Our model portfolios as at {day(funds.modelAsOf)}.</p>
+            <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Each fund</summary>
+              <table className="mt-2 w-full"><thead><tr className="text-left"><th className="py-1 pr-2 font-normal">Fund</th><th className="px-2 text-right font-normal">Model</th><th className="pl-2 text-right font-normal">You hold</th></tr></thead>
+                <tbody>{funds.rows.map((r) => <tr key={r.name} className="border-t border-border/60"><td className="py-1 pr-2">{r.name}{!r.inModel ? " (not part of the model)" : ""}</td><td className="px-2 text-right">{r.modelPct === null ? "—" : `${r.modelPct}%`}</td><td className="pl-2 text-right">{pct(r.heldPct)}</td></tr>)}</tbody></table>
+            </details>
+          </Section>
+  );
+};
+
 export function PortalPortfolioReview({ view, publishedAt, preview = false, statement, onAuthorize, onTalk, authorized, viewerId, authorizedIds }: { view: ClientView; publishedAt?: string; preview?: boolean; statement?: string; onAuthorize?: (ids: string[]) => Promise<void>; onTalk?: () => Promise<void>; authorized?: { at: string } | null; viewerId?: string | null; authorizedIds?: string[] }) {
   const isRebalance = view.kind === "rebalance";
   const history = view.history ?? [];
   const up = (view.summary.ytdPct ?? 0) >= 0;
   const maxValue = Math.max(1, ...(view.accounts ?? []).map((a) => a.value ?? 0));
   const funds = view.funds;
-  const modelFunds = funds ? funds.rows.filter((r) => r.inModel) : [];
-  const otherHeld = funds ? funds.rows.filter((r) => !r.inModel).reduce((s, r) => s + r.heldPct, 0) : 0;
   const resetMax = Math.max(1, ...(view.reset?.rows ?? []).map((r) => r.newGuarantee));
 
   return (
@@ -182,24 +204,8 @@ export function PortalPortfolioReview({ view, publishedAt, preview = false, stat
           </Section>
         )}
 
-        {funds && (
-          <Section title={`Your funds and our ${funds.modelLabel} model portfolio`} lead={`${Math.round(funds.heldInModelPct)}% of what you hold is in the funds our model portfolio uses.`}>
-            <div className="space-y-2.5">
-              <div><p className="mb-1 text-xs text-muted-foreground">Our model portfolio</p><Segments label="Our model portfolio's funds" parts={modelFunds.map((r, i) => ({ pct: r.modelPct ?? 0, bg: FUND_COLORS[i % FUND_COLORS.length], title: `${r.name} ${r.modelPct}%` }))} /></div>
-              <div><p className="mb-1 text-xs text-muted-foreground">Your portfolio</p><Segments label="Your funds" parts={[...modelFunds.map((r, i) => ({ pct: r.heldPct, bg: FUND_COLORS[i % FUND_COLORS.length], title: `${r.name} ${r.heldPct}%` })), { pct: otherHeld, bg: OTHER_BG, title: `Other funds ${otherHeld.toFixed(1)}%` }]} /></div>
-              <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                {modelFunds.map((r, i) => <li key={r.name} className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: FUND_COLORS[i % FUND_COLORS.length] }} />{r.name}</li>)}
-                {otherHeld > 0 && <li className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: OTHER_BG }} />Other funds (not part of the model)</li>}
-              </ul>
-            </div>
-            <Commentary lines={funds.commentary} />
-            <p className="text-xs text-muted-foreground">Our model portfolios as at {day(funds.modelAsOf)}.</p>
-            <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Each fund</summary>
-              <table className="mt-2 w-full"><thead><tr className="text-left"><th className="py-1 pr-2 font-normal">Fund</th><th className="px-2 text-right font-normal">Model</th><th className="pl-2 text-right font-normal">You hold</th></tr></thead>
-                <tbody>{funds.rows.map((r) => <tr key={r.name} className="border-t border-border/60"><td className="py-1 pr-2">{r.name}{!r.inModel ? " (not part of the model)" : ""}</td><td className="px-2 text-right">{r.modelPct === null ? "—" : `${r.modelPct}%`}</td><td className="pl-2 text-right">{pct(r.heldPct)}</td></tr>)}</tbody></table>
-            </details>
-          </Section>
-        )}
+        {funds && <FundsSection funds={funds} />}
+        {!funds && view.fundsSets?.map((f) => <FundsSection key={f.modelLabel} funds={f} accounts={f.accounts} />)}
 
         {view.rebalance && (
           <Section title="What I propose" lead="To bring these accounts back in line with your profile, I propose switching between funds inside each account. No money moves between accounts.">

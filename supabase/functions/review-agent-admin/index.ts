@@ -299,7 +299,7 @@ Deno.serve(async (req) => {
         const { data: ob } = await db.from("review_obligations").select("*").eq("household_id", householdId).eq("kind", "rebalancing").eq("mode", "live").neq("status", "cancelled").is("completed_at", null).gte("window_end", pacificDate(Date.now())).order("window_start", { ascending: true }).limit(1).maybeSingle();
         if (!ob) return json({ error: "No rebalancing is due for this household." }, 400);
         if (ob.acknowledged_at) return json({ error: "The client has already authorized this rebalancing." }, 400);
-        if (!view.proposal && !view.funds) return json({ error: "There is nothing to show: the household has no fund detail or nothing to propose." }, 400);
+        if (!view.proposal && !view.funds && !view.fundsSets?.length) return json({ error: "There is nothing to show: the household has no fund detail or nothing to propose." }, 400);
         const nowIso = new Date().toISOString();
         const wasPublished = Boolean(ob.published_at);
         await db.from("review_obligations").update({ published_at: ob.published_at ?? nowIso, published_by: staff.userId, proposal_summary: note.trim(), proposal: view.proposal ?? null, updated_at: nowIso }).eq("id", ob.id);
