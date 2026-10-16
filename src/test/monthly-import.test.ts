@@ -75,3 +75,12 @@ describe("completeness", () => {
     expect([...duplicateContracts(["1", "2", "1", "3", "2"])].sort()).toEqual(["1", "2"]);
   });
 });
+
+import { closeSnapshotRow } from "../../supabase/functions/_shared/monthly-import";
+describe("closing an account", () => {
+  it("writes a zero balance at the month-end and keeps the year's start value", () => {
+    const r = closeSnapshotRow({ contactId: "c", holdingTankId: "h", snapshotDate: "2026-09-30", boy: 27_707.08, userId: "u" });
+    expect(r).toMatchObject({ contact_id: "c", holding_tank_id: "h", vineyard_account_id: null, snapshot_date: "2026-09-30", reporting_year: 2026, boy_value: 27_707.08, current_value: 0, ytd_value: 0, current_harvest: 0, created_by: "u" });
+    expect(r.notes).toContain("2026-09-30");
+  });
+});

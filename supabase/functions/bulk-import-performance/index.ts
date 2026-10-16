@@ -8,7 +8,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import {
-  CHANGE_THRESHOLD, MANAGED_CUSTODIANS, classifyChange, duplicateContracts, missingFromFile, monthCheck, normalizeCustodian, resolveBoy, yearToDatePct,
+  closeSnapshotRow, CHANGE_THRESHOLD, MANAGED_CUSTODIANS, classifyChange, duplicateContracts, missingFromFile, monthCheck, normalizeCustodian, resolveBoy, yearToDatePct,
   type ExpectedAccount,
 } from "../_shared/monthly-import.ts";
 
@@ -73,8 +73,34 @@ Deno.serve(async (req) => {
     const { data: { user } } = await userClient.auth.getUser();
     if (!user) return json({ error: "unauthorized" }, 401);
 
-    const { mode = "preview", snapshot_date, rows, source_file, approved_exceptions } = await req.json();
+    const body = await req.json();
+    const { mode = "preview", snapshot_date, rows, source_file, approved_exceptions } = body;
     if (!snapshot_date) throw new Error("snapshot_date required (YYYY-MM-DD)");
+
+    // Close accounts that left the monthly file (liquidated or transferred out): a zero balance at this month-end, so they stop showing their last value.
+    if (mode === "close") {
+      const accts: { id: string; table: string }[] = Array.isArray(body.accounts) ? body.accounts.slice(0, 200) : [];
+      const closed: string[] = [];
+      const errors: { id: string; error: string }[] = [];
+      for (const a of accts) {
+        try {
+          const isVine = a.table === "vineyard_accounts";
+          const { data: acct } = await supabase.from(isVine ? "vineyard_accounts" : "holding_tank").select("id, contact_id, book_value, notes").eq("id", a.id).maybeSingle();
+          if (!acct?.contact_id) throw new Error("account or its contact not found");
+          const col = isVine ? "vineyard_account_id" : "holding_tank_id";
+          const { data: prior } = await supabase.from("account_harvest_snapshots").select("boy_value").eq(col, a.id).eq("reporting_year", Number(String(snapshot_date).slice(0, 4))).order("snapshot_date", { ascending: false }).limit(1).maybeSingle();
+          const boy = toNum(prior?.boy_value) ?? toNum(acct.book_value) ?? 0;
+          const row = closeSnapshotRow({ contactId: acct.contact_id, holdingTankId: isVine ? null : a.id, vineyardAccountId: isVine ? a.id : null, snapshotDate: snapshot_date, boy, userId: user.id });
+          const { data: es } = await supabase.from("account_harvest_snapshots").select("id").eq("snapshot_date", snapshot_date).eq(col, a.id).maybeSingle();
+          const w = es?.id ? await supabase.from("account_harvest_snapshots").update(row).eq("id", es.id) : await supabase.from("account_harvest_snapshots").insert(row);
+          if (w.error) throw w.error;
+          await supabase.from(isVine ? "vineyard_accounts" : "holding_tank").update({ current_value: 0, notes: [acct.notes, `Closed ${snapshot_date}.`].filter(Boolean).join("\n"), updated_at: new Date().toISOString() }).eq("id", a.id);
+          closed.push(a.id);
+        } catch (e) { errors.push({ id: a.id, error: (e as Error).message }); }
+      }
+      return json({ ok: true, closed, errors });
+    }
+
     if (!Array.isArray(rows)) throw new Error("rows[] required");
     const approved = new Set<string>((Array.isArray(approved_exceptions) ? approved_exceptions : []).map((c: unknown) => String(c).trim()));
 
