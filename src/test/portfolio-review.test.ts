@@ -285,3 +285,23 @@ describe("a reset recorded after the statement", () => {
     expect(applyResetRecord(null, "2026-06-30", { date: "2026-10-01", guaranteedAtDeath: 1 })).toBeNull();
   });
 });
+
+describe("an account that stopped reporting", () => {
+  const withDates = (asOfs: (string | null)[]) => buildPortfolioPack({ accounts: asOfs.map((d, i) => acct({ id: `a${i}`, number: `${1000 + i}`, asOf: d })), profiles: [], today: "2026-10-16", models: [] });
+  it("asks whether it has closed when its value is much older than the household's newest", () => {
+    const g = withDates(["2026-09-30", "2026-06-30"]).gaps.filter((x) => x.includes("no monthly value since"));
+    expect(g).toHaveLength(1);
+    expect(g[0]).toContain("2026-06-30");
+    expect(g[0]).toMatch(/mark it closed/);
+  });
+  it("says nothing when every account reported within a month or so", () => {
+    expect(withDates(["2026-09-30", "2026-08-31"]).gaps.filter((x) => x.includes("monthly value"))).toEqual([]);
+  });
+  it("flags an account with no monthly value at all, once others have one", () => {
+    expect(withDates(["2026-09-30", null]).gaps.some((x) => x.includes("no monthly value on file"))).toBe(true);
+  });
+  it("leaves a zero balance out, so a closed account stops showing", () => {
+    const p = buildPortfolioPack({ accounts: [acct({ id: "a", asOf: "2026-09-30" }), acct({ id: "b", number: "2", value: 0, asOf: "2026-09-30" })], profiles: [], today: "2026-10-16", models: [] });
+    expect(p.accounts.map((a) => a.id)).toEqual(["a"]);
+  });
+});

@@ -284,6 +284,23 @@ function PerformanceImporter() {
     } finally { setLoading(false); }
   };
 
+  // Accounts that left the file because they were closed: record a zero balance at this month-end.
+  const [closeSel, setCloseSel] = useState<Set<string>>(new Set());
+  const [closing, setClosing] = useState(false);
+  const closeSelected = async () => {
+    if (!window.confirm(`Mark ${closeSel.size} account${closeSel.size === 1 ? "" : "s"} closed with a $0 balance as of ${snapshotDate}?`)) return;
+    setClosing(true);
+    try {
+      const picked = (report?.missing ?? []).filter((m: any) => closeSel.has(m.id)).map((m: any) => ({ id: m.id, table: m.table }));
+      const { data, error } = await supabase.functions.invoke("bulk-import-performance", { body: { mode: "close", snapshot_date: snapshotDate, accounts: picked } });
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+      setReport((r: any) => ({ ...r, missing: (r?.missing ?? []).filter((m: any) => !(data.closed ?? []).includes(m.id)) }));
+      setCloseSel(new Set());
+      if (data.errors?.length) toast.error(`${data.errors.length} could not be closed`); else toast.success(`Marked ${data.closed.length} closed.`);
+    } catch (e: any) { toast.error(e.message || "Couldn't close the accounts"); } finally { setClosing(false); }
+  };
+
   const lines: any[] = report?.lines ?? [];
   const exceptionLines = lines.filter((l) => l.status === "exception");
   const routineCount = lines.filter((l) => l.status === "update" || l.status === "new_account").length;
@@ -384,8 +401,17 @@ function PerformanceImporter() {
                   <AlertTriangle className="h-3 w-3" /> {report.missing.length} account{report.missing.length === 1 ? "" : "s"} at iA or JustWealth {report.missing.length === 1 ? "is" : "are"} in the system but not in this file:
                 </div>
                 <ul className="max-h-40 space-y-0.5 overflow-y-auto rounded border p-2">
-                  {report.missing.map((m: any) => <li key={m.id}>#{m.accountNumber} — {m.owner || "no owner"} · {m.label} · {m.custodian}</li>)}
+                  {report.missing.map((m: any) => (
+                    <li key={m.id} className="flex items-center gap-2">
+                      <input type="checkbox" aria-label={`Close #${m.accountNumber}`} checked={closeSel.has(m.id)} onChange={() => setCloseSel((s) => { const n = new Set(s); n.has(m.id) ? n.delete(m.id) : n.add(m.id); return n; })} />
+                      <span>#{m.accountNumber} — {m.owner || "no owner"} · {m.label} · {m.custodian}</span>
+                    </li>
+                  ))}
                 </ul>
+                <div className="mt-2 flex items-center gap-2">
+                  <Button size="sm" variant="outline" disabled={!closeSel.size || closing} onClick={closeSelected}>Mark selected closed</Button>
+                  <span className="text-muted-foreground">Sets each to $0 as of {snapshotDate}. Use it for accounts that were liquidated or moved out; leave it for accounts that are only late.</span>
+                </div>
               </div>
             )}
             {report.unchecked_custodian > 0 && (

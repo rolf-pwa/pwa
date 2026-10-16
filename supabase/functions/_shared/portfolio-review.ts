@@ -220,6 +220,8 @@ export interface Pack {
 }
 
 export const STATEMENT_STALE_DAYS = 120;
+/** An account whose latest monthly value is this much older than the household's newest is probably closed or missing from the file. */
+export const STALE_VALUE_DAYS = 45;
 /** Past this many days the fund detail is too old to propose switches from without Rolf checking current holdings on iA. */
 export const HOLDINGS_STALE_DAYS = STATEMENT_STALE_DAYS;
 export const BAD_YTD_PCT = -10;
@@ -309,6 +311,15 @@ export function buildPortfolioPack(input: { accounts: PackAccount[]; profiles: I
     }
     if (a.statementAgeDays !== null && a.statementAgeDays > STATEMENT_STALE_DAYS) exceptions.push({ severity: "note", text: `${label}: the latest statement read is ${a.statementAgeDays} days old (${a.statement!.statementDate}).` });
     if (!a.statement || !a.statement.funds.length) gaps.push(`No fund detail for ${label}. Scan its latest statement to include it in the allocation.`);
+  }
+  // An account that stopped appearing in the monthly file keeps its last value for ever: ask whether it has closed.
+  const newestValueDate = out.map((a) => a.asOf).filter(Boolean).sort().pop() ?? null;
+  if (newestValueDate) {
+    for (const a of out) {
+      const label = a.name || a.number || "An account";
+      if (!a.asOf) gaps.push(`${label}: no monthly value on file. Is it missing from the monthly file?`);
+      else if (daysBetween(a.asOf, newestValueDate) > STALE_VALUE_DAYS) gaps.push(`${label}: no monthly value since ${a.asOf}, while the household's other accounts reported ${newestValueDate}. If it has closed, mark it closed on the monthly import report; if not, it is missing from the file.`);
+    }
   }
   if (!householdProfile && !out.some((a) => profileFor(a))) gaps.push("No Investor Profile on file. Add the target mix to compare against.");
   if (!out.length) gaps.push("No managed accounts found for this household.");

@@ -65,6 +65,16 @@ export function monthCheck(snapshotDate: string, latestImported: string | null, 
   return out;
 }
 
+/** The snapshot that records an account as closed at a month-end: a zero balance, so history, totals and the pack all agree. */
+export function closeSnapshotRow(i: { contactId: string; holdingTankId?: string | null; vineyardAccountId?: string | null; snapshotDate: string; boy: number; userId?: string | null }) {
+  return {
+    contact_id: i.contactId, holding_tank_id: i.holdingTankId ?? null, vineyard_account_id: i.vineyardAccountId ?? null,
+    snapshot_date: i.snapshotDate, reporting_year: Number(i.snapshotDate.slice(0, 4)),
+    boy_value: i.boy, current_value: 0, ytd_value: 0, current_harvest: 0,
+    notes: `Account closed: not in the ${i.snapshotDate} monthly file. Balance set to zero.`, created_by: i.userId ?? null,
+  };
+}
+
 export interface ExpectedAccount { id: string; table: string; accountNumber: string; custodian: string | null; label: string; owner: string }
 
 /** Managed accounts that are in the system but not in the file (their contract numbers compared as text). */
