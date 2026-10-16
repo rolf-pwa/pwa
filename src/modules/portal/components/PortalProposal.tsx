@@ -50,7 +50,7 @@ export function PortalProposal({ proposal: p, statement, onAuthorize, onTalk, ti
                 <Tick id={r.id} label={r.label} />
                 <div className="min-w-0 flex-1 text-sm">
                   <div className="flex items-baseline justify-between gap-3"><span className="font-medium text-foreground">{r.label}{r.owner ? <span className="font-normal text-muted-foreground"> · {r.owner.split(" ")[0]}</span> : null}</span><span className="shrink-0 font-serif text-base font-semibold" style={{ color: B.navy }}>about {money(r.amount)}</span></div>
-                  <p className="text-xs text-muted-foreground">{r.direction === "to_income" ? "From equity funds into income funds" : "From income funds into equity funds"}{r.taxable ? " · taxable account: a switch can create a gain, and I will review that with you first" : ""}</p>
+                  <p className="text-xs text-muted-foreground">{r.direction === "to_income" ? "From equity funds into income funds" : "From income funds into equity funds"}{r.toModel ? ", to bring this account back to my model portfolio" : ""}{r.taxable ? " · taxable account: a switch can create a gain, and I will review that with you first" : ""}</p>
                   <Whose id={r.id} owner={r.owner} />
                 </div>
               </li>

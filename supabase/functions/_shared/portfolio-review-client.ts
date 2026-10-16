@@ -198,17 +198,19 @@ export function portfolioReviewReadyEmail(firstName: string, portalUrl: string, 
 // What a Tier 1 household reviews and authorizes in its portal: the switches by asset class (accounts outside their profile's range) and the
 // death benefit resets, each as an item the client acknowledges. Built from the pack when Rolf publishes, and frozen with the rebalancing.
 
-export interface ProposalSwitch { id: string; label: string; owner: string | null; /** The contact who owns the account: only they authorize changes to it. */ ownerId?: string | null; direction: "to_income" | "to_equity"; /** What the client sees, rounded to $100. */ amount: number; /** The pack's figure to the dollar, for Rolf's task. */ exactAmount?: number; taxable: boolean; /** Estimated capital gain (negative: loss) from this switch, to the dollar, from the account's book value. Null when not known. */ estGain?: number | null }
+export interface ProposalSwitch { id: string; label: string; owner: string | null; /** The contact who owns the account: only they authorize changes to it. */ ownerId?: string | null; direction: "to_income" | "to_equity"; /** What the client sees, rounded to $100. */ amount: number; /** The pack's figure to the dollar, for Rolf's task. */ exactAmount?: number; /** True when the account is inside its range but off the model's mix: the switch brings it back to the model. */ toModel?: boolean; taxable: boolean; /** Estimated capital gain (negative: loss) from this switch, to the dollar, from the account's book value. Null when not known. */ estGain?: number | null }
 export interface ProposalReset { id: string; label: string; owner: string | null; ownerId?: string | null; currentGuarantee: number; newGuarantee: number; lift: number }
 export interface ClientProposal { switches: ProposalSwitch[]; resets: ProposalReset[]; totalLift: number; totalNow: number; totalAfter: number; hasTaxable: boolean }
 export type ProposalItem = (ProposalSwitch & { kind: "switch" }) | (ProposalReset & { kind: "reset" });
 
 export function buildClientProposal(pack: Pack): ClientProposal | null {
-  const sw = pack.rebalancing.rows.filter((r) => r.outsideRange && r.direction !== "none");
+  // A rebalancing brings every account back to its model: switches outside the range are needed, and any account off the model's mix by
+  // more than the tolerance is brought back too (when the switch is worth at least $100 after rounding).
+  const sw = pack.rebalancing.rows.filter((r) => r.direction !== "none" && (r.outsideRange || Math.round(r.amount / 100) * 100 >= 100));
   const rs = pack.resets.rows.filter((r) => r.status === "reset");
   if (!sw.length && !rs.length) return null;
   return {
-    switches: sw.map((r) => ({ id: `switch:${r.accountId}`, label: shortAccountName(r.name, r.number), owner: r.owner, ownerId: r.ownerId ?? null, direction: r.direction as "to_income" | "to_equity", amount: Math.round(r.amount / 100) * 100, exactAmount: Math.round(r.amount), taxable: r.taxable, estGain: r.estGain ?? null })),
+    switches: sw.map((r) => ({ id: `switch:${r.accountId}`, label: shortAccountName(r.name, r.number), owner: r.owner, ownerId: r.ownerId ?? null, direction: r.direction as "to_income" | "to_equity", amount: Math.round(r.amount / 100) * 100, exactAmount: Math.round(r.amount), toModel: !r.outsideRange, taxable: r.taxable, estGain: r.estGain ?? null })),
     resets: rs.map((r) => ({ id: `reset:${r.accountId}`, label: shortAccountName(r.name, r.number), owner: r.owner, ownerId: r.ownerId ?? null, currentGuarantee: r.deathGuarantee as number, newGuarantee: r.fundValue as number, lift: r.room as number })),
     totalLift: Math.round(rs.reduce((n, r) => n + (r.room ?? 0), 0)),
     totalNow: Math.round(rs.reduce((n, r) => n + (r.deathGuarantee ?? 0), 0)),

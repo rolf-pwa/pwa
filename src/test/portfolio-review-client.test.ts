@@ -109,28 +109,36 @@ describe("the Tier 1 rebalancing proposal", () => {
     acct({ id: "b", number: "2222", value: 80_000, statement: { statementDate: "2026-09-30", funds: inc(36, 64) } }),
   ], profiles: prof, today: "2026-10-14", models: [balanced] });
 
-  it("holds the switches for accounts outside the range and the death benefit resets, each with an id", () => {
+  it("holds the switches that bring accounts to the model (needed ones and in-range top-ups) and the death benefit resets, each with an id", () => {
     const p = buildClientProposal(pack())!;
-    expect(p.switches.map((s) => [s.id, s.amount])).toEqual([["switch:a", 6_000]]);
+    expect(p.switches.map((s) => [s.id, s.amount, s.toModel])).toEqual([["switch:a", 6_000, false], ["switch:b", 3_200, true]]);
     expect(p.resets.map((r) => [r.id, r.lift])).toEqual([["reset:a", 10_000]]);
     expect(p).toMatchObject({ totalLift: 10_000, totalNow: 90_000, totalAfter: 100_000 });
-    expect(proposalItems(p).map((i) => i.id)).toEqual(["switch:a", "reset:a"]);
+    expect(proposalItems(p).map((i) => i.id)).toEqual(["switch:a", "switch:b", "reset:a"]);
   });
   it("is null when there is nothing to propose", () => {
-    const none = buildPortfolioPack({ accounts: [acct({ guarantee: null, statement: { statementDate: "2026-09-30", funds: inc(42, 58) } })], profiles: prof, today: "2026-10-14", models: [balanced] });
+    const none = buildPortfolioPack({ accounts: [acct({ guarantee: null, statement: { statementDate: "2026-09-30", funds: inc(40, 60) } })], profiles: prof, today: "2026-10-14", models: [balanced] });
     expect(buildClientProposal(none)).toBeNull();
+  });
+  it("brings an account that is inside its range but off the model back to the model, and skips a trivial switch", () => {
+    const off = buildPortfolioPack({ accounts: [acct({ guarantee: null, value: 24_912, statement: { statementDate: "2026-09-30", funds: inc(42, 58) } })], profiles: prof, today: "2026-10-14", models: [balanced] });
+    const p = buildClientProposal(off)!;
+    expect(p.switches).toHaveLength(1);
+    expect(p.switches[0]).toMatchObject({ direction: "to_equity", toModel: true });
+    const tiny = buildPortfolioPack({ accounts: [acct({ guarantee: null, value: 4_000, statement: { statementDate: "2026-09-30", funds: inc(41, 59) } })], profiles: prof, today: "2026-10-14", models: [balanced] });
+    expect(buildClientProposal(tiny)).toBeNull(); // $40: under $100 once rounded
   });
   it("is authorized as a whole: every item ticked, and nothing that is not in it", () => {
     const p = buildClientProposal(pack())!;
-    expect(checkAllAcknowledged(p, ["switch:a", "reset:a"]).ok).toBe(true);
+    expect(checkAllAcknowledged(p, ["switch:a", "switch:b", "reset:a"]).ok).toBe(true);
     expect(checkAllAcknowledged(p, ["switch:a"])).toEqual({ ok: false, error: "Tick every change you have reviewed before authorizing, or ask to talk it through." });
-    expect(checkAllAcknowledged(p, ["switch:a", "reset:a", "switch:zzz"])).toEqual({ ok: false, error: "That item is not part of this rebalancing." });
+    expect(checkAllAcknowledged(p, ["switch:a", "switch:b", "reset:a", "switch:zzz"])).toEqual({ ok: false, error: "That item is not part of this rebalancing." });
     expect(checkAllAcknowledged(null, []).ok).toBe(true);
   });
   it("describes each item for Rolf's task", () => {
     const items = proposalItems(buildClientProposal(pack())!);
     expect(describeProposalItem(items[0])).toMatch(/TFSA …1111 \(Doreen\): switch about \$6,000 from equity into income funds/);
-    expect(describeProposalItem(items[1])).toMatch(/reset the death benefit guarantee from \$90,000 to about \$100,000/);
+    expect(describeProposalItem(items[2])).toMatch(/reset the death benefit guarantee from \$90,000 to about \$100,000/);
   });
 });
 
