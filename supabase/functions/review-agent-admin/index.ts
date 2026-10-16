@@ -186,9 +186,9 @@ Deno.serve(async (req) => {
       const { data: people } = await db.from("contacts").select("household_id, family_role, is_minor, personal_vault_folder_id").not("household_id", "is", null);
       const plan = planVaultCatchUp((hhs ?? []).map((h: any) => ({ id: h.id, label: h.label, familyName: h.families?.name ?? null, serviceTier: h.service_tier, relationshipEnded: !!h.relationship_ended_at, vaultRoot: h.vault_root_folder_id, vaultFolder: h.vault_folder_id })), (people ?? []).map((p: any) => ({ householdId: p.household_id, role: p.family_role, isMinor: p.is_minor, personalDrawer: p.personal_vault_folder_id })));
       if (body?.dryRun !== false) return json({ plan });
-      // A few households per call: each builds a couple of dozen Drive folders. The page calls again until nothing is left.
+      // One household per call for a new Vault (each builds dozens of Drive folders, and a request has a time limit). The page calls again until nothing is left.
       const done: { name: string; kind: string; ok: boolean; detail: string }[] = [];
-      for (const h of plan.provision.slice(0, 3)) {
+      for (const h of plan.provision.slice(0, 1)) {
         const r = await provisionClientFolderTree(db, h.id, "vault_catchup", { requestedBy: { id: staff.userId, email: staff.email } });
         done.push({ name: h.name, kind: "Vault", ok: r.ok, detail: r.ok ? `Vault created${r.personalDrawers ? `, ${r.personalDrawers} personal drawer${r.personalDrawers === 1 ? "" : "s"}` : ""}` : String(r.error) });
       }
@@ -197,7 +197,7 @@ Deno.serve(async (req) => {
         // record it. Otherwise build the new structure beside it. The old folders and every file in them are left exactly as they were.
         const token = await getServiceGoogleAccessToken(db);
         const gj = async (u: string) => { const r = await fetch(u, { headers: { Authorization: `Bearer ${token}` } }); return r.ok ? await r.json() : null; };
-        for (const h of plan.legacy.slice(0, 2)) {
+        for (const h of plan.legacy.slice(0, 1)) {
           try {
             const { data: row } = await db.from("households").select("vault_root_folder_id").eq("id", h.id).maybeSingle();
             const oldRoot = row?.vault_root_folder_id as string;
@@ -219,7 +219,7 @@ Deno.serve(async (req) => {
       }
       if (!plan.provision.length && !plan.legacy.length) {
         const token = plan.drawers.length ? await getServiceGoogleAccessToken(db) : "";
-        for (const h of plan.drawers.slice(0, 6)) {
+        for (const h of plan.drawers.slice(0, 4)) {
           try { const n = await ensurePersonalDrawers(db, h.id, token, "vault_catchup"); done.push({ name: h.name, kind: "Drawers", ok: true, detail: `${n} personal drawer${n === 1 ? "" : "s"} created` }); }
           catch (e) { done.push({ name: h.name, kind: "Drawers", ok: false, detail: e instanceof Error ? e.message : String(e) }); }
         }
