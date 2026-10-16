@@ -67,7 +67,7 @@ export const publishRebalancing = (obligationId: string, summary: string) => cal
 export const unpublishRebalancing = (obligationId: string) => call<{ ok: true }>("unpublishRebalancing", { obligationId });
 export interface PackReadinessRow { householdId: string; household: string; family: string | null; tier: string | null; needs: string[]; accounts: number; ready: boolean; todo: string[]; notes: string[] }
 export const getPackReadiness = () => call<{ rows: PackReadinessRow[] }>("packReadiness");
-export interface VaultCatchUpPlan { provision: { id: string; name: string; tier: string | null }[]; drawers: { id: string; name: string; missing: number }[] }
+export interface VaultCatchUpPlan { provision: { id: string; name: string; tier: string | null }[]; legacy: { id: string; name: string }[]; drawers: { id: string; name: string; missing: number }[] }
 export interface VaultCatchUpDone { name: string; kind: string; ok: boolean; detail: string }
 export const getVaultCatchUp = (run: boolean) => call<{ plan: VaultCatchUpPlan; done?: VaultCatchUpDone[] }>("vaultCatchUp", { dryRun: !run });
 export const markObligationComplete = (obligationId: string) => call<{ ok: true }>("markComplete", { obligationId });

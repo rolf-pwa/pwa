@@ -96,6 +96,8 @@ export interface ProvisionResult {
   ok: boolean;
   vaultRootFolderId?: string;
   personalDrawers?: number;
+  /** The Vault the household had before a rebuild; its Drive folder is left exactly as it was. */
+  previousRoot?: string | null;
   error?: string;
 }
 
@@ -158,7 +160,7 @@ export async function provisionClientFolderTree(
   admin: any,
   householdId: string,
   source = "automatic",
-  opts: { force?: boolean; requestedBy?: { id: string; email: string | null } | null } = {},
+  opts: { force?: boolean; /** Build the household a new structure inside its existing Family Vault, leaving the old Drive folders untouched and unlinked. */ rebuild?: boolean; requestedBy?: { id: string; email: string | null } | null } = {},
 ): Promise<ProvisionResult> {
   if (!CLIENT_ROOT_FOLDER_ID) {
     return { ok: false, error: "CLIENT_VAULT_ROOT_FOLDER_ID is not configured" };
@@ -172,7 +174,7 @@ export async function provisionClientFolderTree(
   if (!household) return { ok: false, error: "household_not_found" };
 
   // Already provisioned: success, plus any missing personal drawers. Never fails because Google is unreachable.
-  if (household.vault_root_folder_id && !opts.force) {
+  if (household.vault_root_folder_id && !opts.force && !opts.rebuild) {
     try {
       const token = await getServiceGoogleAccessToken(admin);
       const personalDrawers = await ensurePersonalDrawers(admin, householdId, token, source);
@@ -244,7 +246,7 @@ export async function provisionClientFolderTree(
 
     await admin.from("households").update({ vault_root_folder_id: vaultFolder.id, vault_folder_id: householdFolder.id }).eq("id", householdId);
     // A forced rebuild starts the personal drawers over too (the old ones stay in Drive, unlinked).
-    if (opts.force) await admin.from("contacts").update({ personal_vault_folder_id: null }).eq("household_id", householdId);
+    if (opts.force || opts.rebuild) await admin.from("contacts").update({ personal_vault_folder_id: null }).eq("household_id", householdId);
     // The Shoebox is found or created under the new root the first time it is needed.
     await admin.from("households").update({ vault_shoebox_folder_id: null }).eq("id", householdId);
 
@@ -265,7 +267,7 @@ export async function provisionClientFolderTree(
       console.error("[vault-provisioning] could not log Vault creation:", e instanceof Error ? e.message : String(e));
     }
 
-    return { ok: true, vaultRootFolderId: vaultFolder.id, personalDrawers };
+    return { ok: true, vaultRootFolderId: vaultFolder.id, personalDrawers, previousRoot: household.vault_root_folder_id ?? null };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

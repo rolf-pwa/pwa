@@ -26,7 +26,7 @@ export function VaultCatchUpCard() {
       }
     } catch (e: any) { toast.error(e?.message ?? "The catch-up stopped"); } finally { setBusy(false); }
   };
-  const left = plan ? plan.provision.length + plan.drawers.length : 0;
+  const left = plan ? plan.provision.length + plan.legacy.length + plan.drawers.length : 0;
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -34,15 +34,16 @@ export function VaultCatchUpCard() {
           <CardTitle className="text-lg">Vault catch-up</CardTitle>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" disabled={busy} onClick={preview}>{plan ? "Check again" : "Check the Vaults"}</Button>
-            {plan && left > 0 && <Button size="sm" disabled={busy} onClick={() => { if (window.confirm(`Create Drive folders for ${plan.provision.length} household${plan.provision.length === 1 ? "" : "s"} and personal drawers for ${plan.drawers.length} more?`)) run(); }}>{busy && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}Run catch-up</Button>}
+            {plan && left > 0 && <Button size="sm" disabled={busy} onClick={() => { if (window.confirm(`Create new Vaults for ${plan.provision.length} household${plan.provision.length === 1 ? "" : "s"}, a new structure beside the older Vault for ${plan.legacy.length}, and personal drawers for ${plan.drawers.length} more? Nothing already in Drive is changed or deleted.`)) run(); }}>{busy && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}Run catch-up</Button>}
           </div>
         </div>
-        <p className="text-sm text-muted-foreground">Existing households that have a tier but no Drive Vault, and households with a Vault where an adult has no personal drawer. Folders are created only: nothing is renamed, moved or deleted, and no one is emailed.</p>
+        <p className="text-sm text-muted-foreground">Existing households that have a tier but no Drive Vault, households still on the older Vault layout, and adults who have no personal drawer. Folders are created only: nothing is renamed, moved or deleted, and no one is emailed.</p>
       </CardHeader>
       {plan && (
         <CardContent className="space-y-3 text-sm">
           {left === 0 && <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-green-600" />Nothing left to catch up.</p>}
           {plan.provision.length > 0 && <div><p className="font-medium">Need a Vault ({plan.provision.length})</p><ul className="ml-5 list-disc text-xs text-muted-foreground">{plan.provision.map((h) => <li key={h.id}>{h.name}</li>)}</ul></div>}
+          {plan.legacy.length > 0 && <div><p className="font-medium">On the older Vault layout ({plan.legacy.length})</p><p className="text-xs text-muted-foreground">A new structure is built and linked. The old folder and its files stay in Drive untouched; move what you want across by hand. The report links each old folder. Until then the client's portal Vault shows the new, empty folders.</p><ul className="ml-5 list-disc text-xs text-muted-foreground">{plan.legacy.map((h) => <li key={h.id}>{h.name}</li>)}</ul></div>}
           {plan.drawers.length > 0 && <div><p className="font-medium">Need personal drawers ({plan.drawers.length})</p><ul className="ml-5 list-disc text-xs text-muted-foreground">{plan.drawers.map((h) => <li key={h.id}>{h.name}: {h.missing}</li>)}</ul></div>}
           {done.length > 0 && (
             <div><p className="font-medium">Done so far</p>
