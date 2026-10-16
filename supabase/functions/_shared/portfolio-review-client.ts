@@ -25,12 +25,16 @@ export interface ClientView {
   history: { date: string; value: number }[];
   accounts: ClientAccount[] | null;
   mix: { /** What the chart means for this household, in plain sentences built in code from the numbers. */ commentary: string[]; classes: { key: string; label: string; pct: number }[]; profileLabel: string | null; incomePct: number | null; equityPct: number | null; rangeMin: number | null; rangeMax: number | null; targetIncomePct: number | null; status: MixStatus; accounts: { name: string; last4: string | null; incomePct: number | null; status: MixStatus }[] } | null;
-  funds: { commentary: string[]; modelLabel: string; modelAsOf: string; heldInModelPct: number; rows: { name: string; modelPct: number | null; heldPct: number; inModel: boolean }[] } | null;
+  funds: ClientFunds | null;
+  /** When the accounts follow different models: one set per model, each against its own model. Replaces `funds`. */
+  fundsSets?: (ClientFunds & { accounts: string[] })[] | null;
   /** What I propose to switch, by asset class, inside each account that is outside its profile's range. */
   rebalance?: { rows: { label: string; owner: string | null; direction: "to_income" | "to_equity"; amount: number; taxable: boolean }[]; hasTaxable: boolean } | null;
   reset: { rows: { name: string; owner: string | null; last4: string | null; fundValue: number; currentGuarantee: number; newGuarantee: number; lift: number }[]; totalLift: number; /** The death guarantee across these accounts today, and after the reset. */ totalNow: number; totalAfter: number } | null;
   disclosures: string[];
 }
+
+export interface ClientFunds { commentary: string[]; modelLabel: string; modelAsOf: string; heldInModelPct: number; rows: { name: string; modelPct: number | null; heldPct: number; inModel: boolean }[] }
 
 export const DISCLOSURES = [
   "Returns are those reported by your custodian. Past performance does not guarantee future results.",
@@ -69,8 +73,13 @@ export function mixCommentary(pack: Pack): string[] {
   const out: string[] = [];
   const actual = d.actualIncomePct;
   if (actual === null || d.status === "no_data" || d.status === "no_target") return out;
+  const byAccount = d.status === "by_account";
   const hasRange = d.rangeMin != null && d.rangeMax != null;
-  if (hasRange) {
+  if (byAccount) {
+    const measured = pack.accounts.filter((a) => a.classTotals);
+    const outside = measured.filter((a) => a.drift.status === "too_much_income" || a.drift.status === "too_little_income");
+    out.push(`Your accounts follow different risk profiles, so each one is measured against its own. ${measured.length - outside.length} of your ${measured.length} accounts are inside their profile's range.`);
+  } else if (hasRange) {
     const min = d.rangeMin as number, max = d.rangeMax as number;
     if (d.status === "within") {
       const pos = max > min ? (actual - min) / (max - min) : 0.5;
@@ -88,7 +97,8 @@ export function mixCommentary(pack: Pack): string[] {
   if (heavyEquity.length) out.push(`${heavyEquity.length} of your ${total} accounts hold more in equities than your profile calls for (${nameList(heavyEquity.map(accountName))}).${rising ? " Equity funds grow faster than income funds when markets rise, which can move an account away from its profile." : ""}`);
   if (heavyIncome.length) out.push(`${heavyIncome.length} of your ${total} accounts hold more in income funds than your profile calls for (${nameList(heavyIncome.map(accountName))}).`);
   const off = [...heavyEquity, ...heavyIncome];
-  if (off.length) out.push(`I recommend rebalancing ${off.length === 1 ? "this account" : "these accounts"} back to your ${label} profile. I will take you through the details at our meeting.`);
+  if (off.length) out.push(`I recommend rebalancing ${off.length === 1 ? "this account" : "these accounts"} back to ${byAccount ? "its own" : `your ${label}`} profile. I will take you through the details at our meeting.`);
+  else if (byAccount) out.push("Every account is inside its own profile's range, so no change is needed to your mix at this time. The funds comparison below shows where a closer match to our model portfolios is possible.");
   else if (d.status === "within") out.push("No change is needed to your mix at this time.");
   else out.push(`I recommend rebalancing your portfolio back to your ${label} profile. I will take you through the details at our meeting.`);
   return out;
@@ -126,6 +136,11 @@ export function narrativeParagraphs(text: string | null | undefined): string[] |
   return t.length ? t : null;
 }
 
+const toClientFunds = (mc: NonNullable<Pack["household"]["modelComparison"]>, commentary: string[]): ClientFunds => ({
+  commentary, modelLabel: mc.modelLabel, modelAsOf: mc.modelAsOf, heldInModelPct: round1(100 - mc.offModelPct),
+  rows: mc.rows.map((r) => ({ name: r.name, modelPct: r.modelPct, heldPct: r.actualPct, inModel: r.inModel })),
+});
+
 export function buildClientView(pack: Pack, includesIn: ClientIncludes, note: string, householdLabel: string, kind: ViewKind = "review", narratives: Narratives = {}): ClientView {
   // A rebalance never shows the values and the mix; the three other sections can still be switched off.
   const includes: ClientIncludes = kind === "rebalance" ? { ...REBALANCE_SECTIONS, funds: includesIn.funds, reset: includesIn.reset, rebalancing: includesIn.rebalancing } : includesIn;
@@ -151,12 +166,16 @@ export function buildClientView(pack: Pack, includesIn: ClientIncludes, note: st
           { key: "global", label: "U.S. and international equity", pct: covered > 0 ? round1((h.classTotals.us_intl_equity / covered) * 100) : 0 },
           { key: "other", label: "Other equity", pct: covered > 0 ? round1((h.classTotals.equity_other / covered) * 100) : 0 },
         ].filter((c) => c.pct > 0),
-        profileLabel: h.drift.profileLabel ?? null, incomePct: h.drift.actualIncomePct, equityPct: equity, rangeMin: h.drift.rangeMin ?? null, rangeMax: h.drift.rangeMax ?? null, targetIncomePct: h.drift.targetIncomePct, status: mixStatus(h.drift),
+        profileLabel: h.drift.profileLabel ?? null, incomePct: h.drift.actualIncomePct, equityPct: equity, rangeMin: h.drift.rangeMin ?? null, rangeMax: h.drift.rangeMax ?? null, targetIncomePct: h.drift.status === "by_account" ? null : h.drift.targetIncomePct, status: mixStatus(h.drift),
         accounts: pack.accounts.filter((a) => a.classTotals).map((a) => ({ name: a.name, last4: last4(a.number), incomePct: a.incomePct, status: mixStatus(a.drift) })),
       }
       : null,
-    funds: includes.funds && mc
-      ? { commentary: narrativeParagraphs(narratives.funds) ?? fundsCommentary(mc), modelLabel: mc.modelLabel, modelAsOf: mc.modelAsOf, heldInModelPct: round1(100 - mc.offModelPct), rows: mc.rows.map((r) => ({ name: r.name, modelPct: r.modelPct, heldPct: r.actualPct, inModel: r.inModel })) }
+    funds: includes.funds && mc ? toClientFunds(mc, narrativeParagraphs(narratives.funds) ?? fundsCommentary(mc)) : null,
+    fundsSets: includes.funds && !mc && h.modelComparisons?.length
+      ? h.modelComparisons.map((m, i) => ({
+        ...toClientFunds(m, i === 0 ? narrativeParagraphs(narratives.funds) ?? fundsCommentary(m) : fundsCommentary(m)),
+        accounts: pack.accounts.filter((a) => a.modelComparison?.modelKey === m.modelKey).map(accountName),
+      }))
       : null,
     proposal: kind === "rebalance" && includes.rebalancing ? buildClientProposal(pack) : null,
     rebalance: kind === "review" && includes.rebalancing && pack.rebalancing.rows.some((r) => r.outsideRange && r.direction !== "none")

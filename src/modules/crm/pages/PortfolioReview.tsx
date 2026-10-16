@@ -17,7 +17,7 @@ const money = (n: number | null | undefined) => (n === null || n === undefined ?
 const pct = (n: number | null | undefined) => (n === null || n === undefined ? "—" : `${n.toFixed(1)}%`);
 const signed = (n: number | null | undefined) => (n === null || n === undefined ? "—" : `${n >= 0 ? "+" : "-"}${money(Math.abs(n))}`);
 const day = (iso: string | null) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-CA", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" }) : "—");
-const DRIFT_TEXT: Record<DriftStatus, string> = { within: "Within target", too_much_income: "Too much income", too_little_income: "Too little income", no_target: "No target", no_data: "No fund detail" };
+const DRIFT_TEXT: Record<DriftStatus, string> = { within: "Within target", too_much_income: "Too much income", too_little_income: "Too little income", no_target: "No target", no_data: "No fund detail", by_account: "Each account against its own profile" };
 const RESET_TEXT: Record<string, string> = { reset: "Reset", no_room: "No room", no_reset_series: "Series 75/75: no reset", too_old: "Age 85 or over", needs_dob: "Add date of birth", no_guarantee_data: "No guarantee data" };
 /** A fund-by-fund table against a model, for the household or one account. */
 function ModelTable({ c }: { c: ModelComparison }) {
@@ -119,13 +119,25 @@ export default function PortfolioReview() {
                     </ul>
                     <p>
                       <span className="font-medium">{DRIFT_TEXT[d!.status]}.</span>{" "}
-                      {d!.status === "no_target" ? `Income is ${pct(d!.actualIncomePct)}. Add the Investor Profile below to compare.` : d!.status === "within" ? (d!.rangeMin != null ? `Income ${pct(d!.actualIncomePct)} is inside the ${d!.profileLabel} range of ${d!.rangeMin}–${d!.rangeMax}% (model mix ${d!.targetIncomePct}%).` : `Income ${pct(d!.actualIncomePct)} against a ${d!.targetIncomePct}% target.`) : `Income ${pct(d!.actualIncomePct)} is outside ${d!.rangeMin != null ? `the ${d!.profileLabel} range of ${d!.rangeMin}–${d!.rangeMax}%` : `the ${d!.targetIncomePct}% target`}: about ${money(Math.abs(d!.moveToIncome ?? 0))} to move ${d!.status === "too_much_income" ? "into equity" : "into income"} to reach the ${d!.targetIncomePct}% mix.`}
+                      {d!.status === "by_account" ? `Overall income is ${pct(d!.actualIncomePct)}. These accounts follow different profiles (see Accounts below), so there is no single household target: ${p.accounts.filter((x) => x.drift.status === "within").length} of ${p.accounts.filter((x) => x.classTotals).length} accounts are inside their own range.` : d!.status === "no_target" ? `Income is ${pct(d!.actualIncomePct)}. Add the Investor Profile below to compare.` : d!.status === "within" ? (d!.rangeMin != null ? `Income ${pct(d!.actualIncomePct)} is inside the ${d!.profileLabel} range of ${d!.rangeMin}–${d!.rangeMax}% (model mix ${d!.targetIncomePct}%).` : `Income ${pct(d!.actualIncomePct)} against a ${d!.targetIncomePct}% target.`) : `Income ${pct(d!.actualIncomePct)} is outside ${d!.rangeMin != null ? `the ${d!.profileLabel} range of ${d!.rangeMin}–${d!.rangeMax}%` : `the ${d!.targetIncomePct}% target`}: about ${money(Math.abs(d!.moveToIncome ?? 0))} to move ${d!.status === "too_much_income" ? "into equity" : "into income"} to reach the ${d!.targetIncomePct}% mix.`}
                     </p>
                     <p className="text-xs text-muted-foreground">Covers {pct(p.household.coveragePct)} of managed value, from the latest statements read in the Vault scan.</p>
                   </>
                 ) : <p className="text-muted-foreground">No fund detail yet. Scan the latest statements in the Vault to see the allocation.</p>}
               </CardContent>
             </Card>
+
+            {!p.household.modelComparison && p.household.modelComparisons?.length > 0 && p.household.modelComparisons.map((mc) => (
+              <Card key={mc.modelKey}>
+                <CardHeader className="pb-3"><CardTitle className="text-lg">Funds against the model: {mc.modelLabel}</CardTitle></CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  <p className="text-xs text-muted-foreground">{p.accounts.filter((a) => a.modelComparison?.modelKey === mc.modelKey).map((a) => a.name || a.number).join(", ")}</p>
+                  <p><span className="font-medium">{mc.offModelPct}% is held in funds the model does not contain.</span> Matching the model would move about {money(mc.moveValue)} of {money(mc.totalValue)} ({mc.activeSharePct}%).</p>
+                  <div className="overflow-x-auto"><ModelTable c={mc} /></div>
+                  <p className="text-xs text-muted-foreground">iA {mc.modelLabel} model as at {day(mc.modelAsOf)}.</p>
+                </CardContent>
+              </Card>
+            ))}
 
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-lg">Funds against the model{p.household.modelComparison ? `: ${p.household.modelComparison.modelLabel}` : ""}</CardTitle></CardHeader>
@@ -150,7 +162,7 @@ export default function PortfolioReview() {
                       </div>
                     </details>
                   </>
-                ) : <p className="text-muted-foreground">Choose an iA profile below (Prudent to Aggressive) and the funds on the statements are compared with that model.</p>}
+                ) : p.household.modelComparisons?.length ? <p className="text-muted-foreground">The accounts follow different models: each is compared with its own above.</p> : <p className="text-muted-foreground">Choose an iA profile below (Prudent to Aggressive) and the funds on the statements are compared with that model.</p>}
               </CardContent>
             </Card>
 
