@@ -10,6 +10,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { KIND_LABEL, getRebalancingProposal, type ClientProposal, completeRebalancing, markObligationComplete, describeReviewEvent, statusLabel, getReminderOverview, groupByQuarter, getReviewOverview, publishRebalancing, rebalancingStage, setReminderMode, unpublishRebalancing, setReviewMode, setReviewPaused, type ReminderOverview, type ReviewMode, type ReviewObligation, type ReviewOverview } from "@/modules/crm/lib/reviewAgent";
 import { familyTitle } from "@/shared/lib/utils";
 import { ReviewAgentGuide } from "@/modules/crm/components/ReviewAgentGuide";
+import { PackReadinessCard } from "@/modules/crm/components/PackReadinessCard";
 import { Textarea } from "@/shared/components/ui/textarea";
 
 const MODES: { value: ReviewMode; label: string; blurb: string }[] = [
@@ -138,6 +139,8 @@ export default function ReviewAgent() {
         {data && (
           <>
             <ReviewAgentGuide />
+
+            <PackReadinessCard />
 
             <Card>
               <CardHeader className="pb-3">

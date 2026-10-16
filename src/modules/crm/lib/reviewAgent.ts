@@ -65,6 +65,8 @@ export const setReviewMode = (mode: ReviewMode, confirm = false) => call<{ ok: t
 export const setReviewPaused = (obligationId: string, paused: boolean) => call<{ ok: true }>("setPaused", { obligationId, paused });
 export const publishRebalancing = (obligationId: string, summary: string) => call<{ ok: true }>("publishRebalancing", { obligationId, summary });
 export const unpublishRebalancing = (obligationId: string) => call<{ ok: true }>("unpublishRebalancing", { obligationId });
+export interface PackReadinessRow { householdId: string; household: string; family: string | null; tier: string | null; needs: string[]; accounts: number; ready: boolean; todo: string[]; notes: string[] }
+export const getPackReadiness = () => call<{ rows: PackReadinessRow[] }>("packReadiness");
 export const markObligationComplete = (obligationId: string) => call<{ ok: true }>("markComplete", { obligationId });
 export const completeRebalancing = (obligationId: string) => call<{ ok: true }>("completeRebalancing", { obligationId });
 
