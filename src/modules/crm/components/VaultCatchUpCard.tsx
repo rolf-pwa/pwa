@@ -18,7 +18,7 @@ export function VaultCatchUpCard() {
     setBusy(true);
     try {
       // A few households per call; keep going until the plan is empty or a household fails (so a failure is not retried forever).
-      for (let i = 0; i < 40; i++) {
+      for (let i = 0; i < 80; i++) {
         const r = await getVaultCatchUp(true);
         setPlan(r.plan);
         setDone((d) => [...d, ...(r.done ?? [])]);

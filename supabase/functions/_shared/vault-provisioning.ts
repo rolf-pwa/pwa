@@ -28,13 +28,24 @@ const ADVISOR_SUBFOLDERS = ["Insurance", "Investment", "Meeting Notes", "Working
 const ADULT_ROLE_PRIORITY: Record<string, number> = { head_of_family: 0, spouse: 1 };
 
 async function driveCreateFolder(name: string, parentId: string, accessToken: string) {
-  const r = await fetch("https://www.googleapis.com/drive/v3/files?fields=id,name,parents", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ name, mimeType: "application/vnd.google-apps.folder", parents: [parentId] }),
-  });
-  if (!r.ok) throw new Error(`drive_create_folder_failed (${name}): ${await r.text()}`);
-  return r.json();
+  // A Drive call that never answers must not hang the whole request: give up after 20 seconds, and try a timed-out or rate-limited call once more.
+  let last = "";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await fetch("https://www.googleapis.com/drive/v3/files?fields=id,name,parents", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ name, mimeType: "application/vnd.google-apps.folder", parents: [parentId] }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (r.ok) return r.json();
+      last = await r.text();
+      if (r.status !== 429 && r.status < 500) break;
+    } catch (e) {
+      last = e instanceof Error ? e.message : String(e);
+    }
+  }
+  throw new Error(`drive_create_folder_failed (${name}): ${last}`);
 }
 
 /** Lists the direct, non-trashed children of a Drive folder. Mirrors vault-service's private helper of the same name. */
