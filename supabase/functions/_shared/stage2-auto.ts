@@ -14,6 +14,8 @@ export function autoApproveDecision(kind: string, overallStatus: string, missing
   if (overallStatus === "CONFLICT") return { ok: false, reason: "Verification found a conflict in the figures." };
   if (overallStatus !== "VERIFIED") return { ok: false, reason: `Not fully verified${missing.length ? `: ${missing.slice(0, 3).join(", ")}` : ""}.` };
   if (!plan || plan.length === 0) return { ok: false, reason: "Nothing on file matched this document." };
+  const skipped = plan.filter((w) => w.op === "skip");
+  if (skipped.length) return { ok: false, reason: (skipped[0] as { reason: string }).reason };
   const created = plan.filter((w) => w.op === "insert");
   if (created.length) return { ok: false, reason: `It would add ${created.length === 1 ? "a new record" : `${created.length} new records`} (${created.slice(0, 2).map((w) => (w as any).label).join(", ")}): confirm they are not duplicates.` };
   return { ok: true };

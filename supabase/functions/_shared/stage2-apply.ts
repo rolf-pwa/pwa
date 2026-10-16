@@ -34,16 +34,17 @@ export async function buildApprovalPlan(admin: any, i: ApprovalInput): Promise<P
     return planEstateApply(i.items, { householdId: i.householdId, members: members ?? [], driveId: i.source.drive_id ?? null, fileName: i.source.file_name ?? null, auditId: i.auditId, approvedBy: i.approvedBy as string });
   }
   if (i.kind === "investment") {
-    const [{ data: vineyard }, { data: storehouses }, { data: tank }, valueDates] = await Promise.all([
+    const [{ data: vineyard }, { data: storehouses }, { data: tank }, valueDates, { data: moved }] = await Promise.all([
       memberIds.length ? admin.from("vineyard_accounts").select("id, contact_id, account_name, account_number").in("contact_id", memberIds) : { data: [] },
       memberIds.length ? admin.from("storehouses").select("id, contact_id, label, asset_type").in("contact_id", memberIds) : { data: [] },
       memberIds.length ? admin.from("holding_tank").select("id, contact_id, account_name, account_number").in("contact_id", memberIds).neq("status", "moved") : { data: [] },
       latestValueDates(admin, memberIds),
+      memberIds.length ? admin.from("holding_tank").select("account_number").in("contact_id", memberIds).eq("status", "moved") : { data: [] },
     ]);
     return planInvestmentApply(i.items, {
       householdId: i.householdId, members: members ?? [], vineyard: vineyard ?? [], storehouses: storehouses ?? [], holdingTank: tank ?? [],
       sourceFile: i.source.drive_id ? `vault:${i.source.drive_id}:${i.source.file_name ?? ""}` : null,
-      statementDate: i.statementDate, valueDates,
+      statementDate: i.statementDate, valueDates, movedNumbers: (moved ?? []).map((m: any) => m.account_number).filter(Boolean),
     });
   }
   const { data: shareholders } = memberIds.length ? await admin.from("shareholders").select("corporation_id").in("contact_id", memberIds).eq("is_active", true) : { data: [] };
