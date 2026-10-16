@@ -15,6 +15,7 @@ export interface OnboardingMemberInput {
   email?: string;
   relationship: "spouse" | "child" | "dependant" | "other";
   isMinor?: boolean;
+  dateOfBirth?: string;
 }
 
 export interface OnboardingState {
@@ -65,8 +66,9 @@ export interface OnboardingState {
     fullName: string;
     email: string;
     phone: string;
+    dateOfBirth: string | null;
   };
-  members: { id: string; fullName: string; email: string | null; role: string | null }[];
+  members: { id: string; fullName: string; email: string | null; role: string | null; dateOfBirth: string | null }[];
   booking: { id: string; schedulingUrl: string | null; serviceName: string | null } | null;
   wealthEventOptions: WealthEventType[];
 }
@@ -168,6 +170,8 @@ export function useOnboarding(portalToken?: string) {
       address: string;
       phone?: string;
       email?: string;
+      dateOfBirth?: string;
+      memberDobs?: Record<string, string>;
       members: OnboardingMemberInput[];
     }) => mutate({ action: "onboarding_profile", ...input }),
 

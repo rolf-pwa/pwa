@@ -20,6 +20,7 @@ import {
   withThinking,
 } from "../_shared/vertex-ai.ts";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
+import { cleanDob, dobRequiredFor } from "../_shared/dob.ts";
 import { recordInviteClick } from "../_shared/onboarding-invite-click.ts";
 import { driveListChildren, matchVaultCategoryFolder } from "../_shared/vault-provisioning.ts";
 
@@ -977,12 +978,12 @@ async function loadOnboarding(resolved: Resolved) {
         .maybeSingle(),
       admin
         .from("contacts")
-        .select("id, first_name, last_name, full_name, email, phone, address, family_role")
+        .select("id, first_name, last_name, full_name, email, phone, address, family_role, date_of_birth")
         .eq("id", resolved.contactId)
         .maybeSingle(),
       admin
         .from("contacts")
-        .select("id, full_name, first_name, last_name, email, family_role, is_minor")
+        .select("id, full_name, first_name, last_name, email, family_role, is_minor, date_of_birth")
         .eq("household_id", resolved.householdId)
         .order("created_at", { ascending: true }),
       admin
@@ -1037,6 +1038,7 @@ async function loadOnboarding(resolved: Resolved) {
       fullName: contact?.full_name ?? "",
       email: contact?.email ?? "",
       phone: contact?.phone ?? "",
+      dateOfBirth: contact?.date_of_birth ?? null,
     },
     members: (members ?? [])
       .filter((m: any) => m.id !== resolved.contactId)
@@ -1045,6 +1047,7 @@ async function loadOnboarding(resolved: Resolved) {
         fullName: m.full_name,
         email: m.email,
         role: m.family_role,
+        dateOfBirth: m.date_of_birth ?? null,
       })),
     booking: booking
       ? {
@@ -1141,6 +1144,9 @@ async function handleOnboardingAction(
     const primaryName = str(payload?.primaryName, 120);
     const email = str(payload?.email, 200).toLowerCase();
     const rawMembers = Array.isArray(payload?.members) ? payload.members.slice(0, 20) : [];
+    // Date of birth: required for the person filling this in and for any spouse; the death benefit and age rules depend on it.
+    const primaryDob = cleanDob(payload?.dateOfBirth);
+    if (primaryDob === "invalid") return json({ error: "Enter your date of birth as a real date" }, 400);
 
     if (!householdName) return json({ error: "Household name is required" }, 400);
     if (!address) return json({ error: "Address is required" }, 400);
@@ -1150,10 +1156,11 @@ async function handleOnboardingAction(
 
     const { data: primary } = await admin
       .from("contacts")
-      .select("id, family_id, created_by, email, full_name")
+      .select("id, family_id, created_by, email, full_name, date_of_birth")
       .eq("id", resolved.contactId)
       .maybeSingle();
     if (!primary) return json({ error: "Contact not found" }, 404);
+    if (!primaryDob && !primary.date_of_birth) return json({ error: "Your date of birth is required" }, 400);
 
     // 1. Household record
     const { error: hhErr } = await admin
@@ -1179,6 +1186,7 @@ async function handleOnboardingAction(
         ...namePatch,
         ...(phone ? { phone } : {}),
         ...(email ? { email } : {}),
+        ...(primaryDob ? { date_of_birth: primaryDob } : {}),
       })
       .eq("id", resolved.contactId);
     if (cErr) return json({ error: cErr.message }, 500);
@@ -1201,8 +1209,17 @@ async function handleOnboardingAction(
     // 3. Household members → contacts (skip anything already on file by email/name)
     const { data: existing } = await admin
       .from("contacts")
-      .select("id, full_name, email")
+      .select("id, full_name, email, family_role, date_of_birth")
       .eq("household_id", resolved.householdId);
+    // Members already on file: fill a missing date of birth (never overwrite one that is there). A spouse on file must have one.
+    const memberDobs = (payload?.memberDobs && typeof payload.memberDobs === "object" ? payload.memberDobs : {}) as Record<string, unknown>;
+    for (const c of existing ?? []) {
+      if (c.id === resolved.contactId) continue;
+      const given = cleanDob(memberDobs[c.id]);
+      if (given === "invalid") return json({ error: `Enter a real date of birth for ${c.full_name ?? "that person"}` }, 400);
+      if (!c.date_of_birth && given) await admin.from("contacts").update({ date_of_birth: given }).eq("id", c.id);
+      else if (!c.date_of_birth && dobRequiredFor(c.family_role)) return json({ error: `A date of birth is required for ${c.full_name ?? "your spouse"}` }, 400);
+    }
     const seenEmails = new Set(
       (existing ?? []).map((c: any) => String(c.email ?? "").toLowerCase()).filter(Boolean),
     );
@@ -1218,6 +1235,9 @@ async function handleOnboardingAction(
       const relationship = str(raw?.relationship, 30).toLowerCase();
       if (memberEmail && seenEmails.has(memberEmail)) continue;
       if (seenNames.has(fullName.toLowerCase())) continue;
+      const memberDob = cleanDob(raw?.dateOfBirth);
+      if (memberDob === "invalid") return json({ error: `Enter a real date of birth for ${fullName}` }, 400);
+      if (!memberDob && dobRequiredFor(MEMBER_ROLES[relationship])) return json({ error: `A date of birth is required for ${fullName}` }, 400);
 
       const parts = fullName.split(/\s+/);
       const first = parts[0];
@@ -1227,6 +1247,7 @@ async function handleOnboardingAction(
         first_name: first,
         last_name: last,
         email: memberEmail || null,
+        date_of_birth: memberDob,
         address,
         family_id: primary.family_id,
         household_id: resolved.householdId,
