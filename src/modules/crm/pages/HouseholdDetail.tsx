@@ -34,6 +34,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/shared/components/ui/dropdown-menu";
+import { MemberDobInput } from "@/modules/crm/components/MemberDobInput";
 import { toast } from "sonner";
 import { PageBreadcrumbs } from "@/shared/components/PageBreadcrumbs";
 import { policyTypeLabel } from "@/shared/lib/insurance";
@@ -180,7 +181,7 @@ const HouseholdDetail = () => {
       { data: charterV2 },
     ] = await Promise.all([
       supabase.from("families").select("name").eq("id", hh.family_id).single(),
-      supabase.from("contacts").select("id, first_name, last_name, family_role, email, phone, address, is_minor, lawyer_name, lawyer_firm, accountant_name, accountant_firm, executor_name, executor_firm, poa_name, poa_firm").eq("household_id", id),
+      supabase.from("contacts").select("id, first_name, last_name, family_role, email, phone, address, is_minor, lawyer_name, lawyer_firm, accountant_name, accountant_firm, executor_name, executor_firm, poa_name, poa_firm, date_of_birth").eq("household_id", id),
       supabase.from("household_charters").select("status").eq("household_id", id).maybeSingle(),
     ]);
     if (!mountedRef.current) return;
@@ -724,23 +725,12 @@ const HouseholdDetail = () => {
                               <th className="text-left font-medium px-6 py-3">Member Name</th>
                               <th className="text-left font-medium px-3 py-3">Email</th>
                               <th className="text-left font-medium px-3 py-3">Contact Phone</th>
-                              <th className="text-right font-medium px-3 py-3">Holding Tank</th>
-                              <th className="text-right font-medium px-3 py-3">Vineyard</th>
-                              <th className="text-right font-medium px-6 py-3">Storehouses</th>
+                              <th className="text-left font-medium px-6 py-3">Date of Birth</th>
                             </tr>
                           </thead>
                           <tbody>
                             {members.map((m) => {
                               const initials = `${(m.first_name?.[0] || "").toUpperCase()}${(m.last_name?.[0] || "").toUpperCase()}` || "—";
-                              const tankTotal = holdingTank
-                                .filter((t) => t.contact_id === m.id)
-                                .reduce((s, t) => s + (Number(t.current_value) || 0), 0);
-                              const vineTotal = vineyardAccounts
-                                .filter((v) => v.contact_id === m.id)
-                                .reduce((s, v) => s + (Number(v.current_value) || 0), 0);
-                              const storeTotal = storehouses
-                                .filter((s) => s.contact_id === m.id && s.asset_type !== 'Primary Residence & Protected Legacy Accounts')
-                                .reduce((sum, s) => sum + (Number(s.current_value) || 0), 0);
                               return (
                                 <tr
                                   key={m.id}
@@ -759,14 +749,8 @@ const HouseholdDetail = () => {
                                   </td>
                                   <td className="px-3 py-4 text-foreground/80">{m.email || "—"}</td>
                                   <td className="px-3 py-4 text-foreground/80">{m.phone || "—"}</td>
-                                  <td className="px-3 py-4 text-right font-medium text-foreground">
-                                    {formatCurrency(tankTotal)}
-                                  </td>
-                                  <td className="px-3 py-4 text-right font-medium text-primary">
-                                    {formatCurrency(vineTotal)}
-                                  </td>
-                                  <td className="px-6 py-4 text-right font-medium text-accent">
-                                    {formatCurrency(storeTotal)}
+                                  <td className="px-6 py-2">
+                                    <MemberDobInput contactId={m.id} value={m.date_of_birth ?? null} onSaved={(v) => setMembers((list) => list.map((x) => (x.id === m.id ? { ...x, date_of_birth: v } : x)))} />
                                   </td>
                                 </tr>
                               );
