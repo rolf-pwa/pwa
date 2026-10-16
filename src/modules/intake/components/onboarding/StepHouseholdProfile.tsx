@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/shared/components/ui/select";
 import type { OnboardingMemberInput, OnboardingState } from "../../hooks/useOnboarding";
+import { cleanDob, dobRequiredFor } from "../../../../../supabase/functions/_shared/dob";
 
 const RELATIONSHIPS: { value: OnboardingMemberInput["relationship"]; label: string }[] = [
   { value: "spouse", label: "Spouse / partner" },
@@ -51,6 +52,8 @@ interface Props {
     address: string;
     phone?: string;
     email?: string;
+    dateOfBirth?: string;
+    memberDobs?: Record<string, string>;
     members: OnboardingMemberInput[];
   }) => void;
 }
@@ -75,6 +78,9 @@ export const StepHouseholdProfile = ({ state, saving, onSave }: Props) => {
   const [phone, setPhone] = useState(state.contact.phone);
   const [email, setEmail] = useState(state.contact.email);
   const [members, setMembers] = useState<OnboardingMemberInput[]>([]);
+  const [dob, setDob] = useState(state.contact.dateOfBirth ?? "");
+  // Dates of birth for members already on file who have none yet.
+  const [memberDobs, setMemberDobs] = useState<Record<string, string>>({});
 
   const sortedExistingMembers = [...state.members].sort(
     (a, b) => roleSortRank(a.role) - roleSortRank(b.role),
@@ -83,10 +89,19 @@ export const StepHouseholdProfile = ({ state, saving, onSave }: Props) => {
   const updateMember = (index: number, patch: Partial<OnboardingMemberInput>) =>
     setMembers((prev) => prev.map((m, i) => (i === index ? { ...m, ...patch } : m)));
 
+  // A date of birth is required for you and for a spouse (on file or added here); for anyone else it is optional.
+  const needsDob = sortedExistingMembers.filter((m) => !m.dateOfBirth && dobRequiredFor(m.role));
+  const dobOk =
+    cleanDob(dob) !== "invalid" && cleanDob(dob) !== null &&
+    needsDob.every((m) => { const v = cleanDob(memberDobs[m.id]); return v !== "invalid" && v !== null; }) &&
+    sortedExistingMembers.every((m) => cleanDob(memberDobs[m.id]) !== "invalid") &&
+    members.filter((m) => m.fullName.trim().length > 0).every((m) => { const v = cleanDob(m.dateOfBirth); return v !== "invalid" && (v !== null || !dobRequiredFor(m.relationship === "spouse" ? "spouse" : "other")); });
+
   const canSubmit =
     primaryName.trim().length > 1 &&
     householdName.trim().length > 0 &&
     address.trim().length > 0 &&
+    dobOk &&
     !saving;
 
 
@@ -151,6 +166,11 @@ export const StepHouseholdProfile = ({ state, saving, onSave }: Props) => {
               maxLength={400}
             />
           </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="ob-dob">Your date of birth</Label>
+            <Input id="ob-dob" type="date" value={dob} onChange={(e) => setDob(e.target.value)} min="1900-01-01" max={new Date().toISOString().slice(0, 10)} className="sm:w-[220px]" />
+            <p className="text-xs text-muted-foreground">We use it to apply the right age rules to your accounts and plan.</p>
+          </div>
           <div className="space-y-1.5">
             <Label htmlFor="ob-phone">Phone</Label>
             <Input
@@ -206,6 +226,17 @@ export const StepHouseholdProfile = ({ state, saving, onSave }: Props) => {
                     <span className="shrink-0 text-xs text-muted-foreground">
                       {(m.role && ROLE_LABELS[m.role]) ?? m.role ?? "Household member"}
                     </span>
+                    {!m.dateOfBirth && (
+                      <Input
+                        type="date"
+                        aria-label={`Date of birth for ${m.fullName}`}
+                        value={memberDobs[m.id] ?? ""}
+                        onChange={(e) => setMemberDobs((prev) => ({ ...prev, [m.id]: e.target.value }))}
+                        min="1900-01-01"
+                        max={new Date().toISOString().slice(0, 10)}
+                        className="h-8 w-[160px]"
+                      />
+                    )}
                   </li>
                 ))}
               </ul>
@@ -217,7 +248,7 @@ export const StepHouseholdProfile = ({ state, saving, onSave }: Props) => {
               {members.map((member, index) => (
                 <div
                   key={index}
-                  className="grid gap-3 rounded-lg border border-border bg-card p-3 sm:grid-cols-[1fr_1fr_auto_auto]"
+                  className="grid gap-3 rounded-lg border border-border bg-card p-3 sm:grid-cols-[1fr_1fr_auto_auto_auto]"
                 >
                   <Input
                     value={member.fullName}
@@ -231,6 +262,16 @@ export const StepHouseholdProfile = ({ state, saving, onSave }: Props) => {
                     placeholder="Email (optional)"
                     type="email"
                     maxLength={200}
+                  />
+                  <Input
+                    type="date"
+                    aria-label={`Date of birth${member.relationship === "spouse" ? "" : " (optional)"}`}
+                    title={member.relationship === "spouse" ? "Date of birth (required)" : "Date of birth (optional)"}
+                    value={member.dateOfBirth ?? ""}
+                    onChange={(e) => updateMember(index, { dateOfBirth: e.target.value })}
+                    min="1900-01-01"
+                    max={new Date().toISOString().slice(0, 10)}
+                    className="sm:w-[150px]"
                   />
                   <Select
                     value={member.relationship}
@@ -277,6 +318,8 @@ export const StepHouseholdProfile = ({ state, saving, onSave }: Props) => {
 
               phone: phone.trim(),
               email: email.trim(),
+              dateOfBirth: dob,
+              memberDobs: Object.fromEntries(Object.entries(memberDobs).filter(([, v]) => v)),
               members: members.filter((m) => m.fullName.trim().length > 0),
             })
           }
