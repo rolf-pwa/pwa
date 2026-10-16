@@ -9,6 +9,9 @@ import { pacificDate } from "../_shared/review-windows.ts";
 import { MODEL_PROMPT, validateModels } from "../_shared/ia-model-parse.ts";
 import { isPooledFamily } from "../_shared/review-units.ts";
 import { buildClientProposal, buildClientView, narrativeParagraphs, portfolioReviewReadyEmail, type ClientIncludes } from "../_shared/portfolio-review-client.ts";
+import { planVaultCatchUp } from "../_shared/vault-catchup.ts";
+import { ensurePersonalDrawers, provisionClientFolderTree } from "../_shared/vault-provisioning.ts";
+import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { packReadiness } from "../_shared/pack-readiness.ts";
 import { sendServiceEmailDetailed } from "../_shared/service-email.ts";
 import { AGENT_SENDER, PORTAL_URL } from "../_shared/onboarding-agent.ts";
@@ -177,6 +180,28 @@ Deno.serve(async (req) => {
       }
       return json({ household: { id: hh.id, label: hh.label, family_id: hh.family_id, family_name: (hh as any).families?.name ?? null, service_tier: hh.service_tier }, pack, profiles, models, publication: pub ?? null, rebalancePublication: rebPub ?? null, rebalancingObligation: rebOb ? { id: rebOb.id, window_start: rebOb.window_start, window_end: rebOb.window_end, status: rebOb.status, published_at: rebOb.published_at, acknowledged_at: rebOb.acknowledged_at, completed_at: rebOb.completed_at } : null, rebalanceProgress });
     }
+    // ── One-time catch-up: bring existing households into the Drive Vault structure (idempotent; creates folders only) ──
+    if (action === "vaultCatchUp") {
+      const { data: hhs } = await db.from("households").select("id, label, service_tier, relationship_ended_at, vault_root_folder_id, families(name)");
+      const { data: people } = await db.from("contacts").select("household_id, family_role, is_minor, personal_vault_folder_id").not("household_id", "is", null);
+      const plan = planVaultCatchUp((hhs ?? []).map((h: any) => ({ id: h.id, label: h.label, familyName: h.families?.name ?? null, serviceTier: h.service_tier, relationshipEnded: !!h.relationship_ended_at, vaultRoot: h.vault_root_folder_id })), (people ?? []).map((p: any) => ({ householdId: p.household_id, role: p.family_role, isMinor: p.is_minor, personalDrawer: p.personal_vault_folder_id })));
+      if (body?.dryRun !== false) return json({ plan });
+      // A few households per call: each builds a couple of dozen Drive folders. The page calls again until nothing is left.
+      const done: { name: string; kind: string; ok: boolean; detail: string }[] = [];
+      for (const h of plan.provision.slice(0, 3)) {
+        const r = await provisionClientFolderTree(db, h.id, "vault_catchup", { requestedBy: { id: staff.userId, email: staff.email } });
+        done.push({ name: h.name, kind: "Vault", ok: r.ok, detail: r.ok ? `Vault created${r.personalDrawers ? `, ${r.personalDrawers} personal drawer${r.personalDrawers === 1 ? "" : "s"}` : ""}` : String(r.error) });
+      }
+      if (!plan.provision.length) {
+        const token = plan.drawers.length ? await getServiceGoogleAccessToken(db) : "";
+        for (const h of plan.drawers.slice(0, 6)) {
+          try { const n = await ensurePersonalDrawers(db, h.id, token, "vault_catchup"); done.push({ name: h.name, kind: "Drawers", ok: true, detail: `${n} personal drawer${n === 1 ? "" : "s"} created` }); }
+          catch (e) { done.push({ name: h.name, kind: "Drawers", ok: false, detail: e instanceof Error ? e.message : String(e) }); }
+        }
+      }
+      return json({ plan, done });
+    }
+
     // ── Which households with open reviews or rebalancings are ready for Rolf to prepare, and what each is missing ──
     if (action === "packReadiness") {
       const today = pacificDate(Date.now());

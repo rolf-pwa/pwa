@@ -11,6 +11,7 @@ import { KIND_LABEL, getRebalancingProposal, type ClientProposal, completeRebala
 import { familyTitle } from "@/shared/lib/utils";
 import { ReviewAgentGuide } from "@/modules/crm/components/ReviewAgentGuide";
 import { PackReadinessCard } from "@/modules/crm/components/PackReadinessCard";
+import { VaultCatchUpCard } from "@/modules/crm/components/VaultCatchUpCard";
 import { Textarea } from "@/shared/components/ui/textarea";
 
 const MODES: { value: ReviewMode; label: string; blurb: string }[] = [
@@ -141,6 +142,8 @@ export default function ReviewAgent() {
             <ReviewAgentGuide />
 
             <PackReadinessCard />
+
+            <VaultCatchUpCard />
 
             <Card>
               <CardHeader className="pb-3">
