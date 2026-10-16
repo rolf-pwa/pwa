@@ -137,7 +137,8 @@ async function event(familyId: string | null, obligationId: string | null, mode:
 
 async function work(o: any, family: any, contacts: FamilyContact[], mode: "shadow" | "live", cfg: ReviewConfig, now: number, summary: Summary, cache: Map<string, any[]>) {
   if (!family) return;
-  const invitees = inviteesOf(contacts);
+  // A household that stands alone (its obligation names the household) invites its own heads and their spouses.
+  const invitees = inviteesOf(contacts, !!o.household_id);
   const allEmails = [...new Set(contacts.filter((p) => !p.isMinor && p.email).map((p) => String(p.email).trim().toLowerCase()))];
   const touch = (patch: Record<string, unknown>) => db.from("review_obligations").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", o.id);
 
@@ -227,7 +228,7 @@ async function handleReplies(o: any, family: any, contacts: FamilyContact[], sum
   const { client, staff } = inboundReplies(messages, { sentIds: o.sent_message_ids ?? [], handledIds: o.handled_message_ids ?? [] });
   const touch = (patch: Record<string, unknown>) => db.from("review_obligations").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", o.id);
   const handled = [...(o.handled_message_ids ?? [])];
-  const invitees = inviteesOf(contacts);
+  const invitees = inviteesOf(contacts, !!o.household_id);
 
   if (staff.length && !client.length) {
     await touch({ handled_message_ids: [...handled, ...staff.map((m) => m.id)].slice(-60), snoozed_until: new Date(Date.now() + SNOOZE_DAYS_STAFF * DAY).toISOString() });

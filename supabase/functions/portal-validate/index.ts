@@ -595,7 +595,8 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
       let owed: ReturnType<typeof meetingsOwedNow> = [];
       const { data: heads } = familyId ? await supabase.from("contacts").select("household_id").eq("family_id", familyId).eq("family_role", "head_of_family") : { data: [] as any[] };
       const hofHouseholds = (heads ?? []).map((h: any) => h.household_id);
-      const canBook = isFamilyAdult({ role: contactRes.data?.family_role ?? null, isMinor: contactRes.data?.is_minor, householdId: contactRes.data?.household_id }, hofHouseholds);
+      const standalone = familyId ? !!(await viewerUnit(supabase, familyId, contactRes.data?.household_id)).householdId : false;
+      const canBook = isFamilyAdult({ role: contactRes.data?.family_role ?? null, isMinor: contactRes.data?.is_minor, householdId: contactRes.data?.household_id }, hofHouseholds, standalone);
       if (canBook && familyId && (mt ?? []).some((t: any) => t.cadence_kind)) {
         const today = pacificDate(Date.now());
         const unit = await viewerUnit(supabase, familyId, contactRes.data?.household_id);
@@ -613,7 +614,8 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
     let rebalancing: { authorizedIds: string[]; viewerId: string | null; view: unknown; proposal: unknown; label: string; summary: string; publishedAt: string; acknowledgedAt: string | null; completedAt: string | null; statement: string; statementVersion: string } | null = null;
     try {
       const { data: rHeads } = familyId ? await supabase.from("contacts").select("household_id").eq("family_id", familyId).eq("family_role", "head_of_family") : { data: [] as any[] };
-      if (familyId && isFamilyAdult({ role: contactRes.data?.family_role ?? null, isMinor: contactRes.data?.is_minor, householdId: contactRes.data?.household_id }, (rHeads ?? []).map((h: any) => h.household_id))) {
+      const rStandalone = familyId ? !!(await viewerUnit(supabase, familyId, contactRes.data?.household_id)).householdId : false;
+      if (familyId && isFamilyAdult({ role: contactRes.data?.family_role ?? null, isMinor: contactRes.data?.is_minor, householdId: contactRes.data?.household_id }, (rHeads ?? []).map((h: any) => h.household_id), rStandalone)) {
         const today = pacificDate(Date.now());
         // Shown only once Rolf has published it to this family, and only while Georgia is live.
         const rUnit = await viewerUnit(supabase, familyId, contactRes.data?.household_id);

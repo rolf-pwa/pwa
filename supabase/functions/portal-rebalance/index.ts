@@ -45,7 +45,8 @@ Deno.serve(async (req) => {
     const { data: me } = await db.from("contacts").select("id, first_name, last_name, family_id, family_role, is_minor, household_id").eq("id", who.contactId).maybeSingle();
     if (!me?.family_id) return json({ error: "Not available" }, 403);
     const { data: heads } = await db.from("contacts").select("household_id").eq("family_id", me.family_id).eq("family_role", "head_of_family");
-    if (!isFamilyAdult({ role: me.family_role, isMinor: me.is_minor, householdId: me.household_id }, (heads ?? []).map((h: any) => h.household_id))) return json({ error: "Not available" }, 403);
+    const standalone = !!(await viewerUnit(db, me.family_id, me.household_id)).householdId;
+    if (!isFamilyAdult({ role: me.family_role, isMinor: me.is_minor, householdId: me.household_id }, (heads ?? []).map((h: any) => h.household_id), standalone)) return json({ error: "Not available" }, 403);
 
     const today = pacificDate(Date.now());
     const unit = await viewerUnit(db, me.family_id, me.household_id);
