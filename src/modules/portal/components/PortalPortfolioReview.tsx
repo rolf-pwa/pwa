@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { Card, CardContent } from "@/shared/components/ui/card";
 import { PortalProposal } from "./PortalProposal";
+import { LinkifyText } from "@/shared/components/LinkifyText";
 import type { ClientView, MixStatus } from "../../../../supabase/functions/_shared/portfolio-review-client";
 
 const money = (n: number | null | undefined) => (n === null || n === undefined ? "—" : n.toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }));
@@ -84,7 +85,7 @@ function Donut({ parts, colors, centre, sub }: { parts: { pct: number }[]; color
 const Commentary = ({ lines }: { lines?: string[] }) =>
   lines && lines.length ? (
     <div className="space-y-1.5 rounded-lg p-3 text-sm leading-relaxed text-foreground" style={{ background: tint(B.sand, 0.35) }}>
-      {lines.map((l, i) => <p key={i}>{l}</p>)}
+      {lines.map((l, i) => <p key={i}><LinkifyText text={l} /></p>)}
     </div>
   ) : null;
 
@@ -119,7 +120,7 @@ export function PortalPortfolioReview({ view, publishedAt, preview = false, stat
           <p className="text-xs text-muted-foreground">{view.householdLabel}{view.valuesAsOf ? ` · values as of ${day(view.valuesAsOf)}` : ""}{view.holdingsAsOf && view.holdingsAsOf !== view.valuesAsOf ? ` · your holdings as of ${day(view.holdingsAsOf)}` : ""}{publishedAt ? ` · shared ${day(publishedAt.slice(0, 10))}` : ""}</p>
         </div>
 
-        {view.note && <blockquote className="whitespace-pre-line border-l-2 border-accent pl-3 text-sm text-foreground">{view.note}<footer className="mt-1 text-xs text-muted-foreground">Rolf</footer></blockquote>}
+        {view.note && <blockquote className="whitespace-pre-line border-l-2 border-accent pl-3 text-sm text-foreground"><LinkifyText text={view.note} /><footer className="mt-1 text-xs text-muted-foreground">Rolf</footer></blockquote>}
 
         {!isRebalance && (
           <>
