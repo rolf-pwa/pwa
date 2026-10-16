@@ -72,8 +72,6 @@ const GROUPS = [
       { to: "/inbox", label: "Inbox", icon: InboxIcon, badgeKey: "inbox" },
       { to: "/projects", label: "Projects", icon: ListTodo },
       { to: "/team-capacity", label: "Team Capacity", icon: Gauge },
-      { to: "/onboarding-agent", label: "Georgia Onboarding", icon: Bot },
-      { to: "/review-agent", label: "Georgia Reviews", icon: CalendarClock },
       { to: "/invoices", label: "Invoices", icon: Receipt },
       { to: "/services", label: "Services", icon: ConciergeBell },
     ],
@@ -96,6 +94,8 @@ const GROUPS = [
     items: [
       ...(SECOND_BRAIN_ENABLED ? [{ to: "/brain", label: "Second Brain", icon: Brain }] : []),
       { to: "/workbench", label: "Workbench", icon: Cpu },
+      { to: "/onboarding-agent", label: "Georgia Onboarding", icon: Bot },
+      { to: "/review-agent", label: "Georgia Reviews", icon: CalendarClock },
       { to: "/review-queue", label: "Review Queue", icon: ClipboardCheck, badgeKey: "review" },
       { to: "/glass-box-review", label: "Glass-Box Review", icon: ShieldCheck },
       { to: "/bulk-statement-import", label: "Bulk Statement Import", icon: FileUp },
