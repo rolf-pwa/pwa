@@ -32,6 +32,9 @@ vi.mock("@/modules/crm/lib/reviewAgent", async () => {
 
 import ReviewAgent from "@/modules/crm/pages/ReviewAgent";
 
+/** Future quarters start collapsed; open one the way Rolf would. */
+const open = (region: HTMLElement) => { const b = within(region).getByRole("button", { expanded: false }); fireEvent.click(b); };
+
 describe("Georgia's review windows page", () => {
   beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date("2026-11-05T18:00:00Z")); });
   afterEach(() => { vi.useRealTimers(); });
@@ -47,6 +50,8 @@ describe("Georgia's review windows page", () => {
     expect(within(q1).getByText("1 with a person")).toBeTruthy();
     expect(screen.getByRole("region", { name: "Q2 2027" })).toBeTruthy();
     // The family needing a person is listed first within its quarter.
+    expect(within(q1).queryByRole("link")).toBeNull(); // future quarters start collapsed
+    open(q1);
     const names = within(q1).getAllByRole("link").map((l) => l.textContent);
     expect(names).toEqual(["Jones Family", "Smith Family"]);
   });
@@ -63,15 +68,27 @@ describe("Georgia's review windows page", () => {
   it("collapses and expands a quarter", async () => {
     render(<MemoryRouter><ReviewAgent /></MemoryRouter>);
     const q2 = await screen.findByRole("region", { name: "Q2 2027" });
+    expect(within(q2).queryByText("Fox Family")).toBeNull();
+    open(q2);
     expect(within(q2).getByText("Fox Family")).toBeTruthy();
     fireEvent.click(within(q2).getByRole("button", { expanded: true }));
     expect(within(q2).queryByText("Fox Family")).toBeNull();
+  });
+
+  it("opens only the current quarter, and keeps the readiness, Vault and activity cards collapsed", async () => {
+    render(<MemoryRouter><ReviewAgent /></MemoryRouter>);
+    const q4 = await screen.findByRole("region", { name: "Q4 2026" });
+    expect(within(q4).getByText("Lively-Lambert Family")).toBeTruthy();
+    for (const title of ["Pack readiness", "Vault catch-up", "Recent activity"]) {
+      expect(screen.getByRole("button", { name: title }).getAttribute("aria-expanded")).toBe("false");
+    }
   });
 
   it("lets Rolf publish a rebalancing only with a summary, and mark an acknowledged one done", async () => {
     const lib: any = await import("@/modules/crm/lib/reviewAgent");
     render(<MemoryRouter><ReviewAgent /></MemoryRouter>);
     const q4 = await screen.findByRole("region", { name: "Q4 2027" });
+    open(q4);
     expect(within(q4).getByText(/^Preparing/)).toBeTruthy();
     expect(within(q4).getByText(/^To carry out/)).toBeTruthy();
     expect(within(q4).getByText("1 to carry out")).toBeTruthy();
