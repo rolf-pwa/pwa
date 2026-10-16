@@ -10,9 +10,8 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkEstate, checkInsurance, checkInvestment, verdictFor } from "../_shared/stage2-checks.ts";
-import {
-  applyCorrections, applyPlan, planEstateApply, planInsuranceApply, planInvestmentApply, type Correction,
-} from "../_shared/vault-apply.ts";
+import { applyCorrections, applyPlan, type Correction } from "../_shared/vault-apply.ts";
+import { buildApprovalPlan } from "../_shared/stage2-apply.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
 import { logActionEvent } from "../_shared/action-brain.ts";
 import { computeAvailability } from "../_shared/withdrawal-availability.ts";
@@ -116,36 +115,10 @@ Deno.serve(async (req) => {
       if (ovErr) throw new Error(`Recording overrides failed: ${ovErr.message}`);
     }
 
-    const { data: members } = await admin.from("contacts").select("id, first_name, last_name, family_role").eq("household_id", audit.household_id);
-    const memberIds = (members ?? []).map((m: any) => m.id);
-    let plan;
-    if (kind === "estate") {
-      plan = planEstateApply(corrected.extraction[listKey] ?? [], {
-        householdId: audit.household_id, members: members ?? [], driveId: source.drive_id ?? null, fileName: source.file_name ?? null,
-        auditId, approvedBy: user.id,
-      });
-    } else if (kind === "investment") {
-      const [{ data: vineyard }, { data: storehouses }, { data: tank }] = await Promise.all([
-        memberIds.length ? admin.from("vineyard_accounts").select("id, contact_id, account_name, account_number").in("contact_id", memberIds) : { data: [] },
-        memberIds.length ? admin.from("storehouses").select("id, contact_id, label, asset_type").in("contact_id", memberIds) : { data: [] },
-        memberIds.length ? admin.from("holding_tank").select("id, contact_id, account_name, account_number").in("contact_id", memberIds).neq("status", "moved") : { data: [] },
-      ]);
-      plan = planInvestmentApply(corrected.extraction[listKey] ?? [], {
-        householdId: audit.household_id, members: members ?? [], vineyard: vineyard ?? [], storehouses: storehouses ?? [], holdingTank: tank ?? [],
-        sourceFile: source.drive_id ? `vault:${source.drive_id}:${source.file_name ?? ""}` : null,
-        statementDate: typeof corrected.extraction.statement_date === "string" ? corrected.extraction.statement_date : null,
-      });
-    } else {
-      const { data: shareholders } = memberIds.length
-        ? await admin.from("shareholders").select("corporation_id").in("contact_id", memberIds).eq("is_active", true) : { data: [] };
-      const corpIds = [...new Set((shareholders ?? []).map((s: any) => s.corporation_id))];
-      const { data: corporations } = corpIds.length ? await admin.from("corporations").select("id, name").in("id", corpIds) : { data: [] };
-      const { data: policies } = await admin.from("insurance_policies").select("id, carrier, policy_number, insured_name, policy_type, renewal_date")
-        .or(`contact_id.in.(${memberIds.length ? memberIds.join(",") : "00000000-0000-0000-0000-000000000000"})${corpIds.length ? `,corporation_id.in.(${corpIds.join(",")})` : ""}`);
-      plan = planInsuranceApply(corrected.extraction[listKey] ?? [], {
-        members: members ?? [], corporations: corporations ?? [], policies: policies ?? [], vaultFolderId: null, fileName: source.file_name ?? null,
-      });
-    }
+    const plan = await buildApprovalPlan(admin, {
+      kind, items: corrected.extraction[listKey] ?? [], statementDate: typeof corrected.extraction.statement_date === "string" ? corrected.extraction.statement_date : null,
+      householdId: audit.household_id, source, auditId, approvedBy: user.id,
+    });
 
     const result = await applyPlan(admin, plan);
     await admin.from("stage2_verification_audit")

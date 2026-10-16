@@ -25,6 +25,7 @@ import { GEMINI_EXTRACT_MODEL, withThinking, fetchWithVertexRetry } from "../_sh
 import { V2_PROVENANCE_PROMPT_SUFFIX } from "../_shared/provenance.ts";
 import { ESTATE_SYSTEM_PROMPT, V2_ESTATE_PROVENANCE_SUFFIX, V2_INVESTMENT_NETGAIN_SUFFIX } from "../_shared/stage1-v2-prompts.ts";
 import { runStage2 } from "../_shared/stage2-run.ts";
+import { tryAutoApprove } from "../_shared/stage2-auto.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
 
 // Keep in sync with src/shared/lib/custodians.ts (a Deno edge function can't
@@ -310,11 +311,19 @@ Deno.serve(async (req) => {
       .from("households").select("v2_ai_engine_enabled").eq("id", householdId).maybeSingle();
     const v2 = flagRow?.v2_ai_engine_enabled === true;
     let heldForReview = 0;
+    // Items Stage 2 fully verified are approved automatically; only the exceptions stay pending and are reported to Rolf. VAULT_SCAN_AUTO_APPROVE=off turns this off.
+    const autoApprove = (Deno.env.get("VAULT_SCAN_AUTO_APPROVE") ?? "on").toLowerCase() !== "off";
+    let autoApproved = 0;
+    const exceptions: { file: string; kind: string; reason: string }[] = [];
     // Stage 2 hold: verify + audit-log one file's extraction, never touching live rows.
     const holdForReview = async (kind: "investment" | "insurance" | "estate", parsed: Record<string, unknown>, file: { id: string; name: string }) => {
       try {
-        await runStage2(admin, { householdId, kind, extraction: parsed, source: { drive_id: file.id, file_name: file.name } });
+        const out = await runStage2(admin, { householdId, kind, extraction: parsed, source: { drive_id: file.id, file_name: file.name } });
         heldForReview += 1;
+        if (autoApprove) {
+          const r = await tryAutoApprove(admin, out.audit_id);
+          if (r.approved) autoApproved += 1; else exceptions.push({ file: file.name, kind, reason: r.reason ?? "Needs review." });
+        }
       } catch (e) {
         await logSystemHealth(admin, {
           function_name: "vault-statement-scan", severity: "ERROR", household_id: householdId,
@@ -662,6 +671,15 @@ Deno.serve(async (req) => {
       }
     }
 
+    // One notification, only when something needs a person.
+    if (v2 && autoApprove && exceptions.length) {
+      const shown = exceptions.slice(0, 4).map((e) => `${e.file}: ${e.reason}`).join("\n");
+      await admin.from("staff_notifications").insert({
+        title: `Vault scan for ${household.label}: ${exceptions.length} item${exceptions.length === 1 ? "" : "s"} need${exceptions.length === 1 ? "s" : ""} review${autoApproved ? ` (${autoApproved} approved automatically)` : ""}`,
+        body: `${shown}${exceptions.length > 4 ? `\n…and ${exceptions.length - 4} more` : ""}`, link: "/glass-box-review", source_type: "vault_scan",
+      });
+    }
+
     // Fold in what the concurrent V2 reader found (empty for V1).
     insuranceFilesParsed.push(...insuranceFilesParsedV2);
     insurancePoliciesExtracted += insurancePoliciesExtractedV2;
@@ -703,7 +721,7 @@ Deno.serve(async (req) => {
         insurancePoliciesMatched,
         insurancePoliciesCreated,
         errors: [...investmentErrors, ...insuranceErrors],
-        ...(v2 ? { v2HeldForReview: heldForReview, estateFilesParsed: estateFilesParsed.length } : {}),
+        ...(v2 ? { v2HeldForReview: heldForReview - autoApproved, v2AutoApproved: autoApproved, v2Exceptions: exceptions, estateFilesParsed: estateFilesParsed.length } : {}),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
