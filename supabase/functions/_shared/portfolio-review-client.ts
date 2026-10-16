@@ -17,6 +17,8 @@ export interface ClientView {
   proposal?: ClientProposal | null;
   householdLabel: string;
   valuesAsOf: string | null;
+  /** The statement date behind the fund detail, when older than the values. */
+  holdingsAsOf?: string | null;
   note: string;
   summary: { value: number; changeYtd: number | null; ytdPct: number | null };
   /** The household's value over time, oldest first (empty when there is not enough history). */
@@ -135,6 +137,7 @@ export function buildClientView(pack: Pack, includesIn: ClientIncludes, note: st
     kind,
     householdLabel,
     valuesAsOf: pack.asOf,
+    holdingsAsOf: pack.holdings?.asOf ?? null,
     note: note.trim(),
     summary: { value: pack.totalValue, changeYtd: h.changeYtd, ytdPct: h.valueWeightedYtd },
     history: pack.history.length >= 2 ? pack.history : [],

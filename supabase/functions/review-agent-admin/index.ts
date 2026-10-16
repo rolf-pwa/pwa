@@ -139,6 +139,23 @@ Deno.serve(async (req) => {
       }
       const { data: adults } = await db.from("contacts").select("id").eq("family_id", o.family_id).in("family_role", ["head_of_family", "spouse"]);
       for (const a of adults ?? []) await db.from("portal_client_notifications").insert({ contact_id: a.id, title: "Your portfolio rebalancing is complete", body: "Your portfolio has been rebalanced. Sign in to see your accounts.", source_type: "rebalancing_complete", link_tab: "financials" });
+      // The resets in it are now done: record them so the pack does not offer them again before the next statement.
+      try {
+        const resets: any[] = Array.isArray(o.proposal?.resets) ? o.proposal.resets : [];
+        if (o.household_id && resets.length) {
+          const today = pacificDate(Date.now());
+          const { pack: now } = await portfolioPackFor(db, o.household_id, today);
+          for (const r of resets) {
+            const accountId = String(r.id ?? "").split(":")[1];
+            const { data: t } = await db.from("holding_tank").select("account_number").eq("id", accountId).maybeSingle();
+            const { data: v } = t ? { data: null } : await db.from("vineyard_accounts").select("account_number").eq("id", accountId).maybeSingle();
+            const number = t?.account_number ?? v?.account_number;
+            if (!number) continue;
+            const value = now.resets.rows.find((x) => x.accountId === accountId)?.fundValue ?? r.newGuarantee ?? null;
+            await db.from("guarantee_resets").upsert({ household_id: o.household_id, account_number: number, last_reset_date: today, guaranteed_at_death: value, source: "rebalancing_completed", updated_by: staff.email, updated_at: new Date().toISOString() }, { onConflict: "household_id,account_number" });
+          }
+        }
+      } catch (e) { console.error("[review-agent-admin] recording resets:", e instanceof Error ? e.message : String(e)); }
       await log("rebalancing_completed");
       return json({ ok: true });
     }
@@ -276,6 +293,8 @@ Deno.serve(async (req) => {
       // The Tier 1 rebalancing: the same page and pack, tied to the household's rebalancing obligation so Georgia's reminders, the task and "to carry out" keep working.
       if (kind === "rebalance") {
         if (note.trim().length < 10) return json({ error: "Write a short note for the client (at least a sentence)." }, 400);
+        // The mix comes from the last statement scan; past the limit, switches are only proposed once Rolf has checked current holdings on iA.
+        if (pack.holdings.stale && body?.holdingsChecked !== true) return json({ error: `The fund detail is from ${pack.holdings.asOf} (${pack.holdings.ageDays} days old). Check the current holdings on iA's advisor site, then confirm you have before publishing.` }, 400);
         const { data: ob } = await db.from("review_obligations").select("*").eq("household_id", householdId).eq("kind", "rebalancing").eq("mode", "live").neq("status", "cancelled").is("completed_at", null).gte("window_end", pacificDate(Date.now())).order("window_start", { ascending: true }).limit(1).maybeSingle();
         if (!ob) return json({ error: "No rebalancing is due for this household." }, 400);
         if (ob.acknowledged_at) return json({ error: "The client has already authorized this rebalancing." }, 400);
@@ -392,7 +411,7 @@ Deno.serve(async (req) => {
       const d = body?.lastResetDate ? String(body.lastResetDate) : null;
       if (!householdId || !accountNumber) return json({ error: "householdId and accountNumber required" }, 400);
       if (d && !/^\d{4}-\d{2}-\d{2}$/.test(d)) return json({ error: "Date must be YYYY-MM-DD" }, 400);
-      const { error } = await db.from("guarantee_resets").upsert({ household_id: householdId, account_number: accountNumber, last_reset_date: d, updated_by: staff.email, updated_at: new Date().toISOString() }, { onConflict: "household_id,account_number" });
+      const { error } = await db.from("guarantee_resets").upsert({ household_id: householdId, account_number: accountNumber, last_reset_date: d, guaranteed_at_death: null, source: "manual", updated_by: staff.email, updated_at: new Date().toISOString() }, { onConflict: "household_id,account_number" });
       if (error) return json({ error: error.message }, 400);
       return json({ ok: true });
     }

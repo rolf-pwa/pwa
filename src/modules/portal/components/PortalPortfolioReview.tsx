@@ -116,7 +116,7 @@ export function PortalPortfolioReview({ view, publishedAt, preview = false, stat
       <CardContent className="space-y-5 p-5 sm:p-6">
         <div>
           <h3 className="font-serif text-lg font-semibold text-foreground">{preview ? "Preview: " : ""}{isRebalance ? "Your portfolio rebalancing" : "Your Portfolio Review"}</h3>
-          <p className="text-xs text-muted-foreground">{view.householdLabel}{view.valuesAsOf ? ` · as of ${day(view.valuesAsOf)}` : ""}{publishedAt ? ` · shared ${day(publishedAt.slice(0, 10))}` : ""}</p>
+          <p className="text-xs text-muted-foreground">{view.householdLabel}{view.valuesAsOf ? ` · values as of ${day(view.valuesAsOf)}` : ""}{view.holdingsAsOf && view.holdingsAsOf !== view.valuesAsOf ? ` · your holdings as of ${day(view.holdingsAsOf)}` : ""}{publishedAt ? ` · shared ${day(publishedAt.slice(0, 10))}` : ""}</p>
         </div>
 
         {view.note && <blockquote className="whitespace-pre-line border-l-2 border-accent pl-3 text-sm text-foreground">{view.note}<footer className="mt-1 text-xs text-muted-foreground">Rolf</footer></blockquote>}

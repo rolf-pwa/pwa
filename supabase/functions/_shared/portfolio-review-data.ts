@@ -2,7 +2,7 @@
 
 // deno-lint-ignore-file no-explicit-any
 import { MANAGED_CUSTODIANS } from "./monthly-import.ts";
-import { buildPortfolioPack, type Guarantee, type InvestorProfile, type ModelPortfolio, type PackAccount, type StatementFunds } from "./portfolio-review.ts";
+import { applyResetRecord, buildPortfolioPack, type Guarantee, type InvestorProfile, type ModelPortfolio, type PackAccount, type StatementFunds } from "./portfolio-review.ts";
 
 const norm = (s: string | null | undefined) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 const num = (v: unknown) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
@@ -62,8 +62,9 @@ export async function portfolioPackFor(db: any, householdId: string, today: stri
     }
   }
 
-  const { data: resetRows } = await db.from("guarantee_resets").select("account_number, last_reset_date").eq("household_id", householdId);
+  const { data: resetRows } = await db.from("guarantee_resets").select("account_number, last_reset_date, guaranteed_at_death").eq("household_id", householdId);
   const lastReset = new Map<string, string | null>((resetRows ?? []).map((r: any) => [norm(r.account_number), (r.last_reset_date ?? null) as string | null]));
+  const resetRecord = new Map<string, { date: string | null; guaranteedAtDeath: number | null }>((resetRows ?? []).map((r: any) => [norm(r.account_number), { date: (r.last_reset_date ?? null) as string | null, guaranteedAtDeath: num(r.guaranteed_at_death) }]));
 
   const packAccounts: PackAccount[] = accounts.map((a: any) => {
     const snaps = snapsOf(a);
@@ -75,7 +76,7 @@ export async function portfolioPackFor(db: any, householdId: string, today: stri
       returns: { ytd: num(latest?.ror_ytd), sixMonth: num(latest?.ror_6m), oneYear: num(latest?.ror_1y), threeYear: num(latest?.ror_3y), fiveYear: num(latest?.ror_5y), sinceInception: num(latest?.ror_since_inception) },
       priorValue: num(prior?.current_value), priorAsOf: prior?.snapshot_date ?? null,
       statement: funds.get(norm(a.account_number)) ?? null,
-      guarantee: guarantees.get(norm(a.account_number))?.guarantee ?? null,
+      guarantee: applyResetRecord(guarantees.get(norm(a.account_number))?.guarantee ?? null, guarantees.get(norm(a.account_number))?.date || null, resetRecord.get(norm(a.account_number)) ?? null),
       statementAllocation: guarantees.get(norm(a.account_number))?.allocation ?? null,
       ownerDob: dobOf.get(a.contact_id) ?? null,
       lastResetDate: lastReset.get(norm(a.account_number)) ?? null,

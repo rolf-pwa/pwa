@@ -213,15 +213,36 @@ export interface Pack {
   resets: ResetSummary;
   /** The household's managed value at each month-end the import has recorded, oldest first. */
   history: { date: string; value: number }[];
+  /** How old the fund detail behind the mix is. Values come from the monthly import; holdings come from the latest statement scan. */
+  holdings: { asOf: string | null; ageDays: number | null; stale: boolean; missing: number };
   /** Switches by asset class to bring each account to its profile's model mix, with the guarantee resets. */
   rebalancing: RebalancingProposal;
 }
 
 export const STATEMENT_STALE_DAYS = 120;
+/** Past this many days the fund detail is too old to propose switches from without Rolf checking current holdings on iA. */
+export const HOLDINGS_STALE_DAYS = STATEMENT_STALE_DAYS;
 export const BAD_YTD_PCT = -10;
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
 const money = (n: number) => n.toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 });
 const norm = (s: string | null | undefined) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/** The oldest statement behind any account's fund detail, and whether it is too old to propose switches from. */
+export function holdingsAge(accounts: { statement: { statementDate: string | null; funds: unknown[] } | null }[], today: string): Pack["holdings"] {
+  const dates = accounts.filter((a) => a.statement && a.statement.funds.length && a.statement.statementDate).map((a) => a.statement!.statementDate as string).sort();
+  const asOf = dates[0] ?? null;
+  const ageDays = asOf ? daysBetween(asOf, today) : null;
+  return { asOf, ageDays, stale: ageDays !== null && ageDays > HOLDINGS_STALE_DAYS, missing: accounts.filter((a) => !a.statement || !a.statement.funds.length).length };
+}
+
+/**
+ * A reset done after the statement was printed moves the guarantee at death to the value on the day. Use that recorded figure over the
+ * statement's older one, so a reset already carried out is not offered again.
+ */
+export function applyResetRecord(g: Guarantee | null, statementDate: string | null, rec: { date: string | null; guaranteedAtDeath: number | null } | null): Guarantee | null {
+  if (!g || !rec || rec.guaranteedAtDeath === null || !rec.date) return g;
+  return statementDate && rec.date <= statementDate ? g : { ...g, guaranteedAtDeath: rec.guaranteedAtDeath };
+}
 
 export function buildPortfolioPack(input: { accounts: PackAccount[]; profiles: InvestorProfile[]; today: string; models?: ModelPortfolio[]; history?: { date: string; value: number }[] }): Pack {
   const { today } = input;
@@ -309,6 +330,7 @@ export function buildPortfolioPack(input: { accounts: PackAccount[]; profiles: I
     modelAsOf: profiles.map((p) => p.model?.asOf).filter(Boolean).sort().pop() ?? null,
     exceptions,
     gaps,
+    holdings: holdingsAge(out, today),
     resets: resetCheck(accounts, today),
     history: input.history ?? [],
     rebalancing: proposeRebalancing(out, resetCheck(accounts, today)),

@@ -255,3 +255,33 @@ describe("estimated capital gain on a switch", () => {
     expect(estimateSwitchGain(100_000, 80_000, 0)).toBeNull();
   });
 });
+
+import { holdingsAge, applyResetRecord, HOLDINGS_STALE_DAYS } from "../../supabase/functions/_shared/portfolio-review";
+describe("how old the holdings behind the mix are", () => {
+  const acc = (date: string | null, funds = 1) => ({ statement: date ? { statementDate: date, funds: Array(funds).fill({}) } : null });
+  it("uses the oldest statement and counts accounts with no fund detail", () => {
+    const h = holdingsAge([acc("2026-06-30"), acc("2026-09-30"), acc(null)], "2026-10-16");
+    expect(h).toEqual({ asOf: "2026-06-30", ageDays: 108, stale: false, missing: 1 });
+  });
+  it("is stale past 120 days, and not before", () => {
+    expect(HOLDINGS_STALE_DAYS).toBe(120);
+    expect(holdingsAge([acc("2026-06-30")], "2026-10-28").stale).toBe(false); // 120 days
+    expect(holdingsAge([acc("2026-06-30")], "2026-10-29").stale).toBe(true); // 121 days
+  });
+  it("has no age when nothing has been scanned", () => {
+    expect(holdingsAge([acc(null), acc("2026-06-30", 0)], "2026-10-16")).toEqual({ asOf: null, ageDays: null, stale: false, missing: 2 });
+  });
+});
+
+describe("a reset recorded after the statement", () => {
+  const g = { series: "Series 75/100", maturityDate: null, guaranteedAtMaturity: 1, guaranteedAtDeath: 90_000, lastQuarterFee: 1, valueOfFunds: 100_000 };
+  it("replaces the statement's guarantee when it is newer", () => {
+    expect(applyResetRecord(g, "2026-06-30", { date: "2026-10-01", guaranteedAtDeath: 120_000 })?.guaranteedAtDeath).toBe(120_000);
+  });
+  it("is ignored when the statement already reflects it, or has no amount", () => {
+    expect(applyResetRecord(g, "2026-09-30", { date: "2026-09-30", guaranteedAtDeath: 120_000 })).toBe(g);
+    expect(applyResetRecord(g, "2026-06-30", { date: "2026-10-01", guaranteedAtDeath: null })).toBe(g);
+    expect(applyResetRecord(g, "2026-06-30", null)).toBe(g);
+    expect(applyResetRecord(null, "2026-06-30", { date: "2026-10-01", guaranteedAtDeath: 1 })).toBeNull();
+  });
+});
