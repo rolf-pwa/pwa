@@ -32,6 +32,8 @@ export function PublishToClient({ householdId, householdLabel, pack, publication
   const [includes, setIncludes] = useState<ClientIncludes>(ALL);
   const [busy, setBusy] = useState(false);
   // The advisor's own wording for the shaded commentary boxes. Null means the suggested wording.
+  // A rebalancing proposed from fund detail older than the limit needs Rolf to confirm he checked current holdings on iA first.
+  const [holdingsChecked, setHoldingsChecked] = useState(false);
   const [narr, setNarr] = useState<{ mix: string | null; funds: string | null }>({ mix: null, funds: null });
   const kind: ViewKind = open ?? "review";
   const rebalance = kind === "rebalance";
@@ -40,6 +42,7 @@ export function PublishToClient({ householdId, householdLabel, pack, publication
     const existing = k === "rebalance" ? rebalancePublication : publication;
     setNote(existing?.note ?? (k === "rebalance" ? suggestedRebalanceNote(buildClientProposal(pack as any)) : ""));
     setIncludes(k === "rebalance" ? { ...REBALANCE_SECTIONS, ...(existing?.includes ? { funds: existing.includes.funds, reset: existing.includes.reset, rebalancing: existing.includes.rebalancing ?? true } : {}) } : { ...ALL, ...(existing?.includes ?? {}) });
+    setHoldingsChecked(false);
     setNarr({ mix: existing?.includes?.narratives?.mix ?? null, funds: existing?.includes?.narratives?.funds ?? null });
     setOpen(k);
   };
@@ -122,12 +125,20 @@ export function PublishToClient({ householdId, householdLabel, pack, publication
                 <Textarea value={narr[n.key] ?? n.text ?? ""} onChange={(e) => setNarr((s) => ({ ...s, [n.key]: e.target.value }))} rows={4} aria-label={n.title} />
               </div>
             ))}
+            {pack.holdings?.asOf && (
+              <div className={`rounded-md border p-3 text-xs ${rebalance && pack.holdings.stale ? "border-amber-400 bg-amber-50 text-amber-900" : "text-muted-foreground"}`} data-testid="holdings-age">
+                <p>Values as of {pack.asOf}. Fund detail from the statement of {pack.holdings.asOf} ({pack.holdings.ageDays} days old). The mix and the size of each switch rest on those holdings.</p>
+                {rebalance && pack.holdings.stale && (
+                  <label className="mt-2 flex items-start gap-2 font-medium"><Checkbox checked={holdingsChecked} onCheckedChange={(v) => setHoldingsChecked(v === true)} aria-label="I have checked the current holdings" /><span>I have checked the current holdings on iA's advisor site and the proposal still holds.</span></label>
+                )}
+              </div>
+            )}
             <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={4} placeholder={rebalance ? "Tell the client what you are proposing and why, in your own words." : "A short note from you, in your own words (optional)."} />
             <PortalPortfolioReview view={view} preview />
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setOpen(null)}>Cancel</Button>
-            <Button disabled={busy || (rebalance && note.trim().length < 10)} onClick={() => run(async () => { const r = await publishPortfolioReview(householdId, note, includes, kind, narr); if (r.emailed) toast.message(`Georgia emailed ${r.emailed} ${r.emailed === 1 ? "person" : "people"}`); }, (rebalance ? rebalancePublication : publication) ? "Updated" : "Published to the portal")}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : (rebalance ? rebalancePublication : publication) ? "Save changes" : "Publish"}</Button>
+            <Button disabled={busy || (rebalance && note.trim().length < 10) || (rebalance && !!pack.holdings?.stale && !holdingsChecked)} onClick={() => run(async () => { const r = await publishPortfolioReview(householdId, note, includes, kind, narr, holdingsChecked); if (r.emailed) toast.message(`Georgia emailed ${r.emailed} ${r.emailed === 1 ? "person" : "people"}`); }, (rebalance ? rebalancePublication : publication) ? "Updated" : "Published to the portal")}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : (rebalance ? rebalancePublication : publication) ? "Save changes" : "Publish"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

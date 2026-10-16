@@ -54,7 +54,7 @@ import type { ModelValidation, ParsedModel } from "../../../../supabase/function
 export type { ModelValidation, ParsedModel };
 export const readModelPdf = (pdfBase64: string) => call<{ validation: ModelValidation }>("readModelPdf", { pdfBase64 });
 export const saveModels = (asOf: string, models: ParsedModel[], sourceFile: string) => call<{ ok: true; asOf: string }>("saveModels", { asOf, models, sourceFile });
-export const publishPortfolioReview = (householdId: string, note: string, includes: { returns: boolean; mix: boolean; funds: boolean; reset: boolean; rebalancing: boolean }, kind: "review" | "rebalance" = "review", narratives: { mix?: string | null; funds?: string | null } = {}) => call<{ ok: true; emailed: number; updated: boolean }>("publishPortfolioReview", { householdId, note, includes, kind, narratives });
+export const publishPortfolioReview = (householdId: string, note: string, includes: { returns: boolean; mix: boolean; funds: boolean; reset: boolean; rebalancing: boolean }, kind: "review" | "rebalance" = "review", narratives: { mix?: string | null; funds?: string | null } = {}, holdingsChecked = false) => call<{ ok: true; emailed: number; updated: boolean }>("publishPortfolioReview", { householdId, note, includes, kind, narratives, holdingsChecked });
 export const unpublishPortfolioReview = (householdId: string, kind: "review" | "rebalance" = "review") => call<{ ok: true }>("unpublishPortfolioReview", { householdId, kind });
 export const getWorkbenchFacts = (householdId: string) => call<import("./workbenchSteps").WorkbenchFacts>("workbenchFacts", { householdId });
 import type { ClientProposal } from "../../../../supabase/functions/_shared/portfolio-review-client";

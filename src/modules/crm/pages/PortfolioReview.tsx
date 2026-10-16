@@ -90,7 +90,7 @@ export default function PortfolioReview() {
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <div>
                 <h1 className="font-serif text-2xl font-semibold">Portfolio Review: {data.household.label}</h1>
-                <p className="text-sm text-muted-foreground">{data.household.family_name} · values as of {day(p.asOf)}{data.household.service_tier ? ` · ${SERVICE_TIER_LABEL[data.household.service_tier as ServiceTier] ?? data.household.service_tier}` : ""}</p>
+                <p className="text-sm text-muted-foreground">{data.household.family_name} · values as of {day(p.asOf)}{p.holdings?.asOf ? <span className={p.holdings.stale ? "font-medium text-amber-700" : ""}> · holdings as of {day(p.holdings.asOf)}{p.holdings.stale ? ` (${p.holdings.ageDays} days old)` : ""}</span> : null}{data.household.service_tier ? ` · ${SERVICE_TIER_LABEL[data.household.service_tier as ServiceTier] ?? data.household.service_tier}` : ""}</p>
               </div>
               <Badge variant="outline" className="text-[10px]">Staff only</Badge>
             </div>
