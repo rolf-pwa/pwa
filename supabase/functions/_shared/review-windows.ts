@@ -200,8 +200,10 @@ export interface FamilyContact { id: string; firstName: string | null; lastName:
  * hold several households (a parent and an adult child's), each with its own "spouse": only the one in the head of family's own
  * household counts. `hofHouseholdIds` are the households the family's heads of family live in.
  */
-export function isFamilyAdult(c: { role: string | null; isMinor?: boolean | null; householdId?: string | null }, hofHouseholdIds: (string | null | undefined)[]): boolean {
+export function isFamilyAdult(c: { role: string | null; isMinor?: boolean | null; householdId?: string | null }, hofHouseholdIds: (string | null | undefined)[], standalone = false): boolean {
   if (c.isMinor) return false;
+  // A household that stands alone is its own unit: its adults are whoever heads it (head of household or head of family) and their spouse.
+  if (standalone) return c.role === "head_of_family" || c.role === "head_of_household" || c.role === "spouse";
   if (c.role === "head_of_family") return true;
   if (c.role !== "spouse") return false;
   const known = hofHouseholdIds.filter(Boolean);
@@ -210,12 +212,12 @@ export function isFamilyAdult(c: { role: string | null; isMinor?: boolean | null
 }
 
 /** Both adults: the head of family and their spouse, with an email, once each. */
-export function inviteesOf(contacts: FamilyContact[]): { contactId: string; firstName: string; email: string }[] {
+export function inviteesOf(contacts: FamilyContact[], standalone = false): { contactId: string; firstName: string; email: string }[] {
   const seen = new Set<string>();
   const out: { contactId: string; firstName: string; email: string }[] = [];
   const hofHouseholds = contacts.filter((c) => c.role === "head_of_family").map((c) => c.householdId);
   for (const c of contacts) {
-    if (!isFamilyAdult(c, hofHouseholds)) continue;
+    if (!isFamilyAdult(c, hofHouseholds, standalone)) continue;
     if (c.noAutoEmail) continue; // asked not to be emailed: a person follows up instead
     const email = (c.email ?? "").trim().toLowerCase();
     if (!email || seen.has(email)) continue;

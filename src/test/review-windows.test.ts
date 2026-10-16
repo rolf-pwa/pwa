@@ -246,3 +246,19 @@ describe("someone who asked not to be emailed", () => {
     expect(inviteesOf([people[0]])).toEqual([]);
   });
 });
+
+describe("a household that stands alone invites its own head, whatever the role is called", () => {
+  const carol = { id: "c", firstName: "Carol", role: "head_of_household", email: "carol@x.ca", isMinor: false, householdId: "h2", lastName: "B" } as any;
+  const aldo = { id: "a", firstName: "Aldo", role: "beneficiary", email: null, isMinor: false, householdId: "h2", lastName: "B" } as any;
+  it("counts a head of household when the unit is a standalone household", () => {
+    expect(inviteesOf([aldo, carol], true).map((i) => i.email)).toEqual(["carol@x.ca"]);
+    expect(isFamilyAdult({ role: "head_of_household", householdId: "h2" }, ["h1"], true)).toBe(true);
+    expect(isFamilyAdult({ role: "spouse", householdId: "h2" }, ["h1"], true)).toBe(true);
+  });
+  it("still excludes a beneficiary, a minor, and (in a pooled family) an adult child's household", () => {
+    expect(isFamilyAdult({ role: "beneficiary", householdId: "h2" }, [], true)).toBe(false);
+    expect(isFamilyAdult({ role: "head_of_household", isMinor: true, householdId: "h2" }, [], true)).toBe(false);
+    expect(inviteesOf([aldo, carol]).map((i) => i.email)).toEqual([]); // pooled: not an adult of the family
+    expect(isFamilyAdult({ role: "head_of_household", householdId: "h2" }, ["h1"])).toBe(false);
+  });
+});

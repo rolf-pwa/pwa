@@ -137,7 +137,8 @@ Deno.serve(async (req) => {
         await db.from("pm_tasks").update({ status: "done", completed_at: doneAt }).in("id", carryIds);
         await db.from("pm_tasks").update({ status: "done", completed_at: doneAt }).in("parent_task_id", carryIds).eq("status", "open");
       }
-      const { data: adults } = await db.from("contacts").select("id").eq("family_id", o.family_id).in("family_role", ["head_of_family", "spouse"]);
+      const adultQuery = db.from("contacts").select("id").in("family_role", ["head_of_family", "head_of_household", "spouse"]).or("is_minor.is.null,is_minor.eq.false");
+      const { data: adults } = await (o.household_id ? adultQuery.eq("household_id", o.household_id) : adultQuery.eq("family_id", o.family_id));
       for (const a of adults ?? []) await db.from("portal_client_notifications").insert({ contact_id: a.id, title: "Your portfolio rebalancing is complete", body: "Your portfolio has been rebalanced. Sign in to see your accounts.", source_type: "rebalancing_complete", link_tab: "financials" });
       // The resets in it are now done: record them so the pack does not offer them again before the next statement.
       try {
