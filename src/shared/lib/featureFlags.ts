@@ -5,3 +5,9 @@
  * brain_cron_secret Vault secret and re-create the `brain-index-drain` cron job (see migration 20260809*brain*).
  */
 export const SECOND_BRAIN_ENABLED = false;
+
+/**
+ * The household registry importer was the one-time seed of the households. It matches by household name, which no longer lines up with
+ * the households as they now stand, so a commit would create duplicates. Hidden; the monthly performance importer is unaffected.
+ */
+export const REGISTRY_IMPORTER_ENABLED = false;

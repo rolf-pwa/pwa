@@ -25,7 +25,6 @@ describe("Georgia's monthly imports on the Importers page", () => {
   });
   it("lists each import with its status, what needs attention, and why a file was held", async () => {
     render(<BulkImporters />);
-    fireEvent.mouseDown(screen.getByRole("tab", { name: /Monthly Performance/ }), { button: 0, ctrlKey: false });
     expect(await screen.findByText("Ready for you")).toBeTruthy();
     expect(screen.getByText(/96 routine · 2 large moves · 1 new · 1 missing/)).toBeTruthy();
     expect(screen.getByText("Held: needs a look")).toBeTruthy();
@@ -34,7 +33,6 @@ describe("Georgia's monthly imports on the Importers page", () => {
   });
   it("offers to load a prepared file, and undo only for a committed one", async () => {
     render(<BulkImporters />);
-    fireEvent.mouseDown(screen.getByRole("tab", { name: /Monthly Performance/ }), { button: 0, ctrlKey: false });
     await screen.findByText("Ready for you");
     expect(screen.getAllByRole("button", { name: "Load into the importer" })).toHaveLength(2);
     expect(screen.getAllByRole("button", { name: "Undo" })).toHaveLength(1);
@@ -42,9 +40,16 @@ describe("Georgia's monthly imports on the Importers page", () => {
   it("undoes after a confirmation", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<BulkImporters />);
-    fireEvent.mouseDown(screen.getByRole("tab", { name: /Monthly Performance/ }), { button: 0, ctrlKey: false });
     await screen.findByText("Ready for you");
     fireEvent.click(screen.getByRole("button", { name: "Undo" }));
     await waitFor(() => expect(invoke).toHaveBeenCalledWith("bulk-import-performance", { body: { action: "undo", runId: "r2" } }));
+  });
+
+  it("no longer offers the household registry importer", async () => {
+    render(<BulkImporters />);
+    await screen.findByText("Ready for you");
+    expect(screen.queryByRole("tab", { name: /Registry/ })).toBeNull();
+    expect(screen.queryByText("Household Registry (Google Doc)")).toBeNull();
+    expect(screen.getByText(/Monthly Performance File/)).toBeTruthy();
   });
 });
