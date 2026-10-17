@@ -15,7 +15,7 @@ import { PortalCharter } from "@/modules/portal/components/PortalCharter";
 import { PortalTimeline } from "@/modules/portal/components/PortalTimeline";
 import { PortalTasks, useTaskCounts } from "@/modules/portal/components/PortalTasks";
 import { PortalDashboard } from "@/modules/portal/components/PortalDashboard";
-import { PortalGeorgiaChat } from "@/modules/portal/components/PortalGeorgiaChat";
+import { PortalGeorgiaChat, type BookableMeeting } from "@/modules/portal/components/PortalGeorgiaChat";
 import { PortalNotificationBell } from "@/modules/portal/components/PortalNotificationBell";
 import { PortalMessages } from "@/modules/portal/components/PortalMessages";
 import { PortalVault } from "@/modules/portal/components/PortalVault";
@@ -1561,6 +1561,9 @@ const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = f
         contactId={contact.id}
         portalToken={portalToken}
         onRequestSubmitted={() => refreshData(portalToken)}
+        meetingTypes={((data as any)?.meeting_types ?? []) as BookableMeeting[]}
+        bookedMeetings={((data as any)?.booked_meetings ?? []) as { label: string; start: string }[]}
+        onOpenBooking={(m) => { setActiveTab("meetings"); if (m.embedUrl && m.embedUrl !== m.url) setEmbeddedBooking({ label: m.label, embedUrl: m.embedUrl }); else window.open(m.url, "_blank", "noopener,noreferrer"); }}
       />
     </div>
   );

@@ -23,7 +23,7 @@ import { PortalMeetings } from "@/modules/portal/components/PortalMeetings";
 import { PortalCharter } from "@/modules/portal/components/PortalCharter";
 import { PortalTasks, useTaskCounts } from "@/modules/portal/components/PortalTasks";
 import { PortalVault } from "@/modules/portal/components/PortalVault";
-import { PortalGeorgiaChat } from "@/modules/portal/components/PortalGeorgiaChat";
+import { PortalGeorgiaChat, type BookableMeeting } from "@/modules/portal/components/PortalGeorgiaChat";
 import { PortalMessages } from "@/modules/portal/components/PortalMessages";
 import { PortalYourTeam } from "@/modules/portal/components/PortalYourTeam";
 import { PortalProfessionals } from "@/modules/portal/components/PortalProfessionals";
@@ -1239,6 +1239,9 @@ const VfoPortal = () => {
         contactId={contact?.id}
         portalToken={portalToken}
         onRequestSubmitted={refreshData}
+        meetingTypes={(((data as any)?.meeting_types ?? []) as BookableMeeting[])}
+        bookedMeetings={(((data as any)?.booked_meetings ?? []) as { label: string; start: string }[])}
+        onOpenBooking={(m) => { setTab("meetings"); if (m.embedUrl && m.embedUrl !== m.url) setEmbeddedBooking({ label: m.label, embedUrl: m.embedUrl }); else window.open(m.url, "_blank", "noopener,noreferrer"); }}
       />
 
       <Dialog open={requestsOpen} onOpenChange={setRequestsOpen}>

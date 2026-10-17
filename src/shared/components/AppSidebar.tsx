@@ -33,6 +33,7 @@ import {
   Gauge,
   Bot,
   CalendarClock,
+  MessageCircle,
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { useEffect, useState, createContext, useContext } from "react";
@@ -98,6 +99,7 @@ const GROUPS = [
       { to: "/workbench", label: "Workbench", icon: Cpu },
       { to: "/onboarding-agent", label: "Georgia Onboarding", icon: Bot },
       { to: "/review-agent", label: "Georgia Reviews", icon: CalendarClock },
+      { to: "/ask-georgia", label: "Ask Georgia", icon: MessageCircle },
       { to: "/review-queue", label: "Review Queue", icon: ClipboardCheck, badgeKey: "review" },
       { to: "/glass-box-review", label: "Glass-Box Review", icon: ShieldCheck },
       { to: "/bulk-statement-import", label: "Bulk Statement Import", icon: FileUp },
