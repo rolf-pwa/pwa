@@ -352,10 +352,12 @@ function summarize(report: Record<string, any>) {
 async function tell(admin: any, title: string, body: string, subject: string) {
   await admin.from("staff_notifications").insert({ title, body, link: "/importers", source_type: "monthly_import" });
   const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  await sendServiceEmailDetailed(admin, {
+  const sent = await sendServiceEmailDetailed(admin, {
     to: NOTIFY_EMAIL, subject, from: AGENT_SENDER,
     html: `<div style="font-family:'DM Sans',sans-serif;color:#334155;max-width:560px;"><p style="font-size:14px;line-height:1.6;">Hi Rolf,</p><p style="font-size:14px;line-height:1.6;white-space:pre-line;">${esc(body)}</p><p style="font-size:14px;line-height:1.6;">Georgia<br/><span style="font-size:12px;color:#94a3b8;">AI Assistant, ProsperWise</span></p></div>`,
   });
+  // The notification above is the record; if the email fails say so in the log rather than silently.
+  if (!sent.ok) console.error("[bulk-import-performance] email to Rolf failed");
 }
 
 /** What the last import looked like, to compare a new file with: the last committed run, else the newest snapshots on file. */
@@ -415,12 +417,13 @@ async function watch(admin: any) {
       const lines = [
         `I read ${f.name} (as of ${parsed.snapshotDate}): ${summary.total_rows} accounts.`,
         verdict.ok ? "The file passed every check." : `I am holding this file because: ${verdict.problems.join(" ")}`,
-        `${summary.routine} are routine, ${summary.exceptions} need your approval (large moves), ${summary.new_accounts} are new accounts, ${summary.unmatched} match no one, and ${summary.missing} accounts that were in last month's file are missing.`,
+        `${summary.routine} routine update${summary.routine === 1 ? "" : "s"}. ${summary.exceptions} large move${summary.exceptions === 1 ? "" : "s"} need your approval, ${summary.new_accounts} new account${summary.new_accounts === 1 ? "" : "s"}, ${summary.unmatched} row${summary.unmatched === 1 ? "" : "s"} I can't match to anyone. ${summary.missing} account${summary.missing === 1 ? "" : "s"} we hold ${summary.missing === 1 ? "is" : "are"} not in this file.`,
         ...(summary.exception_list.length ? ["", "Large moves:", ...summary.exception_list] : []),
         ...(summary.missing_list.length ? ["", "Missing from this file:", ...summary.missing_list] : []),
         committedNote || "\nNothing has been written yet. Open Importers, load the prepared file, approve the exceptions and commit.",
       ];
-      await tell(admin, `Monthly file ready: ${parsed.snapshotDate}${summary.exceptions + summary.missing + summary.new_accounts > 0 ? ` (${summary.exceptions + summary.missing + summary.new_accounts} need you)` : ""}`, lines.join("\n"), `Monthly file ${verdict.ok ? "ready" : "held"}: ${parsed.snapshotDate}`);
+      const needYou = summary.exceptions + summary.missing + summary.new_accounts;
+      await tell(admin, `Monthly file ${verdict.ok ? "ready" : "HELD"}: ${parsed.snapshotDate}${needYou > 0 ? ` (${needYou} need you)` : ""}`, lines.join("\n"), `Monthly file ${verdict.ok ? "ready" : "held"}: ${parsed.snapshotDate}`);
       did.push(`${verdict.ok ? "prepared" : "held"} ${f.name}`);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
