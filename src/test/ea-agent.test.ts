@@ -63,3 +63,29 @@ describe("remembered preferences", () => {
   });
   it("accepts only real dates", () => { expect(isIsoDate("2026-10-23")).toBe(true); expect(isIsoDate("Friday")).toBe(false); expect(isIsoDate("2026-13-40")).toBe(false); });
 });
+
+import { normalizeMembers, defaultHouseholdLabel } from "../../supabase/functions/_shared/ea-agent";
+describe("setting up a household", () => {
+  it("makes the first adult the head of family and the next the spouse, and tidies the details", () => {
+    const { members, problems } = normalizeMembers([{ first_name: " Ed ", last_name: "Weiss" }, { first_name: "Marci", last_name: "Weiss", email: "Marci@X.ca", date_of_birth: "1965-04-02" }]);
+    expect(problems).toEqual([]);
+    expect(members.map((m) => [m.first_name, m.role])).toEqual([["Ed", "head_of_family"], ["Marci", "spouse"]]);
+    expect(members[1]).toMatchObject({ email: "marci@x.ca", date_of_birth: "1965-04-02" });
+  });
+  it("keeps a role she was given, and refuses what it cannot use", () => {
+    expect(normalizeMembers([{ first_name: "A", last_name: "B", role: "minor" }]).members[0].role).toBe("minor");
+    expect(normalizeMembers([{ first_name: "A" }]).problems[0]).toMatch(/first and last name/);
+    expect(normalizeMembers([{ first_name: "A", last_name: "B", email: "nope" }]).problems[0]).toMatch(/email/);
+    expect(normalizeMembers([{ first_name: "A", last_name: "B", date_of_birth: "June 1" }]).problems[0]).toMatch(/YYYY-MM-DD/);
+    expect(normalizeMembers([]).problems[0]).toMatch(/at least one/);
+  });
+  it("labels the household from the adults' first names", () => {
+    expect(defaultHouseholdLabel([{ first_name: "Ed", role: "head_of_family" }, { first_name: "Marci", role: "spouse" }, { first_name: "Sam", role: "minor" }])).toBe("Ed & Marci");
+    expect(defaultHouseholdLabel([{ first_name: "Ed", role: "head_of_family" }])).toBe("Ed");
+  });
+  it("gives her tools to add records but none to change or remove them", () => {
+    const names = TOOL_DECLARATIONS.map((t) => t.name);
+    expect(names).toEqual(expect.arrayContaining(["create_household", "add_contact"]));
+    for (const n of names) expect(n).not.toMatch(/update_contact|edit|remove|merge/);
+  });
+});

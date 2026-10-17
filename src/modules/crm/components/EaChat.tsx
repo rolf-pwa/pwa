@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { Check, ExternalLink, Loader2, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/shared/integrations/supabase/client";
@@ -69,7 +70,7 @@ function ActionCard({ a, onDecide, onForget }: { a: EaAction; onDecide: (id: str
   );
   return (
     <p className={`flex items-center gap-1.5 text-xs ${a.status === "failed" ? "text-destructive" : "text-muted-foreground"}`}>
-      {a.status === "failed" ? <X className="h-3 w-3" /> : <Check className="h-3 w-3 text-green-600" />}{a.summary}
+      {a.status === "failed" ? <X className="h-3 w-3" /> : <Check className="h-3 w-3 text-green-600" />}{p.link ? <Link to={p.link} className="text-accent hover:underline">{a.summary}</Link> : a.summary}
       {a.kind === "preference" && p.id && <button type="button" className="underline" onClick={() => onForget(p.id)}>Undo</button>}
     </p>
   );

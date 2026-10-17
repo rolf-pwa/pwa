@@ -6,6 +6,7 @@ let n = 0;
 vi.mock("@/shared/integrations/supabase/client", () => ({ supabase: { functions: { invoke: (...a: any[]) => invoke(...a) } } }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
+import { MemoryRouter } from "react-router-dom";
 import { EaChat } from "@/modules/crm/components/EaChat";
 
 const proposal = { id: "a1", kind: "calendar_proposal", status: "proposed", summary: "Calendar: Board Meeting", payload: { title: "Board Meeting", start: "2026-10-23T15:30", end: "2026-10-23T17:00", location: "The Pub", url: "https://calendar.google.com/calendar/render?x=1" } };
@@ -24,14 +25,14 @@ describe("the morning meeting chat", () => {
   });
 
   it("opens with a button to start the meeting, then shows Georgia's opening", async () => {
-    render(<EaChat />);
+    render(<MemoryRouter><EaChat /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: "Start the morning meeting" }));
     expect(await screen.findByText(/Good morning, Rolf/)).toBeTruthy();
     expect(invoke).toHaveBeenCalledWith("daily-briefing-generate", { body: { action: "ea_chat", message: "", start: true } });
   });
 
   it("shows what she did, and what she prepared for him to use", async () => {
-    render(<EaChat />);
+    render(<MemoryRouter><EaChat /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: "Start the morning meeting" }));
     await screen.findByText(/Good morning/);
     fireEvent.change(screen.getByLabelText("Message to Georgia"), { target: { value: "Plan the board meeting" } });
@@ -48,7 +49,7 @@ describe("the morning meeting chat", () => {
   });
 
   it("records that he used or dismissed a proposal", async () => {
-    render(<EaChat />);
+    render(<MemoryRouter><EaChat /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: "Start the morning meeting" }));
     await screen.findByText(/Good morning/);
     fireEvent.change(screen.getByLabelText("Message to Georgia"), { target: { value: "go" } });
@@ -60,12 +61,22 @@ describe("the morning meeting chat", () => {
   });
 
   it("lets him undo something she was asked to remember", async () => {
-    render(<EaChat />);
+    render(<MemoryRouter><EaChat /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: "Start the morning meeting" }));
     await screen.findByText(/Good morning/);
     fireEvent.change(screen.getByLabelText("Message to Georgia"), { target: { value: "stop showing Venn" } });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     fireEvent.click(await screen.findByRole("button", { name: "Undo" }));
     await waitFor(() => expect(invoke).toHaveBeenCalledWith("daily-briefing-generate", { body: { action: "ea_forget", prefId: "p1" } }));
+  });
+
+  it("links to a household she created", async () => {
+    invoke.mockImplementation(async (_f: string, { body }: any) => {
+      if (body.action === "ea_history") return { data: { messages: [{ id: "m1", role: "assistant", content: "Done: the Weiss household is set up.", actions: [{ id: "h1", kind: "household_created", status: "done", summary: "Household created: Ed & Marci (2 people)", payload: { link: "/households/abc" } }] }], preferences: [] }, error: null };
+      return { data: {}, error: null };
+    });
+    render(<MemoryRouter><EaChat /></MemoryRouter>);
+    const link = await screen.findByRole("link", { name: "Household created: Ed & Marci (2 people)" });
+    expect(link.getAttribute("href")).toBe("/households/abc");
   });
 });

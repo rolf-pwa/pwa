@@ -3,7 +3,7 @@
 
 // deno-lint-ignore-file no-explicit-any
 import {
-  buildContextBlock, calendarTemplateUrl, gmailComposeUrl, isIsoDate, runAgentTurn, SYSTEM_PROMPT, TOOL_DECLARATIONS,
+  buildContextBlock, calendarTemplateUrl, defaultHouseholdLabel, gmailComposeUrl, isIsoDate, normalizeMembers, runAgentTurn, SYSTEM_PROMPT, TOOL_DECLARATIONS,
   type Content, type Part, type ToolOutcome,
 } from "./ea-agent.ts";
 import { fetchWithVertexRetry, getGcpAccessToken, GEMINI_DRAFTING_MODEL, parseServiceAccountKey, vertexModelUrl, withThinking, type ServiceAccountKey } from "./vertex-ai.ts";
@@ -188,11 +188,57 @@ export async function eaChat(db: any, userId: string, text: string, start: boole
       }
       case "search_clients": {
         const q = str(a.query, 80).replace(/[%,()]/g, " ").trim(); if (q.length < 2) return { ok: false, message: "Give me at least two letters of a name." };
-        const [{ data: people }, { data: hh }] = await Promise.all([
-          db.from("contacts").select("id, first_name, last_name, family_role, household_id, family_id").or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,full_name.ilike.%${q}%`).limit(8),
+        // Every word must match somewhere in the name, so "Ed Weiss" finds Ed Weiss.
+        const tokens = q.split(/\s+/).filter(Boolean).slice(0, 4);
+        let people = db.from("contacts").select("id, first_name, last_name, family_role, household_id, family_id");
+        for (const t of tokens) people = people.or(`first_name.ilike.%${t}%,last_name.ilike.%${t}%,full_name.ilike.%${t}%`);
+        const [{ data: peopleRows }, { data: hh }] = await Promise.all([
+          people.limit(8),
           db.from("households").select("id, label, service_tier").ilike("label", `%${q}%`).limit(5),
         ]);
-        return { ok: true, message: `${(people ?? []).length} contact(s), ${(hh ?? []).length} household(s).`, data: { contacts: (people ?? []).map((p: any) => ({ name: `${p.first_name} ${p.last_name ?? ""}`.trim(), role: p.family_role, link: p.id ? `/contacts/${p.id}` : null })), households: (hh ?? []).map((h: any) => ({ name: h.label, tier: h.service_tier, link: `/households/${h.id}` })) } };
+        return { ok: true, message: `${(peopleRows ?? []).length} contact(s), ${(hh ?? []).length} household(s).`, data: { contacts: (peopleRows ?? []).map((p: any) => ({ name: `${p.first_name} ${p.last_name ?? ""}`.trim(), role: p.family_role, link: p.id ? `/contacts/${p.id}` : null })), households: (hh ?? []).map((h: any) => ({ name: h.label, tier: h.service_tier, link: `/households/${h.id}` })) } };
+      }
+      case "create_household": {
+        const { members, problems } = normalizeMembers(Array.isArray(a.members) ? a.members : []);
+        if (problems.length) return { ok: false, message: problems.join(" ") };
+        // Never create a second copy of someone who is already in the CRM.
+        const dupes: string[] = [];
+        for (const m of members) {
+          const { data: byName } = await db.from("contacts").select("id, first_name, last_name, household_id").ilike("first_name", m.first_name).ilike("last_name", m.last_name).limit(3);
+          const { data: byEmail } = m.email ? await db.from("contacts").select("id, first_name, last_name").ilike("email", m.email).limit(3) : { data: [] };
+          for (const x of [...(byName ?? []), ...(byEmail ?? [])] as any[]) dupes.push(`${x.first_name} ${x.last_name ?? ""}`.trim());
+        }
+        if (dupes.length) return { ok: false, message: `Already in the CRM: ${[...new Set(dupes)].join(", ")}. I did not create anything. Ask Rolf whether this is the same person or a different one.` };
+        const familyName = str(a.family_name, 100) || members[0].last_name;
+        const { data: sameFamily } = await db.from("families").select("id, name").ilike("name", familyName).limit(3);
+        if ((sameFamily ?? []).length) return { ok: false, message: `A family called "${familyName}" already exists. I did not create anything. Ask Rolf whether to add these people to it or use a different family name.` };
+        const label = str(a.household_label, 120) || defaultHouseholdLabel(members);
+        const { data: fam, error: fe } = await db.from("families").insert({ name: familyName, created_by: userId }).select("id").single();
+        if (fe) return { ok: false, message: `Could not create the family: ${fe.message}` };
+        const { data: hh, error: he } = await db.from("households").insert({ family_id: fam.id, label, address: str(a.address, 400) || null }).select("id").single();
+        if (he) return { ok: false, message: `Could not create the household: ${he.message}` };
+        const made: string[] = [];
+        for (const m of members) {
+          const { error: ce } = await db.from("contacts").insert({ created_by: userId, first_name: m.first_name, last_name: m.last_name, full_name: `${m.first_name} ${m.last_name}`, family_id: fam.id, household_id: hh.id, family_role: m.role, email: m.email, phone: m.phone, date_of_birth: m.date_of_birth, is_minor: m.role === "minor" });
+          if (ce) { await record("household_created", "failed", `Household ${label}: could not add ${m.first_name}`, { household_id: hh.id }); return { ok: false, message: `The household was created but ${m.first_name} could not be added: ${ce.message}` }; }
+          made.push(`${m.first_name} ${m.last_name} (${m.role.replace(/_/g, " ")})`);
+        }
+        await record("household_created", "done", `Household created: ${label} (${made.length} ${made.length === 1 ? "person" : "people"})`, { household_id: hh.id, family_id: fam.id, link: `/households/${hh.id}` });
+        return { ok: true, message: `Created the ${familyName} family and household "${label}" with ${made.join(", ")}. It has no tier, accounts or Vault yet.` };
+      }
+      case "add_contact": {
+        const hn = str(a.household_name, 120); if (!hn) return { ok: false, message: "Which household?" };
+        const { members, problems } = normalizeMembers([{ first_name: a.first_name, last_name: a.last_name, role: a.role ?? "beneficiary", email: a.email, phone: a.phone, date_of_birth: a.date_of_birth }]);
+        if (problems.length) return { ok: false, message: problems.join(" ") };
+        const m = members[0];
+        const { data: hhs } = await db.from("households").select("id, label, family_id").or(`label.ilike.%${hn.replace(/[%,()]/g, " ")}%`).limit(5);
+        if ((hhs ?? []).length !== 1) return { ok: false, message: (hhs ?? []).length ? `That matches ${(hhs ?? []).map((h: any) => h.label).join(", ")}. Which one?` : `I could not find a household called "${hn}".` };
+        const { data: dup } = await db.from("contacts").select("id").ilike("first_name", m.first_name).ilike("last_name", m.last_name).eq("household_id", hhs[0].id).limit(1);
+        if ((dup ?? []).length) return { ok: false, message: `${m.first_name} ${m.last_name} is already in ${hhs[0].label}.` };
+        const { error } = await db.from("contacts").insert({ created_by: userId, first_name: m.first_name, last_name: m.last_name, full_name: `${m.first_name} ${m.last_name}`, family_id: hhs[0].family_id, household_id: hhs[0].id, family_role: m.role, email: m.email, phone: m.phone, date_of_birth: m.date_of_birth, is_minor: m.role === "minor" });
+        if (error) return { ok: false, message: `Could not add them: ${error.message}` };
+        await record("contact_added", "done", `Added ${m.first_name} ${m.last_name} to ${hhs[0].label}`, { household_id: hhs[0].id, link: `/households/${hhs[0].id}` });
+        return { ok: true, message: `Added ${m.first_name} ${m.last_name} to ${hhs[0].label} as ${m.role.replace(/_/g, " ")}.` };
       }
       case "remember_preference": {
         const kind = a.kind === "mute_sender" ? "mute_sender" : "note"; const value = str(a.value, 300); if (value.length < 3) return { ok: false, message: "What should I remember?" };
