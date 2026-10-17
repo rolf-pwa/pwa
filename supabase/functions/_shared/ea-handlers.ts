@@ -40,14 +40,15 @@ export interface EaMessage { id: string; role: "user" | "assistant"; content: st
 /** Today's meeting: the conversation with each message's actions, and what she has been asked to remember. */
 export async function eaHistory(db: any, userId: string) {
   const date = pacificDate();
-  const [{ data: msgs }, { data: acts }, { data: prefs }] = await Promise.all([
+  const [{ data: msgs }, { data: acts }, { data: prefs }, { data: tok }] = await Promise.all([
     db.from("ea_messages").select("id, role, content, created_at").eq("staff_user_id", userId).eq("conversation_date", date).order("created_at", { ascending: true }),
     db.from("ea_actions").select("id, kind, status, summary, payload, message_id").eq("staff_user_id", userId).eq("conversation_date", date).order("created_at", { ascending: true }),
     db.from("ea_preferences").select("id, kind, value, created_at").eq("staff_user_id", userId).eq("active", true).order("created_at", { ascending: true }),
+    db.from("google_tokens").select("scopes").eq("user_id", userId).maybeSingle(),
   ]);
   const byMsg = new Map<string, EaAction[]>();
   for (const a of (acts ?? []) as EaAction[]) if (a.message_id) byMsg.set(a.message_id, [...(byMsg.get(a.message_id) ?? []), a]);
-  return { date, messages: ((msgs ?? []) as any[]).map((m) => ({ ...m, actions: byMsg.get(m.id) ?? [] })) as EaMessage[], preferences: prefs ?? [] };
+  return { date, messages: ((msgs ?? []) as any[]).map((m) => ({ ...m, actions: byMsg.get(m.id) ?? [] })) as EaMessage[], preferences: prefs ?? [], calendarWrite: ((tok?.scopes ?? []) as string[]).includes("https://www.googleapis.com/auth/calendar.events") };
 }
 
 /** Rolf's decision on a proposal: he used it ("done") or put it aside ("dismissed"). Georgia never acts on one herself. */
