@@ -2,12 +2,14 @@
 // priorities. Nothing here reads a database or an API, so it can be unit-tested. The model only ranks and words the priorities; everything
 // listed below them is built deterministically from the facts.
 
-export type EmailKind = "ia_notice" | "adobe_sign" | "spam" | "promo" | "other";
-export interface EmailLike { from: string; subject: string; snippet?: string; labels?: string[]; to?: string }
+export type EmailKind = "ia_notice" | "adobe_sign" | "spam" | "promo" | "automated" | "other";
+/** `bulk`: the message carries a List-Unsubscribe header (a newsletter or marketing mail). */
+export interface EmailLike { from: string; subject: string; snippet?: string; labels?: string[]; to?: string; bulk?: boolean }
 
 const IA_FROM = /(inalco|industrial.?alliance|@ia\.ca|iafinancial|iagto|ia financial|iaa\.secureweb)/i;
 const IA_SUBJECT = /(business tracker|new business|requirements? outstanding|outstanding requirement|illustration|contract (issued|status)|pending (case|requirement))/i;
 const ADOBE_FROM = /(adobesign|echosign|adobe sign|@adobe\.com)/i;
+const AUTOMATED_FROM = /(no-?reply|do-?not-?reply|donotreply|mailer-daemon|notifications?@|catch@|alerts?@|statements?@)/i;
 const SPAM_PHRASES = /(guest post|backlinks?|seo services?|crypto|casino|lottery|viagra|you have won|wire transfer|dear beneficiary|click here to claim|rank your website|link building)/i;
 
 export function classifyEmail(m: EmailLike): EmailKind {
@@ -15,9 +17,12 @@ export function classifyEmail(m: EmailLike): EmailKind {
   const text = `${m.from} ${m.subject}`;
   if (labels.includes("SPAM")) return "spam";
   if (ADOBE_FROM.test(m.from)) return "adobe_sign";
+  // Marketing and newsletters (even from iA) are not notices that need action.
+  if (m.bulk && !SPAM_PHRASES.test(text)) return "promo";
   if (IA_FROM.test(m.from) || (IA_SUBJECT.test(m.subject) && /ia|alliance/i.test(m.from))) return "ia_notice";
   if (SPAM_PHRASES.test(`${text} ${m.snippet ?? ""}`)) return "spam";
   if (labels.includes("CATEGORY_PROMOTIONS") || labels.includes("CATEGORY_SOCIAL")) return "promo";
+  if (AUTOMATED_FROM.test(m.from)) return "automated";
   return "other";
 }
 
@@ -51,19 +56,20 @@ export interface BriefingSections {
   ia: { kind: "ia_notice" | "adobe_sign"; from: string; subject: string; link: string }[];
   texts: { label: string; contact: string | null; link: string }[];
   firm: { label: string; link: string }[];
-  counts: { spam: number; promo: number; adminTotal: number };
+  counts: { spam: number; promo: number; automated: number; adminTotal: number };
 }
 
-export const emptySections = (): BriefingSections => ({ schedule: [], week: [], replies: [], ia: [], texts: [], firm: [], counts: { spam: 0, promo: 0, adminTotal: 0 } });
+export const emptySections = (): BriefingSections => ({ schedule: [], week: [], replies: [], ia: [], texts: [], firm: [], counts: { spam: 0, promo: 0, automated: 0, adminTotal: 0 } });
 
-export interface BriefingEmail { id: string; from: string; subject: string; snippet: string; labels: string[]; link: string }
+export interface BriefingEmail { id: string; from: string; subject: string; snippet: string; labels: string[]; link: string; bulk?: boolean }
 /** Sorts mail into the lists the briefing shows: people to reply to, iA and Adobe Sign items, and counts of what was left out. */
 export function sectionsFromEmails(emails: BriefingEmail[], adminCount = 0): Pick<BriefingSections, "replies" | "ia" | "counts"> {
-  const out: Pick<BriefingSections, "replies" | "ia" | "counts"> = { replies: [], ia: [], counts: { spam: 0, promo: 0, adminTotal: adminCount } };
+  const out: Pick<BriefingSections, "replies" | "ia" | "counts"> = { replies: [], ia: [], counts: { spam: 0, promo: 0, automated: 0, adminTotal: adminCount } };
   for (const e of emails) {
     const kind = classifyEmail(e);
     if (kind === "spam") out.counts.spam++;
     else if (kind === "promo") out.counts.promo++;
+    else if (kind === "automated") out.counts.automated++;
     else if (kind === "ia_notice" || kind === "adobe_sign") out.ia.push({ kind, from: e.from, subject: e.subject, link: e.link });
     else out.replies.push({ from: e.from, subject: e.subject, link: e.link });
   }

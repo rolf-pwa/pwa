@@ -199,7 +199,7 @@ async function gatherGoogleFacts(
       const details = await Promise.all(
         ids.map(async (id) => {
           const params = new URLSearchParams({ format: "metadata" });
-          for (const h of ["Subject", "From", "To"]) params.append("metadataHeaders", h);
+          for (const h of ["Subject", "From", "To", "List-Unsubscribe"]) params.append("metadataHeaders", h);
           const r = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?${params}`, { headers: { Authorization: `Bearer ${accessToken}` } });
           return r.ok ? r.json() : null;
         }),
@@ -215,6 +215,7 @@ async function gatherGoogleFacts(
         snippet: String(msg.snippet || "").slice(0, 160),
         labels: msg.labelIds || [],
         link: `https://mail.google.com/mail/u/0/#all/${msg.id}`,
+        bulk: !!getHeader(msg.payload?.headers || [], "List-Unsubscribe"),
       }));
       return { connected: true, emails, adminCount: emails.filter((e) => adminIds.has(e.id)).length };
     } catch {
