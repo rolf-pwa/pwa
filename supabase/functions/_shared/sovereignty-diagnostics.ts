@@ -452,7 +452,7 @@ export async function gatherHouseholdFinancials(
   let corpLiabilities: any[] = [];
   let corpIds: string[] = [];
   if (shareholderRows.length > 0) {
-    corpIds = [...new Set(shareholderRows.map((s: any) => s.corporation_id))];
+    corpIds = [...new Set<string>(shareholderRows.map((s: any) => s.corporation_id as string))];
     const [{ data: corps }, { data: corpVineyard }, { data: corpLiab }] = await Promise.all([
       admin.from("corporations").select("id, name, corporation_type, jurisdiction").in("id", corpIds),
       admin.from("corporate_vineyard_accounts").select("*").in("corporation_id", corpIds),

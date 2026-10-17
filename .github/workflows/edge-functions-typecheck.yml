@@ -1,0 +1,21 @@
+name: Edge function type check
+
+on:
+  pull_request:
+    paths:
+      - "supabase/functions/**"
+      - "scripts/deno-check-functions.sh"
+
+jobs:
+  deno-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      # tsc and vite never read supabase/functions, so this is the only type check these files get.
+      - name: deno check the functions this pull request changes
+        run: scripts/deno-check-functions.sh "origin/${{ github.base_ref }}"
