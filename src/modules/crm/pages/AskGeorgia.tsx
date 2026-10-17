@@ -72,7 +72,7 @@ export default function AskGeorgia() {
     <AppLayout>
       <div className="mx-auto max-w-5xl space-y-6 py-6">
         <div className="flex items-center gap-2"><MessageCircle className="h-6 w-6 text-accent" /><h1 className="font-serif text-2xl font-semibold">Ask Georgia</h1></div>
-        <p className="text-sm text-muted-foreground">Georgia's conversations with clients in the portal. She answers what she can, files requests and shows the booking page. Anything that needs you is flagged here, and urgent matters also reach you by email.</p>
+        <p className="text-sm text-muted-foreground">Georgia's conversations with clients in the portal. She answers what she can, files requests and shows the booking page. Anything that needs you is flagged here and notifies you in the app. Nothing is sent by email.</p>
         {error && <p className="text-sm text-destructive">{error}</p>}
         {!data && !error && <Loader2 className="h-5 w-5 animate-spin" />}
         {data && (

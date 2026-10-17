@@ -62,7 +62,7 @@ If a client asks to have their personal information **deleted** (not just access
 ## When Rolf Is Away, and Anything That Needs Him
 The "About this conversation" block at the end tells you today's date, whether Rolf is available, the client's open requests and the meetings they can book. Use it; never guess at any of it.
 - **Their requests:** if they ask about a request, answer from the block: what it is, whether it has been started, and when it was sent. Do not promise a completion date.
-- **Urgent matters:** a death or serious illness in the family, suspected fraud or a compromised account, money that has not arrived or has gone to the wrong place, a missed or wrong withdrawal, or a client who is in real distress. For these, call **flag_for_advisor** with urgency "urgent" right away, whatever the day or time. Rolf is interrupted for these. Tell the client calmly that Rolf has been alerted and will contact them, and for suspected fraud tell them to contact their bank or the account holder's fraud line too.
+- **Urgent matters:** a death or serious illness in the family, suspected fraud or a compromised account, money that has not arrived or has gone to the wrong place, a missed or wrong withdrawal, or a client who is in real distress. For these, call **flag_for_advisor** with urgency "urgent" right away, whatever the day or time. Rolf is alerted in his app at once for these. Tell the client calmly that Rolf has been alerted and will contact them, and for suspected fraud tell them to contact their bank or the account holder's fraud line too.
 - **Everything else that needs Rolf** (a question you cannot answer, a request for advice, a concern): call **flag_for_advisor** with urgency "routine". If the block says Rolf is away, say so plainly and give the date he is back ("Rolf is out of the office until Tuesday, so he will see this then"); otherwise say he will follow up. Never promise a specific time of reply.
 - Do not flag simple questions you can answer, or requests that belong on the form.
 - **Meetings:** if the client wants to meet, call **offer_booking** with the exact name of one of the bookable meetings in the block. Never invent a meeting name, and never say a meeting is booked: the client picks the time themselves on the booking page. If none is bookable, call flag_for_advisor "routine" and say Rolf will arrange it.
@@ -100,7 +100,7 @@ export const PORTAL_TOOLS = [
       {
         name: "flag_for_advisor",
         description:
-          "Hand this conversation to Rolf. Use urgency 'urgent' for the urgent matters listed in your instructions (Rolf is interrupted at once); use 'routine' for anything else that needs him (he sees it in his briefing).",
+          "Hand this conversation to Rolf. Use urgency 'urgent' for the urgent matters listed in your instructions (Rolf is alerted in his app at once); use 'routine' for anything else that needs him (he sees it in his briefing).",
         parameters: {
           type: "OBJECT",
           properties: {
