@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/shared/hooks/useAuth";
 import {
   LayoutDashboard,
+  Sparkles,
   Users,
   ShieldCheck,
   FileUp,
@@ -93,6 +94,7 @@ const GROUPS = [
     icon: Brain,
     items: [
       ...(SECOND_BRAIN_ENABLED ? [{ to: "/brain", label: "Second Brain", icon: Brain }] : []),
+      { to: "/briefing", label: "Today (Georgia)", icon: Sparkles },
       { to: "/workbench", label: "Workbench", icon: Cpu },
       { to: "/onboarding-agent", label: "Georgia Onboarding", icon: Bot },
       { to: "/review-agent", label: "Georgia Reviews", icon: CalendarClock },

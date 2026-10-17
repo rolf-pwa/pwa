@@ -93,7 +93,7 @@ interface DailyBriefing {
   generation_error: string | null;
   greeting: string | null;
   summary_line: string | null;
-  priority_items: { label: string; reason: string; link: string | null }[];
+  priority_items: { label: string; reason: string; link: string | null; next_step?: string }[];
 }
 
 // Internal routes get a react-router Link (no full reload); external links
@@ -189,6 +189,7 @@ function DailyBriefingCard() {
                     <li key={i} className="text-xs text-foreground">
                       • <PriorityItemLabel item={it} />
                       {it.reason ? ` — ${it.reason}` : ""}
+                      {it.next_step ? <span className="block pl-3 text-muted-foreground">Suggested: {it.next_step}</span> : null}
                     </li>
                   ))}
                 </ul>
@@ -196,6 +197,7 @@ function DailyBriefingCard() {
             </>
           )}
         </div>
+        <Button asChild variant="ghost" size="sm" className="shrink-0 text-xs"><Link to="/briefing">Open</Link></Button>
         <Button variant="ghost" size="sm" onClick={generate} disabled={regenerating} className="shrink-0 text-xs">
           {regenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : briefing ? "Regenerate" : "Generate now"}
         </Button>

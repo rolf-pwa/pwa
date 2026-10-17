@@ -67,6 +67,7 @@ const ProjectDetail = lazy(() => import("@/modules/pm/pages/ProjectDetail"));
 const TeamCapacity = lazy(() => import("@/modules/pm/pages/TeamCapacity"));
 const OnboardingAgent = lazy(() => import("@/modules/crm/pages/OnboardingAgent"));
 const ReviewAgent = lazy(() => import("@/modules/crm/pages/ReviewAgent"));
+const Briefing = lazy(() => import("@/modules/crm/pages/Briefing"));
 const Welcome = lazy(() => import("@/modules/intake/pages/Welcome"));
 const PortfolioReview = lazy(() => import("@/modules/crm/pages/PortfolioReview"));
 
@@ -159,6 +160,7 @@ const App = () => (
               <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
               <Route path="/onboarding-agent" element={<ProtectedRoute><OnboardingAgent /></ProtectedRoute>} />
               <Route path="/review-agent" element={<ProtectedRoute><ReviewAgent /></ProtectedRoute>} />
+              <Route path="/briefing" element={<ProtectedRoute><Briefing /></ProtectedRoute>} />
               <Route path="/welcome/:token" element={<Welcome />} />
               <Route path="/households/:id/portfolio-review" element={<ProtectedRoute><PortfolioReview /></ProtectedRoute>} />
               <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
