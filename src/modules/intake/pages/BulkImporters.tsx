@@ -10,6 +10,7 @@ import { Badge } from "@/shared/components/ui/badge";
 import { Label } from "@/shared/components/ui/label";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { toast } from "sonner";
+import { REGISTRY_IMPORTER_ENABLED } from "@/shared/lib/featureFlags";
 import { Upload, FileSpreadsheet, FileText, CheckCircle2, AlertTriangle, Loader2, Send } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/shared/components/ui/alert-dialog";
 
@@ -490,8 +491,9 @@ export default function BulkImporters() {
       <div className="container mx-auto px-4 py-6 max-w-6xl">
         <div className="mb-6">
           <h1 className="text-2xl font-serif">Bulk Importers</h1>
-          <p className="text-sm text-muted-foreground">Seed household structure from the registry, then apply monthly iA performance files.</p>
+          <p className="text-sm text-muted-foreground">{REGISTRY_IMPORTER_ENABLED ? "Seed household structure from the registry, then apply monthly iA performance files." : "Apply the monthly iA performance file. Georgia prepares it from the Drive folder."}</p>
         </div>
+        {!REGISTRY_IMPORTER_ENABLED ? <PerformanceImporter /> : (
         <Tabs defaultValue="registry">
           <TabsList>
             <TabsTrigger value="registry"><FileText className="h-3.5 w-3.5 mr-1.5" /> Registry</TabsTrigger>
@@ -500,6 +502,7 @@ export default function BulkImporters() {
           <TabsContent value="registry" className="mt-4"><RegistryImporter /></TabsContent>
           <TabsContent value="performance" className="mt-4"><PerformanceImporter /></TabsContent>
         </Tabs>
+        )}
       </div>
     </AppLayout>
   );
