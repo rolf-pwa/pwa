@@ -8,7 +8,7 @@ import { Badge } from "@/shared/components/ui/badge";
 
 import { Button } from "@/shared/components/ui/button";
 import {
-  Loader2, Crown, ShieldCheck, Calendar, CheckSquare, Landmark, FolderLock,
+  Loader2, Crown, ShieldCheck, Calendar, CheckSquare, Landmark, FolderLock, LineChart, Scale,
   ClipboardList, MessageCircle, ScrollText, Home, Users, ChevronLeft,
   ChevronDown, ChevronRight, MessageSquare, ArrowRight, Building2, Briefcase, Anchor, Grape,
 } from "lucide-react";
@@ -34,7 +34,8 @@ import { PortalShoeboxUpload } from "@/modules/portal/components/PortalShoeboxUp
 import { getPortalSession, setPortalSession, clearPortalSession } from "@/modules/portal/lib/portalSession";
 import prosperwiseLogo from "@/assets/prosperwise-logo.png";
 import prosperwiseIconPaper from "@/assets/prosperwise-icon-paper.png";
-import { PortalRebalancing, type RebalancingState } from "@/modules/portal/components/PortalRebalancing";
+import { PortalRebalancing, PortalRebalancingPage, PortalRebalancingTeaser, PortalRebalancingWaiting, rebalancingNeedsMe, type RebalancingState } from "@/modules/portal/components/PortalRebalancing";
+import { PortalReviewTeaser, PortalReviewPage } from "@/modules/portal/components/PortalReviewTeaser";
 import { withBookedMeetings } from "@/modules/portal/lib/bookedMeetings";
 import { PortalBookedMeetings, type BookedMeeting } from "@/modules/portal/components/PortalBookedMeetings";
 import { useBookingWatcher } from "@/modules/portal/lib/useBookingWatcher";
@@ -900,12 +901,19 @@ const VfoPortal = () => {
       const cash = (ind.insurancePolicies || []).filter((p: any) => !p.cash_value_storehouse_id && p.cv_in_strategic !== false).reduce((a: number, p: any) => a + (Number(p.cash_value) || 0), 0);
       return { assets: sum(ind.vineyardAccounts) + sum(ind.memberStorehouses) + sum(holding_tank) + cash, liabilities: Number(data.liabilities_total) || 0 };
     })();
-    const effectiveTab = (!hasFinancials && tab === "financials") || (!isSelf && tab === "dashboard") ? "tasks" : tab;
+    const effectiveTab = (!hasFinancials && tab === "financials") || (!isSelf && tab === "dashboard") || (tab === "review" && !((data as any)?.portfolio_review && isSelf)) || (tab === "rebalancing" && !((data as any)?.rebalancing?.proposal && isSelf)) ? "tasks" : tab;
     const meetingTypes = (((data as any)?.meeting_types as { label: string; url: string; embedUrl: string }[] | undefined) ?? []);
     const charterUrl = charter?.draft_status === "ratified" ? (contact.charter_url || family?.charter_document_url) : null;
     const fullName = `${contact.first_name || ""} ${contact.last_name || ""}`.trim();
 
-    const rebalancingCard = isSelf && (data as any)?.rebalancing ? (
+    // Same rules as the main portal: with a per-item proposal each person authorizes their own accounts' changes on the Rebalancing tab; the
+    // older summary-and-acknowledge card is only for a rebalancing with no proposal, or one that is done.
+    const rebalancingState = (data as any)?.rebalancing as RebalancingState | undefined;
+    const rebalancingAwaiting = isSelf && rebalancingNeedsMe(rebalancingState);
+    const rebalancingWaiting = Boolean(isSelf && rebalancingState?.proposal && !rebalancingState.acknowledgedAt && !rebalancingState.completedAt && !rebalancingAwaiting);
+    const reviewPublished = isSelf ? ((data as any)?.portfolio_review ?? null) : null;
+    const showRebalancingTab = Boolean(isSelf && rebalancingState?.proposal);
+    const rebalancingCard = isSelf && (data as any)?.rebalancing && (!rebalancingState?.proposal || rebalancingState.acknowledgedAt || rebalancingState.completedAt) ? (
       <PortalRebalancing
         rebalancing={(data as any).rebalancing as RebalancingState}
         portalToken={portalToken}
@@ -920,6 +928,9 @@ const VfoPortal = () => {
 
     const dashboardSidebar = (
       <>
+        {rebalancingAwaiting && rebalancingState && <PortalRebalancingTeaser rebalancing={rebalancingState} onOpen={() => setTab("rebalancing")} />}
+        {rebalancingWaiting && rebalancingState && <PortalRebalancingWaiting rebalancing={rebalancingState} onOpen={() => setTab("rebalancing")} />}
+        {reviewPublished && <PortalReviewTeaser id={reviewPublished.id} view={reviewPublished.view} publishedAt={reviewPublished.publishedAt} onOpen={() => setTab("review")} />}
         {rebalancingCard}
         {charterUrl ? <PortalCharter charterUrl={charterUrl} /> : null}
         {renderConciergeCard()}
@@ -952,6 +963,12 @@ const VfoPortal = () => {
           {isSelf && (
             <TabsTrigger value="vault" className={tabTrigger}><FolderLock className="h-4 w-4" />Documents</TabsTrigger>
           )}
+          {reviewPublished && (
+            <TabsTrigger value="review" className={tabTrigger}><LineChart className="h-4 w-4" />Review</TabsTrigger>
+          )}
+          {showRebalancingTab && (
+            <TabsTrigger value="rebalancing" className={tabTrigger}><Scale className="h-4 w-4" />Rebalancing</TabsTrigger>
+          )}
           {professionals.length > 0 && (
             <TabsTrigger value="team" className={`${tabTrigger} max-sm:hidden`}><Briefcase className="h-4 w-4" />Professionals</TabsTrigger>
           )}
@@ -969,6 +986,17 @@ const VfoPortal = () => {
                   sidebar={dashboardSidebar}
                   links={<PortalDynamicLinks layout="grid" />}
                 />
+              </TabsContent>
+            )}
+
+            {reviewPublished && (
+              <TabsContent value="review" className="mt-0">
+                <PortalReviewPage review={reviewPublished} onBack={() => setTab("dashboard")} meetingTypes={meetingTypes} booked={(data as any)?.booked_meetings ?? []} />
+              </TabsContent>
+            )}
+            {showRebalancingTab && (
+              <TabsContent value="rebalancing" className="mt-0">
+                <PortalRebalancingPage rebalancing={rebalancingState ?? null} portalToken={portalToken} onChanged={refreshData} onBack={() => setTab("dashboard")} meetingTypes={meetingTypes} />
               </TabsContent>
             )}
 
