@@ -24,6 +24,8 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const SCOPES = [
   "https://www.googleapis.com/auth/calendar.readonly",
+  // Georgia updates events on Rolf's calendar, only when he clicks Apply on a proposal.
+  "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/drive",
