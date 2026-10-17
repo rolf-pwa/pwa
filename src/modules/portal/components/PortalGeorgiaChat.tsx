@@ -15,6 +15,8 @@ interface FormTrigger {
   prefillDescription: string;
 }
 
+export interface BookableMeeting { label: string; url: string; embedUrl: string }
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -22,13 +24,19 @@ interface Props {
   contactId?: string;
   portalToken?: string;
   onRequestSubmitted?: () => void;
+  /** Meetings this person can book now, and ones already booked, as the portal page has them. */
+  meetingTypes?: BookableMeeting[];
+  bookedMeetings?: { label: string; start: string }[];
+  onOpenBooking?: (m: BookableMeeting) => void;
 }
 
-export function PortalGeorgiaChat({ open, onOpenChange, contactName, contactId, portalToken, onRequestSubmitted }: Props) {
+export function PortalGeorgiaChat({ open, onOpenChange, contactName, contactId, portalToken, onRequestSubmitted, meetingTypes = [], bookedMeetings = [], onOpenBooking }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [formTrigger, setFormTrigger] = useState<FormTrigger | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [offered, setOffered] = useState<BookableMeeting[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -41,6 +49,8 @@ export function PortalGeorgiaChat({ open, onOpenChange, contactName, contactId, 
       setMessages([greeting]);
       setInput("");
       setFormTrigger(null);
+      setConversationId(null);
+      setOffered([]);
     }
   }, [open, contactName]);
 
@@ -65,12 +75,16 @@ export function PortalGeorgiaChat({ open, onOpenChange, contactName, contactId, 
         body: JSON.stringify({
           messages: updated.map((m) => ({ role: m.role, content: m.content })),
           portal_token: portalToken,
+          conversation_id: conversationId,
+          context: { bookable: meetingTypes.map((m) => m.label), booked: bookedMeetings.map((b) => ({ label: b.label, start: b.start })) },
         }),
       });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || "Request failed");
       }
+
+      if (data.conversationId) setConversationId(data.conversationId);
 
       // Handle text response
       if (data.text) {
@@ -80,6 +94,12 @@ export function PortalGeorgiaChat({ open, onOpenChange, contactName, contactId, 
       // Handle function calls (form trigger)
       if (data.functionCalls?.length) {
         for (const fc of data.functionCalls) {
+          if (fc.name === "offer_booking") {
+            // Georgia names a meeting; only one this page actually lists is offered.
+            const wanted = String(fc.args?.meeting ?? "").trim().toLowerCase();
+            const m = meetingTypes.find((t) => t.label.toLowerCase() === wanted);
+            if (m) setOffered((prev) => (prev.some((p) => p.label === m.label) ? prev : [...prev, m]));
+          }
           if (fc.name === "open_admin_request_form") {
             // If no text was returned with the tool call, add a friendly message
             if (!data.text) {
@@ -165,6 +185,18 @@ export function PortalGeorgiaChat({ open, onOpenChange, contactName, contactId, 
                     msg.content
                   )}
                 </div>
+              </div>
+            ))}
+
+            {offered.map((m) => (
+              <div key={m.label} className="flex justify-start">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { onOpenChange(false); onOpenBooking?.(m); }}
+                >
+                  Choose a time: {m.label}
+                </Button>
               </div>
             ))}
 

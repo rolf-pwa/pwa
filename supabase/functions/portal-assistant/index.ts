@@ -2,6 +2,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { GEMINI_CLIENT_CHAT_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
 import { GEORGIA_CLIENT_PROMPT, PORTAL_TOOLS as TOOLS, cleanGeorgiaReply } from "../_shared/georgia-chat-config.ts";
+import { availability, buildSupportContext, cleanLabels, storableMessages } from "../_shared/support-context.ts";
+import { sendServiceEmail, escapeHtml } from "../_shared/service-email.ts";
+import { ADMIN_INBOX_EMAIL } from "../_shared/google-token.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -194,7 +197,7 @@ serve(async (req) => {
 
     // Chat flow — require a valid portal_token to prevent unauth Vertex AI abuse
     // and KB exfiltration.
-    const { messages, portal_token: chatPortalToken } = body;
+    const { messages, portal_token: chatPortalToken, conversation_id: conversationIdIn, context: pageContext } = body;
     if (!messages || !Array.isArray(messages)) {
       return new Response(
         JSON.stringify({ error: "messages array is required" }),
@@ -241,7 +244,22 @@ serve(async (req) => {
         kbEntries.map((e: any) => `### ${e.title} [${e.category}]\n${e.content}`).join("\n\n");
     }
 
-    const systemContent = GEORGIA_CLIENT_PROMPT + knowledgeBlock;
+    // What Georgia knows about this client and about Rolf's availability. The requests come from the database, keyed by the token's contact;
+    // the bookable meetings are the page's own list (the portal gates them), used only to name which booking page to show the same client.
+    const contactId = chatTokenRow.contact_id as string;
+    const now = new Date();
+    const [{ data: contactRow }, { data: reqRows }, { data: awayRow }] = await Promise.all([
+      supabaseAdmin.from("contacts").select("first_name").eq("id", contactId).maybeSingle(),
+      supabaseAdmin.from("portal_requests").select("request_type, status, created_at, request_description").eq("contact_id", contactId).order("created_at", { ascending: false }).limit(12),
+      supabaseAdmin.from("staff_availability").select("away_from, away_until, note").eq("id", true).maybeSingle(),
+    ]);
+    const bookable = cleanLabels(pageContext?.bookable);
+    const booked = Array.isArray(pageContext?.booked)
+      ? pageContext.booked.filter((b: any) => b && typeof b.label === "string" && typeof b.start === "string").slice(0, 6).map((b: any) => ({ label: String(b.label).slice(0, 80), start: String(b.start).slice(0, 30) }))
+      : [];
+    const supportBlock = buildSupportContext({ firstName: contactRow?.first_name ?? null, requests: reqRows ?? [], bookable, booked, away: awayRow ?? null, now });
+
+    const systemContent = GEORGIA_CLIENT_PROMPT + knowledgeBlock + "\n\n" + supportBlock;
     const userMessages = messages.filter((m: any) => m.role !== "system").map((m: any) => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
@@ -322,8 +340,61 @@ serve(async (req) => {
     }
 
     text = cleanGeorgiaReply(text);
+
+    // Keep the conversation so Rolf can review it. A conversation id from the page is honoured only for the same client.
+    const stored = storableMessages([...messages, ...(text ? [{ role: "assistant", content: text }] : [])]);
+    let conversationId: string | null = null;
+    if (typeof conversationIdIn === "string") {
+      const { data: own } = await supabaseAdmin.from("portal_assistant_conversations").select("id").eq("id", conversationIdIn).eq("contact_id", contactId).maybeSingle();
+      conversationId = own?.id ?? null;
+    }
+    if (conversationId) {
+      await supabaseAdmin.from("portal_assistant_conversations").update({ messages: stored, updated_at: now.toISOString() }).eq("id", conversationId);
+    } else {
+      const { data: created } = await supabaseAdmin.from("portal_assistant_conversations").insert({ contact_id: contactId, messages: stored }).select("id").single();
+      conversationId = created?.id ?? null;
+    }
+
+    // Handing the conversation to Rolf happens here; the rest of the tool calls are for the client's page.
+    let flagged: "urgent" | "routine" | null = null;
+    const avail = availability(awayRow ?? null, now);
+    const flag = functionCalls.find((f) => f.name === "flag_for_advisor");
+    if (flag && conversationId) {
+      flagged = String(flag.args?.urgency).toLowerCase() === "urgent" ? "urgent" : "routine";
+      const summary = String(flag.args?.summary ?? "").slice(0, 600) || "Georgia handed this conversation to you.";
+      await supabaseAdmin.from("portal_assistant_conversations").update({ flag: flagged, flag_summary: summary, flagged_at: now.toISOString(), away_when_flagged: avail.away, reviewed_at: null }).eq("id", conversationId);
+      const name = contactRow?.first_name || "A client";
+      await supabaseAdmin.from("staff_notifications").insert({
+        title: `${flagged === "urgent" ? "URGENT: " : ""}Ask Georgia handed ${name}'s conversation to you`,
+        body: summary.slice(0, 200),
+        link: "/ask-georgia",
+        contact_id: contactId,
+        source_type: "ask_georgia_flag",
+      });
+      if (flagged === "urgent") {
+        // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+        EdgeRuntime.waitUntil(
+          sendServiceEmail(supabaseAdmin, {
+            to: ADMIN_INBOX_EMAIL,
+            subject: `URGENT from Ask Georgia: ${name}`,
+            html: `<p><strong>Georgia flagged this as urgent.</strong></p><p>${escapeHtml(summary)}</p><p>Open Ask Georgia under Agents in the CRM to read the whole conversation.</p>`,
+          }).catch((e: unknown) => console.error("[portal-assistant] urgent email failed", e)),
+        );
+      }
+      if (!text) {
+        text = flagged === "urgent"
+          ? "I've alerted Rolf right away, and he will be in touch with you."
+          : avail.away && avail.backOn
+            ? `I've passed this to Rolf. He is out of the office and back on ${avail.backOn}, so he will see it then.`
+            : "I've passed this to Rolf, and he will follow up with you.";
+        const { data: cur } = await supabaseAdmin.from("portal_assistant_conversations").select("messages").eq("id", conversationId).maybeSingle();
+        await supabaseAdmin.from("portal_assistant_conversations").update({ messages: storableMessages([...(cur?.messages ?? []), { role: "assistant", content: text }]) }).eq("id", conversationId);
+      }
+    }
+
+    const forPage = functionCalls.filter((f) => f.name === "open_admin_request_form" || f.name === "offer_booking");
     return new Response(
-      JSON.stringify({ text, functionCalls }),
+      JSON.stringify({ text, functionCalls: forPage, conversationId, flagged }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {

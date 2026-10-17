@@ -2,6 +2,9 @@
 //   overview          mode, limits, every obligation with its family, and the latest events
 //   setMode           off | shadow | live (live needs confirm: true and restarts `since`, so only later windows are managed)
 //   setPaused         pause or resume one obligation
+//   supportOverview   Ask Georgia: Rolf's away dates and the recent client conversations, flagged ones first
+//   supportReview     mark a conversation reviewed
+//   setAway           set or clear the dates clients are told Rolf is away
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { latestModels, portfolioPackFor } from "../_shared/portfolio-review-data.ts";
@@ -447,6 +450,36 @@ Deno.serve(async (req) => {
     }
 
     // Rolf closes a review or rebalancing himself (done outside the flow, or no longer needed): Georgia stops, nobody is emailed.
+    if (action === "supportOverview") {
+      const { data: away } = await db.from("staff_availability").select("away_from, away_until, note").eq("id", true).maybeSingle();
+      const { data: rows } = await db.from("portal_assistant_conversations").select("id, contact_id, messages, flag, flag_summary, flagged_at, away_when_flagged, reviewed_at, updated_at").order("updated_at", { ascending: false }).limit(60);
+      const ids = [...new Set((rows ?? []).map((r: any) => r.contact_id))];
+      const { data: cs } = ids.length ? await db.from("contacts").select("id, full_name").in("id", ids) : { data: [] as any[] };
+      const name = new Map((cs ?? []).map((c: any) => [c.id, c.full_name]));
+      const list = (rows ?? []).map((r: any) => ({ ...r, contact_name: name.get(r.contact_id) ?? "Client" }));
+      // Waiting for Rolf first (urgent, then routine), then the rest by recency.
+      const rank = (r: any) => (r.flag && !r.reviewed_at ? (r.flag === "urgent" ? 0 : 1) : 2);
+      list.sort((a: any, b: any) => rank(a) - rank(b));
+      return json({ away: away ?? { away_from: null, away_until: null, note: null }, conversations: list });
+    }
+
+    if (action === "supportReview") {
+      const id = String(body?.id ?? "");
+      if (!id) return json({ error: "id required" }, 400);
+      await db.from("portal_assistant_conversations").update({ reviewed_at: new Date().toISOString() }).eq("id", id);
+      return json({ ok: true });
+    }
+
+    if (action === "setAway") {
+      const date = (v: unknown) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+      const until = date(body?.away_until);
+      const from = date(body?.away_from);
+      if (until && from && from > until) return json({ error: "The away dates are the wrong way round." }, 400);
+      const note = typeof body?.note === "string" && body.note.trim() ? body.note.trim().slice(0, 300) : null;
+      await db.from("staff_availability").update({ away_from: until ? from : null, away_until: until, note: until ? note : null, updated_at: new Date().toISOString() }).eq("id", true);
+      return json({ ok: true });
+    }
+
     if (action === "markComplete") {
       const id = String(body?.obligationId ?? "");
       const { data: o } = await db.from("review_obligations").select("*").eq("id", id).maybeSingle();
