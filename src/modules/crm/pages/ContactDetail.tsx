@@ -453,7 +453,11 @@ const ContactDetail = () => {
         });
         const result = await res.json();
         if (result.error) { toast.error(result.error); }
-        else { toast.success(`Extracted ${result.accountsExtracted} account(s) from ${file.name}`); }
+        else {
+          toast.success(`Extracted ${result.accountsExtracted} account(s) from ${file.name}`);
+          // Anything left out is said plainly, so nobody thinks it was added.
+          if (result.skippedAccounts?.length) toast.warning(`${result.skippedAccounts.length} not added: ${result.skippedAccounts.slice(0, 2).map((s: any) => `${s.name} (${s.reason})`).join("; ")}`, { duration: 20000 });
+        }
       }
       setStatementFiles([]);
       fetchData();
