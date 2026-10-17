@@ -30,7 +30,7 @@ const NAV_ITEMS = [
   { to: "/contacts", label: "CRM", icon: Users },
   { to: "/vault", label: "Vault", icon: FolderOpen },
   { to: "/invoices", label: "Invoices", icon: Receipt },
-  { to: "/requests", label: "Client Requests", icon: ClipboardList },
+  { to: "/ask-georgia", label: "Ask Georgia (client requests)", icon: ClipboardList },
   { to: "/knowledge-base", label: "Bot Knowledge", icon: BookOpen },
 ];
 
