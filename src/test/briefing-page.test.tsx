@@ -35,7 +35,7 @@ describe("the morning briefing page", () => {
   });
   it("says what was left out, and that nothing was changed", async () => {
     render(<MemoryRouter><Briefing /></MemoryRouter>);
-    expect(await screen.findByText(/3 likely spam, 2 newsletters and promotions, and 4 automated notices/)).toBeTruthy();
+    expect(await screen.findByText(/3 likely spam, 2 newsletters and promotions, 4 automated notices/)).toBeTruthy();
     expect(screen.getByText(/Nothing was deleted/)).toBeTruthy();
     expect(screen.getByText(/only reads/)).toBeTruthy();
   });

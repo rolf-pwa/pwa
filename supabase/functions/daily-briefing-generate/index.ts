@@ -12,6 +12,8 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getValidGoogleAccessToken } from "../_shared/google-token.ts";
+import { eaChat, eaDecide, eaForget, eaHistory, eaNudge } from "../_shared/ea-handlers.ts";
+import { isMutedSender } from "../_shared/ea-agent.ts";
 import { classifyEmail, calendarConflicts, groupWeek, sectionsFromEmails, type BriefingEmail, type BriefingSections, type CalEvent } from "../_shared/briefing-facts.ts";
 import { generateVertexContent, parseServiceAccountKey, GEMINI_DRAFTING_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 
@@ -465,8 +467,15 @@ async function generateBriefingForUser(db: Db, userId: string, todayStr: string)
     gatherFirmFacts(db, todayStr),
   ]);
   // The facts as stored: email bodies are never kept, only the subject, sender and a short snippet.
+  // Senders Rolf has asked Georgia to stop showing are left out (and counted).
+  const { data: mutes } = await db.from("ea_preferences").select("value").eq("staff_user_id", userId).eq("kind", "mute_sender").eq("active", true);
+  const muted = ((mutes ?? []) as { value: string }[]).map((m) => m.value);
+  const keep = google.email.emails.filter((e) => !isMutedSender(e.from, muted));
+  const mutedCount = google.email.emails.length - keep.length;
+  google.email = { ...google.email, emails: keep };
   const facts = { tasks, calendar: google.calendar, email: google.email, requests, quo, firm };
   const sections = buildSections(google.calendar, google.email, quo, firm, todayStr);
+  sections.counts.muted = mutedCount;
 
   await db.from("daily_briefings").upsert(
     {
@@ -578,6 +587,7 @@ Deno.serve(async (req) => {
       const hour = Number(new Intl.DateTimeFormat("en-CA", { timeZone: "America/Vancouver", hour: "2-digit", hour12: false }).format(new Date()));
       if (hour !== only) return json({ skipped: true, pacificHour: hour });
     }
+    if ((await req.clone().json().catch(() => ({}))).nudge === true) return json(await eaNudge(db));
     const { data: staff } = await db.from("profiles").select("user_id, email").ilike("email", "%@prosperwise.ca");
     let generated = 0;
     let skipped = 0;
@@ -599,6 +609,15 @@ Deno.serve(async (req) => {
   if (!userId) return json({ error: "Unauthorized" }, 401);
 
   try {
+    // The morning meeting: chat, history, decisions on proposals, and forgetting a preference.
+    const body = (await req.clone().json().catch(() => ({}))) as { action?: string; message?: string; start?: boolean; actionId?: string; decision?: "done" | "dismissed"; prefId?: string };
+    if (typeof body.action === "string" && body.action.startsWith("ea_")) {
+      if (body.action === "ea_history") return json({ ok: true, ...(await eaHistory(db, userId)) });
+      if (body.action === "ea_chat") return json({ ok: true, ...(await eaChat(db, userId, body.message ?? "", body.start === true)) });
+      if (body.action === "ea_decide") return json(await eaDecide(db, userId, String(body.actionId ?? ""), body.decision === "done" ? "done" : "dismissed"));
+      if (body.action === "ea_forget") return json(await eaForget(db, userId, String(body.prefId ?? "")));
+      return json({ error: "unknown_action" }, 400);
+    }
     await generateBriefingForUser(db, userId, todayStr);
     const { data: briefing } = await db
       .from("daily_briefings")
