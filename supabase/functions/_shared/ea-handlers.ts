@@ -9,6 +9,7 @@ import {
 import { fetchWithVertexRetry, getGcpAccessToken, GEMINI_DRAFTING_MODEL, parseServiceAccountKey, vertexModelUrl, withThinking, type ServiceAccountKey } from "./vertex-ai.ts";
 import { getValidGoogleAccessToken } from "./google-token.ts";
 import { refreshBriefing } from "./briefing-refresh.ts";
+import { provisionClientFolderTree } from "./vault-provisioning.ts";
 
 const DAILY_MESSAGE_CAP = 200;
 const zone = "America/Vancouver";
@@ -144,6 +145,12 @@ export async function eaChat(db: any, userId: string, text: string, start: boole
     const { data } = await db.from("ea_actions").insert({ staff_user_id: userId, conversation_date: date, kind, status, summary, payload }).select("id").single();
     if (data?.id) recorded.push(data.id);
   };
+  const provision = async (householdId: string): Promise<{ ok: boolean; existed?: boolean; error?: string }> => {
+    const { data: p } = await db.from("profiles").select("email").eq("user_id", userId).maybeSingle();
+    const { data: before } = await db.from("households").select("vault_root_folder_id").eq("id", householdId).maybeSingle();
+    const r = await provisionClientFolderTree(db, householdId, "georgia_ea", { requestedBy: { id: userId, email: p?.email ?? null } });
+    return r.ok ? { ok: true, existed: !!before?.vault_root_folder_id } : { ok: false, error: r.error };
+  };
   let googleToken: string | null = null;
   const google = async () => (googleToken ??= await getValidGoogleAccessToken(db, userId));
 
@@ -278,8 +285,18 @@ export async function eaChat(db: any, userId: string, text: string, start: boole
           if (ce) { await record("household_created", "failed", `Household ${label}: could not add ${m.first_name}`, { household_id: hh.id }); return { ok: false, message: `The household was created but ${m.first_name} could not be added: ${ce.message}` }; }
           made.push(`${m.first_name} ${m.last_name} (${m.role.replace(/_/g, " ")})`);
         }
-        await record("household_created", "done", `Household created: ${label} (${made.length} ${made.length === 1 ? "person" : "people"})`, { household_id: hh.id, family_id: fam.id, link: `/households/${hh.id}` });
-        return { ok: true, message: `Created the ${familyName} family and household "${label}" with ${made.join(", ")}. It has no tier, accounts or Vault yet.` };
+        // A new household gets its Drive Vault straight away, as onboarding does.
+        const vault = await provision(hh.id);
+        await record("household_created", "done", `Household created: ${label} (${made.length} ${made.length === 1 ? "person" : "people"})${vault.ok ? ", Vault ready" : ", Vault not built"}`, { household_id: hh.id, family_id: fam.id, link: `/households/${hh.id}`, vault: vault.ok });
+        return { ok: true, message: `Created the ${familyName} family and household "${label}" with ${made.join(", ")}. It has no tier or accounts yet. ${vault.ok ? "Its Drive Vault is built." : `Its Drive Vault could not be built (${vault.error}); offer to try again with provision_vault.`}` };
+      }
+      case "provision_vault": {
+        const hn = str(a.household_name, 120).replace(/[%,()]/g, " ").trim(); if (!hn) return { ok: false, message: "Which household?" };
+        const { data: hhs } = await db.from("households").select("id, label").or(`label.ilike.%${hn}%`).limit(5);
+        if ((hhs ?? []).length !== 1) return { ok: false, message: (hhs ?? []).length ? `That matches ${(hhs ?? []).map((h: any) => h.label).join(", ")}. Which one?` : `I could not find a household called "${hn}".` };
+        const r = await provision(hhs[0].id);
+        await record("vault_provisioned", r.ok ? "done" : "failed", r.ok ? `Vault ready: ${hhs[0].label}` : `Vault not built: ${hhs[0].label}`, { household_id: hhs[0].id, link: `/households/${hhs[0].id}` });
+        return r.ok ? { ok: true, message: `The Drive Vault for ${hhs[0].label} is ready${r.existed ? " (it already existed; I filled in anything missing)" : ""}.` } : { ok: false, message: `Could not build the Vault: ${r.error}` };
       }
       case "add_contact": {
         const hn = str(a.household_name, 120); if (!hn) return { ok: false, message: "Which household?" };

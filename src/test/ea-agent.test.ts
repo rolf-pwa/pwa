@@ -115,3 +115,16 @@ describe("finding someone's address in his mail", () => {
     expect(decodeURIComponent(u)).toContain("add=a@x.ca,b@y.ca");
   });
 });
+
+describe("giving a new household its Vault", () => {
+  it("has a tool to build a Vault for an existing household, and it is additive", () => {
+    const t = TOOL_DECLARATIONS.find((x) => x.name === "provision_vault")!;
+    expect(t).toBeTruthy();
+    expect(t.description).toMatch(/Additive and safe to repeat/);
+    expect(t.description).toMatch(/create_household already does this/);
+  });
+  it("tells her create_household builds the Vault, so she reports whether it worked", async () => {
+    const { SYSTEM_PROMPT } = await import("../../supabase/functions/_shared/ea-agent");
+    expect(SYSTEM_PROMPT).toMatch(/create_household also builds their Drive Vault/);
+  });
+});
