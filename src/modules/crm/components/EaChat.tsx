@@ -20,7 +20,8 @@ const call = async (body: Record<string, unknown>) => {
 const when = (local: string) => { const d = new Date(`${local}:00`); return Number.isNaN(d.getTime()) ? local : d.toLocaleString("en-CA", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); };
 
 /** What Georgia did or prepared in answer to a message. Proposals wait here for Rolf: nothing is sent or added without his click. */
-function ActionCard({ a, onDecide, onForget }: { a: EaAction; onDecide: (id: string, d: "done" | "dismissed") => void; onForget: (id: string) => void }) {
+function ActionCard({ a, onDecide, onForget, onApply }: { a: EaAction; onDecide: (id: string, d: "done" | "dismissed") => void; onForget: (id: string) => void; onApply: (id: string) => Promise<void> }) {
+  const [applying, setApplying] = useState(false);
   const p = a.payload;
   const decided = a.status === "dismissed" ? "Dismissed" : a.status === "done" && (a.kind === "calendar_proposal" || a.kind === "email_draft" || a.kind === "text_draft") ? "Used" : null;
   const copy = async (text: string) => { try { await navigator.clipboard.writeText(text); toast.success("Copied"); } catch { toast.error("Couldn't copy"); } };
@@ -29,6 +30,7 @@ function ActionCard({ a, onDecide, onForget }: { a: EaAction; onDecide: (id: str
     <div className="rounded-md border bg-card p-2.5 text-xs" data-testid="calendar-proposal">
       <p className="font-medium text-foreground">{p.title}</p>
       <p className="text-muted-foreground">{when(p.start)} to {when(p.end)}{p.location ? ` · ${p.location}` : ""}</p>
+      {(p.guests ?? []).length > 0 && <p className="text-muted-foreground">Guests: {(p.guests as string[]).join(", ")}</p>}
       {decided ? <Badge variant="outline" className="mt-1.5 text-[10px]">{decided}</Badge> : (
         <div className="mt-1.5 flex gap-1.5">
           <Button asChild size="sm" className="h-7 text-xs"><a href={p.url} target="_blank" rel="noopener noreferrer" onClick={() => onDecide(a.id, "done")}>Add to my calendar <ExternalLink className="ml-1 h-3 w-3" /></a></Button>
@@ -37,6 +39,23 @@ function ActionCard({ a, onDecide, onForget }: { a: EaAction; onDecide: (id: str
       )}
     </div>
   );
+  if (a.kind === "calendar_update") {
+    const c = p.changes ?? {};
+    const lines = [c.title && `New title: ${c.title}`, c.start && `New time: ${when(c.start)} to ${when(c.end)}`, c.location && `Location: ${c.location}`, c.description && `Details: ${c.description}`].filter(Boolean) as string[];
+    return (
+      <div className="rounded-md border bg-card p-2.5 text-xs" data-testid="calendar-update">
+        <p className="text-muted-foreground">Change to an event on your calendar</p>
+        <p className="font-medium text-foreground">{p.event_title}</p>
+        <ul className="mt-0.5 list-disc pl-4 text-foreground/90">{lines.map((l, i) => <li key={i}>{l}</li>)}{(c.add_attendees ?? []).length > 0 && <li>Invite: {(c.add_attendees as string[]).join(", ")} (they are emailed an invitation when you apply)</li>}</ul>
+        {a.status === "done" ? <Badge variant="outline" className="mt-1.5 text-[10px]">Applied</Badge> : a.status === "dismissed" ? <Badge variant="outline" className="mt-1.5 text-[10px]">Dismissed</Badge> : (
+          <div className="mt-1.5 flex gap-1.5">
+            <Button size="sm" className="h-7 text-xs" disabled={applying} onClick={async () => { setApplying(true); try { await onApply(a.id); } finally { setApplying(false); } }}>{applying ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}Apply to my calendar</Button>
+            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => onDecide(a.id, "dismissed")}>Dismiss</Button>
+          </div>
+        )}
+      </div>
+    );
+  }
   if (a.kind === "email_draft") return (
     <div className="rounded-md border bg-card p-2.5 text-xs" data-testid="email-draft">
       <p className="text-muted-foreground">Draft email{p.to || p.to_name ? ` to ${p.to_name ?? ""} ${p.to ? `<${p.to}>` : ""}`.trimEnd() : ""}</p>
@@ -109,6 +128,13 @@ export function EaChat({ onChanged }: { onChanged?: () => void } = {}) {
     setMessages((m) => (m ?? []).map((x) => ({ ...x, actions: x.actions.map((a) => (a.id === id ? { ...a, status: decision } : a)) })));
     try { await call({ action: "ea_decide", actionId: id, decision }); } catch { /* the link still worked; the status will catch up on reload */ }
   };
+  const apply = async (id: string) => {
+    try {
+      const d = await call({ action: "ea_apply", actionId: id });
+      setMessages((m) => (m ?? []).map((x) => ({ ...x, actions: x.actions.map((a) => (a.id === id ? { ...a, status: "done" as const } : a)) })));
+      toast.success(d.invited?.length ? `Calendar updated. ${d.invited.join(", ")} invited.` : "Calendar updated.");
+    } catch (e: any) { toast.error(e.message); }
+  };
   const forget = async (id: string) => { try { await call({ action: "ea_forget", prefId: id }); toast.success("Forgotten"); setPrefs((p) => p.filter((x) => x.id !== id)); } catch (e: any) { toast.error(e.message); } };
 
   return (
@@ -127,7 +153,7 @@ export function EaChat({ onChanged }: { onChanged?: () => void } = {}) {
             <div key={m.id} className={m.role === "user" ? "flex justify-end" : ""}>
               <div className={`max-w-[92%] space-y-1.5 ${m.role === "user" ? "rounded-lg bg-accent/10 px-3 py-2" : ""}`}>
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground"><LinkifyText text={m.content} /></p>
-                {m.actions.map((a) => <ActionCard key={a.id} a={a} onDecide={decide} onForget={forget} />)}
+                {m.actions.map((a) => <ActionCard key={a.id} a={a} onDecide={decide} onForget={forget} onApply={apply} />)}
               </div>
             </div>
           ))}

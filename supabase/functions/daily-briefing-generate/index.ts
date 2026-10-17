@@ -13,7 +13,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getValidGoogleAccessToken } from "../_shared/google-token.ts";
 import { refreshBriefing } from "../_shared/briefing-refresh.ts";
-import { eaChat, eaDecide, eaForget, eaHistory, eaNudge } from "../_shared/ea-handlers.ts";
+import { eaApply, eaChat, eaDecide, eaForget, eaHistory, eaNudge } from "../_shared/ea-handlers.ts";
 import { isMutedSender } from "../_shared/ea-agent.ts";
 import { classifyEmail, calendarConflicts, groupWeek, sectionsFromEmails, type BriefingEmail, type BriefingSections, type CalEvent } from "../_shared/briefing-facts.ts";
 import { generateVertexContent, parseServiceAccountKey, GEMINI_DRAFTING_MODEL, withThinking } from "../_shared/vertex-ai.ts";
@@ -619,6 +619,7 @@ Deno.serve(async (req) => {
       if (body.action === "ea_history") return json({ ok: true, ...(await eaHistory(db, userId)) });
       if (body.action === "ea_chat") return json({ ok: true, ...(await eaChat(db, userId, body.message ?? "", body.start === true)) });
       if (body.action === "ea_decide") return json(await eaDecide(db, userId, String(body.actionId ?? ""), body.decision === "done" ? "done" : "dismissed"));
+      if (body.action === "ea_apply") return json(await eaApply(db, userId, String(body.actionId ?? "")));
       if (body.action === "ea_forget") return json(await eaForget(db, userId, String(body.prefId ?? "")));
       return json({ error: "unknown_action" }, 400);
     }

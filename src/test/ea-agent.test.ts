@@ -89,3 +89,29 @@ describe("setting up a household", () => {
     for (const n of names) expect(n).not.toMatch(/update_contact|edit|remove|merge/);
   });
 });
+
+import { extractAddresses } from "../../supabase/functions/_shared/ea-agent";
+describe("finding someone's address in his mail", () => {
+  const headers = ["Derek Dalsin <derek@dalsin.ca>", "Hector <hello@secondperspective.ca>, Derek Dalsin <derek@dalsin.ca>", "\"Dalsin, Derek\" <derek.dalsin@work.com>", "Rolf Issler <rolf@prosperwise.ca>"];
+  it("returns the address whose name matches, most often seen first, leaving out his own", () => {
+    const r = extractAddresses(headers, "Derek Dalsin", ["prosperwise.ca"]);
+    expect(r[0]).toMatchObject({ email: "derek@dalsin.ca", seen: 2 });
+    expect(r.map((x) => x.email)).toContain("derek.dalsin@work.com");
+    expect(r.some((x) => x.email.includes("prosperwise"))).toBe(false);
+    expect(r.some((x) => x.email === "hello@secondperspective.ca")).toBe(false);
+  });
+  it("matches on a single first name and on a bare address", () => {
+    expect(extractAddresses(["Hector <hello@secondperspective.ca>"], "hector")[0].email).toBe("hello@secondperspective.ca");
+    expect(extractAddresses(["jane@x.ca"], "jane")[0].email).toBe("jane@x.ca");
+    expect(extractAddresses(["Sam <sam@x.ca>"], "derek")).toEqual([]);
+  });
+  it("has tools to read mail and propose event changes, and still none that send, delete or apply by herself", () => {
+    const names = TOOL_DECLARATIONS.map((t) => t.name);
+    expect(names).toEqual(expect.arrayContaining(["search_email", "find_email_address", "propose_event_update"]));
+    for (const n of names) expect(n).not.toMatch(/send|delete|apply|patch|trash/);
+  });
+  it("puts guests on the new-event link", () => {
+    const u = calendarTemplateUrl({ title: "x", start: "2026-10-23T15:30", end: "2026-10-23T17:00", attendees: ["a@x.ca", "b@y.ca"] })!;
+    expect(decodeURIComponent(u)).toContain("add=a@x.ca,b@y.ca");
+  });
+});

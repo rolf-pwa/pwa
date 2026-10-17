@@ -80,3 +80,29 @@ describe("the morning meeting chat", () => {
     expect(link.getAttribute("href")).toBe("/households/abc");
   });
 });
+
+describe("changing an event on his calendar", () => {
+  const update = { id: "u1", kind: "calendar_update", status: "proposed", summary: "Update event: Board Meeting", payload: { event_id: "e1", event_title: "Board Meeting", changes: { location: "CRAFT Beer Market", add_attendees: ["hello@secondperspective.ca", "derek@dalsin.ca"] } } };
+  beforeEach(() => {
+    invoke.mockReset();
+    invoke.mockImplementation(async (_f: string, { body }: any) => {
+      if (body.action === "ea_history") return { data: { messages: [{ id: "m1", role: "assistant", content: "Here is the change.", actions: [update] }], preferences: [] }, error: null };
+      if (body.action === "ea_apply") return { data: { ok: true, invited: ["hello@secondperspective.ca", "derek@dalsin.ca"] }, error: null };
+      return { data: {}, error: null };
+    });
+  });
+  it("shows what changes and who is invited, and changes nothing until he applies it", async () => {
+    render(<MemoryRouter><EaChat /></MemoryRouter>);
+    const card = await screen.findByTestId("calendar-update");
+    expect(card.textContent).toContain("CRAFT Beer Market");
+    expect(card.textContent).toContain("hello@secondperspective.ca, derek@dalsin.ca");
+    expect(card.textContent).toMatch(/emailed an invitation when you apply/);
+    expect(invoke).not.toHaveBeenCalledWith("daily-briefing-generate", { body: expect.objectContaining({ action: "ea_apply" }) });
+  });
+  it("applies it only on his click", async () => {
+    render(<MemoryRouter><EaChat /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("button", { name: "Apply to my calendar" }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("daily-briefing-generate", { body: { action: "ea_apply", actionId: "u1" } }));
+    expect(await screen.findByText("Applied")).toBeTruthy();
+  });
+});
