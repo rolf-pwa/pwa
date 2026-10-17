@@ -6,8 +6,9 @@ import { AppLayout } from "@/shared/components/AppLayout";
 import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
+import { Textarea } from "@/shared/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
-import { getSupportOverview, reviewSupportConversation, setAway, type Away, type SupportConversation } from "@/modules/crm/lib/reviewAgent";
+import { getSupportOverview, handBackSupportConversation, replyToSupportConversation, reviewSupportConversation, setAway, type Away, type SupportConversation } from "@/modules/crm/lib/reviewAgent";
 
 const when = (iso: string) => new Date(iso).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
@@ -39,24 +40,41 @@ function AwayCard({ away, onSaved }: { away: Away; onSaved: () => void }) {
   );
 }
 
-function Conversation({ c, onReviewed }: { c: SupportConversation; onReviewed: () => void }) {
+function Conversation({ c, onChanged }: { c: SupportConversation; onChanged: () => void }) {
   const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
   const waiting = !!c.flag && !c.reviewed_at;
+  const run = async (fn: () => Promise<unknown>, ok?: string) => {
+    setBusy(true);
+    try { await fn(); if (ok) toast.success(ok); onChanged(); } catch (e: any) { toast.error(e?.message ?? "Couldn't update"); } finally { setBusy(false); }
+  };
   return (
     <div className="border-b border-border px-3 py-2.5 text-sm last:border-0">
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="font-medium text-left">{c.contact_name}</button>
         {waiting && <Badge variant={c.flag === "urgent" ? "destructive" : "default"}>{c.flag === "urgent" ? "Urgent" : "Needs you"}</Badge>}
         {c.flag && c.reviewed_at && <Badge variant="secondary">Reviewed</Badge>}
+        {c.advisor_active && <Badge variant="outline">You are handling this</Badge>}
         {c.away_when_flagged && <span className="text-xs text-muted-foreground">while you were away</span>}
         <span className="ml-auto text-xs text-muted-foreground">{when(c.updated_at)}</span>
         <Link to={`/contacts/${c.contact_id}`} className="text-xs underline">Contact</Link>
-        {waiting && <Button size="sm" variant="outline" onClick={async () => { try { await reviewSupportConversation(c.id); onReviewed(); } catch (e: any) { toast.error(e?.message ?? "Couldn't update"); } }}>Mark reviewed</Button>}
+        {waiting && <Button size="sm" variant="outline" disabled={busy} onClick={() => run(() => reviewSupportConversation(c.id))}>Mark reviewed</Button>}
       </div>
       {c.flag_summary && <p className="mt-1 text-muted-foreground">{c.flag_summary}</p>}
       {open && (
-        <div className="mt-2 space-y-1.5 rounded-md bg-muted/40 p-3">
-          {c.messages.map((m, i) => <p key={i}><span className="font-medium">{m.role === "user" ? "Client" : "Georgia"}: </span>{m.content}</p>)}
+        <div className="mt-2 space-y-3">
+          <div className="space-y-1.5 rounded-md bg-muted/40 p-3">
+            {c.messages.map((m, i) => <p key={i}><span className="font-medium">{m.role === "user" ? "Client" : m.role === "advisor" ? "You" : "Georgia"}: </span>{m.content}</p>)}
+          </div>
+          <div className="space-y-2">
+            <Textarea value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Reply to the client in their Ask Georgia thread" rows={3} maxLength={4000} />
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" disabled={busy || !draft.trim()} onClick={() => run(async () => { await replyToSupportConversation(c.id, draft.trim()); setDraft(""); }, "Sent. Georgia holds her answers in this thread until you hand it back.")}>Send reply</Button>
+              {c.advisor_active && <Button size="sm" variant="outline" disabled={busy} onClick={() => run(() => handBackSupportConversation(c.id), "Georgia will answer in this thread again")}>Hand back to Georgia</Button>}
+              <span className="text-xs text-muted-foreground">The client sees this in their portal and is told by a short email with no details.</span>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -72,7 +90,7 @@ export default function AskGeorgia() {
     <AppLayout>
       <div className="mx-auto max-w-5xl space-y-6 py-6">
         <div className="flex items-center gap-2"><MessageCircle className="h-6 w-6 text-accent" /><h1 className="font-serif text-2xl font-semibold">Ask Georgia</h1></div>
-        <p className="text-sm text-muted-foreground">Georgia's conversations with clients in the portal. She answers what she can, files requests and shows the booking page. Anything that needs you is flagged here and notifies you in the app. Nothing is sent by email.</p>
+        <p className="text-sm text-muted-foreground">Georgia's conversations with clients in the portal. She answers what she can, files requests and shows the booking page. Anything that needs you is flagged here and notifies you in the app, never by email. You can reply in a client's thread, and Georgia stays quiet there until you hand it back.</p>
         {error && <p className="text-sm text-destructive">{error}</p>}
         {!data && !error && <Loader2 className="h-5 w-5 animate-spin" />}
         {data && (
@@ -81,7 +99,7 @@ export default function AskGeorgia() {
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-lg">Conversations</CardTitle></CardHeader>
               <CardContent className="p-0">
-                {data.conversations.length === 0 ? <p className="px-4 pb-4 text-sm text-muted-foreground">No conversations yet.</p> : data.conversations.map((c) => <Conversation key={c.id} c={c} onReviewed={load} />)}
+                {data.conversations.length === 0 ? <p className="px-4 pb-4 text-sm text-muted-foreground">No conversations yet.</p> : data.conversations.map((c) => <Conversation key={c.id} c={c} onChanged={load} />)}
               </CardContent>
             </Card>
           </>

@@ -1504,6 +1504,7 @@ const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = f
                 portalToken={portalToken}
                 onNavigateToRequests={() => setActiveTab("requests")}
                 onNavigateToTasks={() => setActiveTab("tasks")}
+                onOpenGeorgia={() => setGeorgiaOpen(true)}
               />
               <Button
                 variant="ghost"

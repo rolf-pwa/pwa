@@ -4,11 +4,14 @@
 //   setPaused         pause or resume one obligation
 //   supportOverview   Ask Georgia: Rolf's away dates and the recent client conversations, flagged ones first
 //   supportReview     mark a conversation reviewed
+//   supportReply      Rolf writes in a client's thread; Georgia then holds her answers there; the client is told in-app
+//   supportHandBack   Georgia answers in that thread again
 //   setAway           set or clear the dates clients are told Rolf is away
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { latestModels, portfolioPackFor } from "../_shared/portfolio-review-data.ts";
 import { pacificDate } from "../_shared/review-windows.ts";
+import { storableMessages } from "../_shared/support-context.ts";
 import { MODEL_PROMPT, validateModels } from "../_shared/ia-model-parse.ts";
 import { isPooledFamily } from "../_shared/review-units.ts";
 import { buildClientProposal, buildClientView, narrativeParagraphs, portfolioReviewReadyEmail, type ClientIncludes } from "../_shared/portfolio-review-client.ts";
@@ -452,7 +455,7 @@ Deno.serve(async (req) => {
     // Rolf closes a review or rebalancing himself (done outside the flow, or no longer needed): Georgia stops, nobody is emailed.
     if (action === "supportOverview") {
       const { data: away } = await db.from("staff_availability").select("away_from, away_until, note").eq("id", true).maybeSingle();
-      const { data: rows } = await db.from("portal_assistant_conversations").select("id, contact_id, messages, flag, flag_summary, flagged_at, away_when_flagged, reviewed_at, updated_at").order("updated_at", { ascending: false }).limit(60);
+      const { data: rows } = await db.from("portal_assistant_conversations").select("id, contact_id, messages, flag, flag_summary, flagged_at, away_when_flagged, reviewed_at, updated_at, advisor_active").order("updated_at", { ascending: false }).limit(60);
       const ids = [...new Set((rows ?? []).map((r: any) => r.contact_id))];
       const { data: cs } = ids.length ? await db.from("contacts").select("id, full_name").in("id", ids) : { data: [] as any[] };
       const name = new Map((cs ?? []).map((c: any) => [c.id, c.full_name]));
@@ -467,6 +470,34 @@ Deno.serve(async (req) => {
       const id = String(body?.id ?? "");
       if (!id) return json({ error: "id required" }, 400);
       await db.from("portal_assistant_conversations").update({ reviewed_at: new Date().toISOString() }).eq("id", id);
+      return json({ ok: true });
+    }
+
+    if (action === "supportReply") {
+      const id = String(body?.id ?? "");
+      const content = typeof body?.content === "string" ? body.content.trim().slice(0, 4000) : "";
+      if (!id || !content) return json({ error: "A conversation and a message are required." }, 400);
+      const { data: conv } = await db.from("portal_assistant_conversations").select("id, contact_id, messages").eq("id", id).maybeSingle();
+      if (!conv) return json({ error: "Conversation not found." }, 404);
+      const nowIso = new Date().toISOString();
+      const messages = storableMessages([...storableMessages(conv.messages), { role: "advisor", content, at: nowIso }]);
+      await db.from("portal_assistant_conversations").update({ messages, advisor_active: true, last_advisor_reply_at: nowIso, reviewed_at: nowIso, updated_at: nowIso }).eq("id", id);
+      // The client is told in the portal and by a short email with no content, once per half hour.
+      // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+      EdgeRuntime.waitUntil(
+        fetch(`${SUPABASE_URL}/functions/v1/notify-portal-request`, {
+          method: "POST",
+          headers: { "x-region": "ca-central-1", "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_KEY}` },
+          body: JSON.stringify({ notify_type: "chat_reply", contact_id: conv.contact_id }),
+        }).catch((e) => console.error("[review-agent-admin] client notify failed", e)),
+      );
+      return json({ ok: true, messages });
+    }
+
+    if (action === "supportHandBack") {
+      const id = String(body?.id ?? "");
+      if (!id) return json({ error: "id required" }, 400);
+      await db.from("portal_assistant_conversations").update({ advisor_active: false }).eq("id", id);
       return json({ ok: true });
     }
 

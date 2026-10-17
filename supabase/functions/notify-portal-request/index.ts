@@ -215,6 +215,37 @@ if (req.method === "OPTIONS") {
 
     // notify_type: "request" (default) | "task"
 
+    // ─── Rolf replied in a client's Ask Georgia thread ───
+    // A portal notification always; one short email with no content (a one-tap link only), at most once per 30 minutes.
+    if (notify_type === "chat_reply") {
+      const { contact_id } = body;
+      if (!contact_id) {
+        return new Response(JSON.stringify({ error: "contact_id required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const { data: contact } = await supabase.from("contacts").select("email, first_name, email_notifications_enabled").eq("id", contact_id).maybeSingle();
+      const since = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      const { count: recent } = await supabase.from("portal_client_notifications").select("id", { count: "exact", head: true }).eq("contact_id", contact_id).eq("source_type", "ask_georgia_reply").gte("created_at", since);
+      await supabase.from("portal_client_notifications").insert({
+        contact_id,
+        title: "Rolf replied in Ask Georgia",
+        body: "Open Ask Georgia to read his message.",
+        source_type: "ask_georgia_reply",
+        link_tab: null,
+      });
+      if ((recent ?? 0) > 0 || !contact?.email || !contact.email_notifications_enabled) {
+        return new Response(JSON.stringify({ sent: false, reason: (recent ?? 0) > 0 ? "recently_notified" : "no_email_or_disabled" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const link = await mintMagicLink(supabase, { contactId: contact_id });
+      const url = link?.url || plainPortalUrl();
+      const result = await dispatchNotification({
+        email: contact.email.trim().toLowerCase(),
+        subject: "You have a new message in your portal",
+        message: `Hi ${contact.first_name || "there"},\n\nYou have a new message waiting for you in your ProsperWise portal.\n\nOpen it here:\n${url}\n\n(This one-tap link is valid for 1 hour and works once. After that, sign in at https://app.prosperwise.ca)\n\nThank you,\nProsperWise Team`,
+        event_type: "message",
+      });
+      return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     // ─── Task notifications ───
     if (notify_type === "task") {
       const { contact_id, task_name, task_event } = body;
@@ -344,10 +375,10 @@ if (req.method === "OPTIONS") {
 
     if (event_type === "new") {
       subject = `Your ${requestType} request has been received`;
-      message = `Hi ${contact.first_name || "there"},\n\nWe've received your ${requestType} request and will get back to you shortly.\n\nRequest: ${portalRequest.request_description}${linkFooter}\n\nThank you,\nProsperWise Team`;
+      message = `Hi ${contact.first_name || "there"},\n\nWe've received your ${requestType} request and will get back to you shortly.${linkFooter}\n\nThank you,\nProsperWise Team`;
     } else if (event_type === "status_update") {
       subject = `Your ${requestType} request is now ${status}`;
-      message = `Hi ${contact.first_name || "there"},\n\nYour ${requestType} request has been updated to: ${status}.\n\nRequest: ${portalRequest.request_description}${linkFooter}\n\nThank you,\nProsperWise Team`;
+      message = `Hi ${contact.first_name || "there"},\n\nYour ${requestType} request has been updated to: ${status}.${linkFooter}\n\nThank you,\nProsperWise Team`;
     } else if (event_type === "message") {
       subject = `New message on your ${requestType} request`;
       message = `Hi ${contact.first_name || "there"},\n\nYou have a new message regarding your ${requestType} request.${linkFooter}\n\nThank you,\nProsperWise Team`;

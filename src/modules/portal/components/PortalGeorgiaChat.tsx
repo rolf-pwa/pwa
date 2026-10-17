@@ -8,7 +8,9 @@ import { PortalAdminRequestForm } from "./PortalAdminRequestForm";
 
 const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
-type Message = { role: "user" | "assistant"; content: string };
+type Message = { role: "user" | "assistant" | "advisor"; content: string };
+
+const POLL_MS = 30_000;
 
 interface FormTrigger {
   requestType: string;
@@ -37,22 +39,61 @@ export function PortalGeorgiaChat({ open, onOpenChange, contactName, contactId, 
   const [formTrigger, setFormTrigger] = useState<FormTrigger | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [offered, setOffered] = useState<BookableMeeting[]>([]);
+  const [advisorActive, setAdvisorActive] = useState(false);
+  const serverCount = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const greeting: Message = {
+    role: "assistant",
+    content: `Hello${contactName ? ` ${contactName}` : ""}! I'm Georgia, your ProsperWise support assistant. I can help you with questions about your accounts, submit admin requests, or direct you to the right resources. How can I help you today?`,
+  };
+
+  // The thread is kept: reopening picks it up, and a reply from Rolf appears without the client doing anything.
+  async function loadThread(initial: boolean) {
+    if (!portalToken) { if (initial) setMessages([greeting]); return; }
+    try {
+      const res = await fetch(`${FUNCTIONS_URL}/portal-assistant`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "history", portal_token: portalToken }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Request failed");
+      const server: Message[] = Array.isArray(data.messages) ? data.messages : [];
+      setAdvisorActive(!!data.advisorActive);
+      if (data.conversationId) setConversationId(data.conversationId);
+      if (initial) {
+        serverCount.current = server.length;
+        setMessages(server.length ? [greeting, ...server] : [greeting]);
+      } else if (server.length !== serverCount.current) {
+        serverCount.current = server.length;
+        setMessages([greeting, ...server]);
+      }
+    } catch {
+      if (initial) setMessages([greeting]);
+    }
+  }
 
   useEffect(() => {
     if (open) {
-      // Reset chat state each time the dialog opens
-      const greeting: Message = {
-        role: "assistant",
-        content: `Hello${contactName ? ` ${contactName}` : ""}! I'm Georgia, your ProsperWise support assistant. I can help you with questions about your accounts, submit admin requests, or direct you to the right resources. How can I help you today?`,
-      };
       setMessages([greeting]);
       setInput("");
       setFormTrigger(null);
       setConversationId(null);
       setOffered([]);
+      setAdvisorActive(false);
+      serverCount.current = 0;
+      void loadThread(true);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, contactName]);
+
+  useEffect(() => {
+    if (!open) return;
+    const t = setInterval(() => { if (!isLoading) void loadThread(false); }, POLL_MS);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, isLoading, portalToken]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -73,7 +114,7 @@ export function PortalGeorgiaChat({ open, onOpenChange, contactName, contactId, 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: updated.map((m) => ({ role: m.role, content: m.content })),
+          message: userMsg.content,
           portal_token: portalToken,
           conversation_id: conversationId,
           context: { bookable: meetingTypes.map((m) => m.label), booked: bookedMeetings.map((b) => ({ label: b.label, start: b.start })) },
@@ -85,6 +126,8 @@ export function PortalGeorgiaChat({ open, onOpenChange, contactName, contactId, 
       }
 
       if (data.conversationId) setConversationId(data.conversationId);
+      if (data.held) setAdvisorActive(true);
+      serverCount.current += data.text ? 2 : 1;
 
       // Handle text response
       if (data.text) {
@@ -174,10 +217,13 @@ export function PortalGeorgiaChat({ open, onOpenChange, contactName, contactId, 
                   className={`max-w-[85%] rounded-lg px-3.5 py-2.5 text-sm ${
                     msg.role === "user"
                       ? "bg-accent text-accent-foreground"
-                      : "bg-muted text-foreground"
+                      : msg.role === "advisor"
+                        ? "border border-accent/40 bg-background text-foreground"
+                        : "bg-muted text-foreground"
                   }`}
                 >
-                  {msg.role === "assistant" ? (
+                  {msg.role === "advisor" && <p className="mb-1 text-xs font-medium text-accent">Rolf</p>}
+                  {msg.role !== "user" ? (
                     <div className="prose prose-sm max-w-none dark:prose-invert [&>p]:mb-0 [&_a]:text-accent [&_a]:underline">
                       <ReactMarkdown>{msg.content}</ReactMarkdown>
                     </div>
@@ -226,6 +272,7 @@ export function PortalGeorgiaChat({ open, onOpenChange, contactName, contactId, 
           </div>
         </div>
 
+        {advisorActive && <p className="border-t border-border bg-muted/40 px-5 py-2 text-xs text-muted-foreground">Rolf is handling this conversation and will reply here.</p>}
         <div className="border-t border-border px-4 py-3 flex gap-2">
           <Input
             value={input}

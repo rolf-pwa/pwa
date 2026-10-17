@@ -73,13 +73,33 @@ export function buildSupportContext(i: SupportInput): string {
 export const MAX_STORED_MESSAGES = 60;
 export const MAX_MESSAGE_CHARS = 4000;
 
+export type ThreadRole = "user" | "assistant" | "advisor";
+export interface ThreadMessage { role: ThreadRole; content: string; at?: string }
+
 /** What is stored of a chat: roles and text only, bounded. */
-export function storableMessages(messages: unknown): { role: "user" | "assistant"; content: string }[] {
+export function storableMessages(messages: unknown): ThreadMessage[] {
   if (!Array.isArray(messages)) return [];
   return messages
-    .filter((m: any) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
+    .filter((m: any) => m && (m.role === "user" || m.role === "assistant" || m.role === "advisor") && typeof m.content === "string")
     .slice(-MAX_STORED_MESSAGES)
-    .map((m: any) => ({ role: m.role, content: String(m.content).slice(0, MAX_MESSAGE_CHARS) }));
+    .map((m: any) => ({ role: m.role, content: String(m.content).slice(0, MAX_MESSAGE_CHARS), ...(typeof m.at === "string" ? { at: m.at } : {}) }));
+}
+
+/** The thread as the model reads it: Rolf's own words are shown as written by him, so she builds on them and never contradicts them. */
+export function modelTurns(messages: ThreadMessage[]): { role: "user" | "model"; parts: { text: string }[] }[] {
+  return messages.map((m) => ({
+    role: m.role === "assistant" ? "model" as const : "user" as const,
+    parts: [{ text: m.role === "advisor" ? `[Rolf, the advisor, wrote to the client]: ${m.content}` : m.content }],
+  }));
+}
+
+/** The one new thing a client says this turn: the last client message in what the page sent. */
+export function newClientMessage(body: { message?: unknown; messages?: unknown }): string | null {
+  const text = typeof body.message === "string"
+    ? body.message
+    : Array.isArray(body.messages) ? [...body.messages].reverse().find((m: any) => m?.role === "user" && typeof m.content === "string")?.content : null;
+  const t = typeof text === "string" ? text.trim().slice(0, MAX_MESSAGE_CHARS) : "";
+  return t || null;
 }
 
 /** Only meeting labels the page says are bookable, as short plain strings. */

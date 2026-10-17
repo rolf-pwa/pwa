@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { GEMINI_CLIENT_CHAT_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
 import { GEORGIA_CLIENT_PROMPT, PORTAL_TOOLS as TOOLS, cleanGeorgiaReply } from "../_shared/georgia-chat-config.ts";
-import { availability, buildSupportContext, cleanLabels, storableMessages } from "../_shared/support-context.ts";
+import { availability, buildSupportContext, cleanLabels, modelTurns, newClientMessage, storableMessages } from "../_shared/support-context.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -195,14 +195,7 @@ serve(async (req) => {
 
     // Chat flow — require a valid portal_token to prevent unauth Vertex AI abuse
     // and KB exfiltration.
-    const { messages, portal_token: chatPortalToken, conversation_id: conversationIdIn, context: pageContext } = body;
-    if (!messages || !Array.isArray(messages)) {
-      return new Response(
-        JSON.stringify({ error: "messages array is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
+    const { portal_token: chatPortalToken, conversation_id: conversationIdIn, context: pageContext } = body;
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -228,6 +221,44 @@ serve(async (req) => {
       );
     }
 
+    const contactId = chatTokenRow.contact_id as string;
+
+    // The client's running thread, so the chat picks up where it left off and shows Rolf's replies.
+    if (body.action === "history") {
+      const { data: conv } = await supabaseAdmin.from("portal_assistant_conversations").select("id, messages, advisor_active").eq("contact_id", contactId).order("updated_at", { ascending: false }).limit(1).maybeSingle();
+      return new Response(
+        JSON.stringify({ conversationId: conv?.id ?? null, messages: storableMessages(conv?.messages), advisorActive: !!conv?.advisor_active }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // What the client said this turn. The stored thread is the source of truth for everything earlier, so the page cannot rewrite it.
+    const clientText = newClientMessage(body);
+    if (!clientText) {
+      return new Response(JSON.stringify({ error: "A message is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    let existing: { id: string; messages: unknown; advisor_active: boolean; flag: "urgent" | "routine" | null } | null = null;
+    if (typeof conversationIdIn === "string") {
+      const { data: own } = await supabaseAdmin.from("portal_assistant_conversations").select("id, messages, advisor_active, flag").eq("id", conversationIdIn).eq("contact_id", contactId).maybeSingle();
+      existing = own ?? null;
+    }
+    const nowIso = new Date().toISOString();
+    const thread = [...storableMessages(existing?.messages), { role: "user" as const, content: clientText, at: nowIso }];
+
+    // Rolf is handling this thread: Georgia does not answer. He is told a message arrived.
+    if (existing?.advisor_active) {
+      await supabaseAdmin.from("portal_assistant_conversations").update({ messages: storableMessages(thread), updated_at: nowIso, reviewed_at: null, flag: existing.flag ?? "routine", flag_summary: "The client wrote while you are handling this conversation.", flagged_at: nowIso }).eq("id", existing.id);
+      const { data: who } = await supabaseAdmin.from("contacts").select("first_name").eq("id", contactId).maybeSingle();
+      await supabaseAdmin.from("staff_notifications").insert({
+        title: `${who?.first_name || "A client"} wrote in the conversation you are handling`,
+        body: clientText.slice(0, 200),
+        link: "/ask-georgia",
+        contact_id: contactId,
+        source_type: "ask_georgia_reply",
+      });
+      return new Response(JSON.stringify({ text: "", held: true, conversationId: existing.id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     // Fetch active knowledge base entries scoped to portal
     const { data: kbEntries } = await supabaseAdmin
       .from("knowledge_base")
@@ -244,7 +275,6 @@ serve(async (req) => {
 
     // What Georgia knows about this client and about Rolf's availability. The requests come from the database, keyed by the token's contact;
     // the bookable meetings are the page's own list (the portal gates them), used only to name which booking page to show the same client.
-    const contactId = chatTokenRow.contact_id as string;
     const now = new Date();
     const [{ data: contactRow }, { data: reqRows }, { data: awayRow }] = await Promise.all([
       supabaseAdmin.from("contacts").select("first_name").eq("id", contactId).maybeSingle(),
@@ -258,10 +288,7 @@ serve(async (req) => {
     const supportBlock = buildSupportContext({ firstName: contactRow?.first_name ?? null, requests: reqRows ?? [], bookable, booked, away: awayRow ?? null, now });
 
     const systemContent = GEORGIA_CLIENT_PROMPT + knowledgeBlock + "\n\n" + supportBlock;
-    const userMessages = messages.filter((m: any) => m.role !== "system").map((m: any) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content }],
-    }));
+    const userMessages = modelTurns(thread);
 
     // Authenticate with GCP service account for Vertex AI
     const gcpKeyRaw = Deno.env.get("GCP_SERVICE_ACCOUNT_KEY");
@@ -339,13 +366,9 @@ serve(async (req) => {
 
     text = cleanGeorgiaReply(text);
 
-    // Keep the conversation so Rolf can review it. A conversation id from the page is honoured only for the same client.
-    const stored = storableMessages([...messages, ...(text ? [{ role: "assistant", content: text }] : [])]);
-    let conversationId: string | null = null;
-    if (typeof conversationIdIn === "string") {
-      const { data: own } = await supabaseAdmin.from("portal_assistant_conversations").select("id").eq("id", conversationIdIn).eq("contact_id", contactId).maybeSingle();
-      conversationId = own?.id ?? null;
-    }
+    // Keep the conversation so Rolf can review it.
+    const stored = storableMessages([...thread, ...(text ? [{ role: "assistant", content: text, at: new Date().toISOString() }] : [])]);
+    let conversationId: string | null = existing?.id ?? null;
     if (conversationId) {
       await supabaseAdmin.from("portal_assistant_conversations").update({ messages: stored, updated_at: now.toISOString() }).eq("id", conversationId);
     } else {
