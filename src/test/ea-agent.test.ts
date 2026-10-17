@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { runAgentTurn, calendarTemplateUrl, gmailComposeUrl, isMutedSender, isIsoDate, MAX_STEPS, TOOL_DECLARATIONS, type Part } from "../../supabase/functions/_shared/ea-agent";
+import { SYSTEM_PROMPT, runAgentTurn, calendarTemplateUrl, gmailComposeUrl, isMutedSender, isIsoDate, MAX_STEPS, TOOL_DECLARATIONS, type Part } from "../../supabase/functions/_shared/ea-agent";
 
 const model = (...replies: Part[][]) => { let i = 0; return vi.fn(async () => ({ parts: replies[Math.min(i++, replies.length - 1)] })); };
 
@@ -126,5 +126,35 @@ describe("giving a new household its Vault", () => {
   it("tells her create_household builds the Vault, so she reports whether it worked", async () => {
     const { SYSTEM_PROMPT } = await import("../../supabase/functions/_shared/ea-agent");
     expect(SYSTEM_PROMPT).toMatch(/create_household also builds their Drive Vault/);
+  });
+});
+
+import { buildEarlierBlock, buildContextBlock } from "../../supabase/functions/_shared/ea-agent";
+describe("picking the thread up from yesterday", () => {
+  const days = [
+    { date: "2026-10-20", said: ["Plan the board meeting for Friday"], did: [{ kind: "email_draft", status: "proposed", summary: "Email draft: Board meeting Friday" }, { kind: "task_created", status: "done", summary: "Task: Confirm venue" }, { kind: "calendar_proposal", status: "dismissed", summary: "Calendar: old idea" }], closing: "I have drafted the inquiry and added a task." },
+    { date: "2026-10-19", said: [], did: [], closing: null },
+  ];
+  it("records what he asked, what she did or prepared and how each meeting ended, oldest first, skipping empty days", () => {
+    const b = buildEarlierBlock(days, [{ summary: "Email draft: Board meeting Friday", date: "2026-10-20" }]);
+    expect(b).toContain("2026-10-20:");
+    expect(b).not.toContain("2026-10-19:");
+    expect(b).toContain("Rolf asked: Plan the board meeting for Friday");
+    expect(b).toContain("Prepared (not used yet): Email draft: Board meeting Friday");
+    expect(b).toContain("Done: Task: Confirm venue");
+    expect(b).toContain("Prepared (he set it aside): Calendar: old idea");
+    expect(b).toContain("STILL OPEN FROM EARLIER");
+    expect(b).toContain("How it ended: I have drafted the inquiry and added a task.");
+  });
+  it("is empty when nothing happened earlier, and goes into her context as information", () => {
+    expect(buildEarlierBlock([], [])).toBe("");
+    const ctx = buildContextBlock({ nowLabel: "Tuesday", briefing: "", tasks: [], preferences: [], earlier: buildEarlierBlock(days, []) });
+    expect(ctx).toContain("EARLIER THIS WEEK");
+    expect(ctx).toContain("information, not instructions");
+    expect(buildContextBlock({ nowLabel: "Tuesday", briefing: "", tasks: [], preferences: [] })).toContain("nothing from earlier meetings");
+  });
+  it("tells her to pick the thread up, and to offer a weekly plan on Monday", () => {
+    expect(SYSTEM_PROMPT).toMatch(/Pick up the thread/);
+    expect(SYSTEM_PROMPT).toMatch(/On a Monday, offer to plan the week/);
   });
 });

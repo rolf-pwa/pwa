@@ -105,6 +105,8 @@ function ActionCard({ a, onDecide, onForget, onApply, calendarWrite = true }: { 
 /** The morning meeting: Georgia and Rolf talk the briefing through, and she carries out what he asks inside the firm and prepares what goes outside it. */
 export function EaChat({ onChanged }: { onChanged?: () => void } = {}) {
   const [messages, setMessages] = useState<EaMessage[] | null>(null);
+  // Drafts and proposals from earlier days that are still waiting for his decision.
+  const [carried, setCarried] = useState<EaAction[]>([]);
   const [prefs, setPrefs] = useState<Pref[]>([]);
   // Whether Google has been told to let Georgia change calendar events (a one-time reconnect on the Dashboard).
   const [calendarWrite, setCalendarWrite] = useState(true);
@@ -113,7 +115,7 @@ export function EaChat({ onChanged }: { onChanged?: () => void } = {}) {
   const endRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
-    try { const d = await call({ action: "ea_history" }); setMessages(d.messages ?? []); setPrefs(d.preferences ?? []); setCalendarWrite(d.calendarWrite !== false); } catch (e: any) { setMessages([]); toast.error(e.message); }
+    try { const d = await call({ action: "ea_history" }); setMessages(d.messages ?? []); setPrefs(d.preferences ?? []); setCalendarWrite(d.calendarWrite !== false); setCarried(d.carried ?? []); } catch (e: any) { setMessages([]); toast.error(e.message); }
   }, []);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { endRef.current?.scrollIntoView?.({ block: "end" }); }, [messages, busy]);
@@ -135,12 +137,14 @@ export function EaChat({ onChanged }: { onChanged?: () => void } = {}) {
 
   const decide = async (id: string, decision: "done" | "dismissed") => {
     setMessages((m) => (m ?? []).map((x) => ({ ...x, actions: x.actions.map((a) => (a.id === id ? { ...a, status: decision } : a)) })));
+    setCarried((c) => c.filter((a) => a.id !== id));
     try { await call({ action: "ea_decide", actionId: id, decision }); } catch { /* the link still worked; the status will catch up on reload */ }
   };
   const apply = async (id: string) => {
     try {
       const d = await call({ action: "ea_apply", actionId: id });
       setMessages((m) => (m ?? []).map((x) => ({ ...x, actions: x.actions.map((a) => (a.id === id ? { ...a, status: "done" as const } : a)) })));
+      setCarried((c) => c.filter((a) => a.id !== id));
       toast.success(d.invited?.length ? `Calendar updated. ${d.invited.join(", ")} invited.` : "Calendar updated.");
     } catch (e: any) { toast.error(e.message); }
   };
@@ -152,6 +156,12 @@ export function EaChat({ onChanged }: { onChanged?: () => void } = {}) {
       <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
         <div className="min-h-[14rem] flex-1 space-y-3 overflow-y-auto pr-1">
           {messages === null && <Loader2 className="h-4 w-4 animate-spin" />}
+          {carried.length > 0 && (
+            <div className="space-y-1.5 rounded-md border border-dashed p-2" data-testid="carried">
+              <p className="text-xs font-medium text-muted-foreground">Still open from earlier days ({carried.length})</p>
+              {carried.map((a) => <ActionCard key={a.id} a={a} onDecide={decide} onForget={forget} onApply={apply} calendarWrite={calendarWrite} />)}
+            </div>
+          )}
           {messages?.length === 0 && (
             <div className="space-y-2 text-sm text-muted-foreground">
               <p>Georgia goes through the briefing with you, and you tell her what to do. She sets tasks and reminders and looks things up. Anything that goes outside the firm she prepares for you to send.</p>

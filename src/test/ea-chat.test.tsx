@@ -122,3 +122,18 @@ describe("when applying a calendar change cannot work yet", () => {
     expect(await errorText(null, { error: "from data" })).toBe("from data");
   });
 });
+
+describe("drafts left over from an earlier day", () => {
+  it("shows them above today's conversation until he uses or dismisses them", async () => {
+    invoke.mockReset();
+    const old = { id: "c1", kind: "email_draft", status: "proposed", summary: "Email draft: Board meeting Friday", payload: { to: "events@pub.ca", subject: "Board meeting Friday", body: "Space?", url: "https://mail.google.com/mail/?view=cm" } };
+    invoke.mockImplementation(async (_f: string, { body }: any) => (body.action === "ea_history" ? { data: { messages: [], preferences: [], carried: [old] }, error: null } : { data: {}, error: null }));
+    render(<MemoryRouter><EaChat /></MemoryRouter>);
+    const box = await screen.findByTestId("carried");
+    expect(box.textContent).toContain("Still open from earlier days (1)");
+    expect(box.textContent).toContain("Board meeting Friday");
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("daily-briefing-generate", { body: { action: "ea_decide", actionId: "c1", decision: "dismissed" } }));
+    await waitFor(() => expect(screen.queryByTestId("carried")).toBeNull());
+  });
+});
