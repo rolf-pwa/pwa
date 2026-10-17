@@ -56,7 +56,7 @@ export interface BriefingSections {
   ia: { kind: "ia_notice" | "adobe_sign"; from: string; subject: string; link: string }[];
   texts: { label: string; contact: string | null; link: string }[];
   firm: { label: string; link: string }[];
-  counts: { spam: number; promo: number; automated: number; adminTotal: number };
+  counts: { spam: number; promo: number; automated: number; adminTotal: number; muted?: number };
 }
 
 export const emptySections = (): BriefingSections => ({ schedule: [], week: [], replies: [], ia: [], texts: [], firm: [], counts: { spam: 0, promo: 0, automated: 0, adminTotal: 0 } });

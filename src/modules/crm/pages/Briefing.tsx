@@ -9,6 +9,7 @@ import { supabase } from "@/shared/integrations/supabase/client";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { toast } from "sonner";
 import { clock, dayLabel, type DailyBriefing } from "../lib/briefing";
+import { EaChat } from "../components/EaChat";
 
 const todayPacific = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Vancouver" }).format(new Date());
 
@@ -56,12 +57,14 @@ export default function Briefing() {
   const s = b?.sections ?? null;
   return (
     <AppLayout>
-      <div className="mx-auto max-w-5xl space-y-5 py-6">
+      <div className="mx-auto max-w-7xl space-y-5 py-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-center gap-2"><Sparkles className="h-6 w-6 text-accent" /><h1 className="font-serif text-2xl font-semibold">Today</h1></div>
           <Button variant="outline" size="sm" onClick={regenerate} disabled={busy}>{busy ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-2 h-3.5 w-3.5" />}{b ? "Regenerate" : "Generate now"}</Button>
         </div>
 
+        <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_26rem]">
+        <div className="min-w-0 space-y-5">
         {loading && <Loader2 className="h-5 w-5 animate-spin" />}
         {!loading && !b && <Card><CardContent className="p-5 text-sm text-muted-foreground">No briefing yet today. Georgia prepares it at 5:30 a.m. Pacific; you can also generate it now.</CardContent></Card>}
         {b?.generation_status === "generating" && <p className="text-sm text-muted-foreground">Georgia is preparing the briefing…</p>}
@@ -137,11 +140,14 @@ export default function Briefing() {
             )}
 
             {s && (s.counts.spam > 0 || s.counts.promo > 0 || (s.counts.automated ?? 0) > 0) && (
-              <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5" />Left out: {s.counts.spam} likely spam, {s.counts.promo} newsletters and promotions, and {s.counts.automated ?? 0} automated notices. Nothing was deleted.</p>
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5" />Left out: {s.counts.spam} likely spam, {s.counts.promo} newsletters and promotions, {s.counts.automated ?? 0} automated notices{s.counts.muted ? `, and ${s.counts.muted} from senders you asked me to stop showing` : ""}. Nothing was deleted.</p>
             )}
             {b.generated_at && <p className="text-[11px] text-muted-foreground">Prepared {new Date(b.generated_at).toLocaleString("en-CA", { timeZone: "America/Vancouver", weekday: "short", hour: "numeric", minute: "2-digit" })} Pacific. Georgia only reads; she has not sent or changed anything.</p>}
           </>
         )}
+        </div>
+        <div className="xl:sticky xl:top-4"><EaChat /></div>
+        </div>
       </div>
     </AppLayout>
   );
