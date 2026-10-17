@@ -200,9 +200,10 @@ Deno.serve(async (req) => {
     }
     // ── One-time catch-up: bring existing households into the Drive Vault structure (idempotent; creates folders only) ──
     if (action === "vaultCatchUp") {
-      const { data: hhs } = await db.from("households").select("id, label, service_tier, relationship_ended_at, vault_root_folder_id, vault_folder_id, families(name)");
+      const { data: hhs } = await db.from("households").select("id, label, family_id, service_tier, relationship_ended_at, vault_root_folder_id, vault_folder_id, families(name, vfo_enabled)");
+      const { data: fams } = await db.from("families").select("id, name, vfo_enabled, vault_root_folder_id");
       const { data: people } = await db.from("contacts").select("household_id, family_role, is_minor, personal_vault_folder_id").not("household_id", "is", null);
-      const plan = planVaultCatchUp((hhs ?? []).map((h: any) => ({ id: h.id, label: h.label, familyName: h.families?.name ?? null, serviceTier: h.service_tier, relationshipEnded: !!h.relationship_ended_at, vaultRoot: h.vault_root_folder_id, vaultFolder: h.vault_folder_id })), (people ?? []).map((p: any) => ({ householdId: p.household_id, role: p.family_role, isMinor: p.is_minor, personalDrawer: p.personal_vault_folder_id })));
+      const plan = planVaultCatchUp((hhs ?? []).map((h: any) => ({ id: h.id, label: h.label, familyName: h.families?.name ?? null, familyId: h.family_id, vfo: !!h.families?.vfo_enabled, serviceTier: h.service_tier, relationshipEnded: !!h.relationship_ended_at, vaultRoot: h.vault_root_folder_id, vaultFolder: h.vault_folder_id })), (people ?? []).map((p: any) => ({ householdId: p.household_id, role: p.family_role, isMinor: p.is_minor, personalDrawer: p.personal_vault_folder_id })), (fams ?? []).map((f: any) => ({ id: f.id, name: f.name, vfo: !!f.vfo_enabled, vaultRoot: f.vault_root_folder_id })));
       if (body?.dryRun !== false) return json({ plan });
       // One household per call for a new Vault (each builds dozens of Drive folders, and a request has a time limit). The page calls again until nothing is left.
       const done: { name: string; kind: string; ok: boolean; detail: string }[] = [];
@@ -235,7 +236,17 @@ Deno.serve(async (req) => {
           } catch (e) { done.push({ name: h.name, kind: "Older Vault", ok: false, detail: e instanceof Error ? e.message : String(e) }); }
         }
       }
-      if (!plan.provision.length && !plan.legacy.length) {
+      if (!plan.provision.length && !plan.legacy.length && plan.familyVaults.length) {
+        // The Family Vault of a VFO family: made by vault-service's own action, called with the staff member's sign-in.
+        for (const f of plan.familyVaults.slice(0, 1)) {
+          try {
+            const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/vault-service`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: req.headers.get("Authorization") ?? "", apikey: Deno.env.get("SUPABASE_ANON_KEY") ?? "" }, body: JSON.stringify({ action: "provisionFamilyVault", familyId: f.id }) });
+            const j = await r.json().catch(() => ({}));
+            done.push({ name: f.name, kind: "Family Vault", ok: r.ok, detail: r.ok ? "Family Vault created" : String(j?.detail ?? j?.error ?? `HTTP ${r.status}`) });
+          } catch (e) { done.push({ name: f.name, kind: "Family Vault", ok: false, detail: e instanceof Error ? e.message : String(e) }); }
+        }
+      }
+      if (!plan.provision.length && !plan.legacy.length && !plan.familyVaults.length) {
         const token = plan.drawers.length ? await getServiceGoogleAccessToken(db) : "";
         for (const h of plan.drawers.slice(0, 4)) {
           try { const n = await ensurePersonalDrawers(db, h.id, token, "vault_catchup"); done.push({ name: h.name, kind: "Drawers", ok: true, detail: `${n} personal drawer${n === 1 ? "" : "s"} created` }); }
