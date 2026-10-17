@@ -48,6 +48,19 @@ describe("the email lists in the briefing", () => {
     ], 4);
     expect(s.replies.map((r) => r.subject)).toEqual(["RRSP question"]);
     expect(s.ia.map((i) => i.kind)).toEqual(["ia_notice", "adobe_sign"]);
-    expect(s.counts).toEqual({ spam: 1, promo: 1, adminTotal: 4 });
+    expect(s.counts).toEqual({ spam: 1, promo: 1, automated: 0, adminTotal: 4 });
+  });
+});
+
+describe("newsletters and automated mail", () => {
+  it("treats marketing mail as a promotion even from iA, but keeps Adobe Sign", () => {
+    expect(classifyEmail({ from: "iA Financial Group <web@mail-corpo.ia.ca>", subject: "Stay in step with the economy!", bulk: true })).toBe("promo");
+    expect(classifyEmail({ from: "Adobe Sign <adobesign@adobesign.com>", subject: "Signature requested", bulk: true })).toBe("adobe_sign");
+    expect(classifyEmail({ from: "iA Financial Group <noreply@inalco.com>", subject: "Business Tracker update" })).toBe("ia_notice");
+  });
+  it("leaves automated notices out of the replies list", () => {
+    expect(classifyEmail({ from: "Venn <no-reply@venn.ca>", subject: "Funds have landed" })).toBe("automated");
+    expect(classifyEmail({ from: "Dext <no-reply@notifications.app.dext.com>", subject: "Summary of account activity" })).toBe("automated");
+    expect(classifyEmail({ from: "Jane Client <jane@gmail.com>", subject: "Question" })).toBe("other");
   });
 });

@@ -12,7 +12,7 @@ const briefing = {
     schedule: [{ start: "2026-10-19T17:00:00Z", end: "2026-10-19T18:00:00Z", allDay: false, summary: "Client A", link: null, conflict: true }],
     week: [{ date: "2026-10-23", items: [{ start: "2026-10-23T22:00:00Z", allDay: false, summary: "Board Meeting", link: null }] }],
     replies: [{ from: "Jane <jane@x.ca>", subject: "RRSP question", link: "https://mail/1" }], ia: [{ kind: "ia_notice", from: "iA", subject: "Business Tracker update", link: "https://mail/2" }],
-    texts: [{ label: "Can you call me?", contact: "Sam Smith", link: "/inbox" }], firm: [{ label: "Glanz: rebalancing handed to you", link: "/review-agent" }], counts: { spam: 3, promo: 2, adminTotal: 6 },
+    texts: [{ label: "Can you call me?", contact: "Sam Smith", link: "/inbox" }], firm: [{ label: "Glanz: rebalancing handed to you", link: "/review-agent" }], counts: { spam: 3, promo: 2, automated: 4, adminTotal: 6 },
   },
 };
 vi.mock("@/shared/integrations/supabase/client", () => ({ supabase: { from: () => ({ select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: briefing }) }) }) }) }), functions: { invoke: vi.fn() } } }));
@@ -35,7 +35,7 @@ describe("the morning briefing page", () => {
   });
   it("says what was left out, and that nothing was changed", async () => {
     render(<MemoryRouter><Briefing /></MemoryRouter>);
-    expect(await screen.findByText(/3 likely spam and 2 promotions/)).toBeTruthy();
+    expect(await screen.findByText(/3 likely spam, 2 newsletters and promotions, and 4 automated notices/)).toBeTruthy();
     expect(screen.getByText(/Nothing was deleted/)).toBeTruthy();
     expect(screen.getByText(/only reads/)).toBeTruthy();
   });

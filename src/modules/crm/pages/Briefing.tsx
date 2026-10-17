@@ -136,8 +136,8 @@ export default function Briefing() {
               </div>
             )}
 
-            {s && (s.counts.spam > 0 || s.counts.promo > 0) && (
-              <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5" />Left out: {s.counts.spam} likely spam and {s.counts.promo} promotions. Nothing was deleted.</p>
+            {s && (s.counts.spam > 0 || s.counts.promo > 0 || (s.counts.automated ?? 0) > 0) && (
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5" />Left out: {s.counts.spam} likely spam, {s.counts.promo} newsletters and promotions, and {s.counts.automated ?? 0} automated notices. Nothing was deleted.</p>
             )}
             {b.generated_at && <p className="text-[11px] text-muted-foreground">Prepared {new Date(b.generated_at).toLocaleString("en-CA", { timeZone: "America/Vancouver", weekday: "short", hour: "numeric", minute: "2-digit" })} Pacific. Georgia only reads; she has not sent or changed anything.</p>}
           </>
