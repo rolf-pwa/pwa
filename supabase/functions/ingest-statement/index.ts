@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { matchStatementAccount } from "../_shared/statement-match.ts";
 import { GEMINI_EXTRACT_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
 
 const ALLOWED_ORIGINS = [
@@ -214,42 +215,42 @@ Guidelines:
       .from("storehouses")
       .select("id, label, asset_type, book_value, current_value")
       .eq("contact_id", contactId);
-
-    const vineyardByNumber = new Map((existingVineyard || [])
-      .filter((item) => item.account_number)
-      .map((item) => [normalizeAccountToken(item.account_number), item]));
-    const vineyardByName = new Map((existingVineyard || []).map((item) => [normalizeAccountToken(item.account_name), item]));
     // Accounts still waiting in the Holding Tank: a new statement for one of them updates it, never adds a second copy.
     const { data: existingTank } = await adminClient
       .from("holding_tank")
-      .select("id, account_number")
+      .select("id, account_name, account_number")
       .eq("contact_id", contactId)
       .neq("status", "moved");
-    const tankByNumber = new Map((existingTank || [])
-      .filter((item) => item.account_number)
-      .map((item) => [normalizeAccountToken(item.account_number), item]));
-    const storehouseByName = new Map((existingStorehouses || []).flatMap((item) => {
-      const tokens = [item.label, item.asset_type].filter(Boolean).map((value) => normalizeAccountToken(value));
-      return tokens.map((token) => [token, item] as const);
-    }));
+    // Accounts already moved out of the Holding Tank into a Vineyard or Storehouse: a statement for one is never added again.
+    const { data: movedTank } = await adminClient
+      .from("holding_tank")
+      .select("account_number")
+      .eq("contact_id", contactId)
+      .eq("status", "moved");
+    const matchContext = {
+      vineyard: (existingVineyard || []) as any[], storehouses: (existingStorehouses || []) as any[], tank: (existingTank || []) as any[],
+      movedNumbers: (movedTank || []).map((m: any) => m.account_number).filter(Boolean) as string[],
+    };
+    // The latest value date held for each account: an older statement never overwrites a newer value.
+    const { data: heldSnaps } = await adminClient.from("account_harvest_snapshots").select("vineyard_account_id, storehouse_id, snapshot_date").eq("contact_id", contactId);
+    const heldDate = (col: "vineyard_account_id" | "storehouse_id", id: string) => (heldSnaps || []).filter((s: any) => s[col] === id).reduce((m: string, s: any) => (s.snapshot_date > m ? s.snapshot_date : m), "");
 
     let snapshotUpdates = 0;
     const unmatchedAccounts = [];
+    const skippedAccounts: { name: string; reason: string }[] = [];
 
     // Insert extracted accounts into the Holding Tank and/or tracking snapshots
     const insertedAccounts = [];
     for (const account of parsed.accounts || []) {
-      const normalizedNumber = normalizeAccountToken(account.account_number);
-      const normalizedName = normalizeAccountToken(account.account_name);
-      const matchedVineyard = (normalizedNumber && vineyardByNumber.get(normalizedNumber)) || vineyardByName.get(normalizedName);
-      const matchedStorehouse = storehouseByName.get(normalizedName);
-      const matchedAccount = matchedVineyard || matchedStorehouse;
+      const match = matchStatementAccount(account, matchContext);
+      if (match.kind === "skip") { skippedAccounts.push({ name: account.account_name ?? account.account_number ?? "account", reason: match.reason }); continue; }
+      const matchedAccount = match.kind === "vineyard" || match.kind === "storehouse" ? match.row : null;
       const boyValue = account.book_value ?? 0;
       const currentValue = account.current_value ?? 0;
       const currentHarvest = account.current_harvest ?? (currentValue - boyValue);
 
       if (matchedAccount) {
-        const isVineyard = "account_name" in matchedAccount;
+        const isVineyard = match.kind === "vineyard";
         const idColumn = isVineyard ? "vineyard_account_id" : "storehouse_id";
         const sourceTable = isVineyard ? "vineyard_accounts" : "storehouses";
 
@@ -279,15 +280,17 @@ Guidelines:
         const { error: snapshotErr } = await snapshotQuery;
         if (!snapshotErr) {
           snapshotUpdates += 1;
+          // A statement older than the account's latest value only updates the start-of-year figure.
+          const stale = heldDate(isVineyard ? "vineyard_account_id" : "storehouse_id", matchedAccount.id) > snapshotDate;
           await adminClient
             .from(sourceTable)
-            .update({ book_value: boyValue, current_value: currentValue })
+            .update(stale ? { book_value: boyValue } : { book_value: boyValue, current_value: currentValue })
             .eq("id", matchedAccount.id);
           continue;
         }
       }
 
-      const matchedTank = normalizedNumber ? tankByNumber.get(normalizedNumber) : undefined;
+      const matchedTank = match.kind === "tank" ? match.row : undefined;
       if (matchedTank) {
         const { data: tankSnapshot } = await adminClient
           .from("account_harvest_snapshots")
@@ -340,6 +343,7 @@ Guidelines:
         holding_tank_ids: insertedAccounts.map((a: any) => a.id),
         harvest_snapshot_updates: snapshotUpdates,
         unmatched_accounts: unmatchedAccounts,
+        skipped_accounts: skippedAccounts,
         summary: parsed.summary,
         missing_fields: parsed.missing_fields || [],
       },
@@ -354,6 +358,7 @@ Guidelines:
         accountsInserted: insertedAccounts.length,
         harvestSnapshotsUpdated: snapshotUpdates,
         unmatchedAccounts,
+        skippedAccounts,
         missingFields: parsed.missing_fields || [],
         summary: parsed.summary,
       }),
