@@ -3,7 +3,7 @@
 
 // deno-lint-ignore-file no-explicit-any
 import {
-  buildContextBlock, calendarTemplateUrl, defaultHouseholdLabel, extractAddresses, gmailComposeUrl, isIsoDate, normalizeMembers, runAgentTurn, SYSTEM_PROMPT, TOOL_DECLARATIONS,
+  buildContextBlock, buildEarlierBlock, calendarTemplateUrl, defaultHouseholdLabel, extractAddresses, gmailComposeUrl, isIsoDate, normalizeMembers, runAgentTurn, SYSTEM_PROMPT, TOOL_DECLARATIONS,
   type Content, type Part, type ToolOutcome,
 } from "./ea-agent.ts";
 import { fetchWithVertexRetry, getGcpAccessToken, GEMINI_DRAFTING_MODEL, parseServiceAccountKey, vertexModelUrl, withThinking, type ServiceAccountKey } from "./vertex-ai.ts";
@@ -35,6 +35,14 @@ async function searchMail(token: string, q: string, max: number) {
   return rows.filter(Boolean) as { from: string; to: string; cc: string; subject: string; date: string; snippet: string }[];
 }
 
+const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+
+/** Proposals from earlier days that Rolf has neither used nor dismissed (the last week), so they are not lost when the day changes. */
+async function carriedOver(db: any, userId: string, today: string): Promise<EaAction[]> {
+  const { data } = await db.from("ea_actions").select("id, kind, status, summary, payload, message_id, conversation_date").eq("staff_user_id", userId).eq("status", "proposed").lt("conversation_date", today).gte("conversation_date", addDays(today, -7)).order("created_at", { ascending: true }).limit(20);
+  return (data ?? []) as EaAction[];
+}
+
 export interface EaAction { id: string; kind: string; status: string; summary: string; payload: Record<string, unknown>; message_id: string | null }
 export interface EaMessage { id: string; role: "user" | "assistant"; content: string; created_at: string; actions: EaAction[] }
 
@@ -49,7 +57,7 @@ export async function eaHistory(db: any, userId: string) {
   ]);
   const byMsg = new Map<string, EaAction[]>();
   for (const a of (acts ?? []) as EaAction[]) if (a.message_id) byMsg.set(a.message_id, [...(byMsg.get(a.message_id) ?? []), a]);
-  return { date, messages: ((msgs ?? []) as any[]).map((m) => ({ ...m, actions: byMsg.get(m.id) ?? [] })) as EaMessage[], preferences: prefs ?? [], calendarWrite: ((tok?.scopes ?? []) as string[]).includes("https://www.googleapis.com/auth/calendar.events") };
+  return { date, messages: ((msgs ?? []) as any[]).map((m) => ({ ...m, actions: byMsg.get(m.id) ?? [] })) as EaMessage[], preferences: prefs ?? [], carried: await carriedOver(db, userId, date), calendarWrite: ((tok?.scopes ?? []) as string[]).includes("https://www.googleapis.com/auth/calendar.events") };
 }
 
 /** Rolf's decision on a proposal: he used it ("done") or put it aside ("dismissed"). Georgia never acts on one herself. */
@@ -115,12 +123,30 @@ async function groundedSearch(sa: ServiceAccountKey, query: string) {
   return { answer, sources };
 }
 
+async function earlierRecord(db: any, userId: string, today: string): Promise<string> {
+  const from = addDays(today, -5);
+  const [{ data: msgs }, { data: acts }] = await Promise.all([
+    db.from("ea_messages").select("role, content, conversation_date, created_at").eq("staff_user_id", userId).gte("conversation_date", from).lt("conversation_date", today).order("created_at", { ascending: true }).limit(300),
+    db.from("ea_actions").select("kind, status, summary, conversation_date").eq("staff_user_id", userId).gte("conversation_date", from).lt("conversation_date", today).order("created_at", { ascending: true }).limit(300),
+  ]);
+  const days = new Map<string, { date: string; said: string[]; did: { kind: string; status: string; summary: string }[]; closing: string | null }>();
+  const day = (d: string) => days.get(d) ?? (days.set(d, { date: d, said: [], did: [], closing: null }), days.get(d)!);
+  for (const m of (msgs ?? []) as any[]) { const d = day(m.conversation_date); if (m.role === "user") d.said.push(m.content); else d.closing = m.content; }
+  for (const a of (acts ?? []) as any[]) {
+    // Looking things up is not worth recording; what she changed or prepared is.
+    if (["calendar_checked", "email_searched", "research"].includes(a.kind)) continue;
+    day(a.conversation_date).did.push({ kind: a.kind, status: a.status, summary: a.summary });
+  }
+  const open = (await carriedOver(db, userId, today)).map((a: any) => ({ summary: a.summary, date: a.conversation_date }));
+  return buildEarlierBlock([...days.values()], open);
+}
+
 /** One turn: Rolf says something (or the meeting starts); Georgia answers, using tools. */
 export async function eaChat(db: any, userId: string, text: string, start: boolean) {
   const date = pacificDate();
   const { count } = await db.from("ea_messages").select("id", { count: "exact", head: true }).eq("staff_user_id", userId).eq("conversation_date", date);
   if ((count ?? 0) >= DAILY_MESSAGE_CAP) throw new Error("That is a lot of messages for one day. Start again tomorrow.");
-  const userText = start ? "(The morning meeting is starting. Open it: say good morning, give me the shape of the day in a few lines, name the one or two things you most need a decision on, and ask what I want to start with.)" : String(text ?? "").trim().slice(0, 4000);
+  const userText = start ? "(The morning meeting is starting. Open it: say good morning, give me the shape of the day in a few lines, then one line on what is still open from earlier days if anything is, name the one or two things you most need a decision on, and ask what I want to start with.)" : String(text ?? "").trim().slice(0, 4000);
   if (!userText) throw new Error("Say something first.");
 
   const { data: prior } = await db.from("ea_messages").select("role, content").eq("staff_user_id", userId).eq("conversation_date", date).order("created_at", { ascending: true }).limit(40);
@@ -128,12 +154,14 @@ export async function eaChat(db: any, userId: string, text: string, start: boole
 
   // What he has already dealt with since the briefing was made comes off it first, so she works from the day as it is now.
   await refreshBriefing(db, userId, date).catch(() => null);
+  // The last few days' meetings, so the thread continues from day to day.
+  const earlier = await earlierRecord(db, userId, date);
   const [briefing, { data: tasks }, { data: prefs }] = await Promise.all([
     briefingText(db, userId, date),
     db.from("pm_tasks").select("id, title, due_date").eq("assignee_id", userId).neq("status", "done").order("due_date", { ascending: true, nullsFirst: false }).limit(25),
     db.from("ea_preferences").select("kind, value").eq("staff_user_id", userId).eq("active", true),
   ]);
-  const system = `${SYSTEM_PROMPT}\n\n${buildContextBlock({ nowLabel: nowLabel(), briefing, tasks: ((tasks ?? []) as any[]).map((t) => ({ id: t.id, title: t.title, due: t.due_date })), preferences: ((prefs ?? []) as any[]).map((p) => (p.kind === "mute_sender" ? `Do not show mail from: ${p.value}` : p.value)) })}`;
+  const system = `${SYSTEM_PROMPT}\n\n${buildContextBlock({ nowLabel: nowLabel(), briefing, tasks: ((tasks ?? []) as any[]).map((t) => ({ id: t.id, title: t.title, due: t.due_date })), preferences: ((prefs ?? []) as any[]).map((p) => (p.kind === "mute_sender" ? `Do not show mail from: ${p.value}` : p.value)), earlier })}`;
   const history: Content[] = ((prior ?? []) as any[]).map((m) => ({ role: m.role === "user" ? "user" : "model", parts: [{ text: m.content }] }));
   // The model's first turn must be the user's: the opening of the meeting is Georgia's own, so give it a stand-in.
   if (history.length && history[0].role === "model") history.unshift({ role: "user", parts: [{ text: "(The morning meeting has started.)" }] });
