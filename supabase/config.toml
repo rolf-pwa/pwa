@@ -196,3 +196,6 @@ verify_jwt = false
 
 [functions.portal-rebalance]
 verify_jwt = false
+
+[functions.bulk-import-performance]
+verify_jwt = false
