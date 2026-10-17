@@ -830,7 +830,7 @@ Deno.serve(async (req) => {
   };
 
   try {
-    const result = await runFullAudit(admin(), householdId, auth.userId, options);
+    const result = await runFullAudit(admin(), householdId, (auth as { userId: string }).userId, options);
     return json(result);
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);

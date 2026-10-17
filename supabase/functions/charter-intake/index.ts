@@ -472,7 +472,8 @@ Deno.serve(async (req) => {
   try {
     const auth = await requireStaff(req);
     if (auth.error) return json({ ok: false, error: auth.error }, 401);
-    const userId = auth.userId;
+    // `error` can be an empty string, so the check above does not narrow the type; the staff check guarantees a user id here.
+    const userId = (auth as { userId: string }).userId;
 
     const db = admin();
     const body = await req.json().catch(() => ({}));

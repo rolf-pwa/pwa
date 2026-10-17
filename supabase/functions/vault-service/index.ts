@@ -2205,7 +2205,7 @@ serve(async (req) => {
           out.push({
             kind: d.kind, rootId: d.rootId, name: await metaName(d.rootId), capability: cap, canShare: mayShareFromDrawer(d.kind, cap as any),
             label: d.kind === "household" ? HOUSEHOLD_DOCS : d.kind === "family" ? FAMILY_DOCS_LABEL : d.kind === "entity" ? (entityNames.get(d.entityId ?? "") ?? "Corporate Docs") : PERSONAL_DOCS,
-            ...(d.kind === "entity" ? { entityId: d.entityId } : {}),
+            ...(d.kind === "entity" ? { entityId: d.entityId ?? undefined } : {}),
           });
         }
         return new Response(JSON.stringify({ drawers: out }), { headers: { ...cors, "Content-Type": "application/json" } });
