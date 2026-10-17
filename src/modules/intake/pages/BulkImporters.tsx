@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import * as XLSX from "xlsx";
+import { parsePerformanceGrid } from "../../../../supabase/functions/_shared/performance-file-parse";
 import { AppLayout } from "@/shared/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/shared/components/ui/tabs";
@@ -123,26 +124,6 @@ function RegistryImporter() {
 
 /* ------------------------- PERFORMANCE IMPORTER ------------------------- */
 
-const HEADER_MAP: Record<string, keyof any> = {
-  "last name": "last_name",
-  "first name": "first_name",
-  "contract number": "contract",
-  "product": "product",
-  "type of registration": "registration",
-  "account type": "registration",
-  "account number": "contract",
-  "custodian": "custodian",
-  "issue date": "issue_date",
-  "begining of the year": "boy_value",
-  "beginning of the year": "boy_value",
-  "%": "variation_pct",
-  "$": "variation_dollar",
-  "year-to-date": "ror_ytd",
-  "6 months": "ror_6m",
-  "1 year": "ror_1y",
-  "3 years": "ror_3y",
-  "5 years": "ror_5y",
-};
 
 /** After the monthly import: Georgia tells each person their balances are updated (portal notification + email, no figures). */
 function BalanceNoticeCard({ snapshotDate }: { snapshotDate: string }) {
@@ -205,8 +186,67 @@ function BalanceNoticeCard({ snapshotDate }: { snapshotDate: string }) {
   );
 }
 
+/** Georgia's monthly imports: what she prepared from the Drive folder, what has been committed, and undo for a bad month. */
+function MonthlyImportRuns({ onLoad }: { onLoad: (runId: string) => void }) {
+  const [runs, setRuns] = useState<any[] | null>(null);
+  const [config, setConfig] = useState<any>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    const { data, error } = await supabase.functions.invoke("bulk-import-performance", { body: { action: "runs" } });
+    if (error || data?.error) { setRuns([]); return; }
+    setRuns(data.runs ?? []); setConfig(data.config ?? null);
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+  const undo = async (r: any) => {
+    if (!window.confirm(`Undo the ${r.snapshot_date} import? Balances and snapshots it wrote go back to what they were before.`)) return;
+    setBusy(r.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("bulk-import-performance", { body: { action: "undo", runId: r.id } });
+      if (error || data?.error) throw new Error(data?.error || error?.message);
+      toast.success(`Undone: ${data.result.accounts_restored} balances restored, ${data.result.snapshots_removed} snapshots removed.`);
+      await load();
+    } catch (e: any) { toast.error(e.message || "Couldn't undo"); } finally { setBusy(null); }
+  };
+  const STATUS: Record<string, string> = { ready: "Ready for you", held: "Held: needs a look", committed: "Committed", undone: "Undone", error: "Could not read" };
+  return (
+    <Card data-testid="monthly-import-runs">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg">Georgia's monthly imports</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Drop each month's performance file in the Georgia - Monthly Imports folder in Drive{config?.drive_folder_id ? <> (<a className="underline" href={`https://drive.google.com/drive/folders/${config.drive_folder_id}`} target="_blank" rel="noopener noreferrer">open it</a>)</> : null}. She reads it, runs the preview and tells you what needs you.
+          {config ? ` Mode: ${config.mode === "auto" ? "she commits the routine rows of a clean file herself" : config.mode === "prepare" ? "she prepares it and you commit" : "off"}.` : ""}
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-2 text-sm">
+        {runs === null && <Loader2 className="h-4 w-4 animate-spin" />}
+        {runs !== null && runs.length === 0 && <p className="text-muted-foreground">No imports yet.</p>}
+        {(runs ?? []).map((r) => (
+          <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-border py-2 last:border-0">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium">{r.snapshot_date}</span>
+                <Badge variant={r.status === "ready" ? "default" : r.status === "committed" ? "secondary" : "outline"} className="text-[10px]">{STATUS[r.status] ?? r.status}</Badge>
+                <span className="truncate text-xs text-muted-foreground">{r.file_name ?? "uploaded by hand"}{r.source === "georgia" ? " · Georgia" : ""}</span>
+              </div>
+              {r.summary?.total_rows ? <p className="text-xs text-muted-foreground">{r.summary.total_rows} accounts{r.summary.routine != null ? ` · ${r.summary.routine} routine · ${r.summary.exceptions ?? 0} large moves · ${r.summary.new_accounts ?? 0} new · ${r.summary.missing ?? 0} missing` : ""}</p> : null}
+              {(r.checks ?? []).length > 0 && <ul className="mt-0.5 list-disc pl-4 text-xs text-amber-800">{r.checks.map((c: string, i: number) => <li key={i}>{c}</li>)}</ul>}
+            </div>
+            <div className="flex gap-2">
+              {(r.status === "ready" || r.status === "held") && r.source === "georgia" && <Button size="sm" onClick={() => onLoad(r.id)}>Load into the importer</Button>}
+              {r.status === "committed" && <Button size="sm" variant="outline" disabled={busy === r.id} onClick={() => undo(r)}>{busy === r.id ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}Undo</Button>}
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 function PerformanceImporter() {
   const [file, setFile] = useState<File | null>(null);
+  // The prepared run (Georgia's file) being worked on, so the commit is logged against it.
+  const [runId, setRunId] = useState<string | null>(null);
+  const [runFileName, setRunFileName] = useState<string | null>(null);
   const [snapshotDate, setSnapshotDate] = useState<string>("");
   const [rows, setRows] = useState<any[]>([]);
   const [report, setReport] = useState<any>(null);
@@ -215,53 +255,28 @@ function PerformanceImporter() {
   // Contract numbers of exceptions (big moves) that you have approved for this import.
   const [approved, setApproved] = useState<Set<string>>(new Set());
 
+  // Georgia's prepared file: load its rows straight into this importer, then preview, approve and commit as usual.
+  const loadPreparedRun = async (id: string) => {
+    const { data, error } = await supabase.functions.invoke("bulk-import-performance", { body: { action: "loadRun", runId: id } });
+    if (error || data?.error) { toast.error(data?.error || error?.message || "Couldn't load that file"); return; }
+    setFile(null); setReport(null); setCommitResult(null); setApproved(new Set());
+    setRows(data.run.rows ?? []); setSnapshotDate(data.run.snapshot_date); setRunId(data.run.id); setRunFileName(data.run.file_name);
+    toast.success(`Loaded ${data.run.file_name ?? "the file"}: ${(data.run.rows ?? []).length} rows. Run the preview.`);
+  };
+
   const parseFile = async (f: File) => {
     setFile(f);
+    setRunId(null); setRunFileName(null);
     setReport(null); setCommitResult(null); setRows([]); setApproved(new Set());
-    // Auto-detect date from filename: Tracking_Performance_YYYYMMDD_...
-    const dm = f.name.match(/(\d{4})(\d{2})(\d{2})/);
-    if (dm) setSnapshotDate(`${dm[1]}-${dm[2]}-${dm[3]}`);
-
     const buf = await f.arrayBuffer();
     const wb = XLSX.read(buf, { type: "array", cellDates: true });
     const sh = wb.Sheets[wb.SheetNames[0]];
     const grid = XLSX.utils.sheet_to_json<any[]>(sh, { header: 1, raw: true, defval: null });
-
-    // Find header row: row containing "Contract Number"
-    let headerIdx = -1;
-    for (let i = 0; i < Math.min(grid.length, 20); i++) {
-      const r = grid[i] || [];
-      if (r.some((c: any) => String(c || "").toLowerCase().includes("contract number"))) { headerIdx = i; break; }
-    }
-    if (headerIdx < 0) { toast.error("Couldn't find header row"); return; }
-    const headers = (grid[headerIdx] || []).map((c: any) => String(c || "").toLowerCase().trim());
-    // Detect "As of YYYY-MM-DD" column → current_value + snapshot date confirmation
-    const asOfIdx = headers.findIndex((h: string) => h.startsWith("as of"));
-    const asOfMatch = asOfIdx >= 0 ? headers[asOfIdx].match(/(\d{4})-(\d{2})-(\d{2})/) : null;
-    if (asOfMatch && !snapshotDate) setSnapshotDate(`${asOfMatch[1]}-${asOfMatch[2]}-${asOfMatch[3]}`);
-    // "Since Initial Purchase" var may have long name
-    const sinceIdx = headers.findIndex((h: string) => h.startsWith("since"));
-
-    const out: any[] = [];
-    for (let i = headerIdx + 1; i < grid.length; i++) {
-      const row = grid[i] || [];
-      if (!row.some((c: any) => c !== null && c !== "")) continue;
-      const obj: any = {};
-      headers.forEach((h: string, j: number) => {
-        const key = HEADER_MAP[h];
-        if (key) obj[key] = row[j];
-      });
-      if (asOfIdx >= 0) obj.current_value = row[asOfIdx];
-      if (sinceIdx >= 0) obj.ror_since_inception = row[sinceIdx];
-      const contract = String(obj.contract || "").trim();
-      if (!contract || !/^\d+$/.test(contract)) continue;
-      // Skip rows where BoY is text ("Information for this account not available")
-      if (typeof obj.boy_value === "string") obj.boy_value = null;
-      if (typeof obj.current_value === "string") obj.current_value = null;
-      // Convert issue_date if Date
-      if (obj.issue_date instanceof Date) obj.issue_date = obj.issue_date.toISOString().slice(0, 10);
-      out.push(obj);
-    }
+    // The same reader Georgia uses on the Drive folder: header row, balances, and the date from the file name or the "As of" column.
+    const parsed = parsePerformanceGrid(grid, f.name);
+    if (parsed.error) { toast.error(parsed.error); return; }
+    if (parsed.snapshotDate) setSnapshotDate(parsed.snapshotDate);
+    const out: any[] = parsed.rows;
     setRows(out);
     toast.success(`Parsed ${out.length} rows`);
   };
@@ -272,7 +287,7 @@ function PerformanceImporter() {
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("bulk-import-performance", {
-        body: { mode, snapshot_date: snapshotDate, rows, source_file: file?.name, approved_exceptions: [...approved] },
+        body: { mode, snapshot_date: snapshotDate, rows, source_file: file?.name ?? runFileName, approved_exceptions: [...approved], ...(runId ? { run_id: runId } : {}) },
       });
       if (error) throw error;
       if (data.error) throw new Error(data.error);
@@ -314,6 +329,7 @@ function PerformanceImporter() {
 
   return (
     <div className="space-y-4">
+      <MonthlyImportRuns onLoad={loadPreparedRun} />
       <Card>
         <CardHeader><CardTitle>Monthly Performance File (iA XLSX, plus JustWealth rows)</CardTitle></CardHeader>
         <CardContent className="space-y-4">
