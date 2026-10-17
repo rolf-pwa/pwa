@@ -3,8 +3,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { GEMINI_CLIENT_CHAT_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
 import { GEORGIA_CLIENT_PROMPT, PORTAL_TOOLS as TOOLS, cleanGeorgiaReply } from "../_shared/georgia-chat-config.ts";
 import { availability, buildSupportContext, cleanLabels, storableMessages } from "../_shared/support-context.ts";
-import { sendServiceEmail, escapeHtml } from "../_shared/service-email.ts";
-import { ADMIN_INBOX_EMAIL } from "../_shared/google-token.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -371,16 +369,6 @@ serve(async (req) => {
         contact_id: contactId,
         source_type: "ask_georgia_flag",
       });
-      if (flagged === "urgent") {
-        // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
-        EdgeRuntime.waitUntil(
-          sendServiceEmail(supabaseAdmin, {
-            to: ADMIN_INBOX_EMAIL,
-            subject: `URGENT from Ask Georgia: ${name}`,
-            html: `<p><strong>Georgia flagged this as urgent.</strong></p><p>${escapeHtml(summary)}</p><p>Open Ask Georgia under Agents in the CRM to read the whole conversation.</p>`,
-          }).catch((e: unknown) => console.error("[portal-assistant] urgent email failed", e)),
-        );
-      }
       if (!text) {
         text = flagged === "urgent"
           ? "I've alerted Rolf right away, and he will be in touch with you."
