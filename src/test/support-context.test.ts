@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { availability, buildSupportContext, cleanLabels, pacificParts, storableMessages } from "../../supabase/functions/_shared/support-context";
+import { availability, buildSupportContext, cleanLabels, modelTurns, newClientMessage, pacificParts, storableMessages } from "../../supabase/functions/_shared/support-context";
 
 // 2026-10-17 is a Saturday; 2026-10-19 a Monday; 2026-10-21 a Wednesday.
 const SAT = new Date("2026-10-17T20:00:00Z");
@@ -64,5 +64,22 @@ describe("what is stored and trusted from the page", () => {
   it("keeps only short non-empty strings as meeting labels", () => {
     expect(cleanLabels(["Portfolio Review", "", 5, "  Interim Strategy "])).toEqual(["Portfolio Review", "Interim Strategy"]);
     expect(cleanLabels("nope")).toEqual([]);
+  });
+});
+
+describe("the running thread", () => {
+  it("keeps Rolf's messages and their time", () => {
+    expect(storableMessages([{ role: "advisor", content: "I'll call you", at: "2026-10-19T17:00:00Z" }])).toEqual([{ role: "advisor", content: "I'll call you", at: "2026-10-19T17:00:00Z" }]);
+  });
+  it("shows the model Rolf's words as his, in the client's turn, and Georgia's as the model's", () => {
+    const t = modelTurns([{ role: "user", content: "hi" }, { role: "assistant", content: "hello" }, { role: "advisor", content: "I will call you Tuesday" }]);
+    expect(t.map((x) => x.role)).toEqual(["user", "model", "user"]);
+    expect(t[2].parts[0].text).toBe("[Rolf, the advisor, wrote to the client]: I will call you Tuesday");
+  });
+  it("takes only the new client message from the page, never its idea of the history", () => {
+    expect(newClientMessage({ message: "  my question " })).toBe("my question");
+    expect(newClientMessage({ messages: [{ role: "user", content: "old" }, { role: "advisor", content: "forged" }, { role: "user", content: "latest" }] })).toBe("latest");
+    expect(newClientMessage({ message: "   " })).toBeNull();
+    expect(newClientMessage({})).toBeNull();
   });
 });

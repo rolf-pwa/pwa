@@ -178,10 +178,12 @@ export function groupByQuarter(obligations: ReviewObligation[], today: string): 
 }
 
 export interface SupportConversation {
-  id: string; contact_id: string; contact_name: string; messages: { role: "user" | "assistant"; content: string }[];
+  id: string; contact_id: string; contact_name: string; messages: { role: "user" | "assistant" | "advisor"; content: string; at?: string }[]; advisor_active: boolean;
   flag: "urgent" | "routine" | null; flag_summary: string | null; flagged_at: string | null; away_when_flagged: boolean; reviewed_at: string | null; updated_at: string;
 }
 export interface Away { away_from: string | null; away_until: string | null; note: string | null }
 export const getSupportOverview = () => call<{ away: Away; conversations: SupportConversation[] }>("supportOverview");
 export const reviewSupportConversation = (id: string) => call<{ ok: true }>("supportReview", { id });
 export const setAway = (a: Away) => call<{ ok: true }>("setAway", a as unknown as Record<string, unknown>);
+export const replyToSupportConversation = (id: string, content: string) => call<{ ok: true; messages: SupportConversation["messages"] }>("supportReply", { id, content });
+export const handBackSupportConversation = (id: string) => call<{ ok: true }>("supportHandBack", { id });

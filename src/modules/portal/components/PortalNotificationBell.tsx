@@ -55,6 +55,7 @@ const SOURCE_ICONS: Record<string, string> = {
   task_completed: "✅",
   task_reopened: "🔄",
   task_updated: "📋",
+  ask_georgia_reply: "💬",
 };
 
 interface Props {
@@ -63,9 +64,10 @@ interface Props {
   portalToken: string;
   onNavigateToRequests: () => void;
   onNavigateToTasks?: () => void;
+  onOpenGeorgia?: () => void;
 }
 
-export function PortalNotificationBell({ requests, contactId, portalToken, onNavigateToRequests, onNavigateToTasks }: Props) {
+export function PortalNotificationBell({ requests, contactId, portalToken, onNavigateToRequests, onNavigateToTasks, onOpenGeorgia }: Props) {
   const [open, setOpen] = useState(false);
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
   const [clientNotifs, setClientNotifs] = useState<ClientNotification[]>([]);
@@ -119,6 +121,7 @@ export function PortalNotificationBell({ requests, contactId, portalToken, onNav
       created_at: n.created_at,
       kind: "task" as const,
       linkTab: n.link_tab,
+      sourceType: n.source_type,
     })),
   ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
@@ -162,7 +165,8 @@ export function PortalNotificationBell({ requests, contactId, portalToken, onNav
       });
       setClientNotifs((prev) => prev.filter((n) => n.id !== notif.id));
       setOpen(false);
-      if (onNavigateToTasks) onNavigateToTasks();
+      if ((notif as { sourceType?: string }).sourceType === "ask_georgia_reply" && onOpenGeorgia) onOpenGeorgia();
+      else if (onNavigateToTasks) onNavigateToTasks();
     }
   };
 
