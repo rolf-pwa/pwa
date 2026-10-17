@@ -45,6 +45,7 @@ function Conversation({ c, onChanged }: { c: SupportConversation; onChanged: () 
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const waiting = !!c.flag && !c.reviewed_at;
+  const send = () => run(async () => { await replyToSupportConversation(c.id, draft.trim()); setDraft(""); }, "Sent. Georgia holds her answers in this thread until you hand it back.");
   const run = async (fn: () => Promise<unknown>, ok?: string) => {
     setBusy(true);
     try { await fn(); if (ok) toast.success(ok); onChanged(); } catch (e: any) { toast.error(e?.message ?? "Couldn't update"); } finally { setBusy(false); }
@@ -68,9 +69,19 @@ function Conversation({ c, onChanged }: { c: SupportConversation; onChanged: () 
             {c.messages.map((m, i) => <p key={i}><span className="font-medium">{m.role === "user" ? "Client" : m.role === "advisor" ? "You" : "Georgia"}: </span>{m.content}</p>)}
           </div>
           <div className="space-y-2">
-            <Textarea value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Reply to the client in their Ask Georgia thread" rows={3} maxLength={4000} />
+            <Textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                // Return sends; Shift+Return adds a line. Not while an input method is composing, or while a send is under way.
+                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (draft.trim() && !busy) void send(); }
+              }}
+              placeholder="Reply to the client in their Ask Georgia thread. Return sends, Shift+Return adds a line."
+              rows={3}
+              maxLength={4000}
+            />
             <div className="flex flex-wrap items-center gap-2">
-              <Button size="sm" disabled={busy || !draft.trim()} onClick={() => run(async () => { await replyToSupportConversation(c.id, draft.trim()); setDraft(""); }, "Sent. Georgia holds her answers in this thread until you hand it back.")}>Send reply</Button>
+              <Button size="sm" disabled={busy || !draft.trim()} onClick={() => void send()}>Send reply</Button>
               {c.advisor_active && <Button size="sm" variant="outline" disabled={busy} onClick={() => run(() => handBackSupportConversation(c.id), "Georgia will answer in this thread again")}>Hand back to Georgia</Button>}
               <span className="text-xs text-muted-foreground">The client sees this in their portal and is told by a short email with no details.</span>
             </div>
