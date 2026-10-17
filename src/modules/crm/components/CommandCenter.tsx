@@ -88,6 +88,8 @@ export function CommandCenter() {
   );
 }
 
+let lastBriefingRefresh = 0;
+
 interface DailyBriefing {
   generation_status: "generating" | "complete" | "error";
   generation_error: string | null;
@@ -134,6 +136,11 @@ function DailyBriefingCard() {
   const load = async () => {
     if (!user) return;
     setLoading(true);
+    // Take off what has been dealt with since the morning (at most once every couple of minutes).
+    if (Date.now() - lastBriefingRefresh > 120_000) {
+      lastBriefingRefresh = Date.now();
+      try { await supabase.functions.invoke("daily-briefing-generate", { body: { action: "ea_refresh" } }); } catch { /* show it as it was */ }
+    }
     const { data } = await supabase
       .from("daily_briefings")
       .select("generation_status, generation_error, greeting, summary_line, priority_items")

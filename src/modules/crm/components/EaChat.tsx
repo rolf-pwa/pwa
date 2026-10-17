@@ -77,7 +77,7 @@ function ActionCard({ a, onDecide, onForget }: { a: EaAction; onDecide: (id: str
 }
 
 /** The morning meeting: Georgia and Rolf talk the briefing through, and she carries out what he asks inside the firm and prepares what goes outside it. */
-export function EaChat() {
+export function EaChat({ onChanged }: { onChanged?: () => void } = {}) {
   const [messages, setMessages] = useState<EaMessage[] | null>(null);
   const [prefs, setPrefs] = useState<Pref[]>([]);
   const [text, setText] = useState("");
@@ -98,6 +98,8 @@ export function EaChat() {
     try {
       const d = await call({ action: "ea_chat", message: t, start });
       setMessages((m) => [...(m ?? []), d.message as EaMessage]);
+      // If she changed something (a task done or moved), the briefing above should drop it.
+      if ((d.message as EaMessage).actions?.some((x) => x.status === "done" && /^task_/.test(x.kind))) onChanged?.();
       // Something she was asked to remember joins the list at once.
       for (const a of (d.message as EaMessage).actions ?? []) if (a.kind === "preference" && a.payload.id) setPrefs((p) => [...p, { id: a.payload.id, kind: a.payload.kind, value: a.payload.value }]);
     } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }

@@ -12,6 +12,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getValidGoogleAccessToken } from "../_shared/google-token.ts";
+import { refreshBriefing } from "../_shared/briefing-refresh.ts";
 import { eaChat, eaDecide, eaForget, eaHistory, eaNudge } from "../_shared/ea-handlers.ts";
 import { isMutedSender } from "../_shared/ea-agent.ts";
 import { classifyEmail, calendarConflicts, groupWeek, sectionsFromEmails, type BriefingEmail, type BriefingSections, type CalEvent } from "../_shared/briefing-facts.ts";
@@ -95,7 +96,7 @@ function pacificMidnightUtcIso(dateStr: string): string {
 // deno-lint-ignore no-explicit-any
 type Db = any;
 
-interface TaskFact { title: string; project: string | null; due_date?: string; link: string | null }
+interface TaskFact { id?: string; title: string; project: string | null; due_date?: string; link: string | null }
 interface TaskFacts { overdue: TaskFact[]; due_today: TaskFact[]; upcoming: TaskFact[] }
 
 // A task can carry contact_id/household_id/family_id/project_id
@@ -137,9 +138,9 @@ async function gatherTaskFacts(db: Db, userId: string, todayStr: string): Promis
     if (!t.due_date) continue; // undated tasks carry no urgency signal, same as MyTasksWidget's own sort
     const project = t.project_id ? projectNames[t.project_id] ?? null : null;
     const link = taskLink(t);
-    if (t.due_date < todayStr) facts.overdue.push({ title: t.title, project, due_date: t.due_date, link });
-    else if (t.due_date === todayStr) facts.due_today.push({ title: t.title, project, link });
-    else if (t.due_date <= upcomingCutoff) facts.upcoming.push({ title: t.title, project, due_date: t.due_date, link });
+    if (t.due_date < todayStr) facts.overdue.push({ id: t.id, title: t.title, project, due_date: t.due_date, link });
+    else if (t.due_date === todayStr) facts.due_today.push({ id: t.id, title: t.title, project, link });
+    else if (t.due_date <= upcomingCutoff) facts.upcoming.push({ id: t.id, title: t.title, project, due_date: t.due_date, link });
   }
   return facts;
 }
@@ -228,7 +229,7 @@ async function gatherGoogleFacts(
   return { calendar, email };
 }
 
-interface RequestFact { contact: string; type: string; description: string; created_at: string; awaiting_staff_reply: boolean; link: string }
+interface RequestFact { id?: string; contact: string; type: string; description: string; created_at: string; awaiting_staff_reply: boolean; link: string }
 
 async function gatherRequestFacts(db: Db): Promise<RequestFact[]> {
   const { data } = await db
@@ -251,6 +252,7 @@ async function gatherRequestFacts(db: Db): Promise<RequestFact[]> {
       : null;
     const awaiting_staff_reply = !latest || latest.sender_type === "client";
     return {
+      id: r.id,
       contact: r.contacts?.full_name || "Unknown contact",
       type: r.request_type,
       description: r.request_description,
@@ -262,7 +264,7 @@ async function gatherRequestFacts(db: Db): Promise<RequestFact[]> {
 }
 
 interface QuoFacts {
-  unread: { label: string; contact: string | null; link: string }[];
+  unread: { key?: string; label: string; contact: string | null; link: string }[];
   unmatchedCount: number;
   voicemailCount: number;
 }
@@ -293,6 +295,7 @@ async function gatherQuoFacts(db: Db): Promise<QuoFacts> {
   const unreadMsgs = allMsgs.filter((m) => m.direction === "inbound" && !m.read_at);
   const unreadCalls = allCalls.filter((c) => c.direction === "inbound" && !c.read_at && !c.is_voicemail);
   const unread = [...unreadMsgs.slice(0, 5), ...unreadCalls.slice(0, 5)].map((r) => ({
+    key: r.body !== undefined ? `quo:msg:${r.id}` : `quo:call:${r.id}`,
     label: r.body ? (r.body.length > 80 ? r.body.slice(0, 80) + "…" : r.body) : "Missed call",
     contact: r.contact_id ? contactNames[r.contact_id] ?? null : null,
     link: "/inbox",
@@ -305,9 +308,9 @@ async function gatherQuoFacts(db: Db): Promise<QuoFacts> {
 }
 
 interface FirmFacts {
-  notifications: { title: string; link: string | null }[];
-  escalated: { family: string; kind: string }[];
-  imports: { date: string; status: string }[];
+  notifications: { id: string; title: string; link: string | null }[];
+  escalated: { id: string; family: string; kind: string }[];
+  imports: { id: string; date: string; status: string }[];
   pendingScans: number;
 }
 
@@ -315,9 +318,9 @@ interface FirmFacts {
 async function gatherFirmFacts(db: Db, todayStr: string): Promise<FirmFacts> {
   const since = new Date(Date.parse(`${todayStr}T12:00:00Z`) - 3 * 86_400_000).toISOString();
   const [{ data: notes }, { data: esc }, { data: runs }, { count }] = await Promise.all([
-    db.from("staff_notifications").select("title, link, source_type").eq("read", false).gte("created_at", since).order("created_at", { ascending: false }).limit(15),
-    db.from("review_obligations").select("kind, family_id").eq("mode", "live").eq("status", "escalated").limit(15),
-    db.from("monthly_import_runs").select("snapshot_date, status").in("status", ["ready", "held"]).order("snapshot_date", { ascending: false }).limit(2),
+    db.from("staff_notifications").select("id, title, link, source_type").eq("read", false).gte("created_at", since).order("created_at", { ascending: false }).limit(15),
+    db.from("review_obligations").select("id, kind, family_id").eq("mode", "live").eq("status", "escalated").limit(15),
+    db.from("monthly_import_runs").select("id, snapshot_date, status").in("status", ["ready", "held"]).order("snapshot_date", { ascending: false }).limit(2),
     db.from("stage2_verification_audit").select("id", { count: "exact", head: true }).eq("review_status", "pending"),
   ]);
   // deno-lint-ignore no-explicit-any
@@ -327,16 +330,16 @@ async function gatherFirmFacts(db: Db, todayStr: string): Promise<FirmFacts> {
   const famName = new Map((fams || []).map((f: any) => [f.id, f.name]));
   return {
     // deno-lint-ignore no-explicit-any
-    notifications: (notes || []).map((n: any) => ({ title: n.title, link: n.link ?? null })),
+    notifications: (notes || []).map((n: any) => ({ id: n.id, title: n.title, link: n.link ?? null })),
     // deno-lint-ignore no-explicit-any
-    escalated: (esc || []).map((e: any) => ({ family: String(famName.get(e.family_id) ?? "A family"), kind: e.kind })),
+    escalated: (esc || []).map((e: any) => ({ id: e.id, family: String(famName.get(e.family_id) ?? "A family"), kind: e.kind })),
     // deno-lint-ignore no-explicit-any
-    imports: (runs || []).map((r: any) => ({ date: r.snapshot_date, status: r.status })),
+    imports: (runs || []).map((r: any) => ({ id: r.id, date: r.snapshot_date, status: r.status })),
     pendingScans: count ?? 0,
   };
 }
 
-interface FactRef { label: string; link: string | null }
+interface FactRef { label: string; link: string | null; key?: string }
 
 // Builds the plain-text block handed to the model, and a parallel, index-
 // matched list of {label, link}. The model is only ever asked to cite a
@@ -353,18 +356,18 @@ function buildFactsBlockAndRefs(
 ): { block: string; refs: FactRef[] } {
   const lines: string[] = [];
   const refs: FactRef[] = [];
-  const add = (label: string, link: string | null, text: string) => {
-    refs.push({ label, link });
+  const add = (label: string, link: string | null, text: string, key?: string) => {
+    refs.push({ label, link, key });
     lines.push(`[${refs.length}] ${text}`);
   };
   const label = (t: TaskFact) => `${t.title}${t.project ? ` [${t.project}]` : ""}`;
 
   lines.push(`Overdue tasks (${tasks.overdue.length}):`);
-  tasks.overdue.forEach((t) => add(label(t), t.link, `${label(t)} (was due ${t.due_date})`));
+  tasks.overdue.forEach((t) => add(label(t), t.link, `${label(t)} (was due ${t.due_date})`, t.id ? `task:overdue:${t.id}` : undefined));
   lines.push(`Due today (${tasks.due_today.length}):`);
-  tasks.due_today.forEach((t) => add(label(t), t.link, label(t)));
+  tasks.due_today.forEach((t) => add(label(t), t.link, label(t), t.id ? `task:today:${t.id}` : undefined));
   lines.push(`Due in the next 7 days (${tasks.upcoming.length}):`);
-  tasks.upcoming.forEach((t) => add(label(t), t.link, `${label(t)} (due ${t.due_date})`));
+  tasks.upcoming.forEach((t) => add(label(t), t.link, `${label(t)} (due ${t.due_date})`, t.id ? `task:upcoming:${t.id}` : undefined));
 
   if (calendar.connected) {
     lines.push(`Today's calendar events (${calendar.today.length}):`);
@@ -383,9 +386,9 @@ function buildFactsBlockAndRefs(
     const people = kinds.filter((x) => x.k === "other").map((x) => x.e);
     const business = kinds.filter((x) => x.k === "ia_notice" || x.k === "adobe_sign").map((x) => x.e);
     lines.push(`Email in the last day from people or clients (${people.length}):`);
-    people.slice(0, 15).forEach((e) => add(e.subject, e.link, `From ${e.from}: "${e.subject}" — ${e.snippet}`));
+    people.slice(0, 15).forEach((e) => add(e.subject, e.link, `From ${e.from}: "${e.subject}" — ${e.snippet}`, `email:${e.id}`));
     lines.push(`iA Financial and Adobe Sign notices to admin@ (${business.length}):`);
-    business.slice(0, 12).forEach((e) => add(e.subject, e.link, `From ${e.from}: "${e.subject}" — ${e.snippet}`));
+    business.slice(0, 12).forEach((e) => add(e.subject, e.link, `From ${e.from}: "${e.subject}" — ${e.snippet}`, `email:${e.id}`));
   } else {
     lines.push("Email: not connected.");
   }
@@ -393,17 +396,17 @@ function buildFactsBlockAndRefs(
   lines.push(`Open client requests, firm-wide (${requests.length}):`);
   requests.forEach((r) => {
     const l = `${r.contact}: ${r.type}`;
-    add(l, r.link, `${l} — "${r.description}"${r.awaiting_staff_reply ? " (awaiting our reply)" : ""} (opened ${r.created_at})`);
+    add(l, r.link, `${l} — "${r.description}"${r.awaiting_staff_reply ? " (awaiting our reply)" : ""} (opened ${r.created_at})`, r.id ? `request:${r.id}` : undefined);
   });
 
   lines.push(`Quo inbox, firm-wide: ${quo.unread.length} unread items shown, ${quo.unmatchedCount} unmatched to any contact, ${quo.voicemailCount} unheard voicemails.`);
-  quo.unread.forEach((u) => add(u.contact ? u.contact : "Unknown number", u.link, `${u.contact ? u.contact : "Unknown number"}: "${u.label}"`));
+  quo.unread.forEach((u) => add(u.contact ? u.contact : "Unknown number", u.link, `${u.contact ? u.contact : "Unknown number"}: "${u.label}"`, u.key));
 
   lines.push(`Georgia is waiting on you for (${firm.escalated.length + firm.imports.length + (firm.pendingScans ? 1 : 0) + firm.notifications.length}):`);
-  firm.escalated.forEach((e) => add(`${e.family}: ${e.kind.replace(/_/g, " ")} handed to you`, "/review-agent", `${e.family}'s ${e.kind.replace(/_/g, " ")} was handed to you by Georgia`));
-  firm.imports.forEach((i) => add(`Monthly file ${i.date} is ${i.status}`, "/importers", `The monthly performance file dated ${i.date} is ${i.status} and waiting for you`));
-  if (firm.pendingScans) add(`${firm.pendingScans} statements or policies read, waiting for approval`, "/glass-box-review", `${firm.pendingScans} scanned documents are waiting for approval in Glass-Box Review`);
-  firm.notifications.forEach((n) => add(n.title, n.link ?? "/dashboard", `Unread notification: ${n.title}`));
+  firm.escalated.forEach((e) => add(`${e.family}: ${e.kind.replace(/_/g, " ")} handed to you`, "/review-agent", `${e.family}'s ${e.kind.replace(/_/g, " ")} was handed to you by Georgia`, `esc:${e.id}`));
+  firm.imports.forEach((i) => add(`Monthly file ${i.date} is ${i.status}`, "/importers", `The monthly performance file dated ${i.date} is ${i.status} and waiting for you`, `import:${i.id}`));
+  if (firm.pendingScans) add(`${firm.pendingScans} scanned documents waiting for approval`, "/glass-box-review", `${firm.pendingScans} scanned documents are waiting for approval in Glass-Box Review`, "scans");
+  firm.notifications.forEach((n) => add(n.title, n.link ?? "/dashboard", `Unread notification: ${n.title}`, `note:${n.id}`));
 
   return { block: lines.join("\n"), refs };
 }
@@ -447,12 +450,12 @@ function buildSections(calendar: CalendarFacts, email: EmailFacts, quo: QuoFacts
     week: groupWeek(calendar.week, todayStr, (iso) => pacificDateString(new Date(iso))).map((d) => ({ date: d.date, items: d.items.map((i) => ({ start: i.start, allDay: i.allDay, summary: i.summary, link: i.link ?? null })) })),
     replies: e.replies,
     ia: e.ia,
-    texts: quo.unread.map((u) => ({ label: u.label, contact: u.contact, link: u.link })),
+    texts: quo.unread.map((u) => ({ key: u.key, label: u.label, contact: u.contact, link: u.link })),
     firm: [
-      ...firm.escalated.map((x) => ({ label: `${x.family}: ${x.kind.replace(/_/g, " ")} handed to you`, link: "/review-agent" })),
-      ...firm.imports.map((i) => ({ label: `Monthly file ${i.date} is ${i.status}`, link: "/importers" })),
-      ...(firm.pendingScans ? [{ label: `${firm.pendingScans} scanned documents waiting for approval`, link: "/glass-box-review" }] : []),
-      ...firm.notifications.map((n) => ({ label: n.title, link: n.link ?? "/dashboard" })),
+      ...firm.escalated.map((x) => ({ key: `esc:${x.id}`, label: `${x.family}: ${x.kind.replace(/_/g, " ")} handed to you`, link: "/review-agent" })),
+      ...firm.imports.map((i) => ({ key: `import:${i.id}`, label: `Monthly file ${i.date} is ${i.status}`, link: "/importers" })),
+      ...(firm.pendingScans ? [{ key: "scans", label: `${firm.pendingScans} scanned documents waiting for approval`, link: "/glass-box-review" }] : []),
+      ...firm.notifications.map((n) => ({ key: `note:${n.id}`, label: n.title, link: n.link ?? "/dashboard" })),
     ],
     counts: e.counts,
   };
@@ -544,7 +547,7 @@ ${block}`;
       // deno-lint-ignore no-explicit-any
       .map((it: any) => {
         const ref = refs[Number(it.fact_index) - 1];
-        return { label: ref.label, link: ref.link, reason: String(it.reason || ""), next_step: String(it.next_step || "") };
+        return { label: ref.label, link: ref.link, key: ref.key, reason: String(it.reason || ""), next_step: String(it.next_step || "") };
       });
 
     await db
@@ -612,6 +615,7 @@ Deno.serve(async (req) => {
     // The morning meeting: chat, history, decisions on proposals, and forgetting a preference.
     const body = (await req.clone().json().catch(() => ({}))) as { action?: string; message?: string; start?: boolean; actionId?: string; decision?: "done" | "dismissed"; prefId?: string };
     if (typeof body.action === "string" && body.action.startsWith("ea_")) {
+      if (body.action === "ea_refresh") return json({ ok: true, ...(await refreshBriefing(db, userId, todayStr)) });
       if (body.action === "ea_history") return json({ ok: true, ...(await eaHistory(db, userId)) });
       if (body.action === "ea_chat") return json({ ok: true, ...(await eaChat(db, userId, body.message ?? "", body.start === true)) });
       if (body.action === "ea_decide") return json(await eaDecide(db, userId, String(body.actionId ?? ""), body.decision === "done" ? "done" : "dismissed"));

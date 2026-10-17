@@ -8,6 +8,7 @@ import {
 } from "./ea-agent.ts";
 import { fetchWithVertexRetry, getGcpAccessToken, GEMINI_DRAFTING_MODEL, parseServiceAccountKey, vertexModelUrl, withThinking, type ServiceAccountKey } from "./vertex-ai.ts";
 import { getValidGoogleAccessToken } from "./google-token.ts";
+import { refreshBriefing } from "./briefing-refresh.ts";
 
 const DAILY_MESSAGE_CAP = 200;
 const zone = "America/Vancouver";
@@ -104,6 +105,8 @@ export async function eaChat(db: any, userId: string, text: string, start: boole
   const { data: prior } = await db.from("ea_messages").select("role, content").eq("staff_user_id", userId).eq("conversation_date", date).order("created_at", { ascending: true }).limit(40);
   if (!start) await db.from("ea_messages").insert({ staff_user_id: userId, conversation_date: date, role: "user", content: userText });
 
+  // What he has already dealt with since the briefing was made comes off it first, so she works from the day as it is now.
+  await refreshBriefing(db, userId, date).catch(() => null);
   const [briefing, { data: tasks }, { data: prefs }] = await Promise.all([
     briefingText(db, userId, date),
     db.from("pm_tasks").select("id, title, due_date").eq("assignee_id", userId).neq("status", "done").order("due_date", { ascending: true, nullsFirst: false }).limit(25),

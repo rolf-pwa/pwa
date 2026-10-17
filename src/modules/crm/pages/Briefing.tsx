@@ -39,6 +39,8 @@ export default function Briefing() {
 
   const load = useCallback(async () => {
     if (!user) return;
+    // First take off whatever has been dealt with since the briefing was made (a task done, an email answered, a request replied to).
+    try { await supabase.functions.invoke("daily-briefing-generate", { body: { action: "ea_refresh" } }); } catch { /* show the briefing as it was */ }
     const { data } = await supabase.from("daily_briefings").select("generation_status, generation_error, greeting, summary_line, priority_items, sections, generated_at").eq("staff_user_id", user.id).eq("briefing_date", todayPacific()).maybeSingle();
     setB(data as unknown as DailyBriefing | null);
     setLoading(false);
@@ -78,6 +80,8 @@ export default function Briefing() {
                   <h2 className="font-serif text-lg font-semibold">{b.greeting}</h2>
                   <p className="text-sm text-muted-foreground">{b.summary_line}</p>
                 </div>
+                {(s?.handled?.length ?? 0) > 0 && <p className="text-xs text-muted-foreground" data-testid="progress">{b.priority_items.length} still open · {s!.handled!.length} handled since this morning</p>}
+                {b.priority_items.length === 0 && (s?.handled?.length ?? 0) > 0 && <p className="text-sm font-medium text-green-700">Everything in this morning's priorities has been handled.</p>}
                 {b.priority_items.length > 0 && (
                   <ol className="space-y-2.5" data-testid="priorities">
                     {b.priority_items.map((it, i) => (
@@ -139,6 +143,12 @@ export default function Briefing() {
               </div>
             )}
 
+            {s && (s.handled?.length ?? 0) > 0 && (
+              <details className="text-sm"><summary className="cursor-pointer text-muted-foreground">Handled since this morning ({s.handled!.length})</summary>
+                <ul className="mt-1.5 space-y-0.5 pl-4 text-xs text-muted-foreground">{s.handled!.map((h, i) => <li key={i} className="list-disc">{h.label}</li>)}</ul>
+              </details>
+            )}
+
             {s && (s.counts.spam > 0 || s.counts.promo > 0 || (s.counts.automated ?? 0) > 0) && (
               <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5" />Left out: {s.counts.spam} likely spam, {s.counts.promo} newsletters and promotions, {s.counts.automated ?? 0} automated notices{s.counts.muted ? `, and ${s.counts.muted} from senders you asked me to stop showing` : ""}. Nothing was deleted.</p>
             )}
@@ -146,7 +156,7 @@ export default function Briefing() {
           </>
         )}
         </div>
-        <div className="xl:sticky xl:top-4"><EaChat /></div>
+        <div className="xl:sticky xl:top-4"><EaChat onChanged={load} /></div>
         </div>
       </div>
     </AppLayout>

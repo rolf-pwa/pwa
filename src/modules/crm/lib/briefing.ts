@@ -1,6 +1,6 @@
 import type { BriefingSections } from "../../../../supabase/functions/_shared/briefing-facts";
 
-export interface PriorityItem { label: string; reason: string; link: string | null; next_step?: string }
+export interface PriorityItem { label: string; reason: string; link: string | null; next_step?: string; key?: string }
 export interface DailyBriefing {
   generation_status: "generating" | "complete" | "error";
   generation_error: string | null;
