@@ -12,15 +12,21 @@ export interface EaAction { id: string; kind: string; status: "done" | "proposed
 export interface EaMessage { id: string; role: "user" | "assistant"; content: string; actions: EaAction[] }
 interface Pref { id: string; kind: string; value: string }
 
+/** The message Georgia's function sent, not the generic "non-2xx status code" the client library puts in its place. */
+export async function errorText(error: any, data: any): Promise<string> {
+  if (data?.error) return String(data.error);
+  try { const j = await error?.context?.json?.(); if (j?.error) return String(j.error); } catch { /* not JSON */ }
+  return error?.message || "Georgia could not answer";
+}
 const call = async (body: Record<string, unknown>) => {
   const { data, error } = await supabase.functions.invoke("daily-briefing-generate", { body });
-  if (error || data?.error) throw new Error(data?.error || error?.message || "Georgia could not answer");
+  if (error || data?.error) throw new Error(await errorText(error, data));
   return data;
 };
 const when = (local: string) => { const d = new Date(`${local}:00`); return Number.isNaN(d.getTime()) ? local : d.toLocaleString("en-CA", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); };
 
 /** What Georgia did or prepared in answer to a message. Proposals wait here for Rolf: nothing is sent or added without his click. */
-function ActionCard({ a, onDecide, onForget, onApply }: { a: EaAction; onDecide: (id: string, d: "done" | "dismissed") => void; onForget: (id: string) => void; onApply: (id: string) => Promise<void> }) {
+function ActionCard({ a, onDecide, onForget, onApply, calendarWrite = true }: { a: EaAction; onDecide: (id: string, d: "done" | "dismissed") => void; onForget: (id: string) => void; onApply: (id: string) => Promise<void>; calendarWrite?: boolean }) {
   const [applying, setApplying] = useState(false);
   const p = a.payload;
   const decided = a.status === "dismissed" ? "Dismissed" : a.status === "done" && (a.kind === "calendar_proposal" || a.kind === "email_draft" || a.kind === "text_draft") ? "Used" : null;
@@ -47,6 +53,7 @@ function ActionCard({ a, onDecide, onForget, onApply }: { a: EaAction; onDecide:
         <p className="text-muted-foreground">Change to an event on your calendar</p>
         <p className="font-medium text-foreground">{p.event_title}</p>
         <ul className="mt-0.5 list-disc pl-4 text-foreground/90">{lines.map((l, i) => <li key={i}>{l}</li>)}{(c.add_attendees ?? []).length > 0 && <li>Invite: {(c.add_attendees as string[]).join(", ")} (they are emailed an invitation when you apply)</li>}</ul>
+        {!calendarWrite && a.status === "proposed" && <p className="mt-1.5 text-amber-800" data-testid="needs-reconnect">Google has not yet allowed changes to your calendar. On the <Link to="/dashboard" className="underline">Dashboard</Link>, disconnect Google and connect it again, approve the calendar permission, then come back and Apply.</p>}
         {a.status === "done" ? <Badge variant="outline" className="mt-1.5 text-[10px]">Applied</Badge> : a.status === "dismissed" ? <Badge variant="outline" className="mt-1.5 text-[10px]">Dismissed</Badge> : (
           <div className="mt-1.5 flex gap-1.5">
             <Button size="sm" className="h-7 text-xs" disabled={applying} onClick={async () => { setApplying(true); try { await onApply(a.id); } finally { setApplying(false); } }}>{applying ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}Apply to my calendar</Button>
@@ -99,12 +106,14 @@ function ActionCard({ a, onDecide, onForget, onApply }: { a: EaAction; onDecide:
 export function EaChat({ onChanged }: { onChanged?: () => void } = {}) {
   const [messages, setMessages] = useState<EaMessage[] | null>(null);
   const [prefs, setPrefs] = useState<Pref[]>([]);
+  // Whether Google has been told to let Georgia change calendar events (a one-time reconnect on the Dashboard).
+  const [calendarWrite, setCalendarWrite] = useState(true);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
-    try { const d = await call({ action: "ea_history" }); setMessages(d.messages ?? []); setPrefs(d.preferences ?? []); } catch (e: any) { setMessages([]); toast.error(e.message); }
+    try { const d = await call({ action: "ea_history" }); setMessages(d.messages ?? []); setPrefs(d.preferences ?? []); setCalendarWrite(d.calendarWrite !== false); } catch (e: any) { setMessages([]); toast.error(e.message); }
   }, []);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { endRef.current?.scrollIntoView?.({ block: "end" }); }, [messages, busy]);
@@ -153,7 +162,7 @@ export function EaChat({ onChanged }: { onChanged?: () => void } = {}) {
             <div key={m.id} className={m.role === "user" ? "flex justify-end" : ""}>
               <div className={`max-w-[92%] space-y-1.5 ${m.role === "user" ? "rounded-lg bg-accent/10 px-3 py-2" : ""}`}>
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground"><LinkifyText text={m.content} /></p>
-                {m.actions.map((a) => <ActionCard key={a.id} a={a} onDecide={decide} onForget={forget} onApply={apply} />)}
+                {m.actions.map((a) => <ActionCard key={a.id} a={a} onDecide={decide} onForget={forget} onApply={apply} calendarWrite={calendarWrite} />)}
               </div>
             </div>
           ))}

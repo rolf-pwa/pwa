@@ -7,7 +7,7 @@ vi.mock("@/shared/integrations/supabase/client", () => ({ supabase: { functions:
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { MemoryRouter } from "react-router-dom";
-import { EaChat } from "@/modules/crm/components/EaChat";
+import { EaChat, errorText } from "@/modules/crm/components/EaChat";
 
 const proposal = { id: "a1", kind: "calendar_proposal", status: "proposed", summary: "Calendar: Board Meeting", payload: { title: "Board Meeting", start: "2026-10-23T15:30", end: "2026-10-23T17:00", location: "The Pub", url: "https://calendar.google.com/calendar/render?x=1" } };
 const email = { id: "a2", kind: "email_draft", status: "proposed", summary: "Email draft: Friday", payload: { to: "events@pub.ca", subject: "Board meeting Friday", body: "Do you have space?\nRolf", url: "https://mail.google.com/mail/?view=cm" } };
@@ -104,5 +104,21 @@ describe("changing an event on his calendar", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Apply to my calendar" }));
     await waitFor(() => expect(invoke).toHaveBeenCalledWith("daily-briefing-generate", { body: { action: "ea_apply", actionId: "u1" } }));
     expect(await screen.findByText("Applied")).toBeTruthy();
+  });
+});
+
+describe("when applying a calendar change cannot work yet", () => {
+  const update = { id: "u1", kind: "calendar_update", status: "proposed", summary: "Update event: Board Meeting", payload: { event_id: "e1", event_title: "Board Meeting", changes: { location: "CRAFT" } } };
+  it("says Google needs reconnecting, instead of waiting for Apply to fail", async () => {
+    invoke.mockReset();
+    invoke.mockImplementation(async (_f: string, { body }: any) => (body.action === "ea_history" ? { data: { messages: [{ id: "m1", role: "assistant", content: "Here.", actions: [update] }], preferences: [], calendarWrite: false }, error: null } : { data: {}, error: null }));
+    render(<MemoryRouter><EaChat /></MemoryRouter>);
+    expect((await screen.findByTestId("needs-reconnect")).textContent).toMatch(/disconnect Google and connect it again/);
+  });
+  it("shows the real message from the function, not the generic non-2xx text", async () => {
+    const err = { message: "Edge Function returned a non-2xx status code", context: { json: async () => ({ error: "Google has not let me change your calendar yet." }) } };
+    expect(await errorText(err, null)).toBe("Google has not let me change your calendar yet.");
+    expect(await errorText({ message: "boom" }, null)).toBe("boom");
+    expect(await errorText(null, { error: "from data" })).toBe("from data");
   });
 });
