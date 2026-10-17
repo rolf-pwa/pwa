@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 vi.mock("@/shared/components/AppLayout", () => ({ AppLayout: ({ children }: any) => <div>{children}</div> }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 vi.mock("@/shared/hooks/useAuth", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
+const supabaseMock: Record<string, unknown> = {};
 const briefing = {
   generation_status: "complete", generation_error: null, greeting: "Good morning", summary_line: "A full day with one conflict.", generated_at: "2026-10-19T12:35:00Z",
   priority_items: [{ label: "Reply to Jane about her RRSP", link: "https://mail.google.com/mail/u/0/#all/1", reason: "asked yesterday", next_step: "Send the transfer form" }, { label: "Monthly file 2026-10-30 is held", link: "/importers", reason: "waiting on you", next_step: "" }],
@@ -15,7 +16,7 @@ const briefing = {
     texts: [{ label: "Can you call me?", contact: "Sam Smith", link: "/inbox" }], firm: [{ label: "Glanz: rebalancing handed to you", link: "/review-agent" }], counts: { spam: 3, promo: 2, automated: 4, adminTotal: 6 },
   },
 };
-vi.mock("@/shared/integrations/supabase/client", () => ({ supabase: { from: () => ({ select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: briefing }) }) }) }) }), functions: { invoke: vi.fn() } } }));
+vi.mock("@/shared/integrations/supabase/client", () => ({ supabase: { from: () => ({ select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: (supabaseMock as any).current ?? briefing }) }) }) }) }), functions: { invoke: vi.fn() } } }));
 
 import Briefing from "@/modules/crm/pages/Briefing";
 
@@ -38,5 +39,15 @@ describe("the morning briefing page", () => {
     expect(await screen.findByText(/3 likely spam, 2 newsletters and promotions, 4 automated notices/)).toBeTruthy();
     expect(screen.getByText(/Nothing was deleted/)).toBeTruthy();
     expect(screen.getByText(/only reads/)).toBeTruthy();
+  });
+
+  it("shows how much has been handled, and what", async () => {
+    const withHandled = { ...briefing, sections: { ...briefing.sections, handled: [{ label: "IA Financial - Guaranteed Insurability Option", link: null }] } };
+    (supabaseMock as any).current = withHandled;
+    render(<MemoryRouter><Briefing /></MemoryRouter>);
+    expect(await screen.findByTestId("progress")).toBeTruthy();
+    expect(screen.getByTestId("progress").textContent).toMatch(/2 still open · 1 handled since this morning/);
+    expect(screen.getByText(/Handled since this morning \(1\)/)).toBeTruthy();
+    (supabaseMock as any).current = briefing;
   });
 });

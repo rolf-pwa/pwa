@@ -52,10 +52,12 @@ export function groupWeek(events: CalEvent[], today: string, toDate: (iso: strin
 export interface BriefingSections {
   schedule: { start: string; end: string | null; allDay: boolean; summary: string; link: string | null; conflict: boolean }[];
   week: { date: string; items: { start: string; allDay: boolean; summary: string; link: string | null }[] }[];
-  replies: { from: string; subject: string; link: string }[];
-  ia: { kind: "ia_notice" | "adobe_sign"; from: string; subject: string; link: string }[];
-  texts: { label: string; contact: string | null; link: string }[];
-  firm: { label: string; link: string }[];
+  replies: { id?: string; key?: string; from: string; subject: string; link: string }[];
+  ia: { id?: string; key?: string; kind: "ia_notice" | "adobe_sign"; from: string; subject: string; link: string }[];
+  texts: { key?: string; label: string; contact: string | null; link: string }[];
+  firm: { key?: string; label: string; link: string }[];
+  /** Things that were in the briefing and have since been dealt with. */
+  handled?: { label: string; link: string | null }[];
   counts: { spam: number; promo: number; automated: number; adminTotal: number; muted?: number };
 }
 
@@ -70,8 +72,8 @@ export function sectionsFromEmails(emails: BriefingEmail[], adminCount = 0): Pic
     if (kind === "spam") out.counts.spam++;
     else if (kind === "promo") out.counts.promo++;
     else if (kind === "automated") out.counts.automated++;
-    else if (kind === "ia_notice" || kind === "adobe_sign") out.ia.push({ kind, from: e.from, subject: e.subject, link: e.link });
-    else out.replies.push({ from: e.from, subject: e.subject, link: e.link });
+    else if (kind === "ia_notice" || kind === "adobe_sign") out.ia.push({ id: e.id, key: `email:${e.id}`, kind, from: e.from, subject: e.subject, link: e.link });
+    else out.replies.push({ id: e.id, key: `email:${e.id}`, from: e.from, subject: e.subject, link: e.link });
   }
   return out;
 }
