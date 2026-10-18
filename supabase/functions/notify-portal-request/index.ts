@@ -304,7 +304,8 @@ if (req.method === "OPTIONS") {
           contact_id,
           recipient_email: cleanEmail,
           first_name: firstName,
-          task_name,
+          // The email never carries what the task says: task names can hold amounts and names. Details stay behind the portal sign-in.
+          task_name: "an item in your portal",
           task_event: task_event || "updated",
           link_tab: "tasks",
         });

@@ -1,3 +1,4 @@
+import { CommentBody } from "@/shared/components/CommentBody";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { Send, Loader2, MessageCircle, CheckCircle2, Circle, ListChecks, ChevronRight, X } from "lucide-react";
@@ -10,6 +11,7 @@ import { cn } from "@/shared/lib/utils";
 interface Comment {
   id: string;
   body: string;
+  body_format?: "text" | "html";
   author_type: "staff" | "client";
   author_name: string;
   created_at: string;
@@ -197,20 +199,12 @@ export function PortalTaskConversation({ taskId, portalToken, clientName, readOn
                     })}
                   </span>
                 </div>
-                <div className={`rounded-lg px-4 py-3 text-sm leading-relaxed max-w-[90%] whitespace-pre-wrap break-words ${
+                <div className={`rounded-lg px-4 py-3 text-sm leading-relaxed max-w-[90%] break-words ${
                   isClient
                     ? 'bg-accent/10 border border-accent/30 text-foreground ml-auto'
                     : 'bg-muted border border-border text-foreground'
                 }`}>
-                  {comment.body.split(/(https?:\/\/[^\s]+)/g).map((part, i) =>
-                    /^https?:\/\//.test(part) ? (
-                      <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-accent hover:text-accent/80 underline break-all">
-                        {part}
-                      </a>
-                    ) : (
-                      <span key={i}>{part}</span>
-                    )
-                  )}
+                  <CommentBody body={comment.body} format={comment.body_format} />
                 </div>
               </div>
             );

@@ -2,6 +2,7 @@
 // Asana. Read + comment only -- clients never create tasks (matches the
 // Asana-backed version this replaces).
 
+import { notifyStaffOfClientReply, type TaskRef } from "../_shared/task-notify.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validatePortalContact } from "../_shared/portal-auth.ts";
 
@@ -89,7 +90,7 @@ Deno.serve(async (req) => {
 
       const { data: comments, error } = await supabase
         .from("pm_task_comments")
-        .select("id, task_id, author_id, author_contact_id, body, created_at")
+        .select("id, task_id, author_id, author_contact_id, body, body_format, created_at")
         .eq("task_id", task_id)
         .order("created_at", { ascending: true });
       if (error) return json({ error: error.message }, 500);
@@ -107,6 +108,8 @@ Deno.serve(async (req) => {
         id: c.id,
         task_id: c.task_id,
         body: c.body,
+        // Only staff comments can be formatted; a client's is always shown as plain text.
+        body_format: c.author_id && c.body_format === "html" ? "html" : "text",
         created_at: c.created_at,
         author_type: c.author_id ? "staff" : "client",
         author_name: c.author_id ? staffById.get(c.author_id) || "ProsperWise" : contactById.get(c.author_contact_id) || "You",
@@ -125,6 +128,14 @@ Deno.serve(async (req) => {
         .select("id, task_id, body, created_at")
         .maybeSingle();
       if (error) return json({ error: error.message }, 500);
+      // Rolf is told in the app that the client replied, so the conversation on a recap carries on.
+      try {
+        const { data: who } = await supabase.from("contacts").select("full_name").eq("id", contactId).maybeSingle();
+        const { data: full } = await supabase.from("pm_tasks").select("id, title, client_visible, contact_id, household_id").eq("id", task_id).maybeSingle();
+        if (full) await notifyStaffOfClientReply(supabase, full as TaskRef, who?.full_name ?? "", String(commentBody).trim(), contactId);
+      } catch (e) {
+        console.error("[portal-pm-tasks] staff notification failed", e);
+      }
       return json({ comment: data });
     }
 
