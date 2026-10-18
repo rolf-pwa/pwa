@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Loader2, MessageCircle } from "lucide-react";
+import { FileText, Loader2, MessageCircle } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { supabase } from "@/shared/integrations/supabase/client";
+import { RequestDetailDialog, REQUESTS_SELECT, STATUS_CONFIG, TYPE_LABELS, type PortalRequest } from "@/modules/crm/components/RequestDetailDialog";
 import { AppLayout } from "@/shared/components/AppLayout";
 import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
@@ -40,7 +43,30 @@ function AwayCard({ away, onSaved }: { away: Away; onSaved: () => void }) {
   );
 }
 
-function Conversation({ c, onChanged }: { c: SupportConversation; onChanged: () => void }) {
+function RequestRows({ requests, onOpen }: { requests: PortalRequest[]; onOpen: (r: PortalRequest) => void }) {
+  return (
+    <div className="space-y-1">
+      <p className="text-xs font-medium text-muted-foreground">Requests</p>
+      {requests.map((r) => {
+        const sc = STATUS_CONFIG[r.status] || STATUS_CONFIG.submitted;
+        const fromClient = (r.messages || []).filter((m) => m.sender_type === "client").length;
+        return (
+          <button key={r.id} type="button" onClick={() => onOpen(r)} className="flex w-full items-center gap-2 rounded-md border border-border px-3 py-2 text-left text-sm hover:bg-muted/50">
+            <Badge variant={sc.variant} className="text-[10px]">{sc.label}</Badge>
+            <span className="font-medium">{TYPE_LABELS[r.request_type] || r.request_type}</span>
+            <span className="min-w-0 flex-1 truncate text-muted-foreground">{r.request_description}</span>
+            {r.file_urls && r.file_urls.length > 0 && <FileText className="h-3 w-3 text-muted-foreground" aria-label="Has files" />}
+            {fromClient > 0 && <span className="flex items-center gap-0.5 text-xs text-muted-foreground"><MessageCircle className="h-3 w-3" />{fromClient}</span>}
+            <span className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(r.created_at), { addSuffix: true })}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function Conversation({ c, requests, onOpenRequest, onChanged }: { c: SupportConversation; requests: PortalRequest[]; onOpenRequest: (r: PortalRequest) => void; onChanged: () => void }) {
+  const openRequests = requests.filter((r) => r.status !== "resolved").length;
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -56,6 +82,7 @@ function Conversation({ c, onChanged }: { c: SupportConversation; onChanged: () 
         <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="font-medium text-left">{c.contact_name}</button>
         {waiting && <Badge variant={c.flag === "urgent" ? "destructive" : "default"}>{c.flag === "urgent" ? "Urgent" : "Needs you"}</Badge>}
         {c.flag && c.reviewed_at && <Badge variant="secondary">Reviewed</Badge>}
+        {openRequests > 0 && <Badge variant="outline">{openRequests} open request{openRequests !== 1 ? "s" : ""}</Badge>}
         {c.advisor_active && <Badge variant="outline">You are handling this</Badge>}
         {c.away_when_flagged && <span className="text-xs text-muted-foreground">while you were away</span>}
         <span className="ml-auto text-xs text-muted-foreground">{when(c.updated_at)}</span>
@@ -68,6 +95,7 @@ function Conversation({ c, onChanged }: { c: SupportConversation; onChanged: () 
           <div className="space-y-1.5 rounded-md bg-muted/40 p-3">
             {c.messages.map((m, i) => <p key={i}><span className="font-medium">{m.role === "user" ? "Client" : m.role === "advisor" ? "You" : "Georgia"}: </span>{m.content}</p>)}
           </div>
+          {requests.length > 0 && <RequestRows requests={requests} onOpen={onOpenRequest} />}
           <div className="space-y-2">
             <Textarea
               value={draft}
@@ -96,7 +124,20 @@ export default function AskGeorgia() {
   const [data, setData] = useState<{ away: Away; conversations: SupportConversation[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(async () => { try { setData(await getSupportOverview()); setError(null); } catch (e: any) { setError(e?.message ?? "Couldn't load"); } }, []);
-  useEffect(() => { void load(); }, [load]);
+  const [requests, setRequests] = useState<PortalRequest[]>([]);
+  const [selected, setSelected] = useState<PortalRequest | null>(null);
+  const loadRequests = useCallback(async () => {
+    const { data, error: err } = await supabase.from("portal_requests").select(REQUESTS_SELECT).order("created_at", { ascending: false });
+    if (err) { toast.error("Couldn't load client requests"); return; }
+    setRequests((data as unknown as PortalRequest[]) || []);
+  }, []);
+  const reload = useCallback(() => { void load(); void loadRequests(); }, [load, loadRequests]);
+  useEffect(() => { reload(); }, [reload]);
+  const byContact = new Map<string, PortalRequest[]>();
+  for (const r of requests) byContact.set(r.contact_id, [...(byContact.get(r.contact_id) ?? []), r]);
+  const threadContacts = new Set((data?.conversations ?? []).map((c) => c.contact_id));
+  // Clients who filed a request but have no Ask Georgia thread (older form submissions): still shown, never lost.
+  const orphans = [...byContact.entries()].filter(([id]) => !threadContacts.has(id));
   return (
     <AppLayout>
       <div className="mx-auto max-w-5xl space-y-6 py-6">
@@ -110,12 +151,26 @@ export default function AskGeorgia() {
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-lg">Conversations</CardTitle></CardHeader>
               <CardContent className="p-0">
-                {data.conversations.length === 0 ? <p className="px-4 pb-4 text-sm text-muted-foreground">No conversations yet.</p> : data.conversations.map((c) => <Conversation key={c.id} c={c} onChanged={load} />)}
+                {data.conversations.length === 0 ? <p className="px-4 pb-4 text-sm text-muted-foreground">No conversations yet.</p> : data.conversations.map((c) => <Conversation key={c.id} c={c} requests={byContact.get(c.contact_id) ?? []} onOpenRequest={setSelected} onChanged={reload} />)}
               </CardContent>
             </Card>
+            {orphans.length > 0 && (
+              <Card>
+                <CardHeader className="pb-3"><CardTitle className="text-lg">Requests from clients without a chat</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                  {orphans.map(([id, rs]) => (
+                    <div key={id} className="space-y-1">
+                      <Link to={`/contacts/${id}`} className="text-sm font-medium hover:underline">{rs[0].contact?.full_name || "Unknown"}</Link>
+                      <RequestRows requests={rs} onOpen={setSelected} />
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
           </>
         )}
       </div>
+      <RequestDetailDialog request={selected} onClose={() => setSelected(null)} onChanged={loadRequests} />
     </AppLayout>
   );
 }

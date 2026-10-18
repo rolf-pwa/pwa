@@ -63,7 +63,7 @@ export function ContactRequests({ contactId }: Props) {
           return (
             <Link
               key={req.id}
-              to="/requests"
+              to="/ask-georgia"
               className="flex items-center justify-between rounded-md bg-muted/50 px-3 py-2 text-sm transition-colors hover:bg-muted"
             >
               <div className="min-w-0 flex-1">
