@@ -15,6 +15,7 @@ import { getValidGoogleAccessToken } from "../_shared/google-token.ts";
 import { refreshBriefing } from "../_shared/briefing-refresh.ts";
 import { eaApply, eaChat, eaDecide, eaForget, eaHistory, eaNudge } from "../_shared/ea-handlers.ts";
 import { isMutedSender } from "../_shared/ea-agent.ts";
+import { sweepFeedback, sweepList, sweepRun } from "../_shared/inbox-sweep-handlers.ts";
 import { classifyEmail, calendarConflicts, groupWeek, sectionsFromEmails, type BriefingEmail, type BriefingSections, type CalEvent } from "../_shared/briefing-facts.ts";
 import { generateVertexContent, parseServiceAccountKey, GEMINI_DRAFTING_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 
@@ -621,6 +622,12 @@ Deno.serve(async (req) => {
       if (body.action === "ea_decide") return json(await eaDecide(db, userId, String(body.actionId ?? ""), body.decision === "done" ? "done" : "dismissed"));
       if (body.action === "ea_apply") return json(await eaApply(db, userId, String(body.actionId ?? "")));
       if (body.action === "ea_forget") return json(await eaForget(db, userId, String(body.prefId ?? "")));
+      if (body.action === "ea_sweep_run") return json({ ok: true, ...(await sweepRun(db, userId)) });
+      if (body.action === "ea_sweep_list") return json(await sweepList(db, userId));
+      if (body.action === "ea_sweep_feedback") {
+        const r = await sweepFeedback(db, userId, String((body as any).id ?? ""), (body as any).value);
+        return json(r, "error" in r ? 400 : 200);
+      }
       return json({ error: "unknown_action" }, 400);
     }
     await generateBriefingForUser(db, userId, todayStr);

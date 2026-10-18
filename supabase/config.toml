@@ -199,6 +199,3 @@ verify_jwt = false
 
 [functions.bulk-import-performance]
 verify_jwt = false
-
-[functions.inbox-sweep]
-verify_jwt = false

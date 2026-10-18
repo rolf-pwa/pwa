@@ -1,6 +1,6 @@
 import { supabase } from "@/shared/integrations/supabase/client";
 
-const URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/inbox-sweep`;
+const URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/daily-briefing-generate`;
 
 export type SweepBucket = "needs_you" | "fyi" | "archivable" | "client";
 export interface SweepItem {
@@ -22,6 +22,6 @@ async function call<T>(action: string, payload: Record<string, unknown> = {}): P
   return json as T;
 }
 
-export const getSweep = () => call<SweepOverview>("list");
-export const runSweep = () => call<{ ok: true; sorted: number; remaining: number; modelFailed?: boolean }>("run");
-export const rateSweepItem = (id: string, value: "right" | "wrong" | null) => call<{ ok: true }>("feedback", { id, value });
+export const getSweep = () => call<SweepOverview>("ea_sweep_list");
+export const runSweep = () => call<{ ok: true; sorted: number; remaining: number; modelFailed?: boolean }>("ea_sweep_run");
+export const rateSweepItem = (id: string, value: "right" | "wrong" | null) => call<{ ok: true }>("ea_sweep_feedback", { id, value });
