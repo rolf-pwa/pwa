@@ -47,7 +47,7 @@ export async function sweepRun(db: any, userId: string) {
     db.from("contacts").select("email").not("email", "is", null).limit(10000),
     db.from("ea_preferences").select("value").eq("staff_user_id", userId).eq("kind", "mute_sender").eq("active", true),
   ]);
-  const clients = new Set((contacts ?? []).map((c: any) => String(c.email).trim().toLowerCase()).filter(Boolean));
+  const clients = new Set<string>((contacts ?? []).map((c: any) => String(c.email).trim().toLowerCase()).filter(Boolean));
   const muted = (prefs ?? []).map((p: any) => String(p.value));
 
   const verdicts = new Map<string, Verdict>();
