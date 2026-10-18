@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { FileText, Loader2, MessageCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { supabase } from "@/shared/integrations/supabase/client";
+import { InboxSweep } from "@/modules/crm/components/InboxSweep";
 import { RequestDetailDialog, REQUESTS_SELECT, STATUS_CONFIG, TYPE_LABELS, type PortalRequest } from "@/modules/crm/components/RequestDetailDialog";
 import { AppLayout } from "@/shared/components/AppLayout";
 import { Badge } from "@/shared/components/ui/badge";
@@ -148,6 +149,7 @@ export default function AskGeorgia() {
         {data && (
           <>
             <AwayCard away={data.away} onSaved={load} />
+            <InboxSweep />
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-lg">Conversations</CardTitle></CardHeader>
               <CardContent className="p-0">
