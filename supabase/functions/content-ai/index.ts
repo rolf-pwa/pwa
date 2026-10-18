@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { loadVoice } from "../_shared/voice-profile.ts";
+import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { GEMINI_DRAFTING_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
 
 const ALLOWED_ORIGINS = [
@@ -173,6 +175,9 @@ Generate 5 compelling content titles. Return ONLY a JSON array of 5 title string
 
     console.log(`[content-ai] Calling Vertex AI in ${REGION}`);
 
+    // Posts and drafts go out under Rolf's name, so they are written in his voice.
+    const voice = await loadVoice(createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } }), getServiceGoogleAccessToken);
+
     const response = await fetchWithVertexRetry(vertexUrl, {
       method: "POST",
       headers: {
@@ -181,7 +186,7 @@ Generate 5 compelling content titles. Return ONLY a JSON array of 5 title string
       },
       body: JSON.stringify({
         contents: [
-          { role: "user", parts: [{ text: systemPrompt + "\n\n" + userPrompt }] },
+          { role: "user", parts: [{ text: systemPrompt + (voice ? "\n\n" + voice : "") + "\n\n" + userPrompt }] },
         ],
         generationConfig: withThinking(MODEL, { temperature: 0.5, maxOutputTokens: 4000 }, "low"),
       }),

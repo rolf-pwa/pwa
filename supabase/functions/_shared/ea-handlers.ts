@@ -7,7 +7,8 @@ import {
   type Content, type Part, type ToolOutcome,
 } from "./ea-agent.ts";
 import { fetchWithVertexRetry, getGcpAccessToken, GEMINI_DRAFTING_MODEL, parseServiceAccountKey, vertexModelUrl, withThinking, type ServiceAccountKey } from "./vertex-ai.ts";
-import { getValidGoogleAccessToken } from "./google-token.ts";
+import { getServiceGoogleAccessToken, getValidGoogleAccessToken } from "./google-token.ts";
+import { loadVoice } from "./voice-profile.ts";
 import { refreshBriefing } from "./briefing-refresh.ts";
 import { provisionClientFolderTree } from "./vault-provisioning.ts";
 
@@ -161,7 +162,8 @@ export async function eaChat(db: any, userId: string, text: string, start: boole
     db.from("pm_tasks").select("id, title, due_date").eq("assignee_id", userId).neq("status", "done").order("due_date", { ascending: true, nullsFirst: false }).limit(25),
     db.from("ea_preferences").select("kind, value").eq("staff_user_id", userId).eq("active", true),
   ]);
-  const system = `${SYSTEM_PROMPT}\n\n${buildContextBlock({ nowLabel: nowLabel(), briefing, tasks: ((tasks ?? []) as any[]).map((t) => ({ id: t.id, title: t.title, due: t.due_date })), preferences: ((prefs ?? []) as any[]).map((p) => (p.kind === "mute_sender" ? `Do not show mail from: ${p.value}` : p.value)), earlier })}`;
+  const voice = await loadVoice(db, getServiceGoogleAccessToken);
+  const system = `${SYSTEM_PROMPT}${voice ? `\n\n${voice}` : ""}\n\n${buildContextBlock({ nowLabel: nowLabel(), briefing, tasks: ((tasks ?? []) as any[]).map((t) => ({ id: t.id, title: t.title, due: t.due_date })), preferences: ((prefs ?? []) as any[]).map((p) => (p.kind === "mute_sender" ? `Do not show mail from: ${p.value}` : p.value)), earlier })}`;
   const history: Content[] = ((prior ?? []) as any[]).map((m) => ({ role: m.role === "user" ? "user" : "model", parts: [{ text: m.content }] }));
   // The model's first turn must be the user's: the opening of the meeting is Georgia's own, so give it a stand-in.
   if (history.length && history[0].role === "model") history.unshift({ role: "user", parts: [{ text: "(The morning meeting has started.)" }] });
