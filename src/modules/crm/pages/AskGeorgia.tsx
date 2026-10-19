@@ -12,6 +12,7 @@ import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Textarea } from "@/shared/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
+import { MeetingRecordsCard } from "@/modules/crm/components/MeetingRecordsCard";
 import { getSupportOverview, handBackSupportConversation, replyToSupportConversation, reviewSupportConversation, setAway, type Away, type SupportConversation } from "@/modules/crm/lib/reviewAgent";
 
 const when = (iso: string) => new Date(iso).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -150,6 +151,7 @@ export default function AskGeorgia() {
           <>
             <AwayCard away={data.away} onSaved={load} />
             <InboxSweep />
+            <MeetingRecordsCard />
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-lg">Conversations</CardTitle></CardHeader>
               <CardContent className="p-0">

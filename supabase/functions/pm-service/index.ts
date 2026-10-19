@@ -2,6 +2,7 @@
 // comments). Phase 1: no external API, no portal/client access yet.
 
 import { notifyClientsOfComment, notifyProsOfComment, type TaskRef } from "../_shared/task-notify.ts";
+import { createMeetingRecord, maybeCreateMeetingRecord, meetingRecordCandidates } from "../_shared/meeting-record-service.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ALLOWED_ORIGINS = [
@@ -48,7 +49,7 @@ async function requireStaff(req: Request): Promise<{ userId: string; error?: und
 const PROJECT_FIELDS =
   "id, name, description, status, household_id, contact_id, corporation_id, family_id, created_by, created_at, updated_at";
 const TASK_FIELDS =
-  "id, project_id, parent_task_id, title, description, status, due_date, assignee_id, assigned_agent_key, household_id, contact_id, corporation_id, family_id, completed_at, client_visible, created_by, created_at, updated_at";
+  "id, project_id, parent_task_id, title, description, status, due_date, assignee_id, assigned_agent_key, household_id, contact_id, corporation_id, family_id, completed_at, client_visible, meeting_followup, meeting_event, created_by, created_at, updated_at";
 
 Deno.serve(async (req) => {
   const cors = getCorsHeaders(req);
@@ -153,7 +154,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "createTask") {
-      const { title, description, project_id, parent_task_id, due_date, assignee_id, household_id, contact_id, corporation_id, family_id, client_visible } = body;
+      const { title, description, project_id, parent_task_id, due_date, assignee_id, household_id, contact_id, corporation_id, family_id, client_visible, meeting_followup, meeting_event } = body;
       if (!String(title || "").trim()) return json({ ok: false, error: "Task title is required" }, 400);
 
       let resolvedHouseholdId = household_id || null;
@@ -182,6 +183,8 @@ Deno.serve(async (req) => {
           corporation_id: corporation_id || null,
           family_id: resolvedFamilyId,
           ...(typeof client_visible === "boolean" ? { client_visible } : {}),
+          ...(typeof meeting_followup === "boolean" ? { meeting_followup } : {}),
+          ...(meeting_event && typeof meeting_event === "object" ? { meeting_event } : {}),
           created_by: userId,
         })
         .select(TASK_FIELDS)
@@ -194,7 +197,7 @@ Deno.serve(async (req) => {
       const { id, ...updates } = body;
       if (!id) return json({ ok: false, error: "id is required" }, 400);
       const patch: Record<string, unknown> = {};
-      for (const key of ["title", "description", "status", "due_date", "assignee_id", "assigned_agent_key", "client_visible", "family_id"]) {
+      for (const key of ["title", "description", "status", "due_date", "assignee_id", "assigned_agent_key", "client_visible", "family_id", "meeting_followup"]) {
         if (key in updates) patch[key] = updates[key];
       }
       if (patch.status === "done") patch.completed_at = new Date().toISOString();
@@ -207,7 +210,28 @@ Deno.serve(async (req) => {
       if ("assignee_id" in patch && patch.assignee_id) patch.assigned_agent_key = null;
       const { data, error } = await db.from("pm_tasks").update(patch).eq("id", id).select(TASK_FIELDS).maybeSingle();
       if (error) return json({ ok: false, error: error.message }, 500);
+      // A completed meeting follow-up gets its record filed in the household's Advisor Files (also when the box is ticked on a finished task).
+      if (patch.status === "done" || patch.meeting_followup === true) {
+        // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+        EdgeRuntime.waitUntil(maybeCreateMeetingRecord(db, id));
+      }
       return json({ ok: true, task: data });
+    }
+
+    // Backfill: completed tasks since a date, to choose which get a meeting record; then file the chosen ones (a few per call).
+    if (action === "meetingRecordCandidates") {
+      const since = typeof body.since === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.since) ? body.since : "2026-09-01";
+      return json({ ok: true, since, candidates: await meetingRecordCandidates(db, since) });
+    }
+    if (action === "meetingRecordCreate") {
+      const ids: string[] = Array.isArray(body.task_ids) ? body.task_ids.filter((x: unknown) => typeof x === "string").slice(0, 3) : [];
+      const results: { id: string; status: string; reason?: string; url?: string }[] = [];
+      for (const taskId of ids) {
+        await db.from("pm_tasks").update({ meeting_followup: true }).eq("id", taskId).is("parent_task_id", null);
+        const r = await createMeetingRecord(db, taskId);
+        results.push({ id: taskId, status: r.status, reason: r.reason, url: r.url });
+      }
+      return json({ ok: true, results });
     }
 
     if (action === "getTaskComments") {

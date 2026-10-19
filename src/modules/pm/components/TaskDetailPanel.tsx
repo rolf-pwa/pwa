@@ -7,6 +7,7 @@ import { Input } from "@/shared/components/ui/input";
 import { Button } from "@/shared/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import { Switch } from "@/shared/components/ui/switch";
+import { Checkbox } from "@/shared/components/ui/checkbox";
 import { Loader2, Send, Plus, Eye, EyeOff, X, Bot, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { getTaskAgent } from "@/shared/lib/agents";
@@ -169,6 +170,16 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
     }
   };
 
+  const setMeetingFollowup = async (meeting_followup: boolean) => {
+    try {
+      const updated = await getTaskAgent().updateTask(task.id, { meeting_followup });
+      onChanged(updated);
+      if (meeting_followup && task.status === "done") toast.success("Filing the meeting record in Advisor Files");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not update this task.");
+    }
+  };
+
   const toggleSubtask = async (sub: PmTask) => {
     try {
       const updated = await getTaskAgent().updateTask(sub.id, { status: sub.status === "done" ? "open" : "done" });
@@ -281,6 +292,12 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
           Client Visible
           <Switch checked={task.client_visible} onCheckedChange={setClientVisible} />
         </label>
+        {!task.parent_task_id && (
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground" title="When this is completed, a meeting record is filed in the household's Advisor Files > Meeting Notes">
+            <Checkbox checked={!!task.meeting_followup} onCheckedChange={(v) => void setMeetingFollowup(v === true)} aria-label="Meeting follow-up" />
+            Meeting follow-up
+          </label>
+        )}
       </div>
 
       {task.assigned_agent_key && (
