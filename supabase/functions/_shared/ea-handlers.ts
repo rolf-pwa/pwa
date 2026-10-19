@@ -9,6 +9,7 @@ import {
 import { fetchWithVertexRetry, getGcpAccessToken, GEMINI_DRAFTING_MODEL, parseServiceAccountKey, vertexModelUrl, withThinking, type ServiceAccountKey } from "./vertex-ai.ts";
 import { getServiceGoogleAccessToken, getValidGoogleAccessToken } from "./google-token.ts";
 import { loadVoice } from "./voice-profile.ts";
+import { maybeCreateMeetingRecord } from "./meeting-record-service.ts";
 import { refreshBriefing } from "./briefing-refresh.ts";
 import { provisionClientFolderTree } from "./vault-provisioning.ts";
 
@@ -201,6 +202,9 @@ export async function eaChat(db: any, userId: string, text: string, start: boole
         if (!t) return { ok: false, message: "I could not find that open task." };
         if (name === "complete_task") {
           await db.from("pm_tasks").update({ status: "done", completed_at: new Date().toISOString() }).eq("id", id);
+          // A meeting follow-up gets its record filed when it is closed.
+          // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+          EdgeRuntime.waitUntil(maybeCreateMeetingRecord(db, id));
           await record("task_completed", "done", `Completed: ${t.title}`, { task_id: id });
           return { ok: true, message: `Marked done: ${t.title}.` };
         }

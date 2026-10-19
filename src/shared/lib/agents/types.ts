@@ -192,6 +192,8 @@ export interface PmTask {
   family_id: string | null;
   completed_at: string | null;
   client_visible: boolean;
+  /** A meeting follow-up: when it is completed, a standard record is filed in the household's Advisor Files. */
+  meeting_followup?: boolean;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -277,7 +279,7 @@ export interface ITaskAgentProvider {
   updateTask(
     id: string,
     updates: Partial<
-      Pick<PmTask, "title" | "description" | "status" | "due_date" | "assignee_id" | "assigned_agent_key" | "client_visible" | "family_id">
+      Pick<PmTask, "title" | "description" | "status" | "due_date" | "assignee_id" | "assigned_agent_key" | "client_visible" | "family_id" | "meeting_followup">
     >,
   ): Promise<PmTask>;
   getTaskComments(taskId: string): Promise<PmTaskComment[]>;
