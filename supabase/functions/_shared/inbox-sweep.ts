@@ -125,3 +125,8 @@ export function sweepLine(c: SweepCounts): string | null {
   add(c.client, (n) => `${n} from ${n === 1 ? "a client" : "clients"}`);
   return parts.length ? `Inbox sweep: ${parts.join(", ")}. Review the sorts` : null;
 }
+
+/** Which sorts a bulk archive may move: only Would-archive mail still in the Inbox that was not put back before. "rated" also needs Rolf's "right". */
+export function archiveTargets<T extends { bucket: Bucket; feedback: "right" | "wrong" | null; archived_at?: string | null; undone_at?: string | null }>(items: T[], scope: "rated" | "all"): T[] {
+  return items.filter((i) => i.bucket === "archivable" && !i.archived_at && !i.undone_at && (scope === "rated" ? i.feedback === "right" : i.feedback !== "wrong"));
+}

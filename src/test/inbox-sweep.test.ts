@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { accuracy, addressOf, correctionPlan, mutedMatch, ruleVerdict, verdictsFromModel, sweepPrompt, type SweepMessage } from "../../supabase/functions/_shared/inbox-sweep";
+import { accuracy, addressOf, archiveTargets, correctionPlan, mutedMatch, ruleVerdict, verdictsFromModel, sweepPrompt, type SweepMessage } from "../../supabase/functions/_shared/inbox-sweep";
 
 const msg = (o: Partial<SweepMessage>): SweepMessage => ({ id: "m1", from: "Someone <x@example.com>", subject: "Hello", snippet: "", ...o });
 const clients = new Set(["ed@weiss.ca"]);
@@ -102,5 +102,22 @@ describe("the morning run", () => {
     const h = readFileSync("supabase/functions/_shared/inbox-sweep-handlers.ts", "utf8");
     expect(h).toContain("cfg.auto === false");
     expect(h).not.toMatch(/gmail\.googleapis\.com\/gmail\/v1\/users\/me\/messages\/[^`]*\/(modify|trash|delete|send)|method:\s*"(POST|DELETE|PUT|PATCH)"[^}]*gmail/);
+  });
+});
+
+describe("archiveTargets", () => {
+  const row = (bucket: any, feedback: any = null, extra: any = {}) => ({ bucket, feedback, ...extra });
+  const items = [
+    row("archivable", "right"), row("archivable"), row("archivable", "wrong"),
+    row("fyi", "right"), row("needs_you"), row("client", "right"),
+    row("archivable", "right", { archived_at: "2026-10-19" }), row("archivable", "right", { undone_at: "2026-10-19" }),
+  ];
+  it("rated: only Would-archive marked right, not already archived or put back", () => {
+    expect(archiveTargets(items, "rated")).toHaveLength(1);
+  });
+  it("all: every Would-archive not marked wrong, never other buckets", () => {
+    const got = archiveTargets(items, "all");
+    expect(got).toHaveLength(2);
+    expect(got.every((i) => i.bucket === "archivable" && i.feedback !== "wrong")).toBe(true);
   });
 });
