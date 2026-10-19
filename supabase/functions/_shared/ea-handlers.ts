@@ -164,6 +164,16 @@ export function buildEaTools(db: any, userId: string, date: string, sa: ServiceA
   let googleToken: string | null = null;
   const google = async () => (googleToken ??= await getValidGoogleAccessToken(db, userId));
 
+  /** The client a task is about, by name, as the ids that make it a link in Rolf's task list. */
+  const findClient = async (nameIn: unknown): Promise<{ ok: true; link: { contact_id: string; household_id: string | null; family_id: string | null }; label: string } | { ok: false; message: string }> => {
+    const cn = String(nameIn ?? "").trim().slice(0, 120).replace(/[%,()]/g, " ").trim();
+    const { data: people } = await db.from("contacts").select("id, full_name, household_id, family_id").ilike("full_name", `%${cn}%`).limit(5);
+    if (!(people ?? []).length) return { ok: false, message: `I could not find a client called "${cn}". Tell me who it is for, or say it has no client.` };
+    if ((people ?? []).length > 1) return { ok: false, message: `"${cn}" matches ${(people ?? []).map((p: any) => p.full_name).join(", ")}. Which one?` };
+    const p = people[0];
+    return { ok: true, link: { contact_id: p.id, household_id: p.household_id ?? null, family_id: p.family_id ?? null }, label: p.full_name };
+  };
+
   const runTool = async (name: string, a: Record<string, unknown>): Promise<ToolOutcome> => {
     const str = (v: unknown, max = 300) => String(v ?? "").trim().slice(0, max);
     switch (name) {
@@ -173,10 +183,21 @@ export function buildEaTools(db: any, userId: string, date: string, sa: ServiceA
         const toGeorgia = String(a.assign_to ?? "").toLowerCase() === "georgia";
         const rec = a.repeats ? validRecurrence({ every: String(a.repeats).toLowerCase(), owner: toGeorgia ? "georgia" : "same" }) : null;
         if (a.repeats && !rec) return { ok: false, message: "Repeats must be week, month or year." };
-        const { data, error } = await db.from("pm_tasks").insert({ title, description: str(a.notes, 1000) || null, status: "open", client_visible: false, assignee_id: toGeorgia ? null : userId, assigned_agent_key: toGeorgia ? "georgia" : null, recurrence: rec, created_by: userId, due_date: due }).select("id").single();
+        let linked: Awaited<ReturnType<typeof findClient>> | null = null;
+        if (String(a.client ?? "").trim()) { linked = await findClient(a.client); if (!linked.ok) return linked; }
+        const { data, error } = await db.from("pm_tasks").insert({ title, description: str(a.notes, 1000) || null, status: "open", client_visible: false, assignee_id: toGeorgia ? null : userId, assigned_agent_key: toGeorgia ? "georgia" : null, recurrence: rec, created_by: userId, due_date: due, ...(linked?.ok ? linked.link : {}) }).select("id").single();
         if (error) { await record("task_created", "failed", `Could not create: ${title}`); return { ok: false, message: `Could not create the task: ${error.message}` }; }
-        await record("task_created", "done", `Task: ${title}${due ? ` (due ${due})` : ""}${toGeorgia ? " (Georgia's)" : ""}${rec ? `, repeats every ${rec.every}` : ""}`, { task_id: data.id, due });
-        return { ok: true, message: `Task created: ${title}${due ? `, due ${due}` : ""}${toGeorgia ? ", assigned to me" : ""}${rec ? `, repeating every ${rec.every}` : ""}.` };
+        await record("task_created", "done", `Task: ${title}${due ? ` (due ${due})` : ""}${toGeorgia ? " (Georgia's)" : ""}${rec ? `, repeats every ${rec.every}` : ""}${linked?.ok ? `, for ${linked.label}` : ""}`, { task_id: data.id, due, ...(linked?.ok ? { link: `/contacts/${linked.link.contact_id}` } : {}) });
+        return { ok: true, message: `Task created: ${title}${due ? `, due ${due}` : ""}${toGeorgia ? ", assigned to me" : ""}${rec ? `, repeating every ${rec.every}` : ""}${linked?.ok ? `, linked to ${linked.label}` : ", with no client linked"}.` };
+      }
+      case "link_task_to_client": {
+        const id = str(a.task_id, 60); if (!id) return { ok: false, message: "Which task?" };
+        const { data: t } = await db.from("pm_tasks").select("id, title").eq("id", id).maybeSingle();
+        if (!t) return { ok: false, message: "I could not find that task." };
+        const c = await findClient(a.client); if (!c.ok) return c;
+        await db.from("pm_tasks").update(c.link).eq("id", id);
+        await record("task_linked", "done", `${t.title}: linked to ${c.label}`, { task_id: id, link: `/contacts/${c.link.contact_id}` });
+        return { ok: true, message: `"${t.title}" is now linked to ${c.label}.` };
       }
       case "assign_task": {
         const id = str(a.task_id, 60); const to = String(a.to ?? "").toLowerCase();

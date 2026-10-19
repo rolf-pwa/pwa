@@ -192,3 +192,18 @@ describe("assigning tasks to Georgia", () => {
     expect(Object.keys((create.parameters as any).properties)).toEqual(expect.arrayContaining(["assign_to", "repeats"]));
   });
 });
+
+describe("linking tasks to clients", () => {
+  it("lets her say who a task is about, and link one she already made", () => {
+    const create = TOOL_DECLARATIONS.find((t) => t.name === "create_task")!;
+    expect(Object.keys((create.parameters as any).properties)).toContain("client");
+    expect(TOOL_DECLARATIONS.map((t) => t.name)).toContain("link_task_to_client");
+    expect(SYSTEM_PROMPT).toMatch(/always pass the client's name/);
+  });
+  it("sets the contact, household and family on the task, and asks rather than guesses when the name is not one client", () => {
+    const src = readFileSync("supabase/functions/_shared/ea-handlers.ts", "utf8");
+    expect(src).toContain("...(linked?.ok ? linked.link : {})");
+    expect(src).toMatch(/matches \$\{\(people \?\? \[\]\)\.map/);
+    expect(src).toContain("I could not find a client called");
+  });
+});
