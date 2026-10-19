@@ -195,7 +195,7 @@ Deno.serve(async (req) => {
 
       const { data: comments, error } = await supabase
         .from("pm_task_comments")
-        .select("id, task_id, author_id, author_contact_id, author_professional_id, body, body_format, kind, created_at")
+        .select("id, task_id, author_id, author_contact_id, author_professional_id, author_agent_key, body, body_format, kind, created_at")
         .eq("task_id", task_id)
         .order("created_at", { ascending: true });
       if (error) return json({ error: error.message }, 500);
@@ -218,10 +218,10 @@ Deno.serve(async (req) => {
       const proById = new Map((pros || []).map((p: any) => [p.id, p.full_name]));
 
       const resolved = rows.map((c) => {
-        const author_type = c.author_id ? "staff" : c.author_contact_id ? "client" : "pro";
+        const author_type = c.author_id || c.author_agent_key ? "staff" : c.author_contact_id ? "client" : "pro";
         const author_name =
           author_type === "staff"
-            ? staffById.get(c.author_id) || "ProsperWise"
+            ? (c.author_id ? staffById.get(c.author_id) || "ProsperWise" : "Georgia")
             : author_type === "client"
               ? contactById.get(c.author_contact_id) || "Client"
               : proById.get(c.author_professional_id) || session.professional.full_name;

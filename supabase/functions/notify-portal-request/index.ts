@@ -376,7 +376,7 @@ if (req.method === "OPTIONS") {
 
     if (event_type === "new") {
       subject = `Your ${requestType} request has been received`;
-      message = `Hi ${contact.first_name || "there"},\n\nWe've received your ${requestType} request and will get back to you shortly.${linkFooter}\n\nThank you,\nProsperWise Team`;
+      message = `Hi ${contact.first_name || "there"},\n\nWe've received your ${requestType} request and logged it as a task in your portal. If anything further is needed, we'll follow up there.${linkFooter}\n\nThank you,\nProsperWise Team`;
     } else if (event_type === "status_update") {
       subject = `Your ${requestType} request is now ${status}`;
       message = `Hi ${contact.first_name || "there"},\n\nYour ${requestType} request has been updated to: ${status}.${linkFooter}\n\nThank you,\nProsperWise Team`;
