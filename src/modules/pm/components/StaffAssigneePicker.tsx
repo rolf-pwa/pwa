@@ -128,7 +128,8 @@ export function StaffAssigneePicker({ value, onChange, householdId, familyId }: 
         )}
         <SelectSeparator />
         <SelectGroup>
-          <SelectLabel>AI Teammates</SelectLabel>
+          <SelectLabel>Georgia and AI teammates</SelectLabel>
+          <SelectItem value="agent:georgia">🤖 Georgia</SelectItem>
           {AI_TEAMMATE_ORDER.map((key) => (
             <SelectItem key={key} value={`agent:${key}`}>
               🤖 {AI_TEAMMATE_LABEL[key]}

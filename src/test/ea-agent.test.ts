@@ -183,3 +183,12 @@ describe("commenting on tasks and closing requests", () => {
     expect(block).toContain('sender_name: "Georgia"');
   });
 });
+
+describe("assigning tasks to Georgia", () => {
+  const names = TOOL_DECLARATIONS.map((t) => t.name);
+  it("lets her create a task for herself, repeating, and hand a task to herself or back to Rolf", () => {
+    expect(names).toContain("assign_task");
+    const create = TOOL_DECLARATIONS.find((t) => t.name === "create_task")!;
+    expect(Object.keys((create.parameters as any).properties)).toEqual(expect.arrayContaining(["assign_to", "repeats"]));
+  });
+});

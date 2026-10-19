@@ -13,6 +13,8 @@ import { maybeCreateMeetingRecord } from "./meeting-record-service.ts";
 import { postTaskEvent } from "./task-events.ts";
 import { draftFromRequest } from "./meeting-followup-service.ts";
 import { notifyClientsOfComment, notifyProsOfComment } from "./task-notify.ts";
+import { maybeCreateNextRecurrence } from "./task-recurrence.ts";
+import { validRecurrence } from "./georgia-tasks.ts";
 import { refreshBriefing } from "./briefing-refresh.ts";
 import { provisionClientFolderTree } from "./vault-provisioning.ts";
 
@@ -93,13 +95,13 @@ async function briefingText(db: any, userId: string, date: string): Promise<stri
   return lines.join("\n");
 }
 
-async function callGemini(sa: ServiceAccountKey, systemText: string, contents: Content[]): Promise<{ parts: Part[] }> {
+export async function callGemini(sa: ServiceAccountKey, systemText: string, contents: Content[], tools: any[] = TOOL_DECLARATIONS): Promise<{ parts: Part[] }> {
   const token = await getGcpAccessToken(sa);
   const res = await fetchWithVertexRetry(vertexModelUrl(sa.project_id, GEMINI_DRAFTING_MODEL), {
     method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemText }] }, contents,
-      tools: [{ functionDeclarations: TOOL_DECLARATIONS }], toolConfig: { functionCallingConfig: { mode: "AUTO" } },
+      tools: [{ functionDeclarations: tools }], toolConfig: { functionCallingConfig: { mode: "AUTO" } },
       generationConfig: withThinking(GEMINI_DRAFTING_MODEL, { temperature: 0.4, maxOutputTokens: 2048 }, "low"),
     }),
   });
@@ -146,34 +148,8 @@ async function earlierRecord(db: any, userId: string, today: string): Promise<st
   return buildEarlierBlock([...days.values()], open);
 }
 
-/** One turn: Rolf says something (or the meeting starts); Georgia answers, using tools. */
-export async function eaChat(db: any, userId: string, text: string, start: boolean) {
-  const date = pacificDate();
-  const { count } = await db.from("ea_messages").select("id", { count: "exact", head: true }).eq("staff_user_id", userId).eq("conversation_date", date);
-  if ((count ?? 0) >= DAILY_MESSAGE_CAP) throw new Error("That is a lot of messages for one day. Start again tomorrow.");
-  const userText = start ? "(The morning meeting is starting. Open it: say good morning, give me the shape of the day in a few lines, then one line on what is still open from earlier days if anything is, name the one or two things you most need a decision on, and ask what I want to start with.)" : String(text ?? "").trim().slice(0, 4000);
-  if (!userText) throw new Error("Say something first.");
-
-  const { data: prior } = await db.from("ea_messages").select("role, content").eq("staff_user_id", userId).eq("conversation_date", date).order("created_at", { ascending: true }).limit(40);
-  if (!start) await db.from("ea_messages").insert({ staff_user_id: userId, conversation_date: date, role: "user", content: userText });
-
-  // What he has already dealt with since the briefing was made comes off it first, so she works from the day as it is now.
-  await refreshBriefing(db, userId, date).catch(() => null);
-  // The last few days' meetings, so the thread continues from day to day.
-  const earlier = await earlierRecord(db, userId, date);
-  const [briefing, { data: tasks }, { data: prefs }] = await Promise.all([
-    briefingText(db, userId, date),
-    db.from("pm_tasks").select("id, title, due_date").eq("assignee_id", userId).neq("status", "done").order("due_date", { ascending: true, nullsFirst: false }).limit(25),
-    db.from("ea_preferences").select("kind, value").eq("staff_user_id", userId).eq("active", true),
-  ]);
-  const voice = await loadVoice(db, getServiceGoogleAccessToken);
-  const system = `${SYSTEM_PROMPT}${voice ? `\n\n${voice}` : ""}\n\n${buildContextBlock({ nowLabel: nowLabel(), briefing, tasks: ((tasks ?? []) as any[]).map((t) => ({ id: t.id, title: t.title, due: t.due_date })), preferences: ((prefs ?? []) as any[]).map((p) => (p.kind === "mute_sender" ? `Do not show mail from: ${p.value}` : p.value)), earlier })}`;
-  const history: Content[] = ((prior ?? []) as any[]).map((m) => ({ role: m.role === "user" ? "user" : "model", parts: [{ text: m.content }] }));
-  // The model's first turn must be the user's: the opening of the meeting is Georgia's own, so give it a stand-in.
-  if (history.length && history[0].role === "model") history.unshift({ role: "user", parts: [{ text: "(The morning meeting has started.)" }] });
-  history.push({ role: "user", parts: [{ text: userText }] });
-
-  const sa = await parseServiceAccountKey(Deno.env.get("GCP_SERVICE_ACCOUNT_KEY"));
+/** The morning-meeting tools, ready to run for Rolf. Also used when Georgia works a task on her own (with the client-facing ones blocked). */
+export function buildEaTools(db: any, userId: string, date: string, sa: ServiceAccountKey) {
   const recorded: string[] = [];
   const record = async (kind: string, status: "done" | "proposed" | "failed", summary: string, payload: Record<string, unknown> = {}) => {
     const { data } = await db.from("ea_actions").insert({ staff_user_id: userId, conversation_date: date, kind, status, summary, payload }).select("id").single();
@@ -194,14 +170,31 @@ export async function eaChat(db: any, userId: string, text: string, start: boole
       case "create_task": {
         const title = str(a.title, 200); if (!title) return { ok: false, message: "A task needs a title." };
         const due = isIsoDate(a.due_date) ? (a.due_date as string) : null;
-        const { data, error } = await db.from("pm_tasks").insert({ title, description: str(a.notes, 1000) || null, status: "open", client_visible: false, assignee_id: userId, created_by: userId, due_date: due }).select("id").single();
+        const toGeorgia = String(a.assign_to ?? "").toLowerCase() === "georgia";
+        const rec = a.repeats ? validRecurrence({ every: String(a.repeats).toLowerCase(), owner: toGeorgia ? "georgia" : "same" }) : null;
+        if (a.repeats && !rec) return { ok: false, message: "Repeats must be week, month or year." };
+        const { data, error } = await db.from("pm_tasks").insert({ title, description: str(a.notes, 1000) || null, status: "open", client_visible: false, assignee_id: toGeorgia ? null : userId, assigned_agent_key: toGeorgia ? "georgia" : null, recurrence: rec, created_by: userId, due_date: due }).select("id").single();
         if (error) { await record("task_created", "failed", `Could not create: ${title}`); return { ok: false, message: `Could not create the task: ${error.message}` }; }
-        await record("task_created", "done", `Task: ${title}${due ? ` (due ${due})` : ""}`, { task_id: data.id, due });
-        return { ok: true, message: `Task created: ${title}${due ? `, due ${due}` : ""}.` };
+        await record("task_created", "done", `Task: ${title}${due ? ` (due ${due})` : ""}${toGeorgia ? " (Georgia's)" : ""}${rec ? `, repeats every ${rec.every}` : ""}`, { task_id: data.id, due });
+        return { ok: true, message: `Task created: ${title}${due ? `, due ${due}` : ""}${toGeorgia ? ", assigned to me" : ""}${rec ? `, repeating every ${rec.every}` : ""}.` };
+      }
+      case "assign_task": {
+        const id = str(a.task_id, 60); const to = String(a.to ?? "").toLowerCase();
+        if (!id || (to !== "georgia" && to !== "rolf")) return { ok: false, message: "I need the task and whether it is for Georgia or Rolf." };
+        const { data: t } = await db.from("pm_tasks").select("id, title, status, parent_task_id, recurrence").eq("id", id).maybeSingle();
+        if (!t) return { ok: false, message: "I could not find that task." };
+        if (t.status === "done") return { ok: false, message: "That task is already done." };
+        const rec = a.repeats ? validRecurrence({ every: String(a.repeats).toLowerCase(), owner: to === "georgia" ? "georgia" : "same" }) : undefined;
+        if (a.repeats && !rec) return { ok: false, message: "Repeats must be week, month or year." };
+        const patch: Record<string, unknown> = to === "georgia" ? { assigned_agent_key: "georgia", assignee_id: null, agent_attempts: 0 } : { assigned_agent_key: null, assignee_id: userId };
+        if (rec) patch.recurrence = rec;
+        await db.from("pm_tasks").update(patch).eq("id", id);
+        await record("task_assigned", "done", `${t.title}: now ${to === "georgia" ? "Georgia's" : "Rolf's"}${rec ? `, repeats every ${rec.every}` : ""}`, { task_id: id });
+        return { ok: true, message: `"${t.title}" is now ${to === "georgia" ? "mine" : "yours"}${rec ? ` and repeats every ${rec.every}` : ""}.` };
       }
       case "complete_task": case "reschedule_task": {
         const id = str(a.task_id, 60);
-        const { data: t } = await db.from("pm_tasks").select("id, title, parent_task_id").eq("id", id).eq("assignee_id", userId).neq("status", "done").maybeSingle();
+        const { data: t } = await db.from("pm_tasks").select("id, title, parent_task_id").eq("id", id).or(`assignee_id.eq.${userId},assigned_agent_key.eq.georgia`).neq("status", "done").maybeSingle();
         if (!t) return { ok: false, message: "I could not find that open task." };
         if (name === "complete_task") {
           await db.from("pm_tasks").update({ status: "done", completed_at: new Date().toISOString() }).eq("id", id);
@@ -209,6 +202,8 @@ export async function eaChat(db: any, userId: string, text: string, start: boole
           // A meeting follow-up gets its record filed when it is closed.
           // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
           EdgeRuntime.waitUntil(maybeCreateMeetingRecord(db, id));
+          // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+          EdgeRuntime.waitUntil(maybeCreateNextRecurrence(db, id));
           await record("task_completed", "done", `Completed: ${t.title}`, { task_id: id });
           return { ok: true, message: `Marked done: ${t.title}.` };
         }
@@ -427,6 +422,39 @@ export async function eaChat(db: any, userId: string, text: string, start: boole
       default: return { ok: false, message: "I do not have that tool." };
     }
   };
+  return { runTool, recorded };
+}
+
+/** One turn: Rolf says something (or the meeting starts); Georgia answers, using tools. */
+export async function eaChat(db: any, userId: string, text: string, start: boolean) {
+  const date = pacificDate();
+  const { count } = await db.from("ea_messages").select("id", { count: "exact", head: true }).eq("staff_user_id", userId).eq("conversation_date", date);
+  if ((count ?? 0) >= DAILY_MESSAGE_CAP) throw new Error("That is a lot of messages for one day. Start again tomorrow.");
+  const userText = start ? "(The morning meeting is starting. Open it: say good morning, give me the shape of the day in a few lines, then one line on what is still open from earlier days if anything is, name the one or two things you most need a decision on, and ask what I want to start with.)" : String(text ?? "").trim().slice(0, 4000);
+  if (!userText) throw new Error("Say something first.");
+
+  const { data: prior } = await db.from("ea_messages").select("role, content").eq("staff_user_id", userId).eq("conversation_date", date).order("created_at", { ascending: true }).limit(40);
+  if (!start) await db.from("ea_messages").insert({ staff_user_id: userId, conversation_date: date, role: "user", content: userText });
+
+  // What he has already dealt with since the briefing was made comes off it first, so she works from the day as it is now.
+  await refreshBriefing(db, userId, date).catch(() => null);
+  // The last few days' meetings, so the thread continues from day to day.
+  const earlier = await earlierRecord(db, userId, date);
+  const [briefing, { data: tasks }, { data: georgiaOwn }, { data: prefs }] = await Promise.all([
+    briefingText(db, userId, date),
+    db.from("pm_tasks").select("id, title, due_date").eq("assignee_id", userId).neq("status", "done").order("due_date", { ascending: true, nullsFirst: false }).limit(25),
+    db.from("pm_tasks").select("id, title, due_date").eq("assigned_agent_key", "georgia").neq("status", "done").order("due_date", { ascending: true, nullsFirst: false }).limit(15),
+    db.from("ea_preferences").select("kind, value").eq("staff_user_id", userId).eq("active", true),
+  ]);
+  const voice = await loadVoice(db, getServiceGoogleAccessToken);
+  const system = `${SYSTEM_PROMPT}${voice ? `\n\n${voice}` : ""}\n\n${buildContextBlock({ nowLabel: nowLabel(), briefing, tasks: ((tasks ?? []) as any[]).map((t) => ({ id: t.id, title: t.title, due: t.due_date })), georgiaTasks: ((georgiaOwn ?? []) as any[]).map((t) => ({ id: t.id, title: t.title, due: t.due_date })), preferences: ((prefs ?? []) as any[]).map((p) => (p.kind === "mute_sender" ? `Do not show mail from: ${p.value}` : p.value)), earlier })}`;
+  const history: Content[] = ((prior ?? []) as any[]).map((m) => ({ role: m.role === "user" ? "user" : "model", parts: [{ text: m.content }] }));
+  // The model's first turn must be the user's: the opening of the meeting is Georgia's own, so give it a stand-in.
+  if (history.length && history[0].role === "model") history.unshift({ role: "user", parts: [{ text: "(The morning meeting has started.)" }] });
+  history.push({ role: "user", parts: [{ text: userText }] });
+
+  const sa = await parseServiceAccountKey(Deno.env.get("GCP_SERVICE_ACCOUNT_KEY"));
+  const { runTool, recorded } = buildEaTools(db, userId, date, sa);
 
   const result = await runAgentTurn(history, { callModel: (contents) => callGemini(sa, system, contents), runTool });
   const answer = result.text || "I did what you asked.";

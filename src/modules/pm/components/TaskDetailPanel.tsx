@@ -138,10 +138,19 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
     }
   };
 
+  const setRepeats = async (value: string) => {
+    try {
+      const recurrence = value === "none" ? null : { every: value as "week" | "month" | "year", interval: 1, owner: (task.assigned_agent_key === "georgia" ? "georgia" : "same") as "georgia" | "same" };
+      onChanged(await getTaskAgent().updateTask(task.id, { recurrence }));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not update how this repeats.");
+    }
+  };
+
   const setAssignee = async (value: string | null) => {
     try {
       const updated = value?.startsWith("agent:")
-        ? await getTaskAgent().updateTask(task.id, { assignee_id: null, assigned_agent_key: value.slice(6) })
+        ? await getTaskAgent().updateTask(task.id, { assignee_id: null, assigned_agent_key: value.slice(6), ...(value === "agent:georgia" && task.recurrence ? { recurrence: { ...task.recurrence, owner: "georgia" as const } } : {}) })
         : await getTaskAgent().updateTask(task.id, { assignee_id: value, assigned_agent_key: null });
       onChanged(updated);
     } catch (e) {
@@ -310,6 +319,20 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
           Client Visible
           <Switch checked={task.client_visible} onCheckedChange={setClientVisible} />
         </label>
+        {!task.parent_task_id && (
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground" title="When this is completed, the next one is made. If it is Georgia's, she watches it and hands it to you ahead of the date.">
+            Repeats
+            <Select value={task.recurrence?.every ?? "none"} onValueChange={setRepeats}>
+              <SelectTrigger className="h-7 w-[110px] text-xs" aria-label="Repeats"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Never</SelectItem>
+                <SelectItem value="week">Weekly</SelectItem>
+                <SelectItem value="month">Monthly</SelectItem>
+                <SelectItem value="year">Yearly</SelectItem>
+              </SelectContent>
+            </Select>
+          </label>
+        )}
         {!task.parent_task_id && (
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground" title="When this is completed, a meeting record is filed in the household's Advisor Files > Meeting Notes">
             <Checkbox checked={!!task.meeting_followup} onCheckedChange={(v) => void setMeetingFollowup(v === true)} aria-label="Meeting follow-up" />

@@ -22,8 +22,12 @@ function getCorsHeaders(req: Request) {
   };
 }
 
+/** What a client sees of the owner: Georgia when she holds the task, otherwise nothing. The agent key itself never leaves the server. */
+// deno-lint-ignore-file no-explicit-any
+const forClient = (rows: any[] | null) => (rows ?? []).map(({ assigned_agent_key, ...t }) => ({ ...t, assignee_label: assigned_agent_key === "georgia" ? "Georgia" : null }));
+
 const TASK_FIELDS =
-  "id, parent_task_id, title, description, status, due_date, completed_at, contact_id, household_id, created_at";
+  "id, parent_task_id, title, description, status, due_date, completed_at, contact_id, household_id, created_at, assigned_agent_key";
 
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -66,7 +70,7 @@ Deno.serve(async (req) => {
       q = inScopeFilter(q).order("due_date", { ascending: true, nullsFirst: false });
       const { data, error } = await q;
       if (error) return json({ error: error.message }, 500);
-      return json({ tasks: data });
+      return json({ tasks: forClient(data) });
     }
 
     if (action === "subtasks") {
@@ -80,7 +84,7 @@ Deno.serve(async (req) => {
         .eq("client_visible", true)
         .order("due_date", { ascending: true, nullsFirst: false });
       if (error) return json({ error: error.message }, 500);
-      return json({ tasks: data });
+      return json({ tasks: forClient(data) });
     }
 
     if (action === "comments") {

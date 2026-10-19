@@ -16,6 +16,7 @@ export const AI_TEAMMATE_ORDER: AiTeammateKey[] = ["pm_teammate"];
 /** System agents that work on their own: shown on tasks, but never offered a manual "Run" and not assignable by hand. */
 export const AUTONOMOUS_AGENT_LABEL: Record<string, string> = {
   onboarding_concierge: "Georgia, AI Assistant (onboarding)",
+  georgia: "Georgia",
 };
 /** Names for comment authors that are agents but not task owners (Georgia writes drafts and system lines). */
 export const COMMENT_AUTHOR_LABEL: Record<string, string> = {
