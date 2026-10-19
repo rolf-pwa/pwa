@@ -138,3 +138,13 @@ describe("a formatted comment in print", () => {
     expect(commentPlainText("<b>plain</b>", "text")).toBe("<b>plain</b>");
   });
 });
+
+import { proCommentAlertTitle } from "../../supabase/functions/_shared/task-notify";
+
+describe("the alert when a professional comments", () => {
+  it("names the professional and what they do", () => {
+    expect(proCommentAlertTitle({ full_name: "Dana Lee", professional_type: "accountant", firm: "Lee & Co" }, "Tax planning")).toBe('Dana Lee (accountant, Lee & Co) commented on "Tax planning"');
+    expect(proCommentAlertTitle({ full_name: "Sam Roy", professional_type: "estate_lawyer" }, "Will")).toBe('Sam Roy (estate lawyer) commented on "Will"');
+    expect(proCommentAlertTitle({ full_name: "Pat Kim" }, "Review")).toBe('Pat Kim commented on "Review"');
+  });
+});

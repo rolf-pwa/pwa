@@ -6,6 +6,7 @@
 // scope_id only ever narrow which of a pro's own tagged tasks are shown for a
 // given page — they can never widen access to another pro's tasks.
 
+import { proCommentAlertTitle } from "../_shared/task-notify.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validateProSession } from "../_shared/pro-portal-auth.ts";
 
@@ -247,7 +248,7 @@ Deno.serve(async (req) => {
         const trimmedBody = String(commentBody).trim();
         await supabase.from("staff_notifications").insert({
           source_type: "task_comment",
-          title: `${session.professional.full_name} commented on "${task.title}"`,
+          title: proCommentAlertTitle(session.professional, task.title),
           body: trimmedBody.length > 100 ? trimmedBody.slice(0, 100) + "…" : trimmedBody,
           contact_id: task.contact_id || null,
           link: task.contact_id

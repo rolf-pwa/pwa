@@ -87,6 +87,14 @@ export async function notifyProsOfComment(db: any, task: { id: string; parent_ta
   return sent;
 }
 
+const TYPE_LABEL = (t: string) => String(t || "").replace(/_/g, " ").trim();
+
+/** The title of the in-app alert when a professional comments: who they are and what they do, so it cannot be mistaken for a client. */
+export function proCommentAlertTitle(pro: { full_name: string; professional_type?: string | null; firm?: string | null }, taskTitle: string): string {
+  const role = [TYPE_LABEL(pro.professional_type ?? ""), pro.firm?.trim()].filter(Boolean).join(", ");
+  return `${pro.full_name}${role ? ` (${role})` : ""} commented on "${taskTitle}"`.slice(0, 200);
+}
+
 /** An in-app note for Rolf when a client replies on a task. */
 export async function notifyStaffOfClientReply(db: any, task: TaskRef, clientName: string, body: string, contactId: string): Promise<void> {
   await db.from("staff_notifications").insert({
