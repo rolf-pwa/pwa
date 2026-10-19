@@ -193,7 +193,7 @@ Deno.serve(async (req) => {
 
       const { data: comments, error } = await supabase
         .from("pm_task_comments")
-        .select("id, task_id, author_id, author_contact_id, author_professional_id, body, created_at")
+        .select("id, task_id, author_id, author_contact_id, author_professional_id, body, body_format, created_at")
         .eq("task_id", task_id)
         .order("created_at", { ascending: true });
       if (error) return json({ error: error.message }, 500);
@@ -223,7 +223,9 @@ Deno.serve(async (req) => {
             : author_type === "client"
               ? contactById.get(c.author_contact_id) || "Client"
               : proById.get(c.author_professional_id) || session.professional.full_name;
-        return { id: c.id, task_id: c.task_id, body: c.body, created_at: c.created_at, author_type, author_name };
+        // Only staff comments can be formatted; everyone else's is shown as plain text.
+        const body_format = author_type === "staff" && c.body_format === "html" ? "html" : "text";
+        return { id: c.id, task_id: c.task_id, body: c.body, body_format, created_at: c.created_at, author_type, author_name };
       });
       return json({ comments: resolved });
     }

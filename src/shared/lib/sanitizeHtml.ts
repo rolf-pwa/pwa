@@ -28,3 +28,13 @@ export function isEmptyHtml(html: string): boolean {
   div.innerHTML = sanitizeCommentHtml(html);
   return !div.textContent?.trim();
 }
+
+/** A comment as plain text, for print: formatted comments lose their markup but keep line breaks and bullets. */
+export function commentPlainText(body: string, format?: "text" | "html" | null): string {
+  if (format !== "html") return body;
+  const div = document.createElement("div");
+  div.innerHTML = sanitizeCommentHtml(body)
+    .replace(/<li[^>]*>/gi, "• ")
+    .replace(/<br\s*\/?>|<\/(p|div|li|h3|h4|tr|blockquote)>/gi, "\n");
+  return (div.textContent ?? "").replace(/\n{3,}/g, "\n\n").trim();
+}

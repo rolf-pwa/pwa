@@ -44,6 +44,49 @@ export async function notifyClientsOfComment(db: any, task: TaskRef, supabaseUrl
   return sent;
 }
 
+export const PRO_PORTAL_SIGN_IN = "https://app.prosperwise.ca/pro-portal/login";
+const PRO_QUIET_MS = 30 * 60 * 1000;
+
+/** The words of a content-free email to a professional: a comment is waiting, and where to sign in. Nothing about the task. */
+export function proCommentEmail(name: string): { subject: string; text: string } {
+  return {
+    subject: "A task you are tagged on has a new comment",
+    text: `Hello ${name || "there"},\n\nThere is a new comment on a task you are tagged on in the ProsperWise Pro Portal.\n\nSign in to read it:\n${PRO_PORTAL_SIGN_IN}\n\nThank you,\nProsperWise Team`,
+  };
+}
+
+/**
+ * Tells the professionals tagged on a task (or on its parent) that staff commented: one short email with no details, and not again
+ * within 30 minutes of the previous staff comment on the same task. Professionals whose Pro Portal is off are not emailed.
+ */
+export async function notifyProsOfComment(db: any, task: { id: string; parent_task_id?: string | null }, supabaseUrl: string, serviceKey: string, internalSecret: string): Promise<number> {
+  const { data: recent } = await db.from("pm_task_comments").select("created_at").eq("task_id", task.id).not("author_id", "is", null).order("created_at", { ascending: false }).limit(2);
+  const previous = (recent ?? [])[1]?.created_at;
+  if (previous && Date.now() - Date.parse(previous) < PRO_QUIET_MS) return 0;
+
+  const ids = [task.id, ...(task.parent_task_id ? [task.parent_task_id] : [])];
+  const { data: tags } = await db.from("pm_task_collaborators").select("professional_id").in("task_id", ids).not("professional_id", "is", null);
+  const proIds = [...new Set((tags ?? []).map((t: any) => t.professional_id))];
+  if (!proIds.length) return 0;
+  const { data: pros } = await db.from("professionals").select("id, email, full_name, pro_portal_enabled").in("id", proIds);
+  let sent = 0;
+  for (const pro of (pros ?? []).filter((p: any) => p.pro_portal_enabled && p.email)) {
+    try {
+      const { subject, text } = proCommentEmail(pro.full_name);
+      const res = await fetch(`${supabaseUrl}/functions/v1/send-admin-email`, {
+        method: "POST",
+        headers: { "x-region": "ca-central-1", "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}`, "x-internal-secret": internalSecret },
+        body: JSON.stringify({ to: pro.email, subject, text }),
+      });
+      if (res.ok) sent++;
+      else console.error(`[task-notify] pro email failed ${res.status}`);
+    } catch (e) {
+      console.error("[task-notify] pro email error", e);
+    }
+  }
+  return sent;
+}
+
 /** An in-app note for Rolf when a client replies on a task. */
 export async function notifyStaffOfClientReply(db: any, task: TaskRef, clientName: string, body: string, contactId: string): Promise<void> {
   await db.from("staff_notifications").insert({

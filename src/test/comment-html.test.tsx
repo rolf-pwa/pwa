@@ -90,3 +90,51 @@ describe("telling people about task comments", () => {
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ title: "Colleen Jerczynski replied on: Governance Review Followup", link: "/contacts/c1", source_type: "task_client_reply" }));
   });
 });
+
+import { notifyProsOfComment, proCommentEmail, PRO_PORTAL_SIGN_IN } from "../../supabase/functions/_shared/task-notify";
+import { commentPlainText } from "@/shared/lib/sanitizeHtml";
+
+/** A database stub: each table answers every query with its rows, whatever the filters. */
+function fakeDb(tables: Record<string, unknown[]>) {
+  const chain = (rows: unknown[]) => { const c: any = { select: () => c, in: () => c, eq: () => c, not: () => c, order: () => c, limit: () => c, then: (r: (v: unknown) => unknown) => r({ data: rows }) }; return c; };
+  return { from: (t: string) => chain(tables[t] ?? []) } as any;
+}
+const taskRef = { id: "t1", parent_task_id: null as string | null };
+const pro = { id: "p1", email: "accountant@example.com", full_name: "Dana Lee", pro_portal_enabled: true };
+
+describe("telling tagged professionals", () => {
+  it("writes a short email with no task details and the sign-in address", () => {
+    const m = proCommentEmail("Dana Lee");
+    expect(m.text).toContain("Dana Lee");
+    expect(m.text).toContain(PRO_PORTAL_SIGN_IN);
+    expect(m.subject + m.text).not.toMatch(/\$|transfer|policy/i);
+  });
+  it("emails each tagged professional whose portal is on, once", async () => {
+    const f = vi.fn(async () => ({ ok: true })); vi.stubGlobal("fetch", f);
+    const db = fakeDb({ pm_task_comments: [{ created_at: new Date().toISOString() }], pm_task_collaborators: [{ professional_id: "p1" }, { professional_id: "p1" }, { professional_id: "p2" }], professionals: [pro, { ...pro, id: "p2", email: "off@example.com", pro_portal_enabled: false }] });
+    expect(await notifyProsOfComment(db, taskRef, "https://x.supabase.co", "key", "secret")).toBe(1);
+    const call = f.mock.calls[0] as unknown as [string, { body: string; headers: Record<string, string> }];
+    expect(call[0]).toContain("/send-admin-email");
+    expect(JSON.parse(call[1].body).to).toBe("accountant@example.com");
+    expect(call[1].headers["x-internal-secret"]).toBe("secret");
+    vi.unstubAllGlobals();
+  });
+  it("stays quiet when staff commented on the same task in the last half hour", async () => {
+    const f = vi.fn(async () => ({ ok: true })); vi.stubGlobal("fetch", f);
+    const now = Date.now();
+    const db = fakeDb({ pm_task_comments: [{ created_at: new Date(now).toISOString() }, { created_at: new Date(now - 10 * 60_000).toISOString() }], pm_task_collaborators: [{ professional_id: "p1" }], professionals: [pro] });
+    expect(await notifyProsOfComment(db, taskRef, "https://x", "k", "s")).toBe(0);
+    expect(f).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+  it("does nothing for a task with no professional tagged", async () => {
+    expect(await notifyProsOfComment(fakeDb({ pm_task_comments: [{ created_at: new Date().toISOString() }], pm_task_collaborators: [] }), taskRef, "https://x", "k", "s")).toBe(0);
+  });
+});
+
+describe("a formatted comment in print", () => {
+  it("keeps line breaks and bullets, drops the markup", () => {
+    expect(commentPlainText("<p>Next steps</p><ul><li>Send the form</li><li>Book a call</li></ul>", "html")).toBe("Next steps\n• Send the form\n• Book a call");
+    expect(commentPlainText("<b>plain</b>", "text")).toBe("<b>plain</b>");
+  });
+});
