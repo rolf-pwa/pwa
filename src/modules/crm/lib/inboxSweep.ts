@@ -5,10 +5,11 @@ const URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/fun
 export type SweepBucket = "needs_you" | "fyi" | "archivable" | "client";
 export interface SweepItem {
   id: string; message_id: string; from_addr: string; address: string; subject: string; snippet: string; received_at: string | null;
-  bucket: SweepBucket; reason: string; decided_by: "rule" | "model"; feedback: "right" | "wrong" | null; link: string;
+  bucket: SweepBucket; proposed_bucket?: SweepBucket | null; correct_bucket?: SweepBucket | null; reason: string; decided_by: "rule" | "model" | "learned"; feedback: "right" | "wrong" | null; link: string;
 }
 export interface Rate { rated: number; right: number }
-export interface SweepOverview { items: SweepItem[]; accuracy: { overall: Rate | null; archivable: Rate | null } }
+export interface SweepSender { sender: string; bucket: Exclude<SweepBucket, "client"> }
+export interface SweepOverview { items: SweepItem[]; accuracy: { overall: Rate | null; archivable: Rate | null }; senders: SweepSender[] }
 
 async function call<T>(action: string, payload: Record<string, unknown> = {}): Promise<T> {
   const { data: sess } = await supabase.auth.getSession();
@@ -24,4 +25,7 @@ async function call<T>(action: string, payload: Record<string, unknown> = {}): P
 
 export const getSweep = () => call<SweepOverview>("ea_sweep_list");
 export const runSweep = () => call<{ ok: true; sorted: number; remaining: number; modelFailed?: boolean }>("ea_sweep_run");
-export const rateSweepItem = (id: string, value: "right" | "wrong" | null) => call<{ ok: true }>("ea_sweep_feedback", { id, value });
+/** Marks a sort right, or wrong with the bucket it belonged in (which moves it and teaches Georgia about the sender), or clears the mark. */
+export const rateSweepItem = (id: string, value: "right" | "wrong" | null, correctBucket?: Exclude<SweepBucket, "client">) =>
+  call<{ ok: true; moved?: number; remembered?: string | null }>("ea_sweep_feedback", { id, value, ...(correctBucket ? { correct_bucket: correctBucket } : {}) });
+export const forgetSweepSender = (sender: string) => call<{ ok: true }>("ea_sweep_forget", { sender });

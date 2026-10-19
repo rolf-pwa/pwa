@@ -5,7 +5,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { getValidGoogleAccessToken } from "./google-token.ts";
 import { GEMINI_EXTRACT_MODEL, generateVertexContent, parseServiceAccountKey, withThinking } from "./vertex-ai.ts";
-import { accuracy, addressOf, ruleVerdict, SWEEP_TOOL, sweepPrompt, verdictsFromModel, type SweepMessage, type Verdict } from "./inbox-sweep.ts";
+import { accuracy, addressOf, BUCKET_LABEL, correctionPlan, ruleVerdict, SWEEP_TOOL, sweepPrompt, verdictsFromModel, type Learned, type SweepMessage, type Verdict } from "./inbox-sweep.ts";
 
 const MAX_NEW = 60;
 const WINDOW_DAYS = 7;
@@ -43,17 +43,19 @@ export async function sweepRun(db: any, userId: string) {
     receivedAt: Number(m.internalDate || 0),
   }));
 
-  const [{ data: contacts }, { data: prefs }] = await Promise.all([
+  const [{ data: contacts }, { data: prefs }, { data: told }] = await Promise.all([
     db.from("contacts").select("email").not("email", "is", null).limit(10000),
     db.from("ea_preferences").select("value").eq("staff_user_id", userId).eq("kind", "mute_sender").eq("active", true),
+    db.from("inbox_sweep_senders").select("sender, bucket").eq("user_id", userId),
   ]);
+  const learned: Learned = new Map((told ?? []).map((t: any) => [String(t.sender), t.bucket]));
   const clients = new Set<string>((contacts ?? []).map((c: any) => String(c.email).trim().toLowerCase()).filter(Boolean));
   const muted = (prefs ?? []).map((p: any) => String(p.value));
 
   const verdicts = new Map<string, Verdict>();
   const undecided: SweepMessage[] = [];
   for (const m of msgs) {
-    const v = ruleVerdict(m, clients, muted);
+    const v = ruleVerdict(m, clients, muted, learned);
     if (v) verdicts.set(m.id, v); else undecided.push(m);
   }
   let modelFailed = false;
@@ -78,7 +80,7 @@ export async function sweepRun(db: any, userId: string) {
 
   const rows = msgs.filter((m) => verdicts.has(m.id)).map((m) => {
     const v = verdicts.get(m.id)!;
-    return { user_id: userId, message_id: m.id, thread_id: m.threadId ?? null, from_addr: m.from.slice(0, 300), subject: m.subject.slice(0, 300), snippet: m.snippet ?? "", received_at: m.receivedAt ? new Date(m.receivedAt).toISOString() : null, bucket: v.bucket, reason: v.reason, decided_by: v.decidedBy };
+    return { user_id: userId, message_id: m.id, thread_id: m.threadId ?? null, from_addr: m.from.slice(0, 300), subject: m.subject.slice(0, 300), snippet: m.snippet ?? "", received_at: m.receivedAt ? new Date(m.receivedAt).toISOString() : null, bucket: v.bucket, proposed_bucket: v.bucket, reason: v.reason, decided_by: v.decidedBy };
   });
   if (rows.length) {
     const { error } = await db.from("inbox_sweep_items").upsert(rows, { onConflict: "user_id,message_id", ignoreDuplicates: true });
@@ -90,15 +92,50 @@ export async function sweepRun(db: any, userId: string) {
 
 export async function sweepList(db: any, userId: string) {
   const since = new Date(Date.now() - WINDOW_DAYS * 86400000).toISOString();
-  const { data } = await db.from("inbox_sweep_items").select("id, message_id, from_addr, subject, snippet, received_at, bucket, reason, decided_by, feedback")
-    .eq("user_id", userId).gte("received_at", since).order("received_at", { ascending: false }).limit(300);
+  const [{ data }, { data: senders }] = await Promise.all([
+    db.from("inbox_sweep_items").select("id, message_id, from_addr, subject, snippet, received_at, bucket, proposed_bucket, correct_bucket, reason, decided_by, feedback")
+      .eq("user_id", userId).gte("received_at", since).order("received_at", { ascending: false }).limit(300),
+    db.from("inbox_sweep_senders").select("sender, bucket").eq("user_id", userId).order("updated_at", { ascending: false }),
+  ]);
   const items = (data ?? []).map((r: any) => ({ ...r, address: addressOf(r.from_addr), link: `https://mail.google.com/mail/u/0/#all/${r.message_id}` }));
-  return { items, accuracy: accuracy(items) };
+  return { items, accuracy: accuracy(items), senders: senders ?? [] };
 }
 
-export async function sweepFeedback(db: any, userId: string, id: string, value: unknown) {
+/**
+ * Right: the sort stands. Wrong with the bucket it belonged in: the message moves there now, the sender is remembered so its mail is sorted that
+ * way from then on, and the same sender's other unrated mail in the window moves too. Clearing the mark leaves what was learned (it can be forgotten).
+ */
+export async function sweepFeedback(db: any, userId: string, id: string, value: unknown, correctBucket?: unknown) {
   if (!id) return { error: "id required" };
+  const { data: item } = await db.from("inbox_sweep_items").select("id, from_addr, bucket, proposed_bucket").eq("id", id).eq("user_id", userId).maybeSingle();
+  if (!item) return { error: "Not found" };
+  if (value === "wrong" && correctBucket !== undefined && correctBucket !== null) {
+    const plan = correctionPlan(item, correctBucket);
+    if (!plan) return { error: "Choose a different place for it: Needs you, FYI or Would archive." };
+    await db.from("inbox_sweep_items").update({ feedback: "wrong", correct_bucket: plan.correct, bucket: plan.correct, proposed_bucket: item.proposed_bucket ?? item.bucket }).eq("id", id).eq("user_id", userId);
+    let moved = 0;
+    if (plan.sender) {
+      await db.from("inbox_sweep_senders").upsert({ user_id: userId, sender: plan.sender, bucket: plan.correct, source: "corrected", updated_at: new Date().toISOString() }, { onConflict: "user_id,sender" });
+      const since = new Date(Date.now() - WINDOW_DAYS * 86400000).toISOString();
+      const { data: others } = await db.from("inbox_sweep_items").select("id, from_addr, bucket").eq("user_id", userId).is("feedback", null).neq("id", id).neq("bucket", "client").gte("received_at", since).limit(300);
+      const same = (others ?? []).filter((o: any) => addressOf(o.from_addr) === plan.sender && o.bucket !== plan.correct).map((o: any) => o.id);
+      if (same.length) {
+        await db.from("inbox_sweep_items").update({ bucket: plan.correct, decided_by: "learned", reason: `You told Georgia mail from this sender belongs in ${BUCKET_LABEL[plan.correct as keyof typeof BUCKET_LABEL]}` }).in("id", same);
+        moved = same.length;
+      }
+    }
+    return { ok: true, moved, remembered: plan.sender || null };
+  }
   const v = value === "right" || value === "wrong" ? value : null;
-  await db.from("inbox_sweep_items").update({ feedback: v }).eq("id", id).eq("user_id", userId);
+  // Clearing a "wrong" mark puts the message back where Georgia first put it.
+  const back = v === null && item.proposed_bucket ? { bucket: item.proposed_bucket, correct_bucket: null } : {};
+  await db.from("inbox_sweep_items").update({ feedback: v, ...(v === "right" ? { correct_bucket: null } : {}), ...back }).eq("id", id).eq("user_id", userId);
+  return { ok: true };
+}
+
+/** Stop applying what was learned about one sender. */
+export async function sweepForgetSender(db: any, userId: string, sender: string) {
+  if (!sender) return { error: "sender required" };
+  await db.from("inbox_sweep_senders").delete().eq("user_id", userId).eq("sender", sender.toLowerCase());
   return { ok: true };
 }
