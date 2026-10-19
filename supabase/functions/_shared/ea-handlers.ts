@@ -12,6 +12,7 @@ import { loadVoice } from "./voice-profile.ts";
 import { maybeCreateMeetingRecord } from "./meeting-record-service.ts";
 import { postTaskEvent } from "./task-events.ts";
 import { draftFromRequest } from "./meeting-followup-service.ts";
+import { notifyClientsOfComment, notifyProsOfComment } from "./task-notify.ts";
 import { refreshBriefing } from "./briefing-refresh.ts";
 import { provisionClientFolderTree } from "./vault-provisioning.ts";
 
@@ -334,6 +335,65 @@ export async function eaChat(db: any, userId: string, text: string, start: boole
         const r = await provision(hhs[0].id);
         await record("vault_provisioned", r.ok ? "done" : "failed", r.ok ? `Vault ready: ${hhs[0].label}` : `Vault not built: ${hhs[0].label}`, { household_id: hhs[0].id, link: `/households/${hhs[0].id}` });
         return r.ok ? { ok: true, message: `The Drive Vault for ${hhs[0].label} is ready${r.existed ? " (it already existed; I filled in anything missing)" : ""}.` } : { ok: false, message: `Could not build the Vault: ${r.error}` };
+      }
+      case "list_open_requests": {
+        const { data: reqs } = await db.from("portal_requests").select("id, contact_id, request_type, status, request_description, created_at").in("status", ["submitted", "in_progress"]).order("created_at", { ascending: false }).limit(15);
+        if (!(reqs ?? []).length) return { ok: true, message: "There are no open client requests." };
+        const { data: cs } = await db.from("contacts").select("id, full_name").in("id", [...new Set((reqs ?? []).map((r: any) => r.contact_id))]);
+        const nm = new Map((cs ?? []).map((c: any) => [c.id, c.full_name]));
+        return { ok: true, message: (reqs ?? []).map((r: any) => `- ${r.id}: ${nm.get(r.contact_id) ?? "Client"}, ${String(r.request_type).replace(/_/g, " ")} (${r.status}), ${String(r.created_at).slice(0, 10)}: ${str(r.request_description, 140)}`).join("\n") };
+      }
+      case "search_tasks": {
+        const q = str(a.query, 80).replace(/[%,()]/g, " ").trim();
+        if (!q) return { ok: false, message: "Who or what should I look for?" };
+        const { data: people } = await db.from("contacts").select("id, full_name").ilike("full_name", `%${q}%`).limit(10);
+        const ids = (people ?? []).map((p: any) => p.id);
+        const cols = "id, title, due_date, client_visible, assignee_id, assigned_agent_key, contact_id";
+        const [{ data: byTitle }, { data: byPerson }] = await Promise.all([
+          db.from("pm_tasks").select(cols).is("parent_task_id", null).neq("status", "done").ilike("title", `%${q}%`).limit(10),
+          ids.length ? db.from("pm_tasks").select(cols).is("parent_task_id", null).neq("status", "done").in("contact_id", ids).limit(15) : Promise.resolve({ data: [] as any[] }),
+        ]);
+        const seen = new Set<string>(); const tasks = [...(byTitle ?? []), ...(byPerson ?? [])].filter((t: any) => !seen.has(t.id) && seen.add(t.id)).slice(0, 12);
+        if (!tasks.length) return { ok: true, message: `I found no open tasks for "${q}".` };
+        const { data: cs } = await db.from("contacts").select("id, full_name").in("id", [...new Set(tasks.map((t: any) => t.contact_id).filter(Boolean))]);
+        const nm = new Map((cs ?? []).map((c: any) => [c.id, c.full_name]));
+        return { ok: true, message: tasks.map((t: any) => `- ${t.id}: ${t.title} (${nm.get(t.contact_id) ?? "no client"}; ${t.assigned_agent_key ? "Georgia" : t.assignee_id === userId ? "Rolf" : t.assignee_id ? "a colleague" : "unassigned"}; ${t.due_date ? `due ${t.due_date}` : "no date"}; ${t.client_visible ? "client can see it" : "hidden from the client"})`).join("\n") };
+      }
+      case "comment_on_task": {
+        const id = str(a.task_id, 60); const text = str(a.body, 2000);
+        if (!id || !text) return { ok: false, message: "I need the task and the words to post." };
+        const { data: t } = await db.from("pm_tasks").select("id, title, client_visible, contact_id, household_id, parent_task_id, status").eq("id", id).maybeSingle();
+        if (!t) return { ok: false, message: "I could not find that task." };
+        const { error } = await db.from("pm_task_comments").insert({ task_id: id, author_agent_key: "georgia", body: text, body_format: "text" });
+        if (error) { await record("task_commented", "failed", `Could not comment on: ${t.title}`); return { ok: false, message: `Could not post the comment: ${error.message}` }; }
+        const url = Deno.env.get("SUPABASE_URL")!; const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+        EdgeRuntime.waitUntil(Promise.all([notifyClientsOfComment(db, t, url, key), notifyProsOfComment(db, t, url, key, Deno.env.get("INTERNAL_FUNCTION_SECRET") ?? "")]));
+        await record("task_commented", "done", `Commented on: ${t.title}`, { task_id: id, client_visible: !!t.client_visible });
+        return { ok: true, message: `Posted on "${t.title}"${t.client_visible ? " (the client has been told in their portal)" : " (the client cannot see this task)"}: ${text}` };
+      }
+      case "reply_to_request": case "close_request": {
+        const id = str(a.request_id, 60); const text = str(name === "reply_to_request" ? a.message : a.message, 2000);
+        if (!id) return { ok: false, message: "Which request?" };
+        if (name === "reply_to_request" && !text) return { ok: false, message: "What should I say?" };
+        const { data: r } = await db.from("portal_requests").select("id, status, request_type, contact_id").eq("id", id).maybeSingle();
+        if (!r) return { ok: false, message: "I could not find that request." };
+        if (r.status === "resolved" && name === "close_request") return { ok: true, message: "That request is already closed." };
+        const url = Deno.env.get("SUPABASE_URL")!; const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        const ping = (event_type: string) => fetch(`${url}/functions/v1/notify-portal-request`, { method: "POST", headers: { "x-region": "ca-central-1", "Content-Type": "application/json", Authorization: `Bearer ${key}` }, body: JSON.stringify({ request_id: id, event_type }) }).catch((e) => console.error("[ea] notify failed", e));
+        if (text) await db.from("portal_request_messages").insert({ request_id: id, sender_type: "advisor", sender_name: "Georgia", content: text });
+        if (name === "reply_to_request") {
+          if (r.status === "submitted") await db.from("portal_requests").update({ status: "in_progress" }).eq("id", id);
+          // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+          EdgeRuntime.waitUntil(ping("message"));
+          await record("request_replied", "done", `Replied to a ${String(r.request_type).replace(/_/g, " ")} request`, { request_id: id });
+          return { ok: true, message: `Replied to the request (the client has been told in their portal): ${text}` };
+        }
+        await db.from("portal_requests").update({ status: "resolved", resolved_at: new Date().toISOString(), resolved_by: userId }).eq("id", id);
+        // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+        EdgeRuntime.waitUntil(ping(text ? "message" : "status_update"));
+        await record("request_closed", "done", `Closed a ${String(r.request_type).replace(/_/g, " ")} request`, { request_id: id });
+        return { ok: true, message: `Closed the request${text ? ` with this message to the client: ${text}` : ""}.` };
       }
       case "draft_meeting_followup": {
         const date = isIsoDate(a.date) ? String(a.date) : undefined;
