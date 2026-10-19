@@ -74,3 +74,33 @@ describe("correcting a sort", () => {
     expect(correctionPlan({ from_addr: "(unknown)", bucket: "fyi" }, "needs_you")).toEqual({ correct: "needs_you", sender: "" });
   });
 });
+
+import { sweepLine } from "../../supabase/functions/_shared/inbox-sweep";
+import { readFileSync } from "node:fs";
+
+describe("the line in the morning briefing", () => {
+  it("says what the sweep found, leaving out what is zero", () => {
+    expect(sweepLine({ needs_you: 4, fyi: 6, archivable: 12, client: 3 })).toBe("Inbox sweep: 4 need you, 6 FYI, 12 would archive, 3 from clients. Review the sorts");
+    expect(sweepLine({ needs_you: 1, client: 1 })).toBe("Inbox sweep: 1 needs you, 1 from a client. Review the sorts");
+    expect(sweepLine({ fyi: 2, needs_you: 0 })).toBe("Inbox sweep: 2 FYI. Review the sorts");
+  });
+  it("says nothing when nothing was sorted", () => {
+    expect(sweepLine({})).toBeNull();
+    expect(sweepLine({ needs_you: 0, fyi: 0 })).toBeNull();
+  });
+});
+
+describe("the morning run", () => {
+  const mig = readFileSync("supabase/migrations/20261204120000_inbox_sweep_morning.sql", "utf8");
+  it("is scheduled before the briefing, in summer and winter time, and acts only at 4:30 Pacific", () => {
+    expect(mig).toContain("'30 11 * * *'");
+    expect(mig).toContain("'30 12 * * *'");
+    expect((mig.match(/"onlyAtPacificHour":4/g) ?? []).length).toBe(2);
+    expect(mig).toContain('"job":"inbox_sweep_morning"');
+  });
+  it("can be turned off, and only ever reads mail", () => {
+    const h = readFileSync("supabase/functions/_shared/inbox-sweep-handlers.ts", "utf8");
+    expect(h).toContain("cfg.auto === false");
+    expect(h).not.toMatch(/gmail\.googleapis\.com\/gmail\/v1\/users\/me\/messages\/[^`]*\/(modify|trash|delete|send)|method:\s*"(POST|DELETE|PUT|PATCH)"[^}]*gmail/);
+  });
+});

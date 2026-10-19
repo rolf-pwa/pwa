@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor, within } from "@testing-library/rea
 
 const calls: unknown[][] = [];
 const forgot: string[] = [];
+const autoCalls: boolean[] = [];
 let data: any;
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/modules/crm/lib/inboxSweep", () => ({
@@ -10,6 +11,7 @@ vi.mock("@/modules/crm/lib/inboxSweep", () => ({
   runSweep: async () => ({ ok: true, sorted: 0, remaining: 0 }),
   rateSweepItem: async (...a: unknown[]) => { calls.push(a); return { ok: true, moved: 1, remembered: "hello@justinwelsh.me" }; },
   forgetSweepSender: async (s: string) => { forgot.push(s); return { ok: true }; },
+  setSweepAuto: async (on: boolean) => { autoCalls.push(on); return { ok: true, auto: on }; },
 }));
 import { InboxSweep } from "@/modules/crm/components/InboxSweep";
 
@@ -51,5 +53,22 @@ describe("the inbox sweep card", () => {
     expect(screen.getByText("hello@justinwelsh.me: FYI")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Forget" }));
     await waitFor(() => expect(forgot).toEqual(["hello@justinwelsh.me"]));
+  });
+});
+
+describe("the morning run switch", () => {
+  beforeEach(() => { autoCalls.length = 0; data = { items: [], accuracy: { overall: null, archivable: null }, senders: [], auto: true }; });
+  it("shows that it runs every morning, and turns it off", async () => {
+    render(<InboxSweep />);
+    const sw = await screen.findByRole("switch", { name: "Run every morning" });
+    expect(sw.getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByText(/Run every morning at 4:30, before your briefing/)).toBeTruthy();
+    fireEvent.click(sw);
+    await waitFor(() => expect(autoCalls).toEqual([false]));
+  });
+  it("shows it off when it is off", async () => {
+    data = { ...data, auto: false };
+    render(<InboxSweep />);
+    expect((await screen.findByRole("switch", { name: "Run every morning" })).getAttribute("aria-checked")).toBe("false");
   });
 });

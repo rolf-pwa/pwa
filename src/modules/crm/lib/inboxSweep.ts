@@ -9,7 +9,7 @@ export interface SweepItem {
 }
 export interface Rate { rated: number; right: number }
 export interface SweepSender { sender: string; bucket: Exclude<SweepBucket, "client"> }
-export interface SweepOverview { items: SweepItem[]; accuracy: { overall: Rate | null; archivable: Rate | null }; senders: SweepSender[] }
+export interface SweepOverview { items: SweepItem[]; accuracy: { overall: Rate | null; archivable: Rate | null }; senders: SweepSender[]; /** Whether the sweep runs by itself every morning. */ auto?: boolean }
 
 async function call<T>(action: string, payload: Record<string, unknown> = {}): Promise<T> {
   const { data: sess } = await supabase.auth.getSession();
@@ -29,3 +29,4 @@ export const runSweep = () => call<{ ok: true; sorted: number; remaining: number
 export const rateSweepItem = (id: string, value: "right" | "wrong" | null, correctBucket?: Exclude<SweepBucket, "client">) =>
   call<{ ok: true; moved?: number; remembered?: string | null }>("ea_sweep_feedback", { id, value, ...(correctBucket ? { correct_bucket: correctBucket } : {}) });
 export const forgetSweepSender = (sender: string) => call<{ ok: true }>("ea_sweep_forget", { sender });
+export const setSweepAuto = (on: boolean) => call<{ ok: true; auto: boolean }>("ea_sweep_auto", { on });
