@@ -15,7 +15,7 @@ import { getValidGoogleAccessToken } from "../_shared/google-token.ts";
 import { refreshBriefing } from "../_shared/briefing-refresh.ts";
 import { eaApply, eaChat, eaDecide, eaForget, eaHistory, eaNudge } from "../_shared/ea-handlers.ts";
 import { isMutedSender } from "../_shared/ea-agent.ts";
-import { sweepFeedback, sweepForgetSender, sweepList, sweepMorning, sweepRun, sweepSetAuto } from "../_shared/inbox-sweep-handlers.ts";
+import { sweepArchive, sweepFeedback, sweepForgetSender, sweepList, sweepMorning, sweepRun, sweepSetAuto, sweepUndoArchive } from "../_shared/inbox-sweep-handlers.ts";
 import { sweepLine } from "../_shared/inbox-sweep.ts";
 import { scanMeetingNotes } from "../_shared/meeting-followup-service.ts";
 import { runGeorgiaTasks } from "../_shared/georgia-task-service.ts";
@@ -658,6 +658,14 @@ Deno.serve(async (req) => {
       if (body.action === "ea_sweep_list") return json(await sweepList(db, userId));
       if (body.action === "ea_sweep_feedback") {
         const r = await sweepFeedback(db, userId, String((body as any).id ?? ""), (body as any).value, (body as any).correct_bucket);
+        return json(r, "error" in r ? 400 : 200);
+      }
+      if (body.action === "ea_sweep_archive") {
+        const r = await sweepArchive(db, userId, (body as any).scope === "all" ? "all" : "rated");
+        return json(r, "error" in r ? 400 : 200);
+      }
+      if (body.action === "ea_sweep_undo") {
+        const r = await sweepUndoArchive(db, userId);
         return json(r, "error" in r ? 400 : 200);
       }
       if (body.action === "ea_sweep_auto") return json(await sweepSetAuto(db, (body as any).on === true));

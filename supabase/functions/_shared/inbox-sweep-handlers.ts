@@ -1,11 +1,12 @@
-// inbox-sweep-handlers.ts: Georgia sorts the signed-in staff member's own recent inbox mail and proposes what to do with it. READ-ONLY:
-// the Gmail scope the app holds cannot change a message, and nothing here tries to. Only sender, subject and a short snippet go to the model.
+// inbox-sweep-handlers.ts: Georgia sorts the signed-in staff member's own recent inbox mail and proposes what to do with it. Sorting only reads.
+// The one thing that changes Gmail is sweepArchive, which runs only when Rolf says so and only removes the Inbox label (undoable). Only sender,
+// subject and a short snippet go to the model.
 // Served by daily-briefing-generate (ea_sweep_run / ea_sweep_list / ea_sweep_feedback): the project is at its function cap.
 
 // deno-lint-ignore-file no-explicit-any
 import { getValidGoogleAccessToken } from "./google-token.ts";
 import { GEMINI_EXTRACT_MODEL, generateVertexContent, parseServiceAccountKey, withThinking } from "./vertex-ai.ts";
-import { accuracy, addressOf, BUCKET_LABEL, correctionPlan, ruleVerdict, SWEEP_TOOL, sweepPrompt, verdictsFromModel, type Learned, type SweepMessage, type Verdict } from "./inbox-sweep.ts";
+import { accuracy, addressOf, archiveTargets, BUCKET_LABEL, correctionPlan, ruleVerdict, SWEEP_TOOL, sweepPrompt, verdictsFromModel, type Learned, type SweepMessage, type Verdict } from "./inbox-sweep.ts";
 
 const MAX_NEW = 60;
 const WINDOW_DAYS = 7;
@@ -92,14 +93,17 @@ export async function sweepRun(db: any, userId: string) {
 
 export async function sweepList(db: any, userId: string) {
   const since = new Date(Date.now() - WINDOW_DAYS * 86400000).toISOString();
-  const [{ data }, { data: senders }, { data: cfg }] = await Promise.all([
-    db.from("inbox_sweep_items").select("id, message_id, from_addr, subject, snippet, received_at, bucket, proposed_bucket, correct_bucket, reason, decided_by, feedback")
+  const [{ data }, { data: senders }, { data: cfg }, allowed] = await Promise.all([
+    db.from("inbox_sweep_items").select("id, message_id, from_addr, subject, snippet, received_at, bucket, proposed_bucket, correct_bucket, reason, decided_by, feedback, archived_at, archive_batch")
       .eq("user_id", userId).gte("received_at", since).order("received_at", { ascending: false }).limit(300),
     db.from("inbox_sweep_senders").select("sender, bucket").eq("user_id", userId).order("updated_at", { ascending: false }),
     db.from("inbox_sweep_config").select("auto").eq("id", true).maybeSingle(),
+    canArchive(db, userId),
   ]);
   const items = (data ?? []).map((r: any) => ({ ...r, address: addressOf(r.from_addr), link: `https://mail.google.com/mail/u/0/#all/${r.message_id}` }));
-  return { items, accuracy: accuracy(items), senders: senders ?? [], auto: cfg?.auto !== false };
+  const batches = items.filter((i: any) => i.archive_batch && i.archived_at).sort((a: any, b: any) => String(b.archived_at).localeCompare(String(a.archived_at)));
+  const lastBatch = batches.length ? batches.filter((i: any) => i.archive_batch === batches[0].archive_batch).length : 0;
+  return { items, accuracy: accuracy(items), senders: senders ?? [], auto: cfg?.auto !== false, canArchive: allowed, lastBatch };
 }
 
 /**
@@ -166,4 +170,70 @@ export async function sweepMorning(db: any): Promise<string[]> {
 export async function sweepSetAuto(db: any, on: boolean) {
   await db.from("inbox_sweep_config").upsert({ id: true, auto: on }, { onConflict: "id" });
   return { ok: true, auto: on };
+}
+
+
+const MODIFY_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
+const NEEDS_PERMISSION = "Georgia needs your permission to archive mail. On the Ask Georgia page, press Allow archiving and approve it once with Google.";
+
+/** Whether the connected Google account has agreed to let Georgia change mail (archive and undo). */
+export async function canArchive(db: any, userId: string): Promise<boolean> {
+  const { data } = await db.from("google_tokens").select("scopes").eq("user_id", userId).maybeSingle();
+  return ((data?.scopes ?? []) as string[]).includes(MODIFY_SCOPE);
+}
+
+const gmailPost = (token: string, path: string, body: unknown) =>
+  fetch(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+/**
+ * Archives swept Would-archive mail at Rolf's say-so: scope "rated" is only what he marked right, "all" is every Would-archive sort he has not marked wrong.
+ * Starred mail and mail already out of the Inbox are left alone. Removing the Inbox label is all that happens: nothing is deleted, and it can be undone.
+ */
+export async function sweepArchive(db: any, userId: string, scope: "rated" | "all") {
+  if (!(await canArchive(db, userId))) return { error: "needs_permission", message: NEEDS_PERMISSION };
+  const since = new Date(Date.now() - WINDOW_DAYS * 86400000).toISOString();
+  const { data } = await db.from("inbox_sweep_items").select("id, message_id, bucket, feedback, archived_at, undone_at").eq("user_id", userId).eq("bucket", "archivable").gte("received_at", since).limit(300);
+  const targets = archiveTargets((data ?? []) as any[], scope).slice(0, 200);
+  if (!targets.length) return { ok: true, archived: 0, skippedStarred: 0, alreadyGone: 0 };
+
+  const token = await getValidGoogleAccessToken(db, userId);
+  const labels = await Promise.all(targets.map(async (t: any) => {
+    const r = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${t.message_id}?format=minimal`, { headers: { Authorization: `Bearer ${token}` } });
+    return r.ok ? ((await r.json()).labelIds ?? []) as string[] : null; // null: gone or unreadable, leave it
+  }));
+  const move: any[] = [], gone: any[] = [];
+  let skippedStarred = 0;
+  targets.forEach((t: any, i: number) => {
+    const l = labels[i];
+    if (!l) return;
+    if (!l.includes("INBOX")) gone.push(t);
+    else if (l.includes("STARRED")) skippedStarred++;
+    else move.push(t);
+  });
+  const now = new Date().toISOString();
+  if (move.length) {
+    const r = await gmailPost(token, "messages/batchModify", { ids: move.map((m) => m.message_id), removeLabelIds: ["INBOX"] });
+    if (!r.ok) {
+      if (r.status === 403) return { error: "needs_permission", message: NEEDS_PERMISSION };
+      throw new Error(`Gmail archive error: ${r.status}`);
+    }
+    await db.from("inbox_sweep_items").update({ archived_at: now, archive_batch: crypto.randomUUID() }).in("id", move.map((m) => m.id));
+  }
+  if (gone.length) await db.from("inbox_sweep_items").update({ archived_at: now }).in("id", gone.map((g) => g.id));
+  return { ok: true, archived: move.length, skippedStarred, alreadyGone: gone.length };
+}
+
+/** Puts the most recent archive batch back in the Inbox. Those messages are never archived in bulk again. */
+export async function sweepUndoArchive(db: any, userId: string) {
+  if (!(await canArchive(db, userId))) return { error: "needs_permission", message: NEEDS_PERMISSION };
+  const { data: last } = await db.from("inbox_sweep_items").select("archive_batch").eq("user_id", userId).not("archive_batch", "is", null).not("archived_at", "is", null).order("archived_at", { ascending: false }).limit(1).maybeSingle();
+  if (!last?.archive_batch) return { ok: true, restored: 0 };
+  const { data: rows } = await db.from("inbox_sweep_items").select("id, message_id").eq("user_id", userId).eq("archive_batch", last.archive_batch);
+  const items = (rows ?? []) as any[];
+  if (!items.length) return { ok: true, restored: 0 };
+  const token = await getValidGoogleAccessToken(db, userId);
+  const r = await gmailPost(token, "messages/batchModify", { ids: items.map((i) => i.message_id), addLabelIds: ["INBOX"] });
+  if (!r.ok) throw new Error(`Gmail undo error: ${r.status}`);
+  await db.from("inbox_sweep_items").update({ archived_at: null, archive_batch: null, undone_at: new Date().toISOString() }).eq("user_id", userId).eq("archive_batch", last.archive_batch);
+  return { ok: true, restored: items.length };
 }

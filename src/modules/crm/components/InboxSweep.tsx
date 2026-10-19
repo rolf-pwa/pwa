@@ -5,13 +5,14 @@ import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { Switch } from "@/shared/components/ui/switch";
-import { forgetSweepSender, getSweep, rateSweepItem, runSweep, setSweepAuto, type Rate, type SweepBucket, type SweepItem, type SweepOverview } from "@/modules/crm/lib/inboxSweep";
+import { getGoogleAuthUrl } from "@/shared/lib/google-api";
+import { archiveSweep, forgetSweepSender, getSweep, rateSweepItem, runSweep, setSweepAuto, undoSweepArchive, type Rate, type SweepBucket, type SweepItem, type SweepOverview } from "@/modules/crm/lib/inboxSweep";
 
 const BUCKETS: { key: SweepBucket; label: string; hint: string }[] = [
   { key: "needs_you", label: "Needs you", hint: "A person or a deadline" },
   { key: "client", label: "Clients", hint: "Always shown, never touched" },
   { key: "fyi", label: "FYI", hint: "Worth knowing, nothing to do" },
-  { key: "archivable", label: "Would archive", hint: "Noise. Georgia would archive these once allowed" },
+  { key: "archivable", label: "Would archive", hint: "Noise. Georgia archives these when you ask" },
 ];
 const LABEL: Record<SweepBucket, string> = { needs_you: "Needs you", client: "Clients", fyi: "FYI", archivable: "Would archive" };
 const MOVABLE: Exclude<SweepBucket, "client">[] = ["needs_you", "fyi", "archivable"];
@@ -49,10 +50,26 @@ export function InboxSweep() {
     try { await setSweepAuto(on); toast.success(on ? "The sweep will run every morning before your briefing." : "The morning sweep is off. Use Sweep now when you want it."); }
     catch (e: any) { toast.error(e?.message ?? "Couldn't save"); await load(); }
   };
+  const connect = async () => { try { window.location.href = await getGoogleAuthUrl(); } catch (e: any) { toast.error(e?.message ?? "Couldn't reach Google"); } };
+  const archive = async (scope: "rated" | "all") => {
+    setBusy(true);
+    try {
+      const r = await archiveSweep(scope);
+      toast.success(r.archived ? `Archived ${r.archived} message${r.archived !== 1 ? "s" : ""}${r.skippedStarred ? `, left ${r.skippedStarred} starred` : ""}. Undo is below if you change your mind.` : "Nothing to archive");
+      await load();
+    } catch (e: any) { toast.error(e?.message ?? "Couldn't archive"); } finally { setBusy(false); }
+  };
+  const undo = async () => {
+    setBusy(true);
+    try { const r = await undoSweepArchive(); toast.success(r.restored ? `Put ${r.restored} back in your Inbox` : "Nothing to undo"); await load(); }
+    catch (e: any) { toast.error(e?.message ?? "Couldn't undo"); } finally { setBusy(false); }
+  };
   const forget = async (sender: string) => { try { await forgetSweepSender(sender); await load(); } catch (e: any) { toast.error(e?.message ?? "Couldn't forget"); } };
 
-  const items = (data?.items ?? []).filter((i) => i.bucket === tab);
-  const count = (b: SweepBucket) => (data?.items ?? []).filter((i) => i.bucket === b).length;
+  const live = (data?.items ?? []).filter((i) => !i.archived_at);
+  const items = live.filter((i) => i.bucket === tab);
+  const count = (b: SweepBucket) => live.filter((i) => i.bucket === b).length;
+  const ratedRight = live.filter((i) => i.bucket === "archivable" && i.feedback === "right").length;
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -62,7 +79,7 @@ export function InboxSweep() {
         </div>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
-        <p className="text-muted-foreground">Georgia sorts your last 7 days of inbox mail. For now she only reads: nothing is archived, deleted or changed in Gmail. Mark each sort right, or wrong and say where it belonged: it moves there, and Georgia remembers the sender. So you can judge her before she is given any power.</p>
+        <p className="text-muted-foreground">Georgia sorts your last 7 days of inbox mail. Mark each sort right, or wrong and say where it belonged: it moves there, and Georgia remembers the sender. Only when you ask (here, or in the morning meeting) she archives Would-archive mail: it leaves the Inbox, nothing is deleted, and Undo puts the last batch back.</p>
         {data && (
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             <Switch checked={data.auto !== false} onCheckedChange={(v) => void toggleAuto(v)} aria-label="Run every morning" />
@@ -75,6 +92,21 @@ export function InboxSweep() {
             <Button key={b.key} size="sm" role="tab" aria-selected={tab === b.key} variant={tab === b.key ? "default" : "outline"} onClick={() => setTab(b.key)}>{b.label} ({count(b.key)})</Button>
           ))}
         </div>
+        {data && data.canArchive === false && (
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-border p-2 text-xs">
+            <span className="min-w-0 flex-1 text-muted-foreground">Georgia can't archive yet. Allow it once with Google (you will sign in again).</span>
+            <Button size="sm" variant="outline" onClick={() => void connect()}>Allow archiving</Button>
+          </div>
+        )}
+        {data?.canArchive && tab === "archivable" && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="outline" disabled={busy || ratedRight === 0} onClick={() => void archive("rated")}>Archive the {ratedRight} marked right</Button>
+            <Button size="sm" variant="outline" disabled={busy || count("archivable") === 0} onClick={() => { if (window.confirm(`Archive all ${count("archivable")} in Would archive, except any you marked wrong? Starred mail is left alone.`)) void archive("all"); }}>Archive all {count("archivable")}</Button>
+          </div>
+        )}
+        {data?.canArchive && !!data.lastBatch && (
+          <p className="text-xs text-muted-foreground">Last archive moved {data.lastBatch} message{data.lastBatch !== 1 ? "s" : ""}. <button type="button" className="underline" disabled={busy} onClick={() => void undo()}>Undo</button></p>
+        )}
         <p className="text-xs text-muted-foreground">{BUCKETS.find((b) => b.key === tab)?.hint}</p>
         {!data ? <Loader2 className="h-4 w-4 animate-spin" /> : items.length === 0 ? <p className="text-muted-foreground">Nothing here. {data.items.length === 0 ? "Press Sweep now." : ""}</p> : (
           <div className="rounded-md border border-border">
