@@ -3,6 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { GEMINI_CLIENT_CHAT_MODEL, withThinking, fetchWithVertexRetry } from "../_shared/vertex-ai.ts";
 import { GEORGIA_CLIENT_PROMPT, PORTAL_TOOLS as TOOLS, cleanGeorgiaReply } from "../_shared/georgia-chat-config.ts";
 import { availability, buildSupportContext, cleanLabels, modelTurns, newClientMessage, storableMessages } from "../_shared/support-context.ts";
+import { requestAcknowledgement, requestDueDate, requestTaskTitle, todayPacific } from "../_shared/request-task.ts";
+import { ADMIN_INBOX_EMAIL, resolveUserIdByEmail } from "../_shared/google-token.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -150,19 +152,49 @@ serve(async (req) => {
         );
       }
 
+      // The request is acknowledged and closed at once; anything further continues in a client-visible task assigned to Rolf.
+      let acknowledgement = "";
+      let taskId: string | null = null;
+      let contactName = "A client";
+      try {
+        const { data: contactInfo } = await supabase.from("contacts").select("full_name, first_name, household_id, family_id").eq("id", requestData.contact_id).maybeSingle();
+        contactName = contactInfo?.full_name || "A client";
+        const { data: awayRow } = await supabase.from("staff_availability").select("away_from, away_until, note").eq("id", true).maybeSingle();
+        const now = new Date();
+        const avail = availability(awayRow ?? null, now);
+        acknowledgement = requestAcknowledgement({ firstName: contactInfo?.first_name ?? null, type: requestData.request_type, availability: avail });
+        const rolfId = await resolveUserIdByEmail(supabase, ADMIN_INBOX_EMAIL);
+        const title = requestTaskTitle(requestData.request_type);
+        const { data: task, error: taskErr } = await supabase.from("pm_tasks").insert({
+          title, description: null, status: "open", due_date: requestDueDate(todayPacific(now), avail.away ? avail.backOn : null), assignee_id: rolfId,
+          household_id: contactInfo?.household_id ?? null, contact_id: requestData.contact_id, family_id: contactInfo?.family_id ?? null,
+          client_visible: true, portal_request_id: data.id, created_by: rolfId,
+        }).select("id").maybeSingle();
+        if (taskErr || !task) throw new Error(taskErr?.message || "task not created");
+        taskId = task.id;
+        // The thread starts with the client's own words, then Georgia's acknowledgement. Neither notifies the client: they have just been told.
+        await supabase.from("pm_task_comments").insert({ task_id: task.id, author_contact_id: requestData.contact_id, body: requestData.request_description.slice(0, 2000), body_format: "text", created_at: now.toISOString() });
+        await supabase.from("pm_task_comments").insert({ task_id: task.id, author_agent_key: "georgia", body: acknowledgement, body_format: "text", created_at: new Date(now.getTime() + 1000).toISOString() });
+        await supabase.from("portal_request_messages").insert({ request_id: data.id, sender_type: "advisor", sender_name: "Georgia", content: acknowledgement });
+        await supabase.from("portal_requests").update({ status: "resolved", resolved_at: now.toISOString() }).eq("id", data.id);
+        // Keep the Ask Georgia thread whole: the acknowledgement is Georgia's last word in it.
+        const { data: conv } = await supabase.from("portal_assistant_conversations").select("id, messages, updated_at").eq("contact_id", requestData.contact_id).order("updated_at", { ascending: false }).limit(1).maybeSingle();
+        if (conv && now.getTime() - Date.parse(conv.updated_at) < 60 * 60 * 1000) {
+          await supabase.from("portal_assistant_conversations").update({ messages: storableMessages([...storableMessages(conv.messages), { role: "assistant", content: acknowledgement, at: now.toISOString() }]), updated_at: now.toISOString() }).eq("id", conv.id);
+        }
+      } catch (taskErr) {
+        // The request itself is already saved; if the task could not be made it stays open for Rolf, as before.
+        console.error("[PortalAssistant] request task failed:", taskErr);
+        taskId = null;
+      }
+
       // Create in-app notification for staff
       try {
-        const { data: contactInfo } = await supabase
-          .from("contacts")
-          .select("full_name")
-          .eq("id", requestData.contact_id)
-          .maybeSingle();
-        const contactName = contactInfo?.full_name || "A client";
         const typeLabel = requestData.request_type?.replace(/_/g, " ") || "request";
         await supabase.from("staff_notifications").insert({
-          title: `${contactName} submitted a new ${typeLabel} request`,
+          title: `${contactName} submitted a new ${typeLabel} request${taskId ? " (task created)" : ""}`,
           body: requestData.request_description?.substring(0, 100) || null,
-          link: "/requests",
+          link: `/contacts/${requestData.contact_id}`,
           contact_id: requestData.contact_id,
           source_type: "new_request",
         });
@@ -188,7 +220,7 @@ serve(async (req) => {
       );
 
       return new Response(
-        JSON.stringify({ success: true, requestId: data.id }),
+        JSON.stringify({ success: true, requestId: data.id, taskId, acknowledgement: taskId ? acknowledgement : null }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

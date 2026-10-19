@@ -174,16 +174,19 @@ export function PortalGeorgiaChat({ open, onOpenChange, contactName, contactId, 
     }
   }
 
-  const handleFormSubmitted = () => {
+  const handleFormSubmitted = (acknowledgement?: string) => {
     setFormTrigger(null);
+    // The server's acknowledgement (request logged as a task, Rolf's away dates) when there is one; it is also saved in the thread.
     setMessages((prev) => [
       ...prev,
       {
         role: "assistant",
-        content:
-          "Your request has been submitted successfully! Your Personal CFO will review it and follow up with you shortly. Is there anything else I can help you with?",
+        content: acknowledgement
+          ? `${acknowledgement} Is there anything else I can help you with?`
+          : "Your request has been submitted successfully! Your Personal CFO will review it and follow up with you shortly. Is there anything else I can help you with?",
       },
     ]);
+    if (acknowledgement) serverCount.current += 1;
     onRequestSubmitted?.();
   };
 

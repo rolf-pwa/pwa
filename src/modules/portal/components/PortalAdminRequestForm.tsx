@@ -26,7 +26,8 @@ interface Props {
   contactId: string;
   contactName: string;
   portalToken: string;
-  onSubmitted: () => void;
+  /** The acknowledgement Georgia wrote for this request, when the server made a task for it. */
+  onSubmitted: (acknowledgement?: string) => void;
   onCancel: () => void;
   prefillType?: string;
   prefillDescription?: string;
@@ -46,6 +47,7 @@ export function PortalAdminRequestForm({
   chatTranscript,
 }: Props) {
   const [phase, setPhase] = useState<Phase>("form");
+  const [acknowledgement, setAcknowledgement] = useState<string | null>(null);
   const [requestType, setRequestType] = useState(prefillType || "");
   const [description, setDescription] = useState(prefillDescription || "");
   const [files, setFiles] = useState<File[]>([]);
@@ -126,8 +128,11 @@ export function PortalAdminRequestForm({
         throw new Error(data.error || "Failed to submit request");
       }
 
+      const result = await res.json().catch(() => ({}));
+      const ack = typeof result?.acknowledgement === "string" && result.acknowledgement ? result.acknowledgement : undefined;
+      setAcknowledgement(ack ?? null);
       setPhase("submitted");
-      setTimeout(() => onSubmitted(), 2000);
+      setTimeout(() => onSubmitted(ack), 2000);
     } catch (e) {
       console.error("Submit error:", e);
       setError(e instanceof Error ? e.message : "Something went wrong");
@@ -143,7 +148,7 @@ export function PortalAdminRequestForm({
         <CheckCircle className="h-8 w-8 text-accent mx-auto" />
         <h3 className="font-serif font-semibold text-foreground">Request Submitted</h3>
         <p className="text-sm text-muted-foreground">
-          Your Personal CFO will review this and follow up with you shortly.
+          {acknowledgement ?? "Your Personal CFO will review this and follow up with you shortly."}
         </p>
       </div>
     );

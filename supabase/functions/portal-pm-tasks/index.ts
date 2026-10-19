@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
 
       const { data: comments, error } = await supabase
         .from("pm_task_comments")
-        .select("id, task_id, author_id, author_contact_id, body, body_format, kind, edited_at, created_at")
+        .select("id, task_id, author_id, author_contact_id, author_agent_key, body, body_format, kind, edited_at, created_at")
         .eq("task_id", task_id)
         .order("created_at", { ascending: true });
       if (error) return json({ error: error.message }, 500);
@@ -113,8 +113,9 @@ Deno.serve(async (req) => {
         kind: c.kind === "system" ? "system" : "comment",
         edited_at: c.edited_at ?? null,
         created_at: c.created_at,
-        author_type: c.author_id ? "staff" : "client",
-        author_name: c.author_id ? staffById.get(c.author_id) || "ProsperWise" : contactById.get(c.author_contact_id) || "You",
+        // Georgia's comments (an agent, no staff or client author) are shown as hers, never as the client's own.
+        author_type: c.author_id || c.author_agent_key ? "staff" : "client",
+        author_name: c.author_id ? staffById.get(c.author_id) || "ProsperWise" : c.author_agent_key ? "Georgia" : contactById.get(c.author_contact_id) || "You",
       }));
       return json({ comments: resolved });
     }
