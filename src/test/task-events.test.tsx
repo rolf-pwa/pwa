@@ -75,3 +75,41 @@ describe("the meeting record's thread", () => {
     expect(h.indexOf("Task reopened")).toBeLessThan(h.indexOf("Task completed"));
   });
 });
+
+import { isEditableComment, releasedText, postTaskNote } from "../../supabase/functions/_shared/task-events";
+import { textToHtml } from "@/shared/lib/sanitizeHtml";
+import { RichCommentEditor } from "@/shared/components/RichCommentEditor";
+
+describe("which comments can be edited", () => {
+  it("allows what staff or Georgia wrote, and nothing else", () => {
+    expect(isEditableComment({ author_id: "u1" })).toBe(true);
+    expect(isEditableComment({ author_agent_key: "georgia" })).toBe(true);
+    expect(isEditableComment({ author_contact_id: "c1" })).toBe(false);
+    expect(isEditableComment({ author_professional_id: "p1" })).toBe(false);
+    expect(isEditableComment({ author_id: "u1", kind: "system" })).toBe(false);
+    expect(isEditableComment({})).toBe(false);
+  });
+});
+
+describe("releasing a task to the client", () => {
+  it("words the note and records it in the task's own thread", async () => {
+    expect(releasedText("Rolf Issler")).toBe("Shared with the client by Rolf Issler");
+    const rows: Record<string, unknown>[] = [];
+    await postTaskNote({ from: () => ({ insert: async (r: Record<string, unknown>) => { rows.push(r); return {}; } }) } as any, "t1", releasedText("Rolf Issler"), { label: "Rolf Issler", userId: "u1" });
+    expect(rows[0]).toMatchObject({ task_id: "t1", author_id: "u1", kind: "system", body: "Shared with the client by Rolf Issler" });
+  });
+});
+
+describe("editing starts from the existing text", () => {
+  it("turns plain text into editable lines without interpreting markup", () => {
+    expect(textToHtml("Hi\n<b>x</b>\n")).toBe("<div>Hi</div><div>&lt;b&gt;x&lt;/b&gt;</div><div><br></div>");
+  });
+  it("shows the existing comment in the editor, cleaned, and reports it", () => {
+    const onChange = vi.fn();
+    render(<RichCommentEditor value="" onChange={onChange} initialHtml={'<p>Recap <strong>draft</strong></p><script>x()</script>'} />);
+    const box = screen.getByRole("textbox");
+    expect(box.innerHTML).toContain("<strong>draft</strong>");
+    expect(box.innerHTML).not.toContain("script");
+    expect(onChange).toHaveBeenCalledWith(expect.stringContaining("<strong>draft</strong>"));
+  });
+});

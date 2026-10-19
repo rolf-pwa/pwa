@@ -224,6 +224,8 @@ export interface PmTaskComment {
   body_format?: "text" | "html";
   /** A system line (completed, reopened) rather than something a person wrote. */
   kind?: "comment" | "system";
+  /** When the comment was last edited (earlier versions are kept). */
+  edited_at?: string | null;
   created_at: string;
 }
 
@@ -286,6 +288,8 @@ export interface ITaskAgentProvider {
   ): Promise<PmTask>;
   getTaskComments(taskId: string): Promise<PmTaskComment[]>;
   postTaskComment(taskId: string, body: string, format?: "text" | "html"): Promise<PmTaskComment>;
+  /** Edit a staff or Georgia comment; the earlier version is kept. */
+  editTaskComment(commentId: string, body: string): Promise<PmTaskComment>;
   listTaskCollaborators(taskId: string): Promise<PmTaskCollaborator[]>;
   tagProfessional(taskId: string, professionalId: string): Promise<PmTaskCollaborator>;
   untagProfessional(taskId: string, professionalId: string): Promise<void>;

@@ -9,15 +9,25 @@ interface Props {
   onChange: (html: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  /** HTML to start with, for editing an existing comment. */
+  initialHtml?: string;
 }
 
 /** A small formatting editor for staff comments. Pasted content (for example a recap from another tool) is cleaned as it lands. */
-export function RichCommentEditor({ value, onChange, placeholder = "Add a comment…", disabled }: Props) {
+export function RichCommentEditor({ value, onChange, placeholder = "Add a comment…", disabled, initialHtml }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
-  // Clearing the value from outside (after a post) clears the box; typing never rewrites it.
+  // Editing starts from the existing text.
   useEffect(() => {
-    if (ref.current && value === "" && ref.current.innerHTML !== "") ref.current.innerHTML = "";
+    if (ref.current && initialHtml) { ref.current.innerHTML = sanitizeCommentHtml(initialHtml); onChange(sanitizeCommentHtml(initialHtml)); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Clearing the value from outside (after a post) clears the box; typing never rewrites it, and the first render never clears.
+  const previous = useRef(value);
+  useEffect(() => {
+    if (ref.current && previous.current !== "" && value === "" && ref.current.innerHTML !== "") ref.current.innerHTML = "";
+    previous.current = value;
   }, [value]);
 
   const emit = () => onChange(sanitizeCommentHtml(ref.current?.innerHTML ?? ""));

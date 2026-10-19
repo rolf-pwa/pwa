@@ -19,7 +19,7 @@ export function commentRecipientIds(task: TaskRef, householdContacts: { id: stri
 }
 
 /** One notification per recipient: a bell entry in the portal, and (through the existing digest) at most one short email with no task details. */
-export async function notifyClientsOfComment(db: any, task: TaskRef, supabaseUrl: string, serviceKey: string): Promise<number> {
+export async function notifyClientsOfComment(db: any, task: TaskRef, supabaseUrl: string, serviceKey: string, event: "comment" | "updated" = "comment"): Promise<number> {
   if (!task.client_visible) return 0;
   let household: { id: string; is_minor?: boolean | null }[] = [];
   if (!task.contact_id && task.household_id) {
@@ -33,7 +33,7 @@ export async function notifyClientsOfComment(db: any, task: TaskRef, supabaseUrl
       const res = await fetch(`${supabaseUrl}/functions/v1/notify-portal-request`, {
         method: "POST",
         headers: { "x-region": "ca-central-1", "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
-        body: JSON.stringify({ notify_type: "task", contact_id, task_name: task.title, task_event: "comment" }),
+        body: JSON.stringify({ notify_type: "task", contact_id, task_name: task.title, task_event: event }),
       });
       if (res.ok) sent++;
       else console.error(`[task-notify] notify failed ${res.status}`);

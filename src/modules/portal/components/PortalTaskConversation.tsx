@@ -14,6 +14,7 @@ interface Comment {
   body: string;
   body_format?: "text" | "html";
   kind?: "comment" | "system";
+  edited_at?: string | null;
   author_type: "staff" | "client";
   author_name: string;
   created_at: string;
@@ -193,6 +194,7 @@ export function PortalTaskConversation({ taskId, portalToken, clientName, readOn
                   <span className="text-xs font-semibold text-foreground">
                     {comment.author_name}
                   </span>
+                  {comment.edited_at && <span className="text-[10px] italic text-muted-foreground">edited</span>}
                   <span className="text-[10px] text-muted-foreground">
                     {new Date(comment.created_at).toLocaleDateString("en-US", {
                       month: "short",

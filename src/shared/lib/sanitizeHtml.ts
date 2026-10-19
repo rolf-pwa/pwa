@@ -38,3 +38,9 @@ export function commentPlainText(body: string, format?: "text" | "html" | null):
     .replace(/<br\s*\/?>|<\/(p|div|li|h3|h4|tr|blockquote)>/gi, "\n");
   return (div.textContent ?? "").replace(/\n{3,}/g, "\n\n").trim();
 }
+
+/** A plain-text comment as editable HTML: line breaks kept, nothing interpreted as markup. */
+export function textToHtml(text: string): string {
+  const esc = String(text ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return esc.split(/\r?\n/).map((l) => `<div>${l || "<br>"}</div>`).join("");
+}
