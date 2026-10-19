@@ -54,3 +54,8 @@ export function namedAttendees(attendees: CalEventLite["attendees"], k: Known): 
   }
   return out;
 }
+
+/** The household's own email addresses, lower case, without the firm's: the advisor is on every event, so his address shows nothing about who the meeting was with. */
+export function clientEmailSet(members: { email?: string | null }[], staffDomain: string): Set<string> {
+  return new Set(members.map((m) => String(m.email ?? "").trim().toLowerCase()).filter((e) => e && !e.endsWith(`@${staffDomain}`)));
+}

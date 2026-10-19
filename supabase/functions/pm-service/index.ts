@@ -2,6 +2,7 @@
 // comments). Phase 1: no external API, no portal/client access yet.
 
 import { notifyClientsOfComment, notifyProsOfComment, type TaskRef } from "../_shared/task-notify.ts";
+import { eventFor, postTaskEvent } from "../_shared/task-events.ts";
 import { createMeetingRecord, maybeCreateMeetingRecord, meetingRecordCandidates } from "../_shared/meeting-record-service.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -208,8 +209,15 @@ Deno.serve(async (req) => {
       // convention (see pm_task_comments' author columns).
       if ("assigned_agent_key" in patch && patch.assigned_agent_key) patch.assignee_id = null;
       if ("assignee_id" in patch && patch.assignee_id) patch.assigned_agent_key = null;
+      const { data: before } = await db.from("pm_tasks").select("id, title, status, parent_task_id").eq("id", id).maybeSingle();
       const { data, error } = await db.from("pm_tasks").update(patch).eq("id", id).select(TASK_FIELDS).maybeSingle();
       if (error) return json({ ok: false, error: error.message }, 500);
+      // Completing or reopening leaves a line in the thread, before the meeting record is made so the record includes it.
+      const ev = before ? eventFor(before.status, "status" in patch ? String(patch.status) : before.status) : null;
+      if (before && ev) {
+        const { data: me } = await db.from("profiles").select("full_name").eq("user_id", userId).maybeSingle();
+        await postTaskEvent(db, before, ev, { label: me?.full_name || "a team member", userId });
+      }
       // A completed meeting follow-up gets its record filed in the household's Advisor Files (also when the box is ticked on a finished task).
       if (patch.status === "done" || patch.meeting_followup === true) {
         // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
@@ -239,7 +247,7 @@ Deno.serve(async (req) => {
       if (!task_id) return json({ ok: false, error: "task_id is required" }, 400);
       const { data, error } = await db
         .from("pm_task_comments")
-        .select("id, task_id, author_id, author_agent_key, body, body_format, created_at")
+        .select("id, task_id, author_id, author_agent_key, body, body_format, kind, created_at")
         .eq("task_id", task_id)
         .order("created_at", { ascending: true });
       if (error) return json({ ok: false, error: error.message }, 500);

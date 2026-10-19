@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildMeetingRecordHtml, cleanHtmlForDoc, esc, pacificDate, pacificTime, recordTitle, splitRecap, type RecordComment, type RecordInput } from "../../supabase/functions/_shared/meeting-record";
-import { namedAttendees, pickEvent, type CalEventLite } from "../../supabase/functions/_shared/meeting-event";
+import { clientEmailSet, namedAttendees, pickEvent, type CalEventLite } from "../../supabase/functions/_shared/meeting-event";
 
 describe("cleaning formatted text for the record", () => {
   it("keeps formatting, drops scripts, styles, images and every attribute but a safe link address", () => {
@@ -113,5 +113,16 @@ describe("naming attendees", () => {
       { name: "Dana Lee", role: "Professional, accountant" },
       { name: "Xavier", role: "Guest" },
     ]);
+  });
+});
+
+describe("the household's addresses used for matching", () => {
+  it("leaves out the firm's own addresses and blanks, and lower-cases the rest", () => {
+    expect([...clientEmailSet([{ email: "Colleen@Example.com" }, { email: "rolf@prosperwise.ca" }, { email: null }, { email: " " }], "prosperwise.ca")]).toEqual(["colleen@example.com"]);
+  });
+  it("so a meeting is not matched just because the advisor is on it", () => {
+    const only = ev({ summary: "Networking Coffee", attendees: [{ email: "rolf@prosperwise.ca", self: true }, { email: "jayde@socialsweep.ai" }] });
+    const emails = clientEmailSet([{ email: "rolf@prosperwise.ca" }], "prosperwise.ca");
+    expect(pickEvent([only], { clientEmails: emails, clientNames: ["Rolf Issler"], anchor: "2026-10-19T12:00:00Z" })).toBeNull();
   });
 });

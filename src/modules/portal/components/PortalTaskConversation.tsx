@@ -1,4 +1,5 @@
 import { CommentBody } from "@/shared/components/CommentBody";
+import { SystemCommentLine } from "@/shared/components/SystemCommentLine";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { Send, Loader2, MessageCircle, CheckCircle2, Circle, ListChecks, ChevronRight, X } from "lucide-react";
@@ -12,6 +13,7 @@ interface Comment {
   id: string;
   body: string;
   body_format?: "text" | "html";
+  kind?: "comment" | "system";
   author_type: "staff" | "client";
   author_name: string;
   created_at: string;
@@ -185,6 +187,7 @@ export function PortalTaskConversation({ taskId, portalToken, clientName, readOn
         comments.map((comment) => {
             const isClient = comment.author_type === "client";
             return (
+              comment.kind === "system" ? <SystemCommentLine key={comment.id} body={comment.body} at={comment.created_at} /> :
               <div key={comment.id} className="flex flex-col gap-1">
                 <div className={`flex items-center gap-2 ${isClient ? 'justify-end' : ''}`}>
                   <span className="text-xs font-semibold text-foreground">

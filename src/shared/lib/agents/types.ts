@@ -222,6 +222,8 @@ export interface PmTaskComment {
   body: string;
   /** 'html' for formatted staff comments; anything else is plain text. */
   body_format?: "text" | "html";
+  /** A system line (completed, reopened) rather than something a person wrote. */
+  kind?: "comment" | "system";
   created_at: string;
 }
 

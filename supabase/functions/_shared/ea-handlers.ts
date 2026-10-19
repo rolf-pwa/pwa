@@ -10,6 +10,7 @@ import { fetchWithVertexRetry, getGcpAccessToken, GEMINI_DRAFTING_MODEL, parseSe
 import { getServiceGoogleAccessToken, getValidGoogleAccessToken } from "./google-token.ts";
 import { loadVoice } from "./voice-profile.ts";
 import { maybeCreateMeetingRecord } from "./meeting-record-service.ts";
+import { postTaskEvent } from "./task-events.ts";
 import { refreshBriefing } from "./briefing-refresh.ts";
 import { provisionClientFolderTree } from "./vault-provisioning.ts";
 
@@ -198,10 +199,11 @@ export async function eaChat(db: any, userId: string, text: string, start: boole
       }
       case "complete_task": case "reschedule_task": {
         const id = str(a.task_id, 60);
-        const { data: t } = await db.from("pm_tasks").select("id, title").eq("id", id).eq("assignee_id", userId).neq("status", "done").maybeSingle();
+        const { data: t } = await db.from("pm_tasks").select("id, title, parent_task_id").eq("id", id).eq("assignee_id", userId).neq("status", "done").maybeSingle();
         if (!t) return { ok: false, message: "I could not find that open task." };
         if (name === "complete_task") {
           await db.from("pm_tasks").update({ status: "done", completed_at: new Date().toISOString() }).eq("id", id);
+          await postTaskEvent(db, t, "completed", { label: "Georgia", agentKey: "georgia" });
           // A meeting follow-up gets its record filed when it is closed.
           // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
           EdgeRuntime.waitUntil(maybeCreateMeetingRecord(db, id));

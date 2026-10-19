@@ -1,4 +1,5 @@
 import { CommentBody } from "@/shared/components/CommentBody";
+import { SystemCommentLine } from "@/shared/components/SystemCommentLine";
 import { RichCommentEditor } from "@/shared/components/RichCommentEditor";
 import { isEmptyHtml, sanitizeCommentHtml } from "@/shared/lib/sanitizeHtml";
 import { useEffect, useState } from "react";
@@ -443,7 +444,7 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
           <p className="text-sm text-muted-foreground">No comments yet.</p>
         ) : (
           <div className="space-y-2">
-            {comments.map((c) => (
+            {comments.map((c) => c.kind === "system" ? <SystemCommentLine key={c.id} body={c.body} at={c.created_at} /> : (
               <div key={c.id} className="rounded-md bg-muted/50 p-2 text-sm">
                 <div className="mb-0.5 text-xs font-medium text-muted-foreground">
                   {c.author_agent_key

@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
 
       const { data: comments, error } = await supabase
         .from("pm_task_comments")
-        .select("id, task_id, author_id, author_contact_id, body, body_format, created_at")
+        .select("id, task_id, author_id, author_contact_id, body, body_format, kind, created_at")
         .eq("task_id", task_id)
         .order("created_at", { ascending: true });
       if (error) return json({ error: error.message }, 500);
@@ -110,6 +110,7 @@ Deno.serve(async (req) => {
         body: c.body,
         // Only staff comments can be formatted; a client's is always shown as plain text.
         body_format: c.author_id && c.body_format === "html" ? "html" : "text",
+        kind: c.kind === "system" ? "system" : "comment",
         created_at: c.created_at,
         author_type: c.author_id ? "staff" : "client",
         author_name: c.author_id ? staffById.get(c.author_id) || "ProsperWise" : contactById.get(c.author_contact_id) || "You",
