@@ -158,3 +158,28 @@ describe("picking the thread up from yesterday", () => {
     expect(SYSTEM_PROMPT).toMatch(/On a Monday, offer to plan the week/);
   });
 });
+
+import { readFileSync } from "node:fs";
+describe("commenting on tasks and closing requests", () => {
+  const names = TOOL_DECLARATIONS.map((t) => t.name);
+  it("gives her tools to find them, comment, reply and close", () => {
+    expect(names).toEqual(expect.arrayContaining(["list_open_requests", "search_tasks", "comment_on_task", "reply_to_request", "close_request"]));
+  });
+  it("tells her to use them only when Rolf asks in the chat", () => {
+    expect(SYSTEM_PROMPT).toMatch(/only when Rolf has asked you to in this chat/);
+    expect(SYSTEM_PROMPT).toMatch(/Never do this on your own initiative/);
+    for (const n of ["comment_on_task", "reply_to_request", "close_request"]) {
+      const d = TOOL_DECLARATIONS.find((t) => t.name === n)!;
+      expect(d.description).toMatch(/Rolf has asked you to in this conversation/);
+    }
+  });
+  it("never lets her send email or text directly, even through these", () => {
+    const src = readFileSync("supabase/functions/_shared/ea-handlers.ts", "utf8");
+    const start = src.indexOf('case "list_open_requests"'); const end = src.indexOf('case "draft_meeting_followup"');
+    const block = src.slice(start, end);
+    expect(block).not.toMatch(/gmail\.googleapis|send-admin-email|sendServiceEmail|api\.openphone/);
+    // The client is told only through the portal's own notification, and Georgia's posts are marked as hers.
+    expect(block).toContain('author_agent_key: "georgia"');
+    expect(block).toContain('sender_name: "Georgia"');
+  });
+});
