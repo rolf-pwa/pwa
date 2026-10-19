@@ -39,3 +39,25 @@ export async function postTaskEvent(db: any, task: { id: string; title: string; 
     console.error("[task-events] could not record the event", e instanceof Error ? e.message : e);
   }
 }
+
+/** The line recorded when a task is shared with the client. */
+export const releasedText = (actor: string): string => `Shared with the client by ${actor}`;
+
+/** A system note in a task's own thread. Never throws. */
+export async function postTaskNote(db: any, taskId: string, text: string, actor: Actor): Promise<void> {
+  try {
+    await db.from("pm_task_comments").insert({
+      task_id: taskId, author_id: actor.userId ?? null, author_professional_id: actor.professionalId ?? null, author_agent_key: actor.agentKey ?? null,
+      body: text, body_format: "text", kind: "system",
+    });
+  } catch (e) {
+    console.error("[task-events] could not record the note", e instanceof Error ? e.message : e);
+  }
+}
+
+/** Only what staff or Georgia wrote can be edited: never a client's or a professional's words, and never a system line. */
+export function isEditableComment(c: { kind?: string | null; author_contact_id?: string | null; author_professional_id?: string | null; author_id?: string | null; author_agent_key?: string | null }): boolean {
+  if (c.kind === "system") return false;
+  if (c.author_contact_id || c.author_professional_id) return false;
+  return !!(c.author_id || c.author_agent_key);
+}

@@ -2,7 +2,7 @@
 // comments). Phase 1: no external API, no portal/client access yet.
 
 import { notifyClientsOfComment, notifyProsOfComment, type TaskRef } from "../_shared/task-notify.ts";
-import { eventFor, postTaskEvent } from "../_shared/task-events.ts";
+import { eventFor, isEditableComment, postTaskEvent, postTaskNote, releasedText } from "../_shared/task-events.ts";
 import { createMeetingRecord, maybeCreateMeetingRecord, meetingRecordCandidates } from "../_shared/meeting-record-service.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -209,7 +209,7 @@ Deno.serve(async (req) => {
       // convention (see pm_task_comments' author columns).
       if ("assigned_agent_key" in patch && patch.assigned_agent_key) patch.assignee_id = null;
       if ("assignee_id" in patch && patch.assignee_id) patch.assigned_agent_key = null;
-      const { data: before } = await db.from("pm_tasks").select("id, title, status, parent_task_id").eq("id", id).maybeSingle();
+      const { data: before } = await db.from("pm_tasks").select("id, title, status, parent_task_id, client_visible, contact_id, household_id").eq("id", id).maybeSingle();
       const { data, error } = await db.from("pm_tasks").update(patch).eq("id", id).select(TASK_FIELDS).maybeSingle();
       if (error) return json({ ok: false, error: error.message }, 500);
       // Completing or reopening leaves a line in the thread, before the meeting record is made so the record includes it.
@@ -217,6 +217,13 @@ Deno.serve(async (req) => {
       if (before && ev) {
         const { data: me } = await db.from("profiles").select("full_name").eq("user_id", userId).maybeSingle();
         await postTaskEvent(db, before, ev, { label: me?.full_name || "a team member", userId });
+      }
+      // Sharing a task with the client is the release: it is noted in the thread, and the client is told (portal bell, and the short email).
+      if (before && !before.parent_task_id && before.client_visible === false && patch.client_visible === true) {
+        const { data: me } = await db.from("profiles").select("full_name").eq("user_id", userId).maybeSingle();
+        await postTaskNote(db, id, releasedText(me?.full_name || "a team member"), { label: me?.full_name || "a team member", userId });
+        // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+        EdgeRuntime.waitUntil(notifyClientsOfComment(db, { id, title: before.title, client_visible: true, contact_id: before.contact_id, household_id: before.household_id }, Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, "updated"));
       }
       // A completed meeting follow-up gets its record filed in the household's Advisor Files (also when the box is ticked on a finished task).
       if (patch.status === "done" || patch.meeting_followup === true) {
@@ -242,12 +249,27 @@ Deno.serve(async (req) => {
       return json({ ok: true, results });
     }
 
+    // Edit a staff or Georgia comment, keeping the earlier version. Never a client's, a professional's or a system line.
+    if (action === "editTaskComment") {
+      const { comment_id, body: text, format } = body;
+      if (!comment_id || !String(text || "").trim()) return json({ ok: false, error: "comment_id and body are required" }, 400);
+      const { data: c } = await db.from("pm_task_comments").select("id, task_id, author_id, author_contact_id, author_professional_id, author_agent_key, body, body_format, kind").eq("id", comment_id).maybeSingle();
+      if (!c) return json({ ok: false, error: "Comment not found" }, 404);
+      if (!isEditableComment(c)) return json({ ok: false, error: "That comment cannot be edited." }, 403);
+      const body_format = format === "html" ? "html" : "text";
+      await db.from("pm_task_comment_edits").insert({ comment_id: c.id, previous_body: c.body, previous_format: c.body_format ?? "text", edited_by: userId });
+      const { data, error } = await db.from("pm_task_comments").update({ body: String(text).trim(), body_format, edited_at: new Date().toISOString(), edited_by: userId }).eq("id", c.id)
+        .select("id, task_id, author_id, author_agent_key, body, body_format, kind, edited_at, created_at").maybeSingle();
+      if (error) return json({ ok: false, error: error.message }, 500);
+      return json({ ok: true, comment: data });
+    }
+
     if (action === "getTaskComments") {
       const { task_id } = body;
       if (!task_id) return json({ ok: false, error: "task_id is required" }, 400);
       const { data, error } = await db
         .from("pm_task_comments")
-        .select("id, task_id, author_id, author_agent_key, body, body_format, kind, created_at")
+        .select("id, task_id, author_id, author_agent_key, body, body_format, kind, edited_at, created_at")
         .eq("task_id", task_id)
         .order("created_at", { ascending: true });
       if (error) return json({ ok: false, error: error.message }, 500);

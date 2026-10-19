@@ -1,7 +1,7 @@
 import { CommentBody } from "@/shared/components/CommentBody";
 import { SystemCommentLine } from "@/shared/components/SystemCommentLine";
 import { RichCommentEditor } from "@/shared/components/RichCommentEditor";
-import { isEmptyHtml, sanitizeCommentHtml } from "@/shared/lib/sanitizeHtml";
+import { isEmptyHtml, sanitizeCommentHtml, textToHtml } from "@/shared/lib/sanitizeHtml";
 import { useEffect, useState } from "react";
 import { Textarea } from "@/shared/components/ui/textarea";
 import { Input } from "@/shared/components/ui/input";
@@ -17,7 +17,7 @@ import { StaffAssigneePicker } from "./StaffAssigneePicker";
 import { ProfessionalPicker } from "./ProfessionalPicker";
 import { HouseholdMemberPicker } from "./HouseholdMemberPicker";
 import { AiTeammateStepper } from "./AiTeammateStepper";
-import { AI_TEAMMATE_DESCRIPTION, AI_TEAMMATE_LABEL, AUTONOMOUS_AGENT_LABEL, isAutonomousAgent, type AiTeammateKey } from "@/shared/lib/aiTeammates";
+import { AI_TEAMMATE_DESCRIPTION, AI_TEAMMATE_LABEL, AUTONOMOUS_AGENT_LABEL, COMMENT_AUTHOR_LABEL, isAutonomousAgent, type AiTeammateKey } from "@/shared/lib/aiTeammates";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { cn } from "@/shared/lib/utils";
 
@@ -37,6 +37,9 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
   const [comments, setComments] = useState<PmTaskComment[]>([]);
   const [authorNames, setAuthorNames] = useState<Record<string, string>>({});
   const [commentBody, setCommentBody] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editHtml, setEditHtml] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
   // Staff comments are written with formatting; the box holds cleaned HTML.
   const [loadingComments, setLoadingComments] = useState(true);
   const [sending, setSending] = useState(false);
@@ -168,6 +171,20 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
       onChanged(updated);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not update visibility.");
+    }
+  };
+
+  const saveEdit = async () => {
+    if (!editingId || isEmptyHtml(editHtml)) return;
+    setSavingEdit(true);
+    try {
+      const updated = await getTaskAgent().editTaskComment(editingId, sanitizeCommentHtml(editHtml));
+      setComments((prev) => prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
+      setEditingId(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save this comment.");
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -448,11 +465,23 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
               <div key={c.id} className="rounded-md bg-muted/50 p-2 text-sm">
                 <div className="mb-0.5 text-xs font-medium text-muted-foreground">
                   {c.author_agent_key
-                    ? `🤖 ${AI_TEAMMATE_LABEL[c.author_agent_key as AiTeammateKey] || AUTONOMOUS_AGENT_LABEL[c.author_agent_key] || c.author_agent_key}`
+                    ? `🤖 ${AI_TEAMMATE_LABEL[c.author_agent_key as AiTeammateKey] || AUTONOMOUS_AGENT_LABEL[c.author_agent_key] || COMMENT_AUTHOR_LABEL[c.author_agent_key] || c.author_agent_key}`
                     : authorNames[c.author_id] || "Staff"}{" "}
                   · {new Date(c.created_at).toLocaleString()}
+                  {c.edited_at && <span title={`Edited ${new Date(c.edited_at).toLocaleString()}`}> · edited</span>}
+                  {editingId !== c.id && (
+                    <button type="button" className="ml-2 underline" aria-label="Edit comment" onClick={() => { setEditingId(c.id); setEditHtml(c.body_format === "html" ? c.body : textToHtml(c.body)); }}>Edit</button>
+                  )}
                 </div>
-                <CommentBody body={c.body} format={c.body_format} />
+                {editingId === c.id ? (
+                  <div className="space-y-2">
+                    <RichCommentEditor value={editHtml} onChange={setEditHtml} initialHtml={c.body_format === "html" ? c.body : textToHtml(c.body)} disabled={savingEdit} />
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={saveEdit} disabled={savingEdit || isEmptyHtml(editHtml)}>{savingEdit && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}Save</Button>
+                      <Button size="sm" variant="outline" onClick={() => setEditingId(null)} disabled={savingEdit}>Cancel</Button>
+                    </div>
+                  </div>
+                ) : <CommentBody body={c.body} format={c.body_format} />}
               </div>
             ))}
           </div>

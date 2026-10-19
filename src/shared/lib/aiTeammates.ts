@@ -17,6 +17,10 @@ export const AI_TEAMMATE_ORDER: AiTeammateKey[] = ["pm_teammate"];
 export const AUTONOMOUS_AGENT_LABEL: Record<string, string> = {
   onboarding_concierge: "Georgia, AI Assistant (onboarding)",
 };
+/** Names for comment authors that are agents but not task owners (Georgia writes drafts and system lines). */
+export const COMMENT_AUTHOR_LABEL: Record<string, string> = {
+  georgia: "Georgia, AI Assistant",
+};
 export const isAutonomousAgent = (key: string | null | undefined): boolean => !!key && key in AUTONOMOUS_AGENT_LABEL;
 
 export const AI_TEAMMATE_LABEL: Record<AiTeammateKey, string> = {
