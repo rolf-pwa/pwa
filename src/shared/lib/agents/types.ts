@@ -218,6 +218,8 @@ export interface PmTaskComment {
   /** Set instead of author_id when this comment was posted by an AI Teammate. */
   author_agent_key?: string | null;
   body: string;
+  /** 'html' for formatted staff comments; anything else is plain text. */
+  body_format?: "text" | "html";
   created_at: string;
 }
 
@@ -279,7 +281,7 @@ export interface ITaskAgentProvider {
     >,
   ): Promise<PmTask>;
   getTaskComments(taskId: string): Promise<PmTaskComment[]>;
-  postTaskComment(taskId: string, body: string): Promise<PmTaskComment>;
+  postTaskComment(taskId: string, body: string, format?: "text" | "html"): Promise<PmTaskComment>;
   listTaskCollaborators(taskId: string): Promise<PmTaskCollaborator[]>;
   tagProfessional(taskId: string, professionalId: string): Promise<PmTaskCollaborator>;
   untagProfessional(taskId: string, professionalId: string): Promise<void>;

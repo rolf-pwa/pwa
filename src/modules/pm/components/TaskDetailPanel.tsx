@@ -1,3 +1,6 @@
+import { CommentBody } from "@/shared/components/CommentBody";
+import { RichCommentEditor } from "@/shared/components/RichCommentEditor";
+import { isEmptyHtml, sanitizeCommentHtml } from "@/shared/lib/sanitizeHtml";
 import { useEffect, useState } from "react";
 import { Textarea } from "@/shared/components/ui/textarea";
 import { Input } from "@/shared/components/ui/input";
@@ -32,6 +35,7 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
   const [comments, setComments] = useState<PmTaskComment[]>([]);
   const [authorNames, setAuthorNames] = useState<Record<string, string>>({});
   const [commentBody, setCommentBody] = useState("");
+  // Staff comments are written with formatting; the box holds cleaned HTML.
   const [loadingComments, setLoadingComments] = useState(true);
   const [sending, setSending] = useState(false);
   const [subtasks, setSubtasks] = useState<PmTask[]>([]);
@@ -232,10 +236,10 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
   };
 
   const postComment = async () => {
-    if (!commentBody.trim()) return;
+    if (isEmptyHtml(commentBody)) return;
     setSending(true);
     try {
-      const comment = await getTaskAgent().postTaskComment(task.id, commentBody.trim());
+      const comment = await getTaskAgent().postTaskComment(task.id, sanitizeCommentHtml(commentBody), "html");
       setComments((prev) => [...prev, comment]);
       setCommentBody("");
     } catch (e) {
@@ -430,20 +434,16 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
                     : authorNames[c.author_id] || "Staff"}{" "}
                   · {new Date(c.created_at).toLocaleString()}
                 </div>
-                <div className="whitespace-pre-wrap">{c.body}</div>
+                <CommentBody body={c.body} format={c.body_format} />
               </div>
             ))}
           </div>
         )}
         <div className="flex gap-2">
-          <Textarea
-            rows={2}
-            value={commentBody}
-            onChange={(e) => setCommentBody(e.target.value)}
-            placeholder="Add a comment…"
-            className="flex-1"
-          />
-          <Button size="icon" onClick={postComment} disabled={sending || !commentBody.trim()}>
+          <div className="flex-1">
+            <RichCommentEditor value={commentBody} onChange={setCommentBody} disabled={sending} />
+          </div>
+          <Button size="icon" onClick={postComment} disabled={sending || isEmptyHtml(commentBody)}>
             {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </div>

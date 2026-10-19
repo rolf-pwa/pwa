@@ -65,8 +65,8 @@ export const edgeTaskAgent: ITaskAgentProvider = {
     return data.comments;
   },
 
-  async postTaskComment(taskId, body): Promise<PmTaskComment> {
-    const data = await invoke<{ comment: PmTaskComment }>({ action: "postTaskComment", task_id: taskId, body });
+  async postTaskComment(taskId, body, format): Promise<PmTaskComment> {
+    const data = await invoke<{ comment: PmTaskComment }>({ action: "postTaskComment", task_id: taskId, body, format: format === "html" ? "html" : "text" });
     return data.comment;
   },
 

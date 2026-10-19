@@ -1,6 +1,7 @@
 // pm-service — staff-only CRUD for the in-house PM system (projects, tasks,
 // comments). Phase 1: no external API, no portal/client access yet.
 
+import { notifyClientsOfComment, type TaskRef } from "../_shared/task-notify.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ALLOWED_ORIGINS = [
@@ -214,7 +215,7 @@ Deno.serve(async (req) => {
       if (!task_id) return json({ ok: false, error: "task_id is required" }, 400);
       const { data, error } = await db
         .from("pm_task_comments")
-        .select("id, task_id, author_id, author_agent_key, body, created_at")
+        .select("id, task_id, author_id, author_agent_key, body, body_format, created_at")
         .eq("task_id", task_id)
         .order("created_at", { ascending: true });
       if (error) return json({ ok: false, error: error.message }, 500);
@@ -222,14 +223,26 @@ Deno.serve(async (req) => {
     }
 
     if (action === "postTaskComment") {
-      const { task_id, body: text } = body;
+      const { task_id, body: text, format } = body;
       if (!task_id || !String(text || "").trim()) return json({ ok: false, error: "task_id and body are required" }, 400);
+      // Only staff reach this function, so only staff can write formatted comments; the page cleans the HTML before showing it.
+      const body_format = format === "html" ? "html" : "text";
       const { data, error } = await db
         .from("pm_task_comments")
-        .insert({ task_id, author_id: userId, body: String(text).trim() })
-        .select("id, task_id, author_id, author_agent_key, body, created_at")
+        .insert({ task_id, author_id: userId, body: String(text).trim(), body_format })
+        .select("id, task_id, author_id, author_agent_key, body, body_format, created_at")
         .maybeSingle();
       if (error) return json({ ok: false, error: error.message }, 500);
+      // The client is told, once the comment is saved. A failed notification never fails the comment.
+      try {
+        const { data: task } = await db.from("pm_tasks").select("id, title, client_visible, contact_id, household_id").eq("id", task_id).maybeSingle();
+        if (task) {
+          // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+          EdgeRuntime.waitUntil(notifyClientsOfComment(db, task as TaskRef, Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!));
+        }
+      } catch (e) {
+        console.error("[pm-service] client notification failed", e);
+      }
       return json({ ok: true, comment: data });
     }
 
