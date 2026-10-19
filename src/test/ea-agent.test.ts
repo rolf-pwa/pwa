@@ -265,3 +265,34 @@ describe("reading an email and updating a task from it", () => {
     expect(block).not.toContain("pm_task_comments");
   });
 });
+
+describe("going through the inbox sweep in the morning meeting", () => {
+  const names = TOOL_DECLARATIONS.map((t) => t.name);
+  const handlers = readFileSync("supabase/functions/_shared/ea-handlers.ts", "utf8");
+  const block = handlers.slice(handlers.indexOf('case "sweep_items"'), handlers.indexOf('case "find_email_address"'));
+  it("gives her tools to list the sorts and to record Rolf's verdict", () => {
+    expect(names).toEqual(expect.arrayContaining(["sweep_items", "sweep_mark"]));
+    expect(TOOL_DECLARATIONS.find((t) => t.name === "sweep_mark")!.description).toMatch(/Only when Rolf has said so/);
+    expect(TOOL_DECLARATIONS.find((t) => t.name === "sweep_mark")!.description).toMatch(/Nothing in Gmail changes/);
+  });
+  it("tells her to offer it in the opening, go through a handful at a time, and never rate a sort herself", () => {
+    expect(SYSTEM_PROMPT).toMatch(/mention it in the opening and offer to go through the sorts/);
+    expect(SYSTEM_PROMPT).toMatch(/a handful at a time/);
+    expect(SYSTEM_PROMPT).toMatch(/never rate a sort on your own/);
+    expect(SYSTEM_PROMPT).toMatch(/told you to walk him through the sweep every morning/);
+    expect(handlers).toContain("one line on the inbox sweep");
+  });
+  it("shows the morning's sweep, and how many are unrated, in her context", () => {
+    const c = buildContextBlock({ nowLabel: "Tuesday", briefing: "", tasks: [], preferences: [], sweep: "Inbox sweep: 4 need you, 6 FYI. Review the sorts. 7 not yet rated." });
+    expect(c).toContain("THIS MORNING'S INBOX SWEEP");
+    expect(c).toContain("7 not yet rated");
+    expect(buildContextBlock({ nowLabel: "Tuesday", briefing: "", tasks: [], preferences: [], sweep: null })).not.toContain("INBOX SWEEP");
+  });
+  it("records a verdict through the same code as the card, asks where a wrong sort belonged, and only touches his own sorts", () => {
+    expect(block).toContain("sweepFeedback(db, userId, id, verdict");
+    expect(block).toContain("Where did it belong");
+    expect(block).toContain('.eq("user_id", userId)');
+    expect(block).toContain(".slice(0, 8)");
+    expect(block).not.toMatch(/gmail\.googleapis|modify|trash|delete\(/);
+  });
+});
