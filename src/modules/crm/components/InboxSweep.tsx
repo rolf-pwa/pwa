@@ -4,7 +4,8 @@ import { Check, ExternalLink, Loader2, X } from "lucide-react";
 import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
-import { forgetSweepSender, getSweep, rateSweepItem, runSweep, type Rate, type SweepBucket, type SweepItem, type SweepOverview } from "@/modules/crm/lib/inboxSweep";
+import { Switch } from "@/shared/components/ui/switch";
+import { forgetSweepSender, getSweep, rateSweepItem, runSweep, setSweepAuto, type Rate, type SweepBucket, type SweepItem, type SweepOverview } from "@/modules/crm/lib/inboxSweep";
 
 const BUCKETS: { key: SweepBucket; label: string; hint: string }[] = [
   { key: "needs_you", label: "Needs you", hint: "A person or a deadline" },
@@ -43,6 +44,11 @@ export function InboxSweep() {
       await load();
     } catch (e: any) { toast.error(e?.message ?? "Couldn't save"); await load(); }
   };
+  const toggleAuto = async (on: boolean) => {
+    setData((d) => d && { ...d, auto: on });
+    try { await setSweepAuto(on); toast.success(on ? "The sweep will run every morning before your briefing." : "The morning sweep is off. Use Sweep now when you want it."); }
+    catch (e: any) { toast.error(e?.message ?? "Couldn't save"); await load(); }
+  };
   const forget = async (sender: string) => { try { await forgetSweepSender(sender); await load(); } catch (e: any) { toast.error(e?.message ?? "Couldn't forget"); } };
 
   const items = (data?.items ?? []).filter((i) => i.bucket === tab);
@@ -57,6 +63,12 @@ export function InboxSweep() {
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         <p className="text-muted-foreground">Georgia sorts your last 7 days of inbox mail. For now she only reads: nothing is archived, deleted or changed in Gmail. Mark each sort right, or wrong and say where it belonged: it moves there, and Georgia remembers the sender. So you can judge her before she is given any power.</p>
+        {data && (
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Switch checked={data.auto !== false} onCheckedChange={(v) => void toggleAuto(v)} aria-label="Run every morning" />
+            Run every morning at 4:30, before your briefing, which then says what it found
+          </label>
+        )}
         {data && <p className="text-xs text-muted-foreground">Overall: {pct(data.accuracy.overall)}. Would-archive: {pct(data.accuracy.archivable)}.</p>}
         <div className="flex flex-wrap gap-2" role="tablist">
           {BUCKETS.map((b) => (

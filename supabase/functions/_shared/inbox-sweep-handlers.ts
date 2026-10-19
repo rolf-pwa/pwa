@@ -92,13 +92,14 @@ export async function sweepRun(db: any, userId: string) {
 
 export async function sweepList(db: any, userId: string) {
   const since = new Date(Date.now() - WINDOW_DAYS * 86400000).toISOString();
-  const [{ data }, { data: senders }] = await Promise.all([
+  const [{ data }, { data: senders }, { data: cfg }] = await Promise.all([
     db.from("inbox_sweep_items").select("id, message_id, from_addr, subject, snippet, received_at, bucket, proposed_bucket, correct_bucket, reason, decided_by, feedback")
       .eq("user_id", userId).gte("received_at", since).order("received_at", { ascending: false }).limit(300),
     db.from("inbox_sweep_senders").select("sender, bucket").eq("user_id", userId).order("updated_at", { ascending: false }),
+    db.from("inbox_sweep_config").select("auto").eq("id", true).maybeSingle(),
   ]);
   const items = (data ?? []).map((r: any) => ({ ...r, address: addressOf(r.from_addr), link: `https://mail.google.com/mail/u/0/#all/${r.message_id}` }));
-  return { items, accuracy: accuracy(items), senders: senders ?? [] };
+  return { items, accuracy: accuracy(items), senders: senders ?? [], auto: cfg?.auto !== false };
 }
 
 /**
@@ -138,4 +139,31 @@ export async function sweepForgetSender(db: any, userId: string, sender: string)
   if (!sender) return { error: "sender required" };
   await db.from("inbox_sweep_senders").delete().eq("user_id", userId).eq("sender", sender.toLowerCase());
   return { ok: true };
+}
+
+/** The morning sweep for everyone on staff with Google connected: a few passes each, so a backlog clears. Read-only, like every sweep. */
+export async function sweepMorning(db: any): Promise<string[]> {
+  const { data: cfg } = await db.from("inbox_sweep_config").select("auto").eq("id", true).maybeSingle();
+  if (cfg && cfg.auto === false) return ["off"];
+  const { data: staff } = await db.from("profiles").select("user_id, email").ilike("email", "%@prosperwise.ca");
+  const out: string[] = [];
+  for (const s of (staff ?? []) as any[]) {
+    try {
+      let sorted = 0;
+      for (let pass = 0; pass < 4; pass++) {
+        const r = await sweepRun(db, s.user_id);
+        sorted += r.sorted;
+        if (!r.remaining) break;
+      }
+      out.push(`${s.email}: sorted ${sorted}`);
+    } catch (e) {
+      out.push(`${s.email}: ${e instanceof Error ? e.message : "failed"}`); // for example, Google not connected
+    }
+  }
+  return out;
+}
+
+export async function sweepSetAuto(db: any, on: boolean) {
+  await db.from("inbox_sweep_config").upsert({ id: true, auto: on }, { onConflict: "id" });
+  return { ok: true, auto: on };
 }

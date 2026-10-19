@@ -15,7 +15,8 @@ import { getValidGoogleAccessToken } from "../_shared/google-token.ts";
 import { refreshBriefing } from "../_shared/briefing-refresh.ts";
 import { eaApply, eaChat, eaDecide, eaForget, eaHistory, eaNudge } from "../_shared/ea-handlers.ts";
 import { isMutedSender } from "../_shared/ea-agent.ts";
-import { sweepFeedback, sweepForgetSender, sweepList, sweepRun } from "../_shared/inbox-sweep-handlers.ts";
+import { sweepFeedback, sweepForgetSender, sweepList, sweepMorning, sweepRun, sweepSetAuto } from "../_shared/inbox-sweep-handlers.ts";
+import { sweepLine } from "../_shared/inbox-sweep.ts";
 import { scanMeetingNotes } from "../_shared/meeting-followup-service.ts";
 import { runGeorgiaTasks } from "../_shared/georgia-task-service.ts";
 import { classifyEmail, calendarConflicts, groupWeek, sectionsFromEmails, type BriefingEmail, type BriefingSections, type CalEvent } from "../_shared/briefing-facts.ts";
@@ -315,17 +316,24 @@ interface FirmFacts {
   escalated: { id: string; family: string; kind: string }[];
   imports: { id: string; date: string; status: string }[];
   pendingScans: number;
+  /** What this morning's inbox sweep found, as one line; null when it sorted nothing. */
+  sweep: string | null;
 }
 
 // What Georgia is waiting on you for: unread notifications, reviews and rebalances handed to you, a monthly file ready or held, and statements read but not approved.
-async function gatherFirmFacts(db: Db, todayStr: string): Promise<FirmFacts> {
+async function gatherFirmFacts(db: Db, todayStr: string, userId: string): Promise<FirmFacts> {
   const since = new Date(Date.parse(`${todayStr}T12:00:00Z`) - 3 * 86_400_000).toISOString();
-  const [{ data: notes }, { data: esc }, { data: runs }, { count }] = await Promise.all([
+  const sweptSince = new Date(Date.now() - 26 * 3_600_000).toISOString();
+  const [{ data: notes }, { data: esc }, { data: runs }, { count }, { data: swept }] = await Promise.all([
     db.from("staff_notifications").select("id, title, link, source_type").eq("read", false).gte("created_at", since).order("created_at", { ascending: false }).limit(15),
     db.from("review_obligations").select("id, kind, family_id").eq("mode", "live").eq("status", "escalated").limit(15),
     db.from("monthly_import_runs").select("id, snapshot_date, status").in("status", ["ready", "held"]).order("snapshot_date", { ascending: false }).limit(2),
     db.from("stage2_verification_audit").select("id", { count: "exact", head: true }).eq("review_status", "pending"),
+    db.from("inbox_sweep_items").select("bucket").eq("user_id", userId).gte("swept_at", sweptSince).limit(500),
   ]);
+  const sweptCounts: Record<string, number> = {};
+  // deno-lint-ignore no-explicit-any
+  for (const r of (swept || []) as any[]) sweptCounts[r.bucket] = (sweptCounts[r.bucket] ?? 0) + 1;
   // deno-lint-ignore no-explicit-any
   const famIds = [...new Set((esc || []).map((e: any) => e.family_id).filter(Boolean))];
   const { data: fams } = famIds.length ? await db.from("families").select("id, name").in("id", famIds) : { data: [] };
@@ -339,6 +347,7 @@ async function gatherFirmFacts(db: Db, todayStr: string): Promise<FirmFacts> {
     // deno-lint-ignore no-explicit-any
     imports: (runs || []).map((r: any) => ({ id: r.id, date: r.snapshot_date, status: r.status })),
     pendingScans: count ?? 0,
+    sweep: sweepLine(sweptCounts),
   };
 }
 
@@ -405,10 +414,11 @@ function buildFactsBlockAndRefs(
   lines.push(`Quo inbox, firm-wide: ${quo.unread.length} unread items shown, ${quo.unmatchedCount} unmatched to any contact, ${quo.voicemailCount} unheard voicemails.`);
   quo.unread.forEach((u) => add(u.contact ? u.contact : "Unknown number", u.link, `${u.contact ? u.contact : "Unknown number"}: "${u.label}"`, u.key));
 
-  lines.push(`Georgia is waiting on you for (${firm.escalated.length + firm.imports.length + (firm.pendingScans ? 1 : 0) + firm.notifications.length}):`);
+  lines.push(`Georgia is waiting on you for (${firm.escalated.length + firm.imports.length + (firm.pendingScans ? 1 : 0) + (firm.sweep ? 1 : 0) + firm.notifications.length}):`);
   firm.escalated.forEach((e) => add(`${e.family}: ${e.kind.replace(/_/g, " ")} handed to you`, "/review-agent", `${e.family}'s ${e.kind.replace(/_/g, " ")} was handed to you by Georgia`, `esc:${e.id}`));
   firm.imports.forEach((i) => add(`Monthly file ${i.date} is ${i.status}`, "/importers", `The monthly performance file dated ${i.date} is ${i.status} and waiting for you`, `import:${i.id}`));
   if (firm.pendingScans) add(`${firm.pendingScans} scanned documents waiting for approval`, "/glass-box-review", `${firm.pendingScans} scanned documents are waiting for approval in Glass-Box Review`, "scans");
+  if (firm.sweep) add(firm.sweep, "/ask-georgia", `${firm.sweep} (on Ask Georgia)`, "sweep");
   firm.notifications.forEach((n) => add(n.title, n.link ?? "/dashboard", `Unread notification: ${n.title}`, `note:${n.id}`));
 
   return { block: lines.join("\n"), refs };
@@ -458,6 +468,7 @@ function buildSections(calendar: CalendarFacts, email: EmailFacts, quo: QuoFacts
       ...firm.escalated.map((x) => ({ key: `esc:${x.id}`, label: `${x.family}: ${x.kind.replace(/_/g, " ")} handed to you`, link: "/review-agent" })),
       ...firm.imports.map((i) => ({ key: `import:${i.id}`, label: `Monthly file ${i.date} is ${i.status}`, link: "/importers" })),
       ...(firm.pendingScans ? [{ key: "scans", label: `${firm.pendingScans} scanned documents waiting for approval`, link: "/glass-box-review" }] : []),
+      ...(firm.sweep ? [{ key: "sweep", label: firm.sweep, link: "/ask-georgia" }] : []),
       ...firm.notifications.map((n) => ({ key: `note:${n.id}`, label: n.title, link: n.link ?? "/dashboard" })),
     ],
     counts: e.counts,
@@ -470,7 +481,7 @@ async function generateBriefingForUser(db: Db, userId: string, todayStr: string)
     gatherGoogleFacts(db, userId, todayStr),
     gatherRequestFacts(db),
     gatherQuoFacts(db),
-    gatherFirmFacts(db, todayStr),
+    gatherFirmFacts(db, todayStr, userId),
   ]);
   // The facts as stored: email bodies are never kept, only the subject, sender and a short snippet.
   // Senders Rolf has asked Georgia to stop showing are left out (and counted).
@@ -601,6 +612,12 @@ Deno.serve(async (req) => {
       return json({ started: true });
     }
     // The tasks assigned to Georgia: a couple per pass, in the background.
+    // The morning inbox sweep, at 4:30 Pacific, so the 5:30 briefing can say what it found.
+    if (cronBody.job === "inbox_sweep_morning") {
+      // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+      EdgeRuntime.waitUntil(sweepMorning(db).then((r) => console.log("[inbox-sweep-morning]", r.join("; "))).catch((e: unknown) => console.error("[inbox-sweep-morning]", e)));
+      return json({ started: true });
+    }
     if (cronBody.job === "georgia_tasks") {
       // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
       EdgeRuntime.waitUntil(runGeorgiaTasks(db).catch((e: unknown) => console.error("[georgia-tasks]", e)));
@@ -643,6 +660,7 @@ Deno.serve(async (req) => {
         const r = await sweepFeedback(db, userId, String((body as any).id ?? ""), (body as any).value, (body as any).correct_bucket);
         return json(r, "error" in r ? 400 : 200);
       }
+      if (body.action === "ea_sweep_auto") return json(await sweepSetAuto(db, (body as any).on === true));
       if (body.action === "ea_sweep_forget") return json(await sweepForgetSender(db, userId, String((body as any).sender ?? "")));
       return json({ error: "unknown_action" }, 400);
     }

@@ -112,3 +112,16 @@ export function accuracy(rows: { bucket: Bucket; proposed_bucket?: Bucket | null
   // Judged on what Georgia first proposed, even if Rolf has since moved the message.
   return { overall: rate(rows), archivable: rate(rows.filter((r) => (r.proposed_bucket ?? r.bucket) === "archivable")) };
 }
+
+export type SweepCounts = Partial<Record<Bucket, number>>;
+
+/** One line for the morning briefing: what the sweep found. Null when nothing was sorted. */
+export function sweepLine(c: SweepCounts): string | null {
+  const parts: string[] = [];
+  const add = (n: number | undefined, text: (n: number) => string) => { if (n && n > 0) parts.push(text(n)); };
+  add(c.needs_you, (n) => `${n} need${n === 1 ? "s" : ""} you`);
+  add(c.fyi, (n) => `${n} FYI`);
+  add(c.archivable, (n) => `${n} would archive`);
+  add(c.client, (n) => `${n} from ${n === 1 ? "a client" : "clients"}`);
+  return parts.length ? `Inbox sweep: ${parts.join(", ")}. Review the sorts` : null;
+}
