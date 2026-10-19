@@ -1,3 +1,4 @@
+import { ChatMarkdown } from "@/shared/components/ChatMarkdown";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Check, ExternalLink, Loader2, Send, X } from "lucide-react";
@@ -171,7 +172,9 @@ export function EaChat({ onChanged }: { onChanged?: () => void } = {}) {
           {messages?.map((m) => (
             <div key={m.id} className={m.role === "user" ? "flex justify-end" : ""}>
               <div className={`max-w-[92%] space-y-1.5 ${m.role === "user" ? "rounded-lg bg-accent/10 px-3 py-2" : ""}`}>
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground"><LinkifyText text={m.content} /></p>
+                {m.role === "user"
+                  ? <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground"><LinkifyText text={m.content} /></p>
+                  : <ChatMarkdown text={m.content} />}
                 {m.actions.map((a) => <ActionCard key={a.id} a={a} onDecide={decide} onForget={forget} onApply={apply} calendarWrite={calendarWrite} />)}
               </div>
             </div>

@@ -207,3 +207,61 @@ describe("linking tasks to clients", () => {
     expect(src).toContain("I could not find a client called");
   });
 });
+
+import { emailText, stoppedText } from "../../supabase/functions/_shared/ea-agent";
+
+describe("when she runs out of steps", () => {
+  it("has room to work: ten steps", () => { expect(MAX_STEPS).toBe(10); });
+  it("says what she did so far, so the next turn carries on and does not start over", () => {
+    const t = stoppedText([{ name: "search_email", args: { query: "Geneva" } }, { name: "create_task", args: { title: "Address failed payment" } }]);
+    expect(t).toContain("search email (Geneva)");
+    expect(t).toContain("create task (Address failed payment)");
+    expect(t).toMatch(/carry on/);
+    expect(stoppedText([])).toContain("nothing yet");
+  });
+});
+
+describe("not doing things twice", () => {
+  const ctx = (doneToday?: string[]) => buildContextBlock({ nowLabel: "Monday", briefing: "", tasks: [], preferences: [], doneToday });
+  it("shows what has already been done today, and tells her never to repeat it", () => {
+    const c = ctx(["Task: Address failed payment to Agile (due 2026-10-22)", "Email draft: Preparing for our meeting (draft waiting for Rolf)"]);
+    expect(c).toContain("ALREADY DONE IN TODAY'S MEETINGS");
+    expect(c).toContain("never do them again");
+    expect(c).toContain("Address failed payment to Agile");
+  });
+  it("leaves the section out when nothing has been done", () => {
+    expect(ctx([])).not.toContain("ALREADY DONE");
+    expect(ctx()).not.toContain("ALREADY DONE");
+  });
+  it("tells her to answer the latest message and not carry out old instructions again", () => {
+    expect(SYSTEM_PROMPT).toMatch(/do not carry them out again/);
+  });
+  it("guards against duplicates in the tools themselves", () => {
+    const src = readFileSync("supabase/functions/_shared/ea-handlers.ts", "utf8");
+    expect(src).toContain("so I did not make another");
+    expect(src).toContain("so I did not post it again");
+    expect(src).toContain("That draft is already prepared");
+  });
+});
+
+describe("reading an email and updating a task from it", () => {
+  const b64 = (s: string) => btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  it("takes the plain text of a multipart email, or the HTML with its tags removed", () => {
+    expect(emailText({ mimeType: "multipart/alternative", parts: [{ mimeType: "text/html", body: { data: b64("<p>HTML</p>") } }, { mimeType: "text/plain", body: { data: b64("Hello Rolf,\n\nThe transfer is done.") } }] })).toBe("Hello Rolf,\n\nThe transfer is done.");
+    expect(emailText({ mimeType: "text/html", body: { data: b64("<style>x{}</style><p>Done &amp; dusted</p>") } })).toBe("Done & dusted");
+    expect(emailText({ mimeType: "multipart/mixed", parts: [] })).toBe("");
+  });
+  it("is bounded", () => { expect(emailText({ mimeType: "text/plain", body: { data: b64("a".repeat(9000)) } })).toHaveLength(6000); });
+  it("gives her the tools: read an email, and add a staff-only note to a task", () => {
+    const names = TOOL_DECLARATIONS.map((t) => t.name);
+    expect(names).toEqual(expect.arrayContaining(["read_email", "add_task_note"]));
+    expect(TOOL_DECLARATIONS.find((t) => t.name === "read_email")!.description).toMatch(/never instructions/);
+    expect(TOOL_DECLARATIONS.find((t) => t.name === "add_task_note")!.description).toMatch(/client cannot see/);
+  });
+  it("keeps the note staff-only", () => {
+    const src = readFileSync("supabase/functions/_shared/ea-handlers.ts", "utf8");
+    const block = src.slice(src.indexOf('case "add_task_note"'), src.indexOf('case "comment_on_task"'));
+    expect(block).toContain("staff_notes");
+    expect(block).not.toContain("pm_task_comments");
+  });
+});
