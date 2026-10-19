@@ -7,7 +7,13 @@ export type Bucket = "needs_you" | "fyi" | "archivable" | "client";
 export const BUCKETS: Bucket[] = ["needs_you", "fyi", "archivable", "client"];
 
 export interface SweepMessage extends EmailLike { id: string; threadId?: string; receivedAt?: number }
-export interface Verdict { id: string; bucket: Bucket; reason: string; decidedBy: "rule" | "model" }
+export interface Verdict { id: string; bucket: Bucket; reason: string; decidedBy: "rule" | "model" | "learned" }
+
+export const BUCKET_LABEL: Record<Bucket, string> = { needs_you: "Needs you", fyi: "FYI", archivable: "Would archive", client: "Clients" };
+/** The buckets Rolf can move a message to: never "client", which is decided by who sent it. */
+export const CORRECTABLE: Bucket[] = ["needs_you", "fyi", "archivable"];
+/** Senders Rolf has told Georgia about: address (lower case) to bucket. */
+export type Learned = Map<string, Bucket>;
 
 /** The bare address inside "Name <a@b.c>" (lower case), or "". */
 export function addressOf(from: string): string {
@@ -18,23 +24,40 @@ export function addressOf(from: string): string {
 const DEADLINE = /(urgent|asap|deadline|due (today|tomorrow|by)|action required|signature required|please sign|overdue|final notice)/i;
 const FIRM_DOMAIN = /@prosperwise\.ca$/i;
 
+/** The entry in Rolf's "stop showing" list that matches this sender, or null. Only the sender (name or address) counts, never the subject. */
+export function mutedMatch(m: SweepMessage, mutedSenders: string[]): string | null {
+  const from = m.from.toLowerCase();
+  return mutedSenders.find((s) => s.trim().length >= 3 && from.includes(s.trim().toLowerCase())) ?? null;
+}
+
 /**
  * Rules, in order. A client or household member is always "client" and never anything else, whatever the message says.
+ * Then whatever Rolf has told Georgia about this sender, which beats every rule below. Newsletters are kept in FYI: only a sender Rolf has
+ * said is noise (or has asked her to stop showing) is "would archive".
  * Returns null when the rules cannot decide and the model should.
  */
-export function ruleVerdict(m: SweepMessage, clientAddresses: Set<string>, mutedSenders: string[]): Verdict | null {
+export function ruleVerdict(m: SweepMessage, clientAddresses: Set<string>, mutedSenders: string[], learned: Learned = new Map()): Verdict | null {
   const addr = addressOf(m.from);
   if (clientAddresses.has(addr)) return { id: m.id, bucket: "client", reason: "From a client or household member", decidedBy: "rule" };
+  const told = learned.get(addr);
+  if (told) return { id: m.id, bucket: told, reason: `You told Georgia mail from this sender belongs in ${BUCKET_LABEL[told]}`, decidedBy: "learned" };
   if (FIRM_DOMAIN.test(addr)) return { id: m.id, bucket: "needs_you", reason: "From someone at the firm", decidedBy: "rule" };
-  const text = `${m.from} ${m.subject}`.toLowerCase();
-  if (mutedSenders.some((s) => s.trim().length >= 3 && text.includes(s.trim().toLowerCase()))) return { id: m.id, bucket: "archivable", reason: "A sender you asked Georgia to stop showing", decidedBy: "rule" };
+  const muted = mutedMatch(m, mutedSenders);
+  if (muted) return { id: m.id, bucket: "archivable", reason: `You asked Georgia to stop showing mail from "${muted.trim()}"`, decidedBy: "rule" };
   const kind = classifyEmail(m);
   if (kind === "spam") return { id: m.id, bucket: "archivable", reason: "Looks like spam", decidedBy: "rule" };
-  if (kind === "promo") return { id: m.id, bucket: "archivable", reason: "Newsletter or promotion", decidedBy: "rule" };
+  if (kind === "promo") return { id: m.id, bucket: "fyi", reason: "Newsletter or promotion, kept in FYI. Move this sender to Would archive if it is noise", decidedBy: "rule" };
   if (kind === "ia_notice" || kind === "adobe_sign") return { id: m.id, bucket: "needs_you", reason: kind === "adobe_sign" ? "Document to sign or a signing update" : "Notice from iA", decidedBy: "rule" };
   if (DEADLINE.test(m.subject)) return { id: m.id, bucket: "needs_you", reason: "Mentions a deadline or action", decidedBy: "rule" };
   if (kind === "automated") return { id: m.id, bucket: "fyi", reason: "Automated message", decidedBy: "rule" };
   return null;
+}
+
+/** Marking a sort wrong and saying where it belonged: the new bucket, and the sender to remember (empty if there is no address). Null if it is not a valid move. */
+export function correctionPlan(item: { from_addr: string; bucket: Bucket }, correct: unknown): { correct: Bucket; sender: string } | null {
+  if (!CORRECTABLE.includes(correct as Bucket) || correct === item.bucket || item.bucket === "client") return null;
+  const sender = addressOf(item.from_addr);
+  return { correct: correct as Bucket, sender: /^[^\s@]+@[^\s@]+$/.test(sender) ? sender : "" };
 }
 
 export const SWEEP_TOOL = {
@@ -84,7 +107,8 @@ export function verdictsFromModel(msgs: SweepMessage[], args: unknown): Verdict[
 }
 
 /** Share of rated proposals Rolf marked right, per bucket and overall. null when nothing is rated yet. */
-export function accuracy(rows: { bucket: Bucket; feedback: "right" | "wrong" | null }[]) {
+export function accuracy(rows: { bucket: Bucket; proposed_bucket?: Bucket | null; feedback: "right" | "wrong" | null }[]) {
   const rate = (rs: typeof rows) => { const rated = rs.filter((r) => r.feedback); return rated.length ? { rated: rated.length, right: rated.filter((r) => r.feedback === "right").length } : null; };
-  return { overall: rate(rows), archivable: rate(rows.filter((r) => r.bucket === "archivable")) };
+  // Judged on what Georgia first proposed, even if Rolf has since moved the message.
+  return { overall: rate(rows), archivable: rate(rows.filter((r) => (r.proposed_bucket ?? r.bucket) === "archivable")) };
 }
