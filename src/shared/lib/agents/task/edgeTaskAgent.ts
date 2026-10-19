@@ -65,6 +65,10 @@ export const edgeTaskAgent: ITaskAgentProvider = {
     return data.comments;
   },
 
+  async deleteTask(id): Promise<void> {
+    await invoke<Record<string, never>>({ action: "deleteTask", id });
+  },
+
   async editTaskComment(commentId, body): Promise<PmTaskComment> {
     const data = await invoke<{ comment: PmTaskComment }>({ action: "editTaskComment", comment_id: commentId, body, format: "html" });
     return data.comment;

@@ -3,6 +3,7 @@
 
 import { notifyClientsOfComment, notifyProsOfComment, type TaskRef } from "../_shared/task-notify.ts";
 import { maybeCreateNextRecurrence } from "../_shared/task-recurrence.ts";
+import { deleteBlocker } from "../_shared/task-delete.ts";
 import { validRecurrence } from "../_shared/georgia-tasks.ts";
 import { eventFor, isEditableComment, postTaskEvent, postTaskNote, releasedText } from "../_shared/task-events.ts";
 import { createMeetingRecord, maybeCreateMeetingRecord, meetingRecordCandidates } from "../_shared/meeting-record-service.ts";
@@ -262,6 +263,31 @@ Deno.serve(async (req) => {
         results.push({ id: taskId, status: r.status, reason: r.reason, url: r.url });
       }
       return json({ ok: true, results });
+    }
+
+    // Delete a task (and, with it, its action items and comments). A copy is kept in pm_task_deletions. Not when it is part of the record.
+    if (action === "deleteTask") {
+      const id = String(body.id ?? "");
+      if (!id) return json({ ok: false, error: "id is required" }, 400);
+      const { data: task } = await db.from("pm_tasks").select(TASK_FIELDS).eq("id", id).maybeSingle();
+      if (!task) return json({ ok: false, error: "Task not found" }, 404);
+      const { data: subs } = await db.from("pm_tasks").select(TASK_FIELDS).eq("parent_task_id", id);
+      const ids = [id, ...(subs ?? []).map((s: any) => s.id)];
+      const [{ data: comments }, { data: records }] = await Promise.all([
+        db.from("pm_task_comments").select("*").in("task_id", ids),
+        db.from("meeting_records").select("task_id").in("task_id", ids),
+      ]);
+      const blocker = deleteBlocker({
+        hasMeetingRecord: (records ?? []).length > 0,
+        clientComments: (comments ?? []).filter((c: any) => c.author_contact_id).length,
+        professionalComments: (comments ?? []).filter((c: any) => c.author_professional_id).length,
+      });
+      if (blocker) return json({ ok: false, error: blocker }, 409);
+      const { error: auditErr } = await db.from("pm_task_deletions").insert({ task_id: id, title: task.title, contact_id: task.contact_id, household_id: task.household_id, snapshot: { task, subtasks: subs ?? [], comments: comments ?? [] }, deleted_by: userId });
+      if (auditErr) return json({ ok: false, error: "Could not keep a copy, so nothing was deleted." }, 500);
+      const { error } = await db.from("pm_tasks").delete().eq("id", id);
+      if (error) return json({ ok: false, error: error.message }, 500);
+      return json({ ok: true });
     }
 
     // Edit a staff or Georgia comment, keeping the earlier version. Never a client's, a professional's or a system line.

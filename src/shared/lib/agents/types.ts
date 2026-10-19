@@ -290,6 +290,8 @@ export interface ITaskAgentProvider {
       Pick<PmTask, "title" | "description" | "status" | "due_date" | "assignee_id" | "assigned_agent_key" | "client_visible" | "family_id" | "meeting_followup" | "recurrence">
     >,
   ): Promise<PmTask>;
+  /** Delete a task with its action items and comments (a copy is kept). Refused when it is part of the record. */
+  deleteTask(id: string): Promise<void>;
   getTaskComments(taskId: string): Promise<PmTaskComment[]>;
   postTaskComment(taskId: string, body: string, format?: "text" | "html"): Promise<PmTaskComment>;
   /** Edit a staff or Georgia comment; the earlier version is kept. */
