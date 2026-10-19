@@ -453,6 +453,13 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
         />
       </div>
 
+      {task.staff_notes && (
+        <div className="space-y-1 rounded-md border border-amber-300/60 bg-amber-50 p-3 text-sm dark:bg-amber-950/20" data-testid="staff-notes">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">Georgia's notes for you (staff only)</h4>
+          <p className="whitespace-pre-wrap">{task.staff_notes}</p>
+        </div>
+      )}
+
       <div className="space-y-2">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Comments</h4>
         {loadingComments ? (

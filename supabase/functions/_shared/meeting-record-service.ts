@@ -16,14 +16,14 @@ const DAY = 86_400_000;
 
 const sig = () => AbortSignal.timeout(25_000);
 
-async function driveFindFolder(parentId: string, name: string, token: string): Promise<string | null> {
+export async function driveFindFolder(parentId: string, name: string, token: string): Promise<string | null> {
   const q = `'${parentId}' in parents and name = '${name.replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
   const res = await fetch(`${DRIVE}/files?${new URLSearchParams({ q, fields: "files(id,name)", supportsAllDrives: "true", includeItemsFromAllDrives: "true" })}`, { headers: { Authorization: `Bearer ${token}` }, signal: sig() });
   if (!res.ok) throw new Error(`Drive search failed [${res.status}]`);
   return ((await res.json()).files ?? [])[0]?.id ?? null;
 }
 
-async function driveEnsureFolder(parentId: string, name: string, token: string): Promise<string> {
+export async function driveEnsureFolder(parentId: string, name: string, token: string): Promise<string> {
   const found = await driveFindFolder(parentId, name, token);
   if (found) return found;
   const res = await fetch(`${DRIVE}/files?supportsAllDrives=true&fields=id`, {

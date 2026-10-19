@@ -194,6 +194,8 @@ export interface PmTask {
   client_visible: boolean;
   /** A meeting follow-up: when it is completed, a standard record is filed in the household's Advisor Files. */
   meeting_followup?: boolean;
+  /** What Georgia wants Rolf to check on a draft. Staff only: never sent to clients or professionals. */
+  staff_notes?: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;

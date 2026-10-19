@@ -50,7 +50,7 @@ async function requireStaff(req: Request): Promise<{ userId: string; error?: und
 const PROJECT_FIELDS =
   "id, name, description, status, household_id, contact_id, corporation_id, family_id, created_by, created_at, updated_at";
 const TASK_FIELDS =
-  "id, project_id, parent_task_id, title, description, status, due_date, assignee_id, assigned_agent_key, household_id, contact_id, corporation_id, family_id, completed_at, client_visible, meeting_followup, meeting_event, created_by, created_at, updated_at";
+  "id, project_id, parent_task_id, title, description, status, due_date, assignee_id, assigned_agent_key, household_id, contact_id, corporation_id, family_id, completed_at, client_visible, meeting_followup, meeting_event, staff_notes, created_by, created_at, updated_at";
 
 Deno.serve(async (req) => {
   const cors = getCorsHeaders(req);

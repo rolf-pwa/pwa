@@ -11,6 +11,7 @@ import { getServiceGoogleAccessToken, getValidGoogleAccessToken } from "./google
 import { loadVoice } from "./voice-profile.ts";
 import { maybeCreateMeetingRecord } from "./meeting-record-service.ts";
 import { postTaskEvent } from "./task-events.ts";
+import { draftFromRequest } from "./meeting-followup-service.ts";
 import { refreshBriefing } from "./briefing-refresh.ts";
 import { provisionClientFolderTree } from "./vault-provisioning.ts";
 
@@ -333,6 +334,15 @@ export async function eaChat(db: any, userId: string, text: string, start: boole
         const r = await provision(hhs[0].id);
         await record("vault_provisioned", r.ok ? "done" : "failed", r.ok ? `Vault ready: ${hhs[0].label}` : `Vault not built: ${hhs[0].label}`, { household_id: hhs[0].id, link: `/households/${hhs[0].id}` });
         return r.ok ? { ok: true, message: `The Drive Vault for ${hhs[0].label} is ready${r.existed ? " (it already existed; I filled in anything missing)" : ""}.` } : { ok: false, message: `Could not build the Vault: ${r.error}` };
+      }
+      case "draft_meeting_followup": {
+        const date = isIsoDate(a.date) ? String(a.date) : undefined;
+        const search = str(a.search, 80) || undefined;
+        if (!date && !search) return { ok: false, message: "Which meeting? Give me the date or part of the meeting name." };
+        // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+        const message = await draftFromRequest(db, { date, search }, (p: Promise<unknown>) => EdgeRuntime.waitUntil(p));
+        await record("meeting_followup_requested", "done", message, { date, search });
+        return { ok: true, message };
       }
       case "add_contact": {
         const hn = str(a.household_name, 120); if (!hn) return { ok: false, message: "Which household?" };

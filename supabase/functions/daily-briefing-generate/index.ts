@@ -16,6 +16,7 @@ import { refreshBriefing } from "../_shared/briefing-refresh.ts";
 import { eaApply, eaChat, eaDecide, eaForget, eaHistory, eaNudge } from "../_shared/ea-handlers.ts";
 import { isMutedSender } from "../_shared/ea-agent.ts";
 import { sweepFeedback, sweepList, sweepRun } from "../_shared/inbox-sweep-handlers.ts";
+import { scanMeetingNotes } from "../_shared/meeting-followup-service.ts";
 import { classifyEmail, calendarConflicts, groupWeek, sectionsFromEmails, type BriefingEmail, type BriefingSections, type CalEvent } from "../_shared/briefing-facts.ts";
 import { generateVertexContent, parseServiceAccountKey, GEMINI_DRAFTING_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 
@@ -591,7 +592,14 @@ Deno.serve(async (req) => {
       const hour = Number(new Intl.DateTimeFormat("en-CA", { timeZone: "America/Vancouver", hour: "2-digit", hour12: false }).format(new Date()));
       if (hour !== only) return json({ skipped: true, pacificHour: hour });
     }
-    if ((await req.clone().json().catch(() => ({}))).nudge === true) return json(await eaNudge(db));
+    const cronBody = await req.clone().json().catch(() => ({}));
+    // Georgia drafts recaps from new Google Meet notes: one document per run, in the background.
+    if (cronBody.job === "meeting_notes_scan") {
+      // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+      EdgeRuntime.waitUntil(scanMeetingNotes(db).catch((e: unknown) => console.error("[meeting-notes-scan]", e)));
+      return json({ started: true });
+    }
+    if (cronBody.nudge === true) return json(await eaNudge(db));
     const { data: staff } = await db.from("profiles").select("user_id, email").ilike("email", "%@prosperwise.ca");
     let generated = 0;
     let skipped = 0;
