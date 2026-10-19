@@ -17,6 +17,7 @@ import { eaApply, eaChat, eaDecide, eaForget, eaHistory, eaNudge } from "../_sha
 import { isMutedSender } from "../_shared/ea-agent.ts";
 import { sweepFeedback, sweepList, sweepRun } from "../_shared/inbox-sweep-handlers.ts";
 import { scanMeetingNotes } from "../_shared/meeting-followup-service.ts";
+import { runGeorgiaTasks } from "../_shared/georgia-task-service.ts";
 import { classifyEmail, calendarConflicts, groupWeek, sectionsFromEmails, type BriefingEmail, type BriefingSections, type CalEvent } from "../_shared/briefing-facts.ts";
 import { generateVertexContent, parseServiceAccountKey, GEMINI_DRAFTING_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 
@@ -597,6 +598,12 @@ Deno.serve(async (req) => {
     if (cronBody.job === "meeting_notes_scan") {
       // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
       EdgeRuntime.waitUntil(scanMeetingNotes(db).catch((e: unknown) => console.error("[meeting-notes-scan]", e)));
+      return json({ started: true });
+    }
+    // The tasks assigned to Georgia: a couple per pass, in the background.
+    if (cronBody.job === "georgia_tasks") {
+      // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+      EdgeRuntime.waitUntil(runGeorgiaTasks(db).catch((e: unknown) => console.error("[georgia-tasks]", e)));
       return json({ started: true });
     }
     if (cronBody.nudge === true) return json(await eaNudge(db));

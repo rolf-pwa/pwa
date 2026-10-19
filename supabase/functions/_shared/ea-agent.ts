@@ -21,7 +21,8 @@ export interface ToolOutcome {
 }
 
 export const TOOL_DECLARATIONS = [
-  { name: "create_task", description: "Create a task for Rolf (also used for reminders: put the day in due_date). Internal only.", parameters: { type: "OBJECT", properties: { title: { type: "STRING" }, due_date: { type: "STRING", description: "YYYY-MM-DD, Pacific time. Omit if there is no date." }, notes: { type: "STRING" } }, required: ["title"] } },
+  { name: "create_task", description: "Create a task (also used for reminders: put the day in due_date). Internal only. By default it is Rolf's; set assign_to to 'georgia' for a task you will work on yourself, and repeats for one that comes back every week, month or year (you then watch it and hand it to Rolf ahead of its date).", parameters: { type: "OBJECT", properties: { title: { type: "STRING" }, due_date: { type: "STRING", description: "YYYY-MM-DD, Pacific time. Omit if there is no date." }, notes: { type: "STRING" }, assign_to: { type: "STRING", description: "rolf (default) or georgia" }, repeats: { type: "STRING", description: "week, month or year, if the task repeats" } }, required: ["title"] } },
+  { name: "assign_task", description: "Give an existing task to Georgia (herself) or back to Rolf, optionally making it repeat. Get the task_id from search_tasks or the open tasks list. A task assigned to Georgia is worked on her next pass (every 15 minutes); one that repeats is only watched and handed to Rolf ahead of its date.", parameters: { type: "OBJECT", properties: { task_id: { type: "STRING" }, to: { type: "STRING", description: "georgia or rolf" }, repeats: { type: "STRING", description: "week, month or year; leave out to keep the task as it is" } }, required: ["task_id", "to"] } },
   { name: "complete_task", description: "Mark one of Rolf's open tasks done. Use the task_id shown in the open tasks list.", parameters: { type: "OBJECT", properties: { task_id: { type: "STRING" } }, required: ["task_id"] } },
   { name: "reschedule_task", description: "Move one of Rolf's open tasks to another day.", parameters: { type: "OBJECT", properties: { task_id: { type: "STRING" }, due_date: { type: "STRING", description: "YYYY-MM-DD" } }, required: ["task_id", "due_date"] } },
   { name: "check_calendar", description: "Read Rolf's calendar between two days (inclusive), to find what is booked or free.", parameters: { type: "OBJECT", properties: { from_date: { type: "STRING", description: "YYYY-MM-DD" }, to_date: { type: "STRING", description: "YYYY-MM-DD" } }, required: ["from_date", "to_date"] } },
@@ -201,6 +202,8 @@ export function buildContextBlock(i: {
   nowLabel: string;
   briefing: string;
   tasks: { id: string; title: string; due: string | null }[];
+  /** Tasks assigned to Georgia herself (waiting for their date, or being worked). */
+  georgiaTasks?: { id: string; title: string; due: string | null }[];
   preferences: string[];
   earlier?: string;
 }): string {
@@ -213,6 +216,7 @@ export function buildContextBlock(i: {
     `ROLF'S OPEN TASKS (${i.tasks.length}):`,
     ...(i.tasks.length ? i.tasks.map((t) => `- [${t.id}] ${t.title}${t.due ? ` (due ${t.due})` : ""}`) : ["- none"]),
     "",
+    ...((i.georgiaTasks ?? []).length ? [`TASKS ASSIGNED TO YOU (${(i.georgiaTasks ?? []).length}); you work them on your own passes, and hand a repeating one to Rolf ahead of its date:`, ...(i.georgiaTasks ?? []).map((t) => `- [${t.id}] ${t.title}${t.due ? ` (due ${t.due})` : ""}`), ""] : []),
     "WHAT HE HAS ASKED YOU TO REMEMBER:",
     ...(i.preferences.length ? i.preferences.map((p) => `- ${p}`) : ["- nothing yet"]),
     "",

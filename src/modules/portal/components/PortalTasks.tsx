@@ -13,6 +13,8 @@ interface PmTask {
   title: string;
   status: "open" | "in_progress" | "done";
   due_date: string | null;
+  /** "Georgia" when she is the one working on it. */
+  assignee_label?: string | null;
 }
 
 interface Props {
@@ -89,6 +91,7 @@ function TaskCard({ task, onClick, isExpanded }: { task: PmTask; onClick: () => 
         <Clock className={cn("h-4 w-4 shrink-0", isNew ? "text-accent" : "text-muted-foreground/60")} />
         <div className="min-w-0">
           <p className="text-sm font-medium text-foreground truncate">{task.title}</p>
+          {task.assignee_label && <p className="text-xs text-accent mt-0.5">{task.assignee_label} is on this</p>}
           {task.due_date && (
             <p className="text-xs text-muted-foreground mt-0.5">
               Due: {parseLocalDate(task.due_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}

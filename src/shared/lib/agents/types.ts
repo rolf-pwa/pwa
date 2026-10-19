@@ -196,6 +196,8 @@ export interface PmTask {
   meeting_followup?: boolean;
   /** What Georgia wants Rolf to check on a draft. Staff only: never sent to clients or professionals. */
   staff_notes?: string | null;
+  /** Repeats: completing the task makes the next one (Georgia watches a series she owns and hands each task to Rolf ahead of its date). */
+  recurrence?: { every: "week" | "month" | "year"; interval: number; owner?: "georgia" | "same" } | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -285,7 +287,7 @@ export interface ITaskAgentProvider {
   updateTask(
     id: string,
     updates: Partial<
-      Pick<PmTask, "title" | "description" | "status" | "due_date" | "assignee_id" | "assigned_agent_key" | "client_visible" | "family_id" | "meeting_followup">
+      Pick<PmTask, "title" | "description" | "status" | "due_date" | "assignee_id" | "assigned_agent_key" | "client_visible" | "family_id" | "meeting_followup" | "recurrence">
     >,
   ): Promise<PmTask>;
   getTaskComments(taskId: string): Promise<PmTaskComment[]>;

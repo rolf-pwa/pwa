@@ -2,6 +2,8 @@
 // comments). Phase 1: no external API, no portal/client access yet.
 
 import { notifyClientsOfComment, notifyProsOfComment, type TaskRef } from "../_shared/task-notify.ts";
+import { maybeCreateNextRecurrence } from "../_shared/task-recurrence.ts";
+import { validRecurrence } from "../_shared/georgia-tasks.ts";
 import { eventFor, isEditableComment, postTaskEvent, postTaskNote, releasedText } from "../_shared/task-events.ts";
 import { createMeetingRecord, maybeCreateMeetingRecord, meetingRecordCandidates } from "../_shared/meeting-record-service.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -50,7 +52,7 @@ async function requireStaff(req: Request): Promise<{ userId: string; error?: und
 const PROJECT_FIELDS =
   "id, name, description, status, household_id, contact_id, corporation_id, family_id, created_by, created_at, updated_at";
 const TASK_FIELDS =
-  "id, project_id, parent_task_id, title, description, status, due_date, assignee_id, assigned_agent_key, household_id, contact_id, corporation_id, family_id, completed_at, client_visible, meeting_followup, meeting_event, staff_notes, created_by, created_at, updated_at";
+  "id, project_id, parent_task_id, title, description, status, due_date, assignee_id, assigned_agent_key, household_id, contact_id, corporation_id, family_id, completed_at, client_visible, meeting_followup, meeting_event, staff_notes, recurrence, created_by, created_at, updated_at";
 
 Deno.serve(async (req) => {
   const cors = getCorsHeaders(req);
@@ -155,7 +157,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "createTask") {
-      const { title, description, project_id, parent_task_id, due_date, assignee_id, household_id, contact_id, corporation_id, family_id, client_visible, meeting_followup, meeting_event } = body;
+      const { title, description, project_id, parent_task_id, due_date, assignee_id, household_id, contact_id, corporation_id, family_id, client_visible, meeting_followup, meeting_event, assigned_agent_key, recurrence } = body;
       if (!String(title || "").trim()) return json({ ok: false, error: "Task title is required" }, 400);
 
       let resolvedHouseholdId = household_id || null;
@@ -186,6 +188,8 @@ Deno.serve(async (req) => {
           ...(typeof client_visible === "boolean" ? { client_visible } : {}),
           ...(typeof meeting_followup === "boolean" ? { meeting_followup } : {}),
           ...(meeting_event && typeof meeting_event === "object" ? { meeting_event } : {}),
+          ...(assigned_agent_key === "georgia" ? { assigned_agent_key: "georgia", assignee_id: null } : {}),
+          ...(validRecurrence(recurrence) ? { recurrence: validRecurrence(recurrence) } : {}),
           created_by: userId,
         })
         .select(TASK_FIELDS)
@@ -201,6 +205,12 @@ Deno.serve(async (req) => {
       for (const key of ["title", "description", "status", "due_date", "assignee_id", "assigned_agent_key", "client_visible", "family_id", "meeting_followup"]) {
         if (key in updates) patch[key] = updates[key];
       }
+      if ("recurrence" in updates) {
+        const r = updates.recurrence === null ? null : validRecurrence(updates.recurrence);
+        if (updates.recurrence !== null && !r) return json({ ok: false, error: "That repeat setting is not valid." }, 400);
+        patch.recurrence = r;
+      }
+      if (patch.assigned_agent_key === "georgia") patch.agent_attempts = 0; // a fresh assignment starts a fresh count
       if (patch.status === "done") patch.completed_at = new Date().toISOString();
       else if ("status" in patch) patch.completed_at = null;
       // A task's owner is either a human (assignee_id) or an AI Teammate
@@ -224,6 +234,11 @@ Deno.serve(async (req) => {
         await postTaskNote(db, id, releasedText(me?.full_name || "a team member"), { label: me?.full_name || "a team member", userId });
         // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
         EdgeRuntime.waitUntil(notifyClientsOfComment(db, { id, title: before.title, client_visible: true, contact_id: before.contact_id, household_id: before.household_id }, Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, "updated"));
+      }
+      // A repeating task that is completed makes the next one.
+      if (before && ev === "completed") {
+        // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+        EdgeRuntime.waitUntil(maybeCreateNextRecurrence(db, id));
       }
       // A completed meeting follow-up gets its record filed in the household's Advisor Files (also when the box is ticked on a finished task).
       if (patch.status === "done" || patch.meeting_followup === true) {

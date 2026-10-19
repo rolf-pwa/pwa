@@ -8,6 +8,7 @@
 
 import { proCommentAlertTitle } from "../_shared/task-notify.ts";
 import { eventFor, postTaskEvent } from "../_shared/task-events.ts";
+import { maybeCreateNextRecurrence } from "../_shared/task-recurrence.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validateProSession } from "../_shared/pro-portal-auth.ts";
 
@@ -283,6 +284,7 @@ Deno.serve(async (req) => {
       if (error) return json({ error: error.message }, 500);
       const ev = before ? eventFor(before.status, completed ? "done" : "open") : null;
       if (before && ev) await postTaskEvent(supabase, before, ev, { label: `${session.professional.full_name} (professional)`, professionalId: session.professional_id });
+      if (before && ev === "completed") await maybeCreateNextRecurrence(supabase, task_id);
       return json({ ok: true });
     }
 
