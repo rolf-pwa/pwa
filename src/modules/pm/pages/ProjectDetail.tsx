@@ -41,6 +41,10 @@ export default function ProjectDetail() {
     ]).finally(() => setLoading(false));
   }, [id]);
 
+  const handleTaskDeleted = (taskId: string) => {
+    setTasks((prev) => prev.filter((t) => t.id !== taskId && t.parent_task_id !== taskId));
+  };
+
   const handleTaskChanged = (updated: PmTask) => {
     setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
   };
@@ -134,7 +138,7 @@ export default function ProjectDetail() {
                       {expandedId === task.id && (
                         <TableRow>
                           <TableCell colSpan={4} className="bg-muted/20 p-4">
-                            <TaskDetailPanel task={task} onChanged={handleTaskChanged} />
+                            <TaskDetailPanel task={task} onChanged={handleTaskChanged} onDeleted={handleTaskDeleted} />
                           </TableCell>
                         </TableRow>
                       )}

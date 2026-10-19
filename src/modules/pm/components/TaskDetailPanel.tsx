@@ -9,7 +9,8 @@ import { Button } from "@/shared/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import { Switch } from "@/shared/components/ui/switch";
 import { Checkbox } from "@/shared/components/ui/checkbox";
-import { Loader2, Send, Plus, Eye, EyeOff, X, Bot, RefreshCw } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/shared/components/ui/alert-dialog";
+import { Loader2, Send, Plus, Eye, EyeOff, X, Bot, RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { getTaskAgent } from "@/shared/lib/agents";
 import type { PmTask, PmTaskCollaborator, PmTaskComment } from "@/shared/lib/agents";
@@ -30,9 +31,11 @@ const STATUS_LABELS: Record<string, string> = {
 interface Props {
   task: PmTask;
   onChanged: (task: PmTask) => void;
+  /** Called after the task is deleted, so the list it was in can drop it. */
+  onDeleted?: (taskId: string) => void;
 }
 
-export function TaskDetailPanel({ task, onChanged }: Props) {
+export function TaskDetailPanel({ task, onChanged, onDeleted }: Props) {
   const [description, setDescription] = useState(task.description || "");
   const [comments, setComments] = useState<PmTaskComment[]>([]);
   const [authorNames, setAuthorNames] = useState<Record<string, string>>({});
@@ -180,6 +183,20 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
       onChanged(updated);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not update visibility.");
+    }
+  };
+
+  const [deleting, setDeleting] = useState(false);
+  const deleteTask = async () => {
+    setDeleting(true);
+    try {
+      await getTaskAgent().deleteTask(task.id);
+      toast.success("Task deleted");
+      onDeleted?.(task.id);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not delete this task.");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -524,6 +541,29 @@ export function TaskDetailPanel({ task, onChanged }: Props) {
             {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </div>
+      </div>
+
+      <div className="flex justify-end border-t border-border pt-2">
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" disabled={deleting}>
+              {deleting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Trash2 className="mr-1.5 h-3.5 w-3.5" />}
+              Delete task
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete this task?</AlertDialogTitle>
+              <AlertDialogDescription>
+                "{task.title}"{task.parent_task_id ? "" : ", its action items"} and its comments will be removed. A copy is kept for the record. If a client or professional has written in it, or a meeting record has been filed, it cannot be deleted: close it instead.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Keep it</AlertDialogCancel>
+              <AlertDialogAction onClick={() => void deleteTask()}>Delete</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );

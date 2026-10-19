@@ -75,6 +75,10 @@ export function ContactTaskList({ contactId }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contactId]);
 
+  const handleTaskDeleted = (taskId: string) => {
+    setTasks((prev) => prev.filter((t) => t.id !== taskId && t.parent_task_id !== taskId));
+  };
+
   const handleTaskChanged = (updated: PmTask) => {
     setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
   };
@@ -165,7 +169,7 @@ export function ContactTaskList({ contactId }: Props) {
         </div>
         {isExpanded && (
           <div className="mt-1 rounded-md border border-border bg-background p-3">
-            <TaskDetailPanel task={task} onChanged={handleTaskChanged} />
+            <TaskDetailPanel task={task} onChanged={handleTaskChanged} onDeleted={handleTaskDeleted} />
           </div>
         )}
       </div>

@@ -449,6 +449,10 @@ function MyTasksWidget() {
     load();
   }, []);
 
+  const handleTaskDeleted = (taskId: string) => {
+    setTasks((prev) => prev.filter((t) => t.id !== taskId && t.parent_task_id !== taskId));
+  };
+
   const handleTaskChanged = (updated: PmTask) => {
     setTasks((prev) =>
       updated.status === "done"
@@ -537,7 +541,7 @@ function MyTasksWidget() {
                   </button>
                   {isExpanded && (
                     <div className="mt-1 mb-2 rounded-lg border border-border bg-background p-3">
-                      <TaskDetailPanel task={task} onChanged={handleTaskChanged} />
+                      <TaskDetailPanel task={task} onChanged={handleTaskChanged} onDeleted={handleTaskDeleted} />
                     </div>
                   )}
                 </div>

@@ -57,6 +57,10 @@ export default function TeamCapacity() {
     };
   }, []);
 
+  const handleTaskDeleted = (taskId: string) => {
+    setTasks((prev) => prev.filter((t) => t.id !== taskId && t.parent_task_id !== taskId));
+  };
+
   const handleTaskChanged = (updated: PmTask) => {
     setTasks((prev) =>
       updated.status === "done" ? prev.filter((t) => t.id !== updated.id) : prev.map((t) => (t.id === updated.id ? updated : t)),
@@ -178,7 +182,7 @@ export default function TeamCapacity() {
                       {row.tasks.map((task) => (
                         <div key={task.id} className="rounded-md border border-border bg-background p-3">
                           <p className="mb-1 text-sm font-medium">{task.title}</p>
-                          <TaskDetailPanel task={task} onChanged={handleTaskChanged} />
+                          <TaskDetailPanel task={task} onChanged={handleTaskChanged} onDeleted={handleTaskDeleted} />
                         </div>
                       ))}
                     </div>
