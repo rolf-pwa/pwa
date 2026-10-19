@@ -331,6 +331,114 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
     const familyId = contactRes.data?.family_id;
     const householdId = contactRes.data?.household_id;
 
+    // Loading the portal used to run about forty queries and Google calls one after another. The sections that do not depend on each other now
+    // run together: each is started as soon as what it needs is known, and collected where its result is used. The sections themselves are unchanged.
+    const t0 = Date.now();
+    const marks: string[] = [];
+    const mark = (name: string) => marks.push(`${name};dur=${Date.now() - t0}`);
+    // A section started early that fails before it is collected must not be reported as unhandled; the failure still surfaces where it is collected.
+    const early = <T,>(p: Promise<T>): Promise<T> => { p.catch(() => {}); return p; };
+
+    // Needs only the contact: start now.
+    const meetingsP = early((async () => {
+    let meetings: any[] = [];
+    const contactEmail = contactRes.data?.email;
+    if (contactEmail) {
+      // The advisor who made the link, or the firm's shared Google account when the link has none (a welcome-email link).
+      let googleToken = await getValidGoogleToken(supabase, advisorUserId);
+      if (!googleToken) { try { googleToken = await getServiceGoogleAccessToken(supabase); } catch { googleToken = null; } }
+      if (googleToken) {
+        meetings = await fetchCalendarEvents(googleToken, contactEmail);
+      }
+    }
+
+      return meetings;
+    })().catch((e) => { console.error("[portal-validate] calendar error", e); return [] as any[]; }));
+    const liabilitiesP = early((async () => {
+    let liabilities_total: number | null = null;
+    try {
+      const { data: liabs } = await supabase.from("liabilities").select("current_balance").eq("holder_type", "contact").eq("contact_id", contactId);
+      liabilities_total = (liabs ?? []).reduce((a: number, r: any) => a + (Number(r.current_balance) || 0), 0);
+    } catch (e) {
+      console.error("[portal-validate] liabilities fetch error", e);
+    }
+
+      return liabilities_total;
+    })());
+    const meetingTypesP = early((async () => {
+    let meeting_types: { label: string; url: string; embedUrl: string }[] | null = null;
+    let booked_meetings: { label: string; start: string }[] = [];
+    try {
+      const { data: mt } = await supabase.from("meeting_types").select("label, client_label, url, embed_url, cadence_kind").eq("active", true).eq("client_visible", true).order("sort_order");
+      // A meeting type tied to the review cadence is shown only to the family's adults, and only while that meeting is owed:
+      // its window is open and nothing is booked. Once booked, the portal shows the date instead of a booking link.
+      let owed: ReturnType<typeof meetingsOwedNow> = [];
+      const { data: heads } = familyId ? await supabase.from("contacts").select("household_id").eq("family_id", familyId).eq("family_role", "head_of_family") : { data: [] as any[] };
+      const hofHouseholds = (heads ?? []).map((h: any) => h.household_id);
+      const standalone = familyId ? !!(await viewerUnit(supabase, familyId, contactRes.data?.household_id)).householdId : false;
+      const canBook = isFamilyAdult({ role: contactRes.data?.family_role ?? null, isMinor: contactRes.data?.is_minor, householdId: contactRes.data?.household_id }, hofHouseholds, standalone);
+      if (canBook && familyId && (mt ?? []).some((t: any) => t.cadence_kind)) {
+        const today = pacificDate(Date.now());
+        const unit = await viewerUnit(supabase, familyId, contactRes.data?.household_id);
+        const { data: tracked } = await scopeToUnit(supabase.from("review_obligations").select("window_key, status, booked_start").eq("family_id", familyId).lte("window_start", today).gte("window_end", today), unit);
+        owed = meetingsOwedNow((unit.tier ?? null) as any, today, (tracked ?? []) as any);
+      }
+      const gated = gateMeetingTypes((mt ?? []) as any[], owed, canBook);
+      meeting_types = gated.bookable.map((t: any) => ({ label: t.client_label || t.label, url: t.url, embedUrl: t.embed_url || t.url }));
+      booked_meetings = gated.booked.map((b: any) => ({ label: b.type.client_label || b.type.label, start: b.start }));
+    } catch (e) {
+      console.error("[portal-validate] meeting types fetch error", e);
+    }
+
+      return { meeting_types, booked_meetings };
+    })());
+    const rebalancingP = early((async () => {
+    let rebalancing: { authorizedIds: string[]; viewerId: string | null; view: unknown; proposal: unknown; label: string; summary: string; publishedAt: string; acknowledgedAt: string | null; completedAt: string | null; statement: string; statementVersion: string } | null = null;
+    try {
+      const { data: rHeads } = familyId ? await supabase.from("contacts").select("household_id").eq("family_id", familyId).eq("family_role", "head_of_family") : { data: [] as any[] };
+      const rStandalone = familyId ? !!(await viewerUnit(supabase, familyId, contactRes.data?.household_id)).householdId : false;
+      if (familyId && isFamilyAdult({ role: contactRes.data?.family_role ?? null, isMinor: contactRes.data?.is_minor, householdId: contactRes.data?.household_id }, (rHeads ?? []).map((h: any) => h.household_id), rStandalone)) {
+        const today = pacificDate(Date.now());
+        // Shown only once Rolf has published it to this family, and only while Georgia is live.
+        const rUnit = await viewerUnit(supabase, familyId, contactRes.data?.household_id);
+        // The rebalance page (the same format as the review, fewer sections), frozen when Rolf published it.
+        const { data: rebPub } = contactRes.data?.household_id ? await supabase.from("portfolio_review_publications").select("view").eq("household_id", contactRes.data.household_id).eq("kind", "rebalance").is("unpublished_at", null).order("published_at", { ascending: false }).limit(1).maybeSingle() : { data: null as any };
+        const rebView = rebPub?.view ?? null;
+        const { data: ob } = await scopeToUnit(supabase.from("review_obligations").select("id, window_start, window_end, published_at, proposal_summary, proposal, acknowledged_at, completed_at").eq("family_id", familyId).eq("kind", "rebalancing").eq("mode", "live").neq("status", "cancelled").not("published_at", "is", null).lte("window_start", today), rUnit).order("window_start", { ascending: false }).limit(1).maybeSingle();
+        // Which items have been authorized so far, by whichever account holder: each person authorizes the changes to their own accounts.
+        const { data: rebAcks } = ob?.id ? await supabase.from("rebalance_acknowledgements").select("items").eq("obligation_id", ob.id).eq("decision", "acknowledged") : { data: [] as any[] };
+        const rebAuthorized = [...new Set((rebAcks ?? []).flatMap((a: any) => (Array.isArray(a.items) ? a.items.map((i: any) => String(i.id)) : [])))] as string[];
+        // A completed one stays on the card for a month, then goes quiet; one still being worked on stays until it is done.
+        // Closed by Rolf before the client authorized it: nothing is left for the client to do.
+        const recent = ob && !(ob.completed_at && !ob.acknowledged_at) && (!ob.completed_at || Date.now() - Date.parse(ob.completed_at) < 30 * 86_400_000);
+        if (ob && recent) rebalancing = { authorizedIds: rebAuthorized, viewerId: contactRes.data?.id ?? null, view: rebView, // The estimated gain is for Rolf's carry-out task only: it rests on book values that are not always the true cost.
+proposal: ob.proposal ? { ...ob.proposal, switches: (ob.proposal.switches ?? []).map(({ estGain: _g, ...rest }: any) => rest) } : null, label: windowLabel(ob.window_start, ob.window_end), summary: ob.proposal_summary ?? "", publishedAt: ob.published_at, acknowledgedAt: ob.acknowledged_at ?? null, completedAt: ob.completed_at ?? null, statement: REBALANCE_STATEMENT, statementVersion: REBALANCE_STATEMENT_VERSION };
+      }
+    } catch (e) {
+      console.error("[portal-validate] rebalancing fetch error", e);
+    }
+
+      return rebalancing;
+    })());
+    const portfolioReviewP = early((async () => {
+    let portfolio_review: { id: string; publishedAt: string; view: unknown; booking: { label: string; url: string; embedUrl: string } | null } | null = null;
+    try {
+      const c = contactRes.data;
+      if (c?.household_id && !c.is_minor && ["head_of_household", "head_of_family", "spouse"].includes(String(c.family_role ?? ""))) {
+        const { data: pub } = await supabase.from("portfolio_review_publications").select("id, published_at, view").eq("household_id", c.household_id).eq("kind", "review").is("unpublished_at", null).order("published_at", { ascending: false }).limit(1).maybeSingle();
+        if (pub) {
+          // The meeting to talk it through is always the Portfolio Review scheduler, whether or not that meeting is "owed" right now.
+          const { data: mt } = await supabase.from("meeting_types").select("label, client_label, url, embed_url").eq("active", true).ilike("label", "portfolio review").limit(1).maybeSingle();
+          portfolio_review = { id: pub.id, publishedAt: pub.published_at, view: pub.view, booking: mt ? { label: mt.client_label || mt.label, url: mt.url, embedUrl: mt.embed_url || mt.url } : null };
+        }
+      }
+    } catch (e) {
+      console.error("[portal-validate] portfolio review fetch error", e);
+    }
+
+      return portfolio_review;
+    })());
+
     if (familyId || householdId) {
       const extraQueries: any[] = [];
       
@@ -360,9 +468,13 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
       householdMembers = membersRes.data || [];
     }
 
-    // Build hierarchy data based on role
-    const hierarchy = contactRes.data ? await buildHierarchy(supabase, contactRes.data) : { level: "individual" };
+    mark("household");
 
+    // Needs the household's members: start together.
+    const reviewMemberIds = [contactId, ...householdMembers.map((m: any) => m.id)];
+    const quarterlyP = early(fetchQuarterlyReviews(supabase, reviewMemberIds).catch((e) => { console.error("[portal-validate] quarterly reviews error", e); return [] as any[]; }));
+    const hierarchyP = early(contactRes.data ? buildHierarchy(supabase, contactRes.data) : Promise.resolve({ level: "individual" } as any));
+    const householdHoldingP = early((async () => {
     // Fetch household-wide holding tank by contact membership (not household_id field which may be stale)
     let householdHoldingTank: any[] = [];
     if (householdId) {
@@ -376,6 +488,74 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
       householdHoldingTank = hhHolding || [];
     }
 
+      return householdHoldingTank;
+    })());
+    const corporationsP = early((async () => {
+    // Fetch corporations via shareholders for all household members + self
+    let corporations: any[] = [];
+    const allMemberIds = [contactId, ...householdMembers.map((m: any) => m.id)];
+    const { data: shareholders } = await supabase
+      .from("shareholders")
+      .select("contact_id, corporation_id, ownership_percentage, share_class, role_title")
+      .in("contact_id", allMemberIds)
+      .eq("is_active", true);
+
+    if (shareholders && shareholders.length > 0) {
+      const corpIds = [...new Set(shareholders.map((s: any) => s.corporation_id))];
+      const [corpsRes, corpVineyardRes] = await Promise.all([
+        supabase.from("corporations").select("id, name, corporation_type, jurisdiction").in("id", corpIds),
+        supabase.from("corporate_vineyard_accounts").select("*").in("corporation_id", corpIds),
+      ]);
+
+      corporations = (corpsRes.data || []).map((corp: any) => ({
+        ...corp,
+        shareholders: shareholders.filter((s: any) => s.corporation_id === corp.id),
+        vineyard_accounts: (corpVineyardRes.data || []).filter((v: any) => v.corporation_id === corp.id),
+        total_assets: (corpVineyardRes.data || [])
+          .filter((v: any) => v.corporation_id === corp.id)
+          .reduce((sum: number, v: any) => sum + (Number(v.current_value) || 0), 0),
+      }));
+    }
+
+      return corporations;
+    })());
+    const professionalsP = early((async () => {
+    // VFO Professionals & engagements scoped to this family / household / contacts
+    let professionals: any[] = [];
+    let engagements: any[] = [];
+    try {
+      const scopeIds: string[] = [];
+      if (familyId) scopeIds.push(familyId);
+      if (householdId) scopeIds.push(householdId);
+      reviewMemberIds.forEach((id) => id && scopeIds.push(id));
+      if (scopeIds.length > 0) {
+        const { data: engRows } = await supabase
+          .from("professional_engagements")
+          .select("id, professional_id, scope_type, scope_id, pillar, title, status, started_at, completed_at, updated_at")
+          .in("scope_id", scopeIds)
+          .neq("status", "draft")
+          .neq("status", "revoked")
+          .order("updated_at", { ascending: false });
+        engagements = engRows || [];
+        const proIds = [...new Set(engagements.map((e: any) => e.professional_id).filter(Boolean))];
+        if (proIds.length > 0) {
+          const { data: pros } = await supabase
+            .from("professionals")
+            .select("id, full_name, firm, professional_type, credentials, email, phone")
+            .in("id", proIds);
+          professionals = pros || [];
+        }
+      }
+    } catch (e) {
+      console.error("[portal-validate] professionals fetch error", e);
+    }
+
+      return { professionals, engagements };
+    })());
+
+    const hierarchy: any = await hierarchyP;
+    mark("hierarchy");
+    let householdHoldingTank: any[] = await householdHoldingP;
     // Fetch family-wide holding tank for all family members across households
     let familyHoldingTank: any[] = [];
     if (hierarchy.level === "family" && Array.isArray(hierarchy.households)) {
@@ -410,78 +590,12 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
     householdHoldingTank = householdHoldingTank.filter(visibleToViewer);
     familyHoldingTank = familyHoldingTank.filter(visibleToViewer);
 
-    // Fetch corporations via shareholders for all household members + self
-    let corporations: any[] = [];
-    const allMemberIds = [contactId, ...householdMembers.map((m: any) => m.id)];
-    const { data: shareholders } = await supabase
-      .from("shareholders")
-      .select("contact_id, corporation_id, ownership_percentage, share_class, role_title")
-      .in("contact_id", allMemberIds)
-      .eq("is_active", true);
+    mark("firewall");
 
-    if (shareholders && shareholders.length > 0) {
-      const corpIds = [...new Set(shareholders.map((s: any) => s.corporation_id))];
-      const [corpsRes, corpVineyardRes] = await Promise.all([
-        supabase.from("corporations").select("id, name, corporation_type, jurisdiction").in("id", corpIds),
-        supabase.from("corporate_vineyard_accounts").select("*").in("corporation_id", corpIds),
-      ]);
-
-      corporations = (corpsRes.data || []).map((corp: any) => ({
-        ...corp,
-        shareholders: shareholders.filter((s: any) => s.corporation_id === corp.id),
-        vineyard_accounts: (corpVineyardRes.data || []).filter((v: any) => v.corporation_id === corp.id),
-        total_assets: (corpVineyardRes.data || [])
-          .filter((v: any) => v.corporation_id === corp.id)
-          .reduce((sum: number, v: any) => sum + (Number(v.current_value) || 0), 0),
-      }));
-    }
-
-    // Fetch calendar events if contact has an email
-    let meetings: any[] = [];
-    const contactEmail = contactRes.data?.email;
-    if (contactEmail) {
-      // The advisor who made the link, or the firm's shared Google account when the link has none (a welcome-email link).
-      let googleToken = await getValidGoogleToken(supabase, advisorUserId);
-      if (!googleToken) { try { googleToken = await getServiceGoogleAccessToken(supabase); } catch { googleToken = null; } }
-      if (googleToken) {
-        meetings = await fetchCalendarEvents(googleToken, contactEmail);
-      }
-    }
-
-    // Pinned Quarterly Reviews (synced from "Sovereignty Charter Sources" Drive folder)
-    const reviewMemberIds = [contactId, ...householdMembers.map((m: any) => m.id)];
-    const quarterly_reviews = await fetchQuarterlyReviews(supabase, reviewMemberIds);
-
-    // VFO Professionals & engagements scoped to this family / household / contacts
-    let professionals: any[] = [];
-    let engagements: any[] = [];
-    try {
-      const scopeIds: string[] = [];
-      if (familyId) scopeIds.push(familyId);
-      if (householdId) scopeIds.push(householdId);
-      reviewMemberIds.forEach((id) => id && scopeIds.push(id));
-      if (scopeIds.length > 0) {
-        const { data: engRows } = await supabase
-          .from("professional_engagements")
-          .select("id, professional_id, scope_type, scope_id, pillar, title, status, started_at, completed_at, updated_at")
-          .in("scope_id", scopeIds)
-          .neq("status", "draft")
-          .neq("status", "revoked")
-          .order("updated_at", { ascending: false });
-        engagements = engRows || [];
-        const proIds = [...new Set(engagements.map((e: any) => e.professional_id).filter(Boolean))];
-        if (proIds.length > 0) {
-          const { data: pros } = await supabase
-            .from("professionals")
-            .select("id, full_name, firm, professional_type, credentials, email, phone")
-            .in("id", proIds);
-          professionals = pros || [];
-        }
-      }
-    } catch (e) {
-      console.error("[portal-validate] professionals fetch error", e);
-    }
-
+    const corporations: any[] = await corporationsP;
+    // The snapshots and the insurance policies need the accounts and corporations above, but not each other.
+    const [, insurance_policies] = await Promise.all([
+      (async () => {
     // Attach latest performance snapshot to every account (vineyard / storehouse / holding tank)
     try {
       const vyIds: string[] = [];
@@ -547,6 +661,8 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
       console.error("[portal-validate] snapshot attach error", e);
     }
 
+      })(),
+      (async () => {
     // Fetch insurance policies for all in-scope contacts and corporations
     let insurance_policies: any[] = [];
     try {
@@ -576,81 +692,15 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
       console.error("[portal-validate] insurance fetch error", e);
     }
 
-    // The viewer's own debts, for the dashboard's balance line (a single total, never the individual loans).
-    let liabilities_total: number | null = null;
-    try {
-      const { data: liabs } = await supabase.from("liabilities").select("current_balance").eq("holder_type", "contact").eq("contact_id", contactId);
-      liabilities_total = (liabs ?? []).reduce((a: number, r: any) => a + (Number(r.current_balance) || 0), 0);
-    } catch (e) {
-      console.error("[portal-validate] liabilities fetch error", e);
-    }
+        return insurance_policies;
+      })(),
+    ]);
+    mark("accounts");
 
-    // Meeting types clients may book (managed in the CRM under Book a meeting > Edit meeting types).
-    let meeting_types: { label: string; url: string; embedUrl: string }[] | null = null;
-    let booked_meetings: { label: string; start: string }[] = [];
-    try {
-      const { data: mt } = await supabase.from("meeting_types").select("label, client_label, url, embed_url, cadence_kind").eq("active", true).eq("client_visible", true).order("sort_order");
-      // A meeting type tied to the review cadence is shown only to the family's adults, and only while that meeting is owed:
-      // its window is open and nothing is booked. Once booked, the portal shows the date instead of a booking link.
-      let owed: ReturnType<typeof meetingsOwedNow> = [];
-      const { data: heads } = familyId ? await supabase.from("contacts").select("household_id").eq("family_id", familyId).eq("family_role", "head_of_family") : { data: [] as any[] };
-      const hofHouseholds = (heads ?? []).map((h: any) => h.household_id);
-      const standalone = familyId ? !!(await viewerUnit(supabase, familyId, contactRes.data?.household_id)).householdId : false;
-      const canBook = isFamilyAdult({ role: contactRes.data?.family_role ?? null, isMinor: contactRes.data?.is_minor, householdId: contactRes.data?.household_id }, hofHouseholds, standalone);
-      if (canBook && familyId && (mt ?? []).some((t: any) => t.cadence_kind)) {
-        const today = pacificDate(Date.now());
-        const unit = await viewerUnit(supabase, familyId, contactRes.data?.household_id);
-        const { data: tracked } = await scopeToUnit(supabase.from("review_obligations").select("window_key, status, booked_start").eq("family_id", familyId).lte("window_start", today).gte("window_end", today), unit);
-        owed = meetingsOwedNow((unit.tier ?? null) as any, today, (tracked ?? []) as any);
-      }
-      const gated = gateMeetingTypes((mt ?? []) as any[], owed, canBook);
-      meeting_types = gated.bookable.map((t: any) => ({ label: t.client_label || t.label, url: t.url, embedUrl: t.embed_url || t.url }));
-      booked_meetings = gated.booked.map((b: any) => ({ label: b.type.client_label || b.type.label, start: b.start }));
-    } catch (e) {
-      console.error("[portal-validate] meeting types fetch error", e);
-    }
-
-    // The family's portfolio rebalancing, when its window is open: only for adults, and only once Georgia has made it live.
-    let rebalancing: { authorizedIds: string[]; viewerId: string | null; view: unknown; proposal: unknown; label: string; summary: string; publishedAt: string; acknowledgedAt: string | null; completedAt: string | null; statement: string; statementVersion: string } | null = null;
-    try {
-      const { data: rHeads } = familyId ? await supabase.from("contacts").select("household_id").eq("family_id", familyId).eq("family_role", "head_of_family") : { data: [] as any[] };
-      const rStandalone = familyId ? !!(await viewerUnit(supabase, familyId, contactRes.data?.household_id)).householdId : false;
-      if (familyId && isFamilyAdult({ role: contactRes.data?.family_role ?? null, isMinor: contactRes.data?.is_minor, householdId: contactRes.data?.household_id }, (rHeads ?? []).map((h: any) => h.household_id), rStandalone)) {
-        const today = pacificDate(Date.now());
-        // Shown only once Rolf has published it to this family, and only while Georgia is live.
-        const rUnit = await viewerUnit(supabase, familyId, contactRes.data?.household_id);
-        // The rebalance page (the same format as the review, fewer sections), frozen when Rolf published it.
-        const { data: rebPub } = contactRes.data?.household_id ? await supabase.from("portfolio_review_publications").select("view").eq("household_id", contactRes.data.household_id).eq("kind", "rebalance").is("unpublished_at", null).order("published_at", { ascending: false }).limit(1).maybeSingle() : { data: null as any };
-        const rebView = rebPub?.view ?? null;
-        const { data: ob } = await scopeToUnit(supabase.from("review_obligations").select("id, window_start, window_end, published_at, proposal_summary, proposal, acknowledged_at, completed_at").eq("family_id", familyId).eq("kind", "rebalancing").eq("mode", "live").neq("status", "cancelled").not("published_at", "is", null).lte("window_start", today), rUnit).order("window_start", { ascending: false }).limit(1).maybeSingle();
-        // Which items have been authorized so far, by whichever account holder: each person authorizes the changes to their own accounts.
-        const { data: rebAcks } = ob?.id ? await supabase.from("rebalance_acknowledgements").select("items").eq("obligation_id", ob.id).eq("decision", "acknowledged") : { data: [] as any[] };
-        const rebAuthorized = [...new Set((rebAcks ?? []).flatMap((a: any) => (Array.isArray(a.items) ? a.items.map((i: any) => String(i.id)) : [])))] as string[];
-        // A completed one stays on the card for a month, then goes quiet; one still being worked on stays until it is done.
-        // Closed by Rolf before the client authorized it: nothing is left for the client to do.
-        const recent = ob && !(ob.completed_at && !ob.acknowledged_at) && (!ob.completed_at || Date.now() - Date.parse(ob.completed_at) < 30 * 86_400_000);
-        if (ob && recent) rebalancing = { authorizedIds: rebAuthorized, viewerId: contactRes.data?.id ?? null, view: rebView, // The estimated gain is for Rolf's carry-out task only: it rests on book values that are not always the true cost.
-proposal: ob.proposal ? { ...ob.proposal, switches: (ob.proposal.switches ?? []).map(({ estGain: _g, ...rest }: any) => rest) } : null, label: windowLabel(ob.window_start, ob.window_end), summary: ob.proposal_summary ?? "", publishedAt: ob.published_at, acknowledgedAt: ob.acknowledged_at ?? null, completedAt: ob.completed_at ?? null, statement: REBALANCE_STATEMENT, statementVersion: REBALANCE_STATEMENT_VERSION };
-      }
-    } catch (e) {
-      console.error("[portal-validate] rebalancing fetch error", e);
-    }
-
-    // The household's Portfolio Review, once Rolf has published it: only to its own adults, as it was when he approved it.
-    let portfolio_review: { id: string; publishedAt: string; view: unknown; booking: { label: string; url: string; embedUrl: string } | null } | null = null;
-    try {
-      const c = contactRes.data;
-      if (c?.household_id && !c.is_minor && ["head_of_household", "head_of_family", "spouse"].includes(String(c.family_role ?? ""))) {
-        const { data: pub } = await supabase.from("portfolio_review_publications").select("id, published_at, view").eq("household_id", c.household_id).eq("kind", "review").is("unpublished_at", null).order("published_at", { ascending: false }).limit(1).maybeSingle();
-        if (pub) {
-          // The meeting to talk it through is always the Portfolio Review scheduler, whether or not that meeting is "owed" right now.
-          const { data: mt } = await supabase.from("meeting_types").select("label, client_label, url, embed_url").eq("active", true).ilike("label", "portfolio review").limit(1).maybeSingle();
-          portfolio_review = { id: pub.id, publishedAt: pub.published_at, view: pub.view, booking: mt ? { label: mt.client_label || mt.label, url: mt.url, embedUrl: mt.embed_url || mt.url } : null };
-        }
-      }
-    } catch (e) {
-      console.error("[portal-validate] portfolio review fetch error", e);
-    }
+    const [meetings, liabilities_total, { meeting_types, booked_meetings }, rebalancing, portfolio_review, quarterly_reviews, { professionals, engagements }] = await Promise.all([
+      meetingsP, liabilitiesP, meetingTypesP, rebalancingP, portfolioReviewP, quarterlyP, professionalsP,
+    ]);
+    mark("sections");
 
     return new Response(JSON.stringify({
       session_token: sessionToken,
@@ -683,7 +733,7 @@ proposal: ob.proposal ? { ...ob.proposal, switches: (ob.proposal.switches ?? [])
       portfolio_review,
       liabilities_total,
     }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json", "Server-Timing": [...marks, `total;dur=${Date.now() - t0}`].join(", ") },
     });
   } catch (e) {
     console.error("Portal validate error:", e);
