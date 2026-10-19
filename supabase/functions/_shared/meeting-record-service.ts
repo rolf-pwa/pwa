@@ -4,7 +4,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { getServiceGoogleAccessToken } from "./google-token.ts";
 import { buildMeetingRecordHtml, recordTitle, pacificYmd, splitRecap, type RecordComment, type RecordEvent, type RecordTask } from "./meeting-record.ts";
-import { namedAttendees, pickEvent, type CalEventLite, type Known } from "./meeting-event.ts";
+import { clientEmailSet, namedAttendees, pickEvent, type CalEventLite, type Known } from "./meeting-event.ts";
 
 const DRIVE = "https://www.googleapis.com/drive/v3";
 const UPLOAD = "https://www.googleapis.com/upload/drive/v3";
@@ -104,7 +104,7 @@ export async function createMeetingRecord(db: any, taskId: string): Promise<Reco
     } else {
       try {
         const events = await calendarAround(token, task.created_at);
-        const clientEmails = new Set<string>((members ?? []).map((m: any) => String(m.email ?? "").toLowerCase()).filter(Boolean));
+        const clientEmails = clientEmailSet(members ?? [], STAFF_DOMAIN);
         const clientNames = (members ?? []).flatMap((m: any) => [m.full_name, m.last_name]).filter(Boolean);
         const hit = pickEvent(events, { clientEmails, clientNames, anchor: task.created_at });
         if (hit) event = { title: hit.summary, start: hit.start, end: hit.end, attendees: namedAttendees(hit.attendees, known), source: "matched" };
@@ -115,7 +115,7 @@ export async function createMeetingRecord(db: any, taskId: string): Promise<Reco
 
     // Tasks and the thread.
     const { data: subs } = await db.from("pm_tasks").select("title, status, due_date, assignee_id, completed_at").eq("parent_task_id", task.id).order("created_at", { ascending: true });
-    const { data: cms } = await db.from("pm_task_comments").select("author_id, author_contact_id, author_professional_id, author_agent_key, body, body_format, created_at").eq("task_id", task.id).order("created_at", { ascending: true });
+    const { data: cms } = await db.from("pm_task_comments").select("author_id, author_contact_id, author_professional_id, author_agent_key, body, body_format, kind, created_at").eq("task_id", task.id).order("created_at", { ascending: true });
     const staffIds = [...new Set([...(subs ?? []).map((s: any) => s.assignee_id), ...(cms ?? []).map((c: any) => c.author_id)].filter(Boolean))];
     const contactIds = [...new Set((cms ?? []).map((c: any) => c.author_contact_id).filter(Boolean))];
     const authorProIds = [...new Set((cms ?? []).map((c: any) => c.author_professional_id).filter(Boolean))];
@@ -131,6 +131,7 @@ export async function createMeetingRecord(db: any, taskId: string): Promise<Reco
     const tasks: RecordTask[] = (subs ?? []).map((s: any) => ({ title: s.title, owner: s.assignee_id ? staffName.get(s.assignee_id) ?? null : null, due: s.due_date ?? null, status: s.status, completedAt: s.completed_at ?? null }));
     const all: RecordComment[] = (cms ?? []).map((c: any) => {
       const base = { at: c.created_at, body: c.body, format: (c.body_format === "html" ? "html" : "text") as "text" | "html" };
+      if (c.kind === "system") return { ...base, author: "System", role: "System" };
       if (c.author_id) return { ...base, author: staffName.get(c.author_id) || "Advisor", role: "Advisor" };
       if (c.author_contact_id) return { ...base, author: contactName.get(c.author_contact_id) || "Client", role: "Client" };
       if (c.author_professional_id) { const p: any = proInfo.get(c.author_professional_id); return { ...base, author: p?.full_name || "Professional", role: `Professional${p?.professional_type ? `, ${String(p.professional_type).replace(/_/g, " ")}` : ""}` }; }

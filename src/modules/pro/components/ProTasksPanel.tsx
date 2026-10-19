@@ -1,4 +1,5 @@
 import { CommentBody } from "@/shared/components/CommentBody";
+import { SystemCommentLine } from "@/shared/components/SystemCommentLine";
 import { commentPlainText } from "@/shared/lib/sanitizeHtml";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -22,7 +23,7 @@ interface Task {
   updated_at: string;
   context?: TaskContext | null;
 }
-interface Comment { id: string; body: string; body_format?: "text" | "html"; author_type: "staff" | "client" | "pro"; author_name: string; created_at: string }
+interface Comment { id: string; body: string; body_format?: "text" | "html"; kind?: "comment" | "system"; author_type: "staff" | "client" | "pro"; author_name: string; created_at: string }
 
 interface Props {
   scopeType: "family" | "household" | "contact" | "portfolio";
@@ -264,6 +265,7 @@ export default function ProTasksPanel({ scopeType, scopeId, title }: Props) {
                           <div className="space-y-1.5">
                             {(comments[t.id] || []).map((c) => {
                               const isMine = c.author_type === "pro";
+                              if (c.kind === "system") return <SystemCommentLine key={c.id} body={c.body} at={c.created_at} />;
                               return (
                                 <div key={c.id} className="flex flex-col gap-0.5">
                                   <div className={`flex items-center gap-2 ${isMine ? "justify-end" : ""}`}>

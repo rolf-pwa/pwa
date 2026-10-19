@@ -7,6 +7,7 @@
 // given page — they can never widen access to another pro's tasks.
 
 import { proCommentAlertTitle } from "../_shared/task-notify.ts";
+import { eventFor, postTaskEvent } from "../_shared/task-events.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validateProSession } from "../_shared/pro-portal-auth.ts";
 
@@ -194,7 +195,7 @@ Deno.serve(async (req) => {
 
       const { data: comments, error } = await supabase
         .from("pm_task_comments")
-        .select("id, task_id, author_id, author_contact_id, author_professional_id, body, body_format, created_at")
+        .select("id, task_id, author_id, author_contact_id, author_professional_id, body, body_format, kind, created_at")
         .eq("task_id", task_id)
         .order("created_at", { ascending: true });
       if (error) return json({ error: error.message }, 500);
@@ -226,7 +227,7 @@ Deno.serve(async (req) => {
               : proById.get(c.author_professional_id) || session.professional.full_name;
         // Only staff comments can be formatted; everyone else's is shown as plain text.
         const body_format = author_type === "staff" && c.body_format === "html" ? "html" : "text";
-        return { id: c.id, task_id: c.task_id, body: c.body, body_format, created_at: c.created_at, author_type, author_name };
+        return { id: c.id, task_id: c.task_id, body: c.body, body_format, kind: c.kind === "system" ? "system" : "comment", created_at: c.created_at, author_type, author_name };
       });
       return json({ comments: resolved });
     }
@@ -274,11 +275,14 @@ Deno.serve(async (req) => {
       const task = await taskTaggedForPro(task_id);
       if (!task) return json({ error: "Not found" }, 404);
 
+      const { data: before } = await supabase.from("pm_tasks").select("id, title, status, parent_task_id").eq("id", task_id).maybeSingle();
       const { error } = await supabase
         .from("pm_tasks")
         .update({ status: completed ? "done" : "open", completed_at: completed ? new Date().toISOString() : null })
         .eq("id", task_id);
       if (error) return json({ error: error.message }, 500);
+      const ev = before ? eventFor(before.status, completed ? "done" : "open") : null;
+      if (before && ev) await postTaskEvent(supabase, before, ev, { label: `${session.professional.full_name} (professional)`, professionalId: session.professional_id });
       return json({ ok: true });
     }
 

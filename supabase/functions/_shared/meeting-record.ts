@@ -86,7 +86,9 @@ export function buildMeetingRecordHtml(i: RecordInput): string {
         .join("")}</table>`
     : "<p>No tasks were recorded.</p>";
   const thread = i.thread.length
-    ? i.thread.map((c) => `<p><b>${esc(pacificStamp(c.at))}, ${esc(c.author)} (${esc(c.role)})</b></p>${bodyHtml(c.body, c.format)}`).join("")
+    ? i.thread.map((c) => (c.role === "System"
+        ? `<p><i>${esc(pacificStamp(c.at))}: ${esc(c.body)}</i></p>`
+        : `<p><b>${esc(pacificStamp(c.at))}, ${esc(c.author)} (${esc(c.role)})</b></p>${bodyHtml(c.body, c.format)}`)).join("")
     : "<p>No comments after the recap.</p>";
   const note = !ev
     ? "<p><i>The calendar event for this meeting could not be identified.</i></p>"
