@@ -1,7 +1,7 @@
 // pm-service — staff-only CRUD for the in-house PM system (projects, tasks,
 // comments). Phase 1: no external API, no portal/client access yet.
 
-import { notifyClientsOfComment, type TaskRef } from "../_shared/task-notify.ts";
+import { notifyClientsOfComment, notifyProsOfComment, type TaskRef } from "../_shared/task-notify.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ALLOWED_ORIGINS = [
@@ -235,10 +235,16 @@ Deno.serve(async (req) => {
       if (error) return json({ ok: false, error: error.message }, 500);
       // The client is told, once the comment is saved. A failed notification never fails the comment.
       try {
-        const { data: task } = await db.from("pm_tasks").select("id, title, client_visible, contact_id, household_id").eq("id", task_id).maybeSingle();
+        const { data: task } = await db.from("pm_tasks").select("id, title, client_visible, contact_id, household_id, parent_task_id").eq("id", task_id).maybeSingle();
         if (task) {
+          const url = Deno.env.get("SUPABASE_URL")!;
+          const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+          // The client and any professional tagged on the task are each told, separately.
           // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
-          EdgeRuntime.waitUntil(notifyClientsOfComment(db, task as TaskRef, Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!));
+          EdgeRuntime.waitUntil(Promise.all([
+            notifyClientsOfComment(db, task as TaskRef, url, key),
+            notifyProsOfComment(db, task as { id: string; parent_task_id: string | null }, url, key, Deno.env.get("INTERNAL_FUNCTION_SECRET") ?? ""),
+          ]));
         }
       } catch (e) {
         console.error("[pm-service] client notification failed", e);

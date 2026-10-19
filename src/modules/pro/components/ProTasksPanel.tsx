@@ -1,3 +1,5 @@
+import { CommentBody } from "@/shared/components/CommentBody";
+import { commentPlainText } from "@/shared/lib/sanitizeHtml";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
@@ -20,7 +22,7 @@ interface Task {
   updated_at: string;
   context?: TaskContext | null;
 }
-interface Comment { id: string; body: string; author_type: "staff" | "client" | "pro"; author_name: string; created_at: string }
+interface Comment { id: string; body: string; body_format?: "text" | "html"; author_type: "staff" | "client" | "pro"; author_name: string; created_at: string }
 
 interface Props {
   scopeType: "family" | "household" | "contact" | "portfolio";
@@ -271,13 +273,13 @@ export default function ProTasksPanel({ scopeType, scopeId, title }: Props) {
                                     </span>
                                   </div>
                                   <div
-                                    className={`rounded px-2 py-1.5 text-xs whitespace-pre-wrap break-words max-w-[90%] ${
+                                    className={`rounded px-2 py-1.5 text-xs break-words max-w-[90%] ${
                                       isMine
                                         ? "bg-accent/10 border border-accent/30 text-foreground ml-auto"
                                         : "bg-card border border-border/60 text-foreground"
                                     }`}
                                   >
-                                    {c.body}
+                                    <CommentBody body={c.body} format={c.body_format} />
                                   </div>
                                 </div>
                               );
@@ -346,7 +348,7 @@ export default function ProTasksPanel({ scopeType, scopeId, title }: Props) {
                   <p style={{ fontSize: "11px", fontWeight: 700, marginBottom: "2px" }}>
                     {c.author_name} <span style={{ fontWeight: 400, color: "#666" }}>{format(new Date(c.created_at), "PP p")}</span>
                   </p>
-                  <p style={{ fontSize: "12px", whiteSpace: "pre-wrap" }}>{c.body}</p>
+                  <p style={{ fontSize: "12px", whiteSpace: "pre-wrap" }}>{commentPlainText(c.body, c.body_format)}</p>
                 </div>
               ))}
             </div>
