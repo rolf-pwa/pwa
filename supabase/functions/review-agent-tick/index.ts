@@ -112,6 +112,18 @@ Deno.serve(async (req) => {
       }
     }
 
+    // A family handed over only because nobody could be emailed comes back to Georgia once an address appears. She closes her own task.
+    {
+      const { data: stuck } = await db.from("review_obligations").select("id, family_id, household_id, mode, escalation_task_id").eq("mode", mode).eq("status", "escalated").eq("escalation_reason", "no_email").limit(50);
+      for (const o of stuck ?? []) {
+        if (!inviteesOf(contactsOf.get(unitKey(o.family_id, o.household_id)) ?? [], !!o.household_id).length) continue;
+        const nowIso = new Date().toISOString();
+        await db.from("review_obligations").update({ status: "open", escalation_reason: null, escalation_task_id: null, updated_at: nowIso }).eq("id", o.id).eq("status", "escalated");
+        if (o.escalation_task_id) await db.from("pm_tasks").update({ status: "done", completed_at: nowIso }).eq("id", o.escalation_task_id).eq("status", "open");
+        await event(o.family_id, o.id, mode, "resumed", { why: "An email address was added, so Georgia picked this up again" });
+      }
+    }
+
     // 2. Work each live obligation.
     const { data: obligations } = await db.from("review_obligations").select("*").eq("mode", mode).in("status", ["open", "booked"]).or(`window_end.gte.${pacificDate(now - 7 * DAY)},kind.eq.rebalancing`).order("window_start").limit(MAX_OBLIGATIONS);
     const calendarCache = new Map<string, any[]>();

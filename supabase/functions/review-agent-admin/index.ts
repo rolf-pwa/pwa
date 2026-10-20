@@ -10,7 +10,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { latestModels, portfolioPackFor } from "../_shared/portfolio-review-data.ts";
-import { pacificDate } from "../_shared/review-windows.ts";
+import { inviteesOf, pacificDate, type FamilyContact } from "../_shared/review-windows.ts";
 import { storableMessages } from "../_shared/support-context.ts";
 import { MODEL_PROMPT, validateModels } from "../_shared/ia-model-parse.ts";
 import { isPooledFamily } from "../_shared/review-units.ts";
@@ -50,6 +50,14 @@ async function requireStaff(req: Request): Promise<{ userId: string; email: stri
   const { data } = await userClient.auth.getUser();
   if (!data?.user?.email?.endsWith("@prosperwise.ca")) return null;
   return { userId: data.user.id, email: data.user.email };
+}
+
+/** Set when nobody in the unit has an email Georgia can use, so a publish tells Rolf before she hands the family back to him. */
+async function noInviteeWarning(db: any, familyId: string, householdId: string | null): Promise<string | undefined> {
+  const q = db.from("contacts").select("id, first_name, last_name, email, family_role, is_minor, household_id, no_automated_email");
+  const { data } = await (householdId ? q.eq("household_id", householdId) : q.eq("family_id", familyId));
+  const people: FamilyContact[] = (data ?? []).map((p: any) => ({ id: p.id, firstName: p.first_name, lastName: p.last_name, email: p.email, role: p.family_role, isMinor: p.is_minor, householdId: p.household_id, noAutoEmail: p.no_automated_email }));
+  return inviteesOf(people, !!householdId).length ? undefined : "Nobody in this household has an email address Georgia can use, so she cannot invite them. Add one to the contact record and she will pick it up.";
 }
 
 Deno.serve(async (req) => {
@@ -123,7 +131,7 @@ Deno.serve(async (req) => {
         }
         await db.from("review_obligations").update({ published_at: o.published_at ?? new Date().toISOString(), published_by: staff.userId, proposal_summary: summary, proposal, updated_at: new Date().toISOString() }).eq("id", id);
         await log(o.published_at ? "rebalancing_republished" : "rebalancing_published");
-        return json({ ok: true });
+        return json({ ok: true, warning: await noInviteeWarning(db, o.family_id, o.household_id ?? null) });
       }
       if (action === "unpublishRebalancing") {
         if (o.acknowledged_at) return json({ error: "The client has already acknowledged this one, so it can't be taken back." }, 400);
@@ -328,7 +336,7 @@ Deno.serve(async (req) => {
           for (const a of adults ?? []) await db.from("portal_client_notifications").insert({ contact_id: a.id, title: "Your rebalancing is ready to review", body: "Rolf has prepared a rebalancing for you. Sign in to review it.", source_type: "rebalancing", link_tab: "dashboard" });
         }
         await db.from("review_agent_events").insert({ family_id: ob.family_id, obligation_id: ob.id, mode: ob.mode, kind: wasPublished ? "rebalancing_republished" : "rebalancing_published", detail: { by: staff.email, via: "pack" } });
-        return json({ ok: true, emailed: 0, updated: wasPublished });
+        return json({ ok: true, emailed: 0, updated: wasPublished, warning: await noInviteeWarning(db, ob.family_id, householdId) });
       }
       const { data: prior } = await db.from("portfolio_review_publications").select("id, notified_at").eq("household_id", householdId).eq("kind", "review").is("unpublished_at", null);
       const firstTime = !(prior ?? []).some((p: any) => p.notified_at);
