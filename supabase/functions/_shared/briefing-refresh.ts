@@ -3,7 +3,7 @@
 // itself is not rewritten and nothing is invented: items only ever leave it.
 
 // deno-lint-ignore-file no-explicit-any
-import { applyOpen, type OpenState } from "./briefing-open.ts";
+import { applyOpen, sweepPending, type OpenState } from "./briefing-open.ts";
 import { getValidGoogleAccessToken } from "./google-token.ts";
 
 const keysOf = (items: { key?: string }[], prefix: string) => items.map((i) => i.key).filter((k): k is string => !!k && k.startsWith(prefix)).map((k) => k.split(":").slice(-1)[0]);
@@ -27,11 +27,6 @@ async function gmailState(db: any, userId: string, ids: string[]): Promise<OpenS
   } catch {
     return null; // could not read Gmail: leave the email items where they are
   }
-}
-
-/** Sorts still to deal with: not yet rated, or Would archive and rated right but still in the Inbox. Mail from clients is shown, never sorted by hand. */
-export function sweepPending(rows: { bucket: string; feedback: string | null; archived_at: string | null }[]): number {
-  return rows.filter((r) => r.bucket !== "client" && !r.archived_at && (r.feedback === null || (r.bucket === "archivable" && r.feedback === "right"))).length;
 }
 
 export async function refreshBriefing(db: any, userId: string, todayStr: string) {

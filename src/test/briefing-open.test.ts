@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isStillOpen, applyOpen, type OpenState } from "../../supabase/functions/_shared/briefing-open";
-import { sweepPending } from "../../supabase/functions/_shared/briefing-refresh";
+import { isStillOpen, applyOpen, sweepPending, type OpenState } from "../../supabase/functions/_shared/briefing-open";
 
 const state = (over: Partial<OpenState> = {}): OpenState => ({
   today: "2026-10-19", tasks: new Map(), requests: new Map(), emails: new Map(), quo: new Map(), escalations: new Map(), imports: new Map(), pendingScans: 0, notes: new Map(), ...over,

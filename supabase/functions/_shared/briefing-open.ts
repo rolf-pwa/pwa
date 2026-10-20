@@ -60,3 +60,8 @@ export function applyOpen<T extends { key?: string }>(items: T[], s: OpenState):
   }
   return { open, handled };
 }
+
+/** Sorts still to deal with: not yet rated, or Would archive and rated right but still in the Inbox. Mail from clients is shown, never sorted by hand. */
+export function sweepPending(rows: { bucket: string; feedback: string | null; archived_at: string | null }[]): number {
+  return rows.filter((r) => r.bucket !== "client" && !r.archived_at && (r.feedback === null || (r.bucket === "archivable" && r.feedback === "right"))).length;
+}
