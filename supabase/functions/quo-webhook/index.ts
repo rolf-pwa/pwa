@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { callFromEvent, smsFromEvent, verifyCallizySignature, voicemailFromEvent } from "../_shared/callizy.ts";
+import { callFromEvent, signatureDiagnosis, smsFromEvent, verifyCallizySignature, voicemailFromEvent } from "../_shared/callizy.ts";
 
 // PUBLIC endpoint — Quo posts here. HMAC signature is the only auth.
 
@@ -173,7 +173,10 @@ async function handleCallizy(req: Request, rawBody: string): Promise<Response> {
   try { payload = JSON.parse(rawBody); } catch { payload = { raw: rawBody }; }
   const event: string = payload?.event || "unknown";
   const { data: logRow } = await admin.from("quo_webhook_events").insert({ event_type: `callizy:${event}`, quo_event_id: payload?.data?.sms_id || payload?.data?.call_id || null, payload, signature_valid: valid, processed: false }).select("id").single();
-  if (!valid) return json({ error: "Invalid signature" }, 401);
+  if (!valid) {
+    if (logRow?.id) await admin.from("quo_webhook_events").update({ processing_error: signatureDiagnosis(req.headers, Deno.env.get("CALLIZY_WEBHOOK_SIGNING_SECRET")) }).eq("id", logRow.id);
+    return json({ error: "Invalid signature" }, 401);
+  }
 
   try {
     const data = payload?.data ?? {};
