@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { callFromEvent, smsFromEvent, verifyCallizySignature, voicemailFromEvent } from "../_shared/callizy.ts";
 
 // PUBLIC endpoint — Quo posts here. HMAC signature is the only auth.
 
@@ -110,7 +111,7 @@ async function sendAutoReply(admin: any, toNumber: string): Promise<void> {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "content-type, openphone-signature, x-openphone-signature",
+  "Access-Control-Allow-Headers": "content-type, openphone-signature, x-openphone-signature, x-callizy-signature",
 };
 
 async function verifySignature(rawBody: string, signatureHeader: string | null): Promise<boolean> {
@@ -163,11 +164,74 @@ async function findContactByPhone(admin: any, phone: string): Promise<string | n
   return null;
 }
 
+/** Callizy posts here with ?provider=callizy. Its texts and calls are stored in the same tables as Quo's, marked provider = callizy. */
+async function handleCallizy(req: Request): Promise<Response> {
+  const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  const rawBody = await req.text();
+  const valid = await verifyCallizySignature(rawBody, req.headers.get("x-callizy-signature"), Deno.env.get("CALLIZY_WEBHOOK_SIGNING_SECRET"));
+  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  let payload: any = {};
+  try { payload = JSON.parse(rawBody); } catch { payload = { raw: rawBody }; }
+  const event: string = payload?.event || "unknown";
+  const { data: logRow } = await admin.from("quo_webhook_events").insert({ event_type: `callizy:${event}`, quo_event_id: payload?.data?.sms_id || payload?.data?.call_id || null, payload, signature_valid: valid, processed: false }).select("id").single();
+  if (!valid) return json({ error: "Invalid signature" }, 401);
+
+  try {
+    const data = payload?.data ?? {};
+    const at = payload?.timestamp;
+    if (event === "sms.received" || event === "sms.sent") {
+      const m = smsFromEvent(event, data, at);
+      if (!m.id) throw new Error("sms event without an id");
+      const contactId = await findContactByPhone(admin, m.direction === "inbound" ? m.from : m.to);
+      await admin.from("quo_messages").upsert({
+        quo_message_id: m.id, provider: "callizy", contact_id: contactId, direction: m.direction, from_number: m.from, to_number: m.to, body: m.body,
+        status: m.direction === "inbound" ? "received" : "delivered", media_urls: [], portal_visible: true, occurred_at: m.at,
+        ...(m.direction === "outbound" ? { read_at: new Date().toISOString() } : {}),
+      }, { onConflict: "quo_message_id" });
+    } else if (event === "call.completed" || event === "call.missed") {
+      const c = callFromEvent(event, data, at);
+      if (!c.id) throw new Error("call event without an id");
+      const contactId = await findContactByPhone(admin, c.direction === "inbound" ? c.from : c.to);
+      await admin.from("quo_calls").upsert({
+        quo_call_id: c.id, provider: "callizy", contact_id: contactId, direction: c.direction, from_number: c.from, to_number: c.to, status: c.status,
+        duration_seconds: c.duration, portal_visible: true, is_voicemail: false, occurred_at: c.at,
+        ...(c.transcript ? { transcript: c.transcript } : {}), ...(c.summary ? { summary: c.summary } : {}),
+      }, { onConflict: "quo_call_id" });
+    } else if (event === "voicemail.received") {
+      const v = voicemailFromEvent(data, at);
+      if (!v.id) throw new Error("voicemail event without an id");
+      const contactId = await findContactByPhone(admin, v.from);
+      await admin.from("quo_calls").upsert({
+        quo_call_id: v.id, provider: "callizy", contact_id: contactId, direction: "inbound", from_number: v.from, to_number: v.to, status: "voicemail",
+        duration_seconds: v.duration, portal_visible: true, is_voicemail: true, voicemail_url: v.url || null, occurred_at: v.at,
+        ...(v.transcript ? { transcript: v.transcript } : {}),
+      }, { onConflict: "quo_call_id" });
+      let title = `New voicemail from ${v.from || "an unknown caller"}`;
+      let link = "/inbox";
+      if (contactId) {
+        const { data: c } = await admin.from("contacts").select("first_name, last_name").eq("id", contactId).single();
+        const name = `${c?.first_name || ""} ${c?.last_name || ""}`.trim();
+        if (name) title = `New voicemail from ${name}`;
+        link = `/contacts/${contactId}`;
+      }
+      await admin.from("staff_notifications").insert({ title, body: v.transcript || `Voicemail received at ${new Date().toLocaleString()}`, link, contact_id: contactId, source_type: "voicemail" });
+    }
+    // Contact events and call.started are logged above and otherwise ignored. No auto-reply is sent for Callizy texts yet.
+    if (logRow?.id) await admin.from("quo_webhook_events").update({ processed: true }).eq("id", logRow.id);
+    return json({ ok: true });
+  } catch (err: any) {
+    console.error("[quo-webhook] callizy processing error:", err);
+    if (logRow?.id) await admin.from("quo_webhook_events").update({ processing_error: err.message || String(err) }).eq("id", logRow.id);
+    return json({ error: err.message || "Processing failed" }, 500);
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405, headers: corsHeaders });
   }
+  if (new URL(req.url).searchParams.get("provider") === "callizy") return await handleCallizy(req);
 
   const rawBody = await req.text();
   const sigHeader =
