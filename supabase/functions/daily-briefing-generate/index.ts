@@ -492,6 +492,9 @@ async function generateBriefingForUser(db: Db, userId: string, todayStr: string)
   const facts = { tasks, calendar: google.calendar, email: google.email, requests, quo, firm };
   const sections = buildSections(google.calendar, google.email, quo, firm, todayStr);
   sections.counts.muted = mutedCount;
+  // A regeneration the same day keeps what Rolf already marked done by hand.
+  const { data: earlier } = await db.from("daily_briefings").select("sections").eq("staff_user_id", userId).eq("briefing_date", todayStr).maybeSingle();
+  if (Array.isArray(earlier?.sections?.dismissed) && earlier.sections.dismissed.length) sections.dismissed = earlier.sections.dismissed;
 
   await db.from("daily_briefings").upsert(
     {
@@ -576,6 +579,8 @@ ${block}`;
       })
       .eq("staff_user_id", userId)
       .eq("briefing_date", todayStr);
+    // Take off at once whatever is already dealt with (labelled or filed mail, done tasks, items marked done), so a new briefing never shows it.
+    try { await refreshBriefing(db, userId, todayStr); } catch (e) { console.error("[briefing] refresh after generating failed", e); }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await db
