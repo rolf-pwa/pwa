@@ -54,7 +54,7 @@ import type { ModelValidation, ParsedModel } from "../../../../supabase/function
 export type { ModelValidation, ParsedModel };
 export const readModelPdf = (pdfBase64: string) => call<{ validation: ModelValidation }>("readModelPdf", { pdfBase64 });
 export const saveModels = (asOf: string, models: ParsedModel[], sourceFile: string) => call<{ ok: true; asOf: string }>("saveModels", { asOf, models, sourceFile });
-export const publishPortfolioReview = (householdId: string, note: string, includes: { returns: boolean; mix: boolean; funds: boolean; reset: boolean; rebalancing: boolean }, kind: "review" | "rebalance" = "review", narratives: { mix?: string | null; funds?: string | null } = {}, holdingsChecked = false) => call<{ ok: true; emailed: number; updated: boolean }>("publishPortfolioReview", { householdId, note, includes, kind, narratives, holdingsChecked });
+export const publishPortfolioReview = (householdId: string, note: string, includes: { returns: boolean; mix: boolean; funds: boolean; reset: boolean; rebalancing: boolean }, kind: "review" | "rebalance" = "review", narratives: { mix?: string | null; funds?: string | null } = {}, holdingsChecked = false) => call<{ ok: true; emailed: number; updated: boolean; warning?: string }>("publishPortfolioReview", { householdId, note, includes, kind, narratives, holdingsChecked });
 export const unpublishPortfolioReview = (householdId: string, kind: "review" | "rebalance" = "review") => call<{ ok: true }>("unpublishPortfolioReview", { householdId, kind });
 export const getWorkbenchFacts = (householdId: string) => call<import("./workbenchSteps").WorkbenchFacts>("workbenchFacts", { householdId });
 import type { ClientProposal } from "../../../../supabase/functions/_shared/portfolio-review-client";
@@ -63,7 +63,7 @@ export const getRebalancingProposal = (obligationId: string) => call<{ proposal:
 export const deleteInvestorProfile = (householdId: string, accountNumber: string | null) => call<{ ok: true }>("deleteInvestorProfile", { householdId, accountNumber });
 export const setReviewMode = (mode: ReviewMode, confirm = false) => call<{ ok: true; mode: ReviewMode }>("setMode", { mode, confirm });
 export const setReviewPaused = (obligationId: string, paused: boolean) => call<{ ok: true }>("setPaused", { obligationId, paused });
-export const publishRebalancing = (obligationId: string, summary: string) => call<{ ok: true }>("publishRebalancing", { obligationId, summary });
+export const publishRebalancing = (obligationId: string, summary: string) => call<{ ok: true; warning?: string }>("publishRebalancing", { obligationId, summary });
 export const unpublishRebalancing = (obligationId: string) => call<{ ok: true }>("unpublishRebalancing", { obligationId });
 export interface PackReadinessRow { householdId: string; household: string; family: string | null; tier: string | null; needs: string[]; accounts: number; ready: boolean; todo: string[]; notes: string[] }
 export const getPackReadiness = () => call<{ rows: PackReadinessRow[] }>("packReadiness");

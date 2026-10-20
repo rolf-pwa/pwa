@@ -113,7 +113,7 @@ export default function ReviewAgent() {
   };
   const runRebalancing = async (fn: () => Promise<unknown>, ok: string) => {
     setBusy(true);
-    try { await fn(); await load(); toast.success(ok); setPublishing(null); }
+    try { const r = (await fn()) as { warning?: string } | undefined; await load(); toast.success(ok); if (r?.warning) toast.warning(r.warning); setPublishing(null); }
     catch (e: any) { toast.error(e?.message ?? "Couldn't update"); }
     finally { setBusy(false); }
   };

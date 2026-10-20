@@ -262,3 +262,13 @@ describe("a household that stands alone invites its own head, whatever the role 
     expect(isFamilyAdult({ role: "head_of_household", householdId: "h2" }, ["h1"])).toBe(false);
   });
 });
+
+describe("a household whose only email is the head of family's", () => {
+  it("is invitable (the Wetherill shape), and not before the email is added", () => {
+    const person = (id: string, role: string, email: string | null) => ({ id, firstName: id, lastName: "W", email, role, isMinor: false, householdId: "h1" });
+    const withoutEmail = [person("judy", "head_of_family", null), person("kid", "beneficiary", null)];
+    const withEmail = [person("judy", "head_of_family", "judy@x.com"), person("kid", "beneficiary", null)];
+    expect(inviteesOf(withoutEmail, true)).toEqual([]);
+    expect(inviteesOf(withEmail, true).map((i) => i.contactId)).toEqual(["judy"]);
+  });
+});

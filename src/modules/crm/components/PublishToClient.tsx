@@ -138,7 +138,7 @@ export function PublishToClient({ householdId, householdLabel, pack, publication
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setOpen(null)}>Cancel</Button>
-            <Button disabled={busy || (rebalance && note.trim().length < 10) || (rebalance && !!pack.holdings?.stale && !holdingsChecked)} onClick={() => run(async () => { const r = await publishPortfolioReview(householdId, note, includes, kind, narr, holdingsChecked); if (r.emailed) toast.message(`Georgia emailed ${r.emailed} ${r.emailed === 1 ? "person" : "people"}`); }, (rebalance ? rebalancePublication : publication) ? "Updated" : "Published to the portal")}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : (rebalance ? rebalancePublication : publication) ? "Save changes" : "Publish"}</Button>
+            <Button disabled={busy || (rebalance && note.trim().length < 10) || (rebalance && !!pack.holdings?.stale && !holdingsChecked)} onClick={() => run(async () => { const r = await publishPortfolioReview(householdId, note, includes, kind, narr, holdingsChecked); if (r.emailed) toast.message(`Georgia emailed ${r.emailed} ${r.emailed === 1 ? "person" : "people"}`); if (r.warning) toast.warning(r.warning); }, (rebalance ? rebalancePublication : publication) ? "Updated" : "Published to the portal")}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : (rebalance ? rebalancePublication : publication) ? "Save changes" : "Publish"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
