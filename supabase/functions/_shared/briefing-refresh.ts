@@ -3,7 +3,7 @@
 // itself is not rewritten and nothing is invented: items only ever leave it.
 
 // deno-lint-ignore-file no-explicit-any
-import { applyOpen, sweepPending, type OpenState } from "./briefing-open.ts";
+import { applyOpen, pendingSorts, type OpenState } from "./briefing-open.ts";
 import { getValidGoogleAccessToken } from "./google-token.ts";
 
 const keysOf = (items: { key?: string }[], prefix: string) => items.map((i) => i.key).filter((k): k is string => !!k && k.startsWith(prefix)).map((k) => k.split(":").slice(-1)[0]);
@@ -29,6 +29,33 @@ async function gmailState(db: any, userId: string, ids: string[]): Promise<OpenS
   }
 }
 
+/** How many pending sorts are still in the Inbox: mail filed by Georgia, or moved by hand, is done whatever the card says. If Gmail cannot be read they all count. */
+async function sweepStillInInbox(db: any, userId: string, rows: { message_id: string }[]): Promise<number> {
+  if (!rows.length) return 0;
+  try {
+    const token = await getValidGoogleAccessToken(db, userId);
+    const left = await Promise.all(rows.slice(0, 60).map(async (r) => {
+      const m = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${r.message_id}?format=minimal`, { headers: { Authorization: `Bearer ${token}` } });
+      if (m.status === 404) return false;
+      if (!m.ok) throw new Error(`Gmail ${m.status}`);
+      return ((await m.json()).labelIds ?? []).includes("INBOX");
+    }));
+    return left.filter(Boolean).length + Math.max(0, rows.length - 60);
+  } catch {
+    return rows.length;
+  }
+}
+
+/** Rolf marked one briefing item done by hand: it stays off for the rest of the day, then the briefing is brought up to date. */
+export async function dismissBriefingItem(db: any, userId: string, todayStr: string, key: string) {
+  const { data: b } = await db.from("daily_briefings").select("sections").eq("staff_user_id", userId).eq("briefing_date", todayStr).maybeSingle();
+  if (!b || !key) return { ok: false };
+  const s: any = b.sections ?? {};
+  const dismissed = [...new Set([...(s.dismissed ?? []), key])].slice(-200);
+  await db.from("daily_briefings").update({ sections: { ...s, dismissed } }).eq("staff_user_id", userId).eq("briefing_date", todayStr);
+  return { ok: true, ...(await refreshBriefing(db, userId, todayStr)) };
+}
+
 export async function refreshBriefing(db: any, userId: string, todayStr: string) {
   const { data: b } = await db.from("daily_briefings").select("priority_items, sections, generation_status").eq("staff_user_id", userId).eq("briefing_date", todayStr).maybeSingle();
   if (!b || b.generation_status !== "complete") return { refreshed: false };
@@ -51,7 +78,7 @@ export async function refreshBriefing(db: any, userId: string, todayStr: string)
     quoCall.length ? db.from("quo_calls").select("id, read_at").in("id", quoCall) : { data: [] },
     db.from("stage2_verification_audit").select("id", { count: "exact", head: true }).eq("review_status", "pending"),
     gmailState(db, userId, emailIds),
-    hasSweep ? db.from("inbox_sweep_items").select("bucket, feedback, archived_at").eq("user_id", userId).gte("swept_at", new Date(Date.now() - 26 * 3_600_000).toISOString()).limit(500) : { data: null },
+    hasSweep ? db.from("inbox_sweep_items").select("message_id, bucket, feedback, archived_at").eq("user_id", userId).gte("swept_at", new Date(Date.now() - 26 * 3_600_000).toISOString()).limit(500) : { data: null },
   ]);
 
   const state: OpenState = {
@@ -66,13 +93,18 @@ export async function refreshBriefing(db: any, userId: string, todayStr: string)
     escalations: new Map((escs.data ?? []).map((e: any) => [e.id, { status: e.status }])),
     imports: new Map((imports.data ?? []).map((i: any) => [i.id, { status: i.status }])),
     pendingScans: scans.count ?? 0,
-    sweepPending: sweepRows.data ? sweepPending(sweepRows.data) : undefined,
+    sweepPending: sweepRows.data ? await sweepStillInInbox(db, userId, pendingSorts(sweepRows.data as any[])) : undefined,
     notes: new Map((notes.data ?? []).map((n: any) => [n.id, { read: !!n.read }])),
   };
 
   const handled: { label: string; link: string | null }[] = [...(s.handled ?? [])];
+  const dismissed = new Set<string>(s.dismissed ?? []);
   const split = <T extends { key?: string; link?: string | null }>(items: T[]): T[] => {
-    const r = applyOpen(items, state);
+    const r = applyOpen(items.filter((i) => !(i.key && dismissed.has(i.key))), state);
+    for (const d of items.filter((i) => i.key && dismissed.has(i.key)) as any[]) {
+      const label = d.label ?? d.subject ?? "";
+      if (label && !handled.some((x) => x.label === label)) handled.push({ label, link: d.link ?? null });
+    }
     for (const h of r.handled as any[]) {
       const label = h.label ?? h.subject ?? "";
       if (label && !handled.some((x) => x.label === label)) handled.push({ label, link: h.link ?? null });

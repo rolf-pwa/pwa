@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isStillOpen, applyOpen, sweepPending, type OpenState } from "../../supabase/functions/_shared/briefing-open";
+import { isStillOpen, applyOpen, sweepPending, pendingSorts, type OpenState } from "../../supabase/functions/_shared/briefing-open";
 
 const state = (over: Partial<OpenState> = {}): OpenState => ({
   today: "2026-10-19", tasks: new Map(), requests: new Map(), emails: new Map(), quo: new Map(), escalations: new Map(), imports: new Map(), pendingScans: 0, notes: new Map(), ...over,
@@ -60,5 +60,22 @@ describe("sweepPending", () => {
   it("counts unrated sorts and rated-right Would archive still in the Inbox, never Clients or archived mail", () => {
     const row = (bucket: string, feedback: string | null, archived_at: string | null = null) => ({ bucket, feedback, archived_at });
     expect(sweepPending([row("needs_you", null), row("fyi", "right"), row("archivable", "right"), row("archivable", "right", "2026-10-20"), row("client", null), row("fyi", "wrong")])).toBe(2);
+  });
+});
+
+describe("pendingSorts", () => {
+  it("returns the sorts themselves so their mail can be checked in the Inbox", () => {
+    const rows = [{ message_id: "a", bucket: "needs_you", feedback: null, archived_at: null }, { message_id: "b", bucket: "client", feedback: null, archived_at: null }, { message_id: "c", bucket: "fyi", feedback: "right", archived_at: null }];
+    expect(pendingSorts(rows).map((r) => r.message_id)).toEqual(["a"]);
+  });
+});
+
+describe("the Done button on the briefing", () => {
+  it("is wired through ea_dismiss and only ever adds to today's dismissed keys", async () => {
+    const { readFileSync } = await import("node:fs");
+    const refresh = readFileSync("supabase/functions/_shared/briefing-refresh.ts", "utf8");
+    expect(refresh).toContain("dismissBriefingItem");
+    expect(refresh).toMatch(/new Set\(\[\.\.\.\(s\.dismissed \?\? \[\]\), key\]\)/);
+    expect(readFileSync("supabase/functions/daily-briefing-generate/index.ts", "utf8")).toContain('"ea_dismiss"');
   });
 });

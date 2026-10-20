@@ -58,6 +58,8 @@ export interface BriefingSections {
   firm: { key?: string; label: string; link: string }[];
   /** Things that were in the briefing and have since been dealt with. */
   handled?: { label: string; link: string | null }[];
+  /** Keys of items Rolf marked done by hand (the Done button), so they stay off the briefing for the rest of the day. */
+  dismissed?: string[];
   counts: { spam: number; promo: number; automated: number; adminTotal: number; muted?: number };
 }
 
