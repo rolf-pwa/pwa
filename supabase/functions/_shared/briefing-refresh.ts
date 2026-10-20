@@ -29,6 +29,11 @@ async function gmailState(db: any, userId: string, ids: string[]): Promise<OpenS
   }
 }
 
+/** Sorts still to deal with: not yet rated, or Would archive and rated right but still in the Inbox. Mail from clients is shown, never sorted by hand. */
+export function sweepPending(rows: { bucket: string; feedback: string | null; archived_at: string | null }[]): number {
+  return rows.filter((r) => r.bucket !== "client" && !r.archived_at && (r.feedback === null || (r.bucket === "archivable" && r.feedback === "right"))).length;
+}
+
 export async function refreshBriefing(db: any, userId: string, todayStr: string) {
   const { data: b } = await db.from("daily_briefings").select("priority_items, sections, generation_status").eq("staff_user_id", userId).eq("briefing_date", todayStr).maybeSingle();
   if (!b || b.generation_status !== "complete") return { refreshed: false };
@@ -40,7 +45,8 @@ export async function refreshBriefing(db: any, userId: string, todayStr: string)
   const quoMsg = all.map((i) => i.key).filter((k: string) => k?.startsWith("quo:msg:")).map((k: string) => k.slice(8));
   const quoCall = all.map((i) => i.key).filter((k: string) => k?.startsWith("quo:call:")).map((k: string) => k.slice(9));
 
-  const [tasks, reqs, escs, imports, notes, msgs, calls, scans, emails] = await Promise.all([
+  const hasSweep = all.some((i) => i.key === "sweep");
+  const [tasks, reqs, escs, imports, notes, msgs, calls, scans, emails, sweepRows] = await Promise.all([
     taskIds.length ? db.from("pm_tasks").select("id, status, due_date").in("id", taskIds) : { data: [] },
     reqIds.length ? db.from("portal_requests").select("id, status, portal_request_messages(sender_type, created_at)").in("id", reqIds) : { data: [] },
     escIds.length ? db.from("review_obligations").select("id, status").in("id", escIds) : { data: [] },
@@ -50,6 +56,7 @@ export async function refreshBriefing(db: any, userId: string, todayStr: string)
     quoCall.length ? db.from("quo_calls").select("id, read_at").in("id", quoCall) : { data: [] },
     db.from("stage2_verification_audit").select("id", { count: "exact", head: true }).eq("review_status", "pending"),
     gmailState(db, userId, emailIds),
+    hasSweep ? db.from("inbox_sweep_items").select("bucket, feedback, archived_at").eq("user_id", userId).gte("swept_at", new Date(Date.now() - 26 * 3_600_000).toISOString()).limit(500) : { data: null },
   ]);
 
   const state: OpenState = {
@@ -64,6 +71,7 @@ export async function refreshBriefing(db: any, userId: string, todayStr: string)
     escalations: new Map((escs.data ?? []).map((e: any) => [e.id, { status: e.status }])),
     imports: new Map((imports.data ?? []).map((i: any) => [i.id, { status: i.status }])),
     pendingScans: scans.count ?? 0,
+    sweepPending: sweepRows.data ? sweepPending(sweepRows.data) : undefined,
     notes: new Map((notes.data ?? []).map((n: any) => [n.id, { read: !!n.read }])),
   };
 

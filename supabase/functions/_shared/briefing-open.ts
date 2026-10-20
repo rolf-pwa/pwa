@@ -2,7 +2,7 @@
 // email, a notification). Once Rolf has dealt with it, it drops off the briefing and moves to "handled". Pure: the current state is passed in.
 //
 // Keys: task:overdue:<id>  task:today:<id>  task:upcoming:<id>  request:<id>  email:<id>  quo:msg:<id>  quo:call:<id>
-//       esc:<id>  import:<id>  scans  note:<id>  conflict:<a>|<b>
+//       esc:<id>  import:<id>  scans  sweep  note:<id>  conflict:<a>|<b>
 
 export interface OpenState {
   today: string;
@@ -14,6 +14,8 @@ export interface OpenState {
   escalations: Map<string, { status: string }>;
   imports: Map<string, { status: string }>;
   pendingScans: number;
+  /** Sweep sorts from the last day still to rate, or rated right as Would archive but not yet archived (Clients mail needs nothing). Undefined: not known, so the item stays. */
+  sweepPending?: number;
   notes: Map<string, { read: boolean }>;
 }
 
@@ -42,6 +44,7 @@ export function isStillOpen(key: string | undefined | null, s: OpenState, within
     case "esc": { const e = s.escalations.get(a); return { open: !!e && e.status === "escalated" }; }
     case "import": { const i = s.imports.get(a); return { open: !!i && (i.status === "ready" || i.status === "held") }; }
     case "scans": return s.pendingScans > 0 ? { open: true, label: `${s.pendingScans} scanned document${s.pendingScans === 1 ? "" : "s"} waiting for approval` } : { open: false };
+    case "sweep": return { open: s.sweepPending === undefined || s.sweepPending > 0 };
     case "note": { const n = s.notes.get(a); return { open: !!n && !n.read }; }
     default: return { open: true };
   }
