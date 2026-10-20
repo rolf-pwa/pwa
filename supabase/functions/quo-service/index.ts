@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkOutboundPii, piiBlockMessage } from "../_shared/pii-shield.ts";
+import { callizySend, currentProvider } from "../_shared/callizy.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -110,6 +111,16 @@ serve(async (req) => {
     const body = await req.json();
     const { action } = body;
 
+    // ---- which phone provider the CRM sends through ----
+    if (action === "getProvider") {
+      return new Response(JSON.stringify({ provider: await currentProvider(adminClient) }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    if (action === "setProvider") {
+      const provider = body.provider === "callizy" ? "callizy" : "quo";
+      await adminClient.from("phone_provider_config").upsert({ id: true, provider, updated_at: new Date().toISOString() }, { onConflict: "id" });
+      return new Response(JSON.stringify({ ok: true, provider }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     // ---- sendSms ----
     if (action === "sendSms") {
       const { contactId, to, content } = body;
@@ -164,17 +175,24 @@ serve(async (req) => {
       if (pendingErr) throw pendingErr;
 
       try {
-        const result = await quoFetch("/messages", {
-          method: "POST",
-          body: JSON.stringify({
-            from: QUO_PHONE_NUMBER_ID,
-            to: [toNum],
-            content,
-          }),
-        });
-
-        const msg = result?.data || result;
+        const provider = await currentProvider(adminClient);
+        let msg: any;
+        if (provider === "callizy") {
+          const sent = await callizySend(toNum, content);
+          msg = { id: sent.id, from: sent.from, status: "sent" };
+        } else {
+          const result = await quoFetch("/messages", {
+            method: "POST",
+            body: JSON.stringify({
+              from: QUO_PHONE_NUMBER_ID,
+              to: [toNum],
+              content,
+            }),
+          });
+          msg = result?.data || result;
+        }
         await adminClient.from("quo_messages").update({
+          provider,
           quo_message_id: msg?.id,
           from_number: msg?.from || QUO_PHONE_NUMBER_ID,
           status: msg?.status || "sent",

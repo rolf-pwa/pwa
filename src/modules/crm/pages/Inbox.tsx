@@ -24,6 +24,30 @@ import {
 } from "@/shared/components/ui/alert-dialog";
 import { toast } from "sonner";
 
+/** Which phone provider texts are sent through from the CRM: Quo, or the Callizy trial. Incoming texts and calls from both land in this inbox. */
+function ProviderSwitch() {
+  const [provider, setProvider] = useState<"quo" | "callizy" | null>(null);
+  useEffect(() => {
+    supabase.functions.invoke("quo-service", { body: { action: "getProvider" } }).then(({ data }) => setProvider(data?.provider === "callizy" ? "callizy" : "quo")).catch(() => setProvider(null));
+  }, []);
+  if (!provider) return null;
+  const choose = async (next: "quo" | "callizy") => {
+    const prev = provider;
+    setProvider(next);
+    const { error } = await supabase.functions.invoke("quo-service", { body: { action: "setProvider", provider: next } });
+    if (error) { setProvider(prev); toast.error("Couldn't switch the texting provider"); } else toast.success(next === "callizy" ? "Texts from the CRM now go out through Callizy" : "Texts from the CRM now go out through Quo");
+  };
+  return (
+    <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      Send texts through
+      <select value={provider} onChange={(e) => void choose(e.target.value as "quo" | "callizy")} className="rounded border border-border bg-background px-1.5 py-1 text-xs text-foreground" aria-label="Texting provider">
+        <option value="quo">Quo</option>
+        <option value="callizy">Callizy (trial)</option>
+      </select>
+    </label>
+  );
+}
+
 interface QuoMessage {
   id: string;
   contact_id: string | null;
@@ -340,9 +364,12 @@ export default function Inbox() {
               </p>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={load}>
-            <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <ProviderSwitch />
+            <Button variant="outline" size="sm" onClick={load}>
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Refresh
+            </Button>
+          </div>
         </div>
 
         <Tabs defaultValue="all">
