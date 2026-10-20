@@ -3,7 +3,7 @@
 // itself is not rewritten and nothing is invented: items only ever leave it.
 
 // deno-lint-ignore-file no-explicit-any
-import { applyOpen, type OpenState } from "./briefing-open.ts";
+import { applyOpen, sweepPending, type OpenState } from "./briefing-open.ts";
 import { getValidGoogleAccessToken } from "./google-token.ts";
 
 const keysOf = (items: { key?: string }[], prefix: string) => items.map((i) => i.key).filter((k): k is string => !!k && k.startsWith(prefix)).map((k) => k.split(":").slice(-1)[0]);
@@ -40,7 +40,8 @@ export async function refreshBriefing(db: any, userId: string, todayStr: string)
   const quoMsg = all.map((i) => i.key).filter((k: string) => k?.startsWith("quo:msg:")).map((k: string) => k.slice(8));
   const quoCall = all.map((i) => i.key).filter((k: string) => k?.startsWith("quo:call:")).map((k: string) => k.slice(9));
 
-  const [tasks, reqs, escs, imports, notes, msgs, calls, scans, emails] = await Promise.all([
+  const hasSweep = all.some((i) => i.key === "sweep");
+  const [tasks, reqs, escs, imports, notes, msgs, calls, scans, emails, sweepRows] = await Promise.all([
     taskIds.length ? db.from("pm_tasks").select("id, status, due_date").in("id", taskIds) : { data: [] },
     reqIds.length ? db.from("portal_requests").select("id, status, portal_request_messages(sender_type, created_at)").in("id", reqIds) : { data: [] },
     escIds.length ? db.from("review_obligations").select("id, status").in("id", escIds) : { data: [] },
@@ -50,6 +51,7 @@ export async function refreshBriefing(db: any, userId: string, todayStr: string)
     quoCall.length ? db.from("quo_calls").select("id, read_at").in("id", quoCall) : { data: [] },
     db.from("stage2_verification_audit").select("id", { count: "exact", head: true }).eq("review_status", "pending"),
     gmailState(db, userId, emailIds),
+    hasSweep ? db.from("inbox_sweep_items").select("bucket, feedback, archived_at").eq("user_id", userId).gte("swept_at", new Date(Date.now() - 26 * 3_600_000).toISOString()).limit(500) : { data: null },
   ]);
 
   const state: OpenState = {
@@ -64,6 +66,7 @@ export async function refreshBriefing(db: any, userId: string, todayStr: string)
     escalations: new Map((escs.data ?? []).map((e: any) => [e.id, { status: e.status }])),
     imports: new Map((imports.data ?? []).map((i: any) => [i.id, { status: i.status }])),
     pendingScans: scans.count ?? 0,
+    sweepPending: sweepRows.data ? sweepPending(sweepRows.data) : undefined,
     notes: new Map((notes.data ?? []).map((n: any) => [n.id, { read: !!n.read }])),
   };
 
