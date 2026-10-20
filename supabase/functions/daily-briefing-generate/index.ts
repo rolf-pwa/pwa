@@ -12,7 +12,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getValidGoogleAccessToken } from "../_shared/google-token.ts";
-import { refreshBriefing } from "../_shared/briefing-refresh.ts";
+import { dismissBriefingItem, refreshBriefing } from "../_shared/briefing-refresh.ts";
 import { eaApply, eaChat, eaDecide, eaForget, eaHistory, eaNudge } from "../_shared/ea-handlers.ts";
 import { isMutedSender } from "../_shared/ea-agent.ts";
 import { sweepArchive, sweepFeedback, sweepForgetSender, sweepList, sweepMorning, sweepRun, sweepSetAuto, sweepUndoArchive } from "../_shared/inbox-sweep-handlers.ts";
@@ -654,6 +654,7 @@ Deno.serve(async (req) => {
       if (body.action === "ea_decide") return json(await eaDecide(db, userId, String(body.actionId ?? ""), body.decision === "done" ? "done" : "dismissed"));
       if (body.action === "ea_apply") return json(await eaApply(db, userId, String(body.actionId ?? "")));
       if (body.action === "ea_forget") return json(await eaForget(db, userId, String(body.prefId ?? "")));
+      if (body.action === "ea_dismiss") return json(await dismissBriefingItem(db, userId, todayStr, String((body as any).key ?? "").slice(0, 200)));
       if (body.action === "ea_sweep_run") return json({ ok: true, ...(await sweepRun(db, userId)) });
       if (body.action === "ea_sweep_list") return json(await sweepList(db, userId));
       if (body.action === "ea_sweep_feedback") {

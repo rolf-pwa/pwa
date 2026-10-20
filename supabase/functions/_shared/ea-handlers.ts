@@ -18,6 +18,7 @@ import { sweepArchive, sweepFeedback, sweepUndoArchive } from "./inbox-sweep-han
 import { BUCKET_LABEL, CORRECTABLE, sweepLine, type Bucket } from "./inbox-sweep.ts";
 import { appendNote, noteLine, validRecurrence } from "./georgia-tasks.ts";
 import { refreshBriefing } from "./briefing-refresh.ts";
+import { GMAIL_MODIFY_SCOPE, handledLabelId } from "./gmail-handled.ts";
 import { provisionClientFolderTree } from "./vault-provisioning.ts";
 
 const DAILY_MESSAGE_CAP = 200;
@@ -79,15 +80,6 @@ export async function eaDecide(db: any, userId: string, actionId: string, decisi
 export async function eaForget(db: any, userId: string, prefId: string) {
   await db.from("ea_preferences").update({ active: false }).eq("id", prefId).eq("staff_user_id", userId);
   return { ok: true };
-}
-
-const HANDLED_LABEL = "Georgia/Handled";
-/** The id of the Georgia/Handled Gmail label, made the first time it is needed. */
-async function handledLabelId(gm: (path: string, init?: RequestInit) => Promise<Response>): Promise<string | null> {
-  const list = await gm("labels");
-  if (list.ok) { const found = ((await list.json()).labels ?? []).find((l: any) => l.name === HANDLED_LABEL); if (found) return found.id; }
-  const made = await gm("labels", { method: "POST", body: JSON.stringify({ name: HANDLED_LABEL, labelListVisibility: "labelShow", messageListVisibility: "show" }) });
-  return made.ok ? (await made.json()).id ?? null : null;
 }
 
 async function briefingText(db: any, userId: string, date: string): Promise<string> {
@@ -364,7 +356,7 @@ export function buildEaTools(db: any, userId: string, date: string, sa: ServiceA
         const ids = [...new Set([...given, ...fromBriefing])].slice(0, 50);
         if (!ids.length) return { ok: true, message: "There are no emails like that to file. Give me message_ids, or say notices, people or both." };
         const { data: tok } = await db.from("google_tokens").select("scopes").eq("user_id", userId).maybeSingle();
-        if (!((tok?.scopes ?? []) as string[]).includes("https://www.googleapis.com/auth/gmail.modify")) return { ok: false, message: "I need your permission to change Gmail first. On the Ask Georgia page, press Allow archiving and approve it once." };
+        if (!((tok?.scopes ?? []) as string[]).includes(GMAIL_MODIFY_SCOPE)) return { ok: false, message: "I need your permission to change Gmail first. On the Ask Georgia page, press Allow archiving and approve it once." };
         const auth = { Authorization: `Bearer ${await google()}` };
         const gm = (path: string, init?: RequestInit) => fetch(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`, { ...init, headers: { ...auth, "Content-Type": "application/json" } });
         const labelId = await handledLabelId(gm);

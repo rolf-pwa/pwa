@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarClock, CircleAlert, Loader2, Mail, MessageSquare, RefreshCw, Sparkles, ShieldCheck, Inbox } from "lucide-react";
+import { CalendarClock, Check, CircleAlert, Loader2, Mail, MessageSquare, RefreshCw, Sparkles, ShieldCheck, Inbox } from "lucide-react";
 import { AppLayout } from "@/shared/components/AppLayout";
 import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
@@ -47,6 +47,14 @@ export default function Briefing() {
   }, [user]);
   useEffect(() => { void load(); }, [load]);
 
+  /** Rolf marks one item done by hand: it comes off today's briefing, whatever it was waiting on. */
+  const done = async (key: string | undefined) => {
+    if (!key) return;
+    try { await supabase.functions.invoke("daily-briefing-generate", { body: { action: "ea_dismiss", key } }); await load(); }
+    catch { toast.error("Couldn't mark it done"); }
+  };
+  const Done = ({ k }: { k: string | undefined }) => k ? <button type="button" aria-label="Mark done" title="Mark done" className="ml-2 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-border text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => void done(k)}><Check className="h-3 w-3" /></button> : null;
+
   const regenerate = async () => {
     setBusy(true);
     try {
@@ -88,7 +96,7 @@ export default function Briefing() {
                       <li key={i} className="flex gap-3 text-sm">
                         <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent/15 text-[11px] font-semibold text-accent">{i + 1}</span>
                         <div className="min-w-0">
-                          <SourceLink href={it.link}>{it.label}</SourceLink>
+                          <SourceLink href={it.link}>{it.label}</SourceLink><Done k={it.key} />
                           {it.reason && <span className="text-muted-foreground"> — {it.reason}</span>}
                           {it.next_step && <p className="text-xs text-foreground/80">Suggested: {it.next_step}</p>}
                         </div>
@@ -123,22 +131,22 @@ export default function Briefing() {
 
                 <Block title="To reply to" icon={Mail} count={s.replies.length}>
                   {s.replies.length === 0 && <Empty>No new mail from people in the last day.</Empty>}
-                  {s.replies.map((e, i) => <div key={i}><SourceLink href={e.link}>{e.subject}</SourceLink><p className="text-xs text-muted-foreground">{e.from}</p></div>)}
+                  {s.replies.map((e, i) => <div key={i}><SourceLink href={e.link}>{e.subject}</SourceLink><Done k={e.key} /><p className="text-xs text-muted-foreground">{e.from}</p></div>)}
                 </Block>
 
                 <Block title="iA and Adobe Sign" icon={Inbox} count={s.ia.length}>
                   {s.ia.length === 0 && <Empty>No notices in the last day.</Empty>}
-                  {s.ia.map((e, i) => <div key={i}><SourceLink href={e.link}>{e.subject}</SourceLink><p className="text-xs text-muted-foreground">{e.kind === "adobe_sign" ? "Adobe Sign" : "iA Financial"}</p></div>)}
+                  {s.ia.map((e, i) => <div key={i}><SourceLink href={e.link}>{e.subject}</SourceLink><Done k={e.key} /><p className="text-xs text-muted-foreground">{e.kind === "adobe_sign" ? "Adobe Sign" : "iA Financial"}</p></div>)}
                 </Block>
 
                 <Block title="Texts and voicemails" icon={MessageSquare} count={s.texts.length}>
                   {s.texts.length === 0 && <Empty>Nothing unread on the business line.</Empty>}
-                  {s.texts.map((t, i) => <div key={i}><SourceLink href={t.link}>{t.contact ?? "Unknown number"}</SourceLink><p className="text-xs text-muted-foreground">{t.label}</p></div>)}
+                  {s.texts.map((t, i) => <div key={i}><SourceLink href={t.link}>{t.contact ?? "Unknown number"}</SourceLink><Done k={t.key} /><p className="text-xs text-muted-foreground">{t.label}</p></div>)}
                 </Block>
 
                 <Block title="Georgia is waiting on you" icon={CircleAlert} count={s.firm.length}>
                   {s.firm.length === 0 && <Empty>Nothing is waiting on you.</Empty>}
-                  {s.firm.map((f, i) => <div key={i}><SourceLink href={f.link}>{f.label}</SourceLink></div>)}
+                  {s.firm.map((f, i) => <div key={i}><SourceLink href={f.link}>{f.label}</SourceLink><Done k={f.key} /></div>)}
                 </Block>
               </div>
             )}

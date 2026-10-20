@@ -309,7 +309,7 @@ describe("filing the emails she goes through in the meeting", () => {
   it("labels, reads and removes from the Inbox only; never deletes; leaves starred mail; needs the Gmail change permission", () => {
     expect(block).toContain('removeLabelIds: ["INBOX", "UNREAD"]');
     expect(block).toContain("STARRED");
-    expect(block).toContain("gmail.modify");
+    expect(block).toContain("GMAIL_MODIFY_SCOPE");
     expect(block).not.toMatch(/trash|delete\(|messages\/\$\{[a-z]+\}\/modify/);
   });
   it("gives her the email's link to put in the task", () => {
