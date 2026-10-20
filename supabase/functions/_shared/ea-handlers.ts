@@ -341,6 +341,21 @@ export function buildEaTools(db: any, userId: string, date: string, sa: ServiceA
         await record("email_searched", "done", `Looked for ${name}'s address in your email`, { found: people.length });
         return people.length ? { ok: true, message: people.length > 1 ? "More than one fits; ask Rolf which." : "Found.", data: people } : { ok: false, message: `I found no address for ${name} in the mail I can search.` };
       }
+      case "mark_emails_read": {
+        const which = String(a.which ?? "").toLowerCase();
+        const sub = str(a.subject_contains, 100).toLowerCase();
+        const { data: b } = await db.from("daily_briefings").select("sections").eq("staff_user_id", userId).eq("briefing_date", date).maybeSingle();
+        const sec: any = b?.sections ?? {};
+        const pool = [...(which === "people" || which === "both" ? sec.replies ?? [] : []), ...(which === "notices" || which === "both" ? sec.ia ?? [] : [])] as any[];
+        const picked = pool.filter((e) => e?.id && (!sub || String(e.subject ?? "").toLowerCase().includes(sub)));
+        if (!picked.length) return { ok: true, message: "There are no briefing emails like that to mark." };
+        const { data: tok } = await db.from("google_tokens").select("scopes").eq("user_id", userId).maybeSingle();
+        if (!((tok?.scopes ?? []) as string[]).includes("https://www.googleapis.com/auth/gmail.modify")) return { ok: false, message: "I need your permission to change Gmail first. On the Ask Georgia page, press Allow archiving and approve it once." };
+        const r = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/batchModify", { method: "POST", headers: { Authorization: `Bearer ${await google()}`, "Content-Type": "application/json" }, body: JSON.stringify({ ids: picked.map((e) => e.id), removeLabelIds: ["UNREAD"] }) });
+        if (!r.ok) return { ok: false, message: `I could not mark them read (${r.status}).` };
+        await record("emails_marked_read", "done", `Marked ${picked.length} email${picked.length === 1 ? "" : "s"} read after going through them`, { count: picked.length, which });
+        return { ok: true, message: `Marked ${picked.length} read.` };
+      }
       case "draft_email": {
         const subject = str(a.subject, 200), body = str(a.body, 6000); if (!subject || !body) return { ok: false, message: "An email needs a subject and a body." };
         const to = str(a.to, 200);

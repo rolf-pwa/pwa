@@ -296,3 +296,17 @@ describe("going through the inbox sweep in the morning meeting", () => {
     expect(block).not.toMatch(/gmail\.googleapis|modify|trash|delete\(/);
   });
 });
+
+describe("marking briefing emails read after the meeting covered them", () => {
+  const handlers = readFileSync("supabase/functions/_shared/ea-handlers.ts", "utf8");
+  const block = handlers.slice(handlers.indexOf('case "mark_emails_read"'), handlers.indexOf('case "draft_email"'));
+  it("is a tool, and the prompt says to use it only for what she covered", () => {
+    expect(TOOL_DECLARATIONS.map((t) => t.name)).toContain("mark_emails_read");
+    expect(SYSTEM_PROMPT).toMatch(/mark them read with mark_emails_read, only the ones you actually covered/);
+  });
+  it("only removes the UNREAD label from today's briefing emails, and needs the Gmail change permission", () => {
+    expect(block).toContain('removeLabelIds: ["UNREAD"]');
+    expect(block).toContain("gmail.modify");
+    expect(block).not.toMatch(/INBOX|trash|delete\(/);
+  });
+});
