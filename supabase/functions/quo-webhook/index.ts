@@ -167,14 +167,16 @@ async function findContactByPhone(admin: any, phone: string): Promise<string | n
 /** Callizy posts here with ?provider=callizy. Its texts and calls are stored in the same tables as Quo's, marked provider = callizy. */
 async function handleCallizy(req: Request, rawBody: string): Promise<Response> {
   const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-  const valid = await verifyCallizySignature(rawBody, req.headers.get("x-callizy-signature"), Deno.env.get("CALLIZY_WEBHOOK_SIGNING_SECRET"));
+  // The signing secret is not shown anywhere in Callizy's dashboard (support asked), so the API secret is tried as the signing key too.
+  const signingKeys = [Deno.env.get("CALLIZY_WEBHOOK_SIGNING_SECRET"), Deno.env.get("CALLIZY_API_SECRET")].filter(Boolean).join(",");
+  const valid = await verifyCallizySignature(rawBody, req.headers.get("x-callizy-signature"), signingKeys);
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   let payload: any = {};
   try { payload = JSON.parse(rawBody); } catch { payload = { raw: rawBody }; }
   const event: string = payload?.event || "unknown";
   const { data: logRow } = await admin.from("quo_webhook_events").insert({ event_type: `callizy:${event}`, quo_event_id: payload?.data?.sms_id || payload?.data?.call_id || null, payload, signature_valid: valid, processed: false }).select("id").single();
   if (!valid) {
-    if (logRow?.id) await admin.from("quo_webhook_events").update({ processing_error: signatureDiagnosis(req.headers, Deno.env.get("CALLIZY_WEBHOOK_SIGNING_SECRET")) }).eq("id", logRow.id);
+    if (logRow?.id) await admin.from("quo_webhook_events").update({ processing_error: signatureDiagnosis(req.headers, signingKeys) }).eq("id", logRow.id);
     return json({ error: "Invalid signature" }, 401);
   }
 
