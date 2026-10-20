@@ -20,13 +20,24 @@ const hex = (buf: ArrayBuffer) => [...new Uint8Array(buf)].map((b) => b.toString
 export async function verifyCallizySignature(rawBody: string, header: string | null, secret: string | undefined): Promise<boolean> {
   if (!header || !secret) return false;
   const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const expected = hex(await crypto.subtle.sign("HMAC", key, enc.encode(rawBody)));
   const given = header.trim().toLowerCase().replace(/^sha256=/, "");
-  if (given.length !== expected.length) return false;
-  let diff = 0;
-  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ given.charCodeAt(i);
-  return diff === 0;
+  // More than one webhook can be registered, each with its own signing secret: the setting may hold several, separated by commas.
+  for (const one of secret.split(",").map((x) => x.trim()).filter(Boolean)) {
+    const key = await crypto.subtle.importKey("raw", enc.encode(one), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    const expected = hex(await crypto.subtle.sign("HMAC", key, enc.encode(rawBody)));
+    if (given.length !== expected.length) continue;
+    let diff = 0;
+    for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ given.charCodeAt(i);
+    if (diff === 0) return true;
+  }
+  return false;
+}
+
+/** Why a signature failed, without revealing anything secret: which signature-like headers came, how long, and whether a secret is set. */
+export function signatureDiagnosis(headers: Headers, secret: string | undefined): string {
+  const sig = [...headers.entries()].filter(([k]) => /sig|hmac|callizy|webhook/i.test(k)).map(([k, v]) => `${k}(len ${v.length}${/^sha256=/i.test(v) ? ", sha256= prefix" : ""})`);
+  const parts = (secret ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+  return `bad signature; headers: ${sig.join(", ") || "none"}; secrets set: ${parts.length}${parts.length ? ` (lengths ${parts.map((x) => x.length).join("/")})` : ""}`;
 }
 
 const first = (...vals: unknown[]): string => { for (const v of vals) if (v !== undefined && v !== null && String(v) !== "") return String(v); return ""; };

@@ -39,3 +39,12 @@ describe("reading Callizy events", () => {
     expect(voicemailFromEvent({ voicemail_id: "vml_1", from_number: "+14385551234", transcription: "call me", audio_url: "https://x/a.mp3", duration: 12 })).toMatchObject({ id: "vml_1", transcript: "call me", url: "https://x/a.mp3", duration: 12 });
   });
 });
+
+describe("more than one signing secret", () => {
+  it("accepts a signature made with any secret in a comma-separated list", async () => {
+    const body = "{\"event\":\"sms.sent\"}";
+    const sig = await hmac(body, "second");
+    expect(await verifyCallizySignature(body, sig, "first, second")).toBe(true);
+    expect(await verifyCallizySignature(body, sig, "first,third")).toBe(false);
+  });
+});
