@@ -296,3 +296,23 @@ describe("going through the inbox sweep in the morning meeting", () => {
     expect(block).not.toMatch(/gmail\.googleapis|modify|trash|delete\(/);
   });
 });
+
+describe("filing the emails she goes through in the meeting", () => {
+  const handlers = readFileSync("supabase/functions/_shared/ea-handlers.ts", "utf8");
+  const block = handlers.slice(handlers.indexOf('case "file_emails"'), handlers.indexOf('case "draft_email"'));
+  it("has file and undo tools, and the prompt says to make the task first when action is needed", () => {
+    const names = TOOL_DECLARATIONS.map((t) => t.name);
+    expect(names).toEqual(expect.arrayContaining(["file_emails", "unfile_emails"]));
+    expect(SYSTEM_PROMPT).toMatch(/make the task first \(create_task with a due date/);
+    expect(SYSTEM_PROMPT).toMatch(/never delete anything/);
+  });
+  it("labels, reads and removes from the Inbox only; never deletes; leaves starred mail; needs the Gmail change permission", () => {
+    expect(block).toContain('removeLabelIds: ["INBOX", "UNREAD"]');
+    expect(block).toContain("STARRED");
+    expect(block).toContain("gmail.modify");
+    expect(block).not.toMatch(/trash|delete\(|messages\/\$\{[a-z]+\}\/modify/);
+  });
+  it("gives her the email's link to put in the task", () => {
+    expect(handlers).toContain("https://mail.google.com/mail/u/0/#all/");
+  });
+});
