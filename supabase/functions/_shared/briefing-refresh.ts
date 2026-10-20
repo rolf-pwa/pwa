@@ -5,6 +5,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { applyOpen, pendingSorts, type OpenState } from "./briefing-open.ts";
 import { getValidGoogleAccessToken } from "./google-token.ts";
+import { GMAIL_MODIFY_SCOPE, findHandledLabelId, gmailFor, handledLabelId, stillInInbox } from "./gmail-handled.ts";
 
 const keysOf = (items: { key?: string }[], prefix: string) => items.map((i) => i.key).filter((k): k is string => !!k && k.startsWith(prefix)).map((k) => k.split(":").slice(-1)[0]);
 
@@ -12,6 +13,7 @@ async function gmailState(db: any, userId: string, ids: string[]): Promise<OpenS
   if (!ids.length) return new Map();
   try {
     const token = await getValidGoogleAccessToken(db, userId);
+    const handledId = await findHandledLabelId(gmailFor(token));
     const out = new Map<string, { inInbox: boolean; lastFromMe: boolean }>();
     await Promise.all(ids.slice(0, 40).map(async (id) => {
       const m = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=minimal`, { headers: { Authorization: `Bearer ${token}` } });
@@ -21,7 +23,7 @@ async function gmailState(db: any, userId: string, ids: string[]): Promise<OpenS
       const t = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/threads/${msg.threadId}?format=minimal`, { headers: { Authorization: `Bearer ${token}` } });
       const thread = t.ok ? await t.json() : null;
       const last = (thread?.messages ?? []).slice(-1)[0];
-      out.set(id, { inInbox: (msg.labelIds ?? []).includes("INBOX"), lastFromMe: (last?.labelIds ?? []).includes("SENT") });
+      out.set(id, { inInbox: stillInInbox(msg.labelIds, handledId), lastFromMe: (last?.labelIds ?? []).includes("SENT") });
     }));
     return out;
   } catch {
@@ -34,11 +36,12 @@ async function sweepStillInInbox(db: any, userId: string, rows: { message_id: st
   if (!rows.length) return 0;
   try {
     const token = await getValidGoogleAccessToken(db, userId);
+    const handledId = await findHandledLabelId(gmailFor(token));
     const left = await Promise.all(rows.slice(0, 60).map(async (r) => {
       const m = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${r.message_id}?format=minimal`, { headers: { Authorization: `Bearer ${token}` } });
       if (m.status === 404) return false;
       if (!m.ok) throw new Error(`Gmail ${m.status}`);
-      return ((await m.json()).labelIds ?? []).includes("INBOX");
+      return stillInInbox((await m.json()).labelIds, handledId);
     }));
     return left.filter(Boolean).length + Math.max(0, rows.length - 60);
   } catch {
@@ -53,7 +56,20 @@ export async function dismissBriefingItem(db: any, userId: string, todayStr: str
   const s: any = b.sections ?? {};
   const dismissed = [...new Set([...(s.dismissed ?? []), key])].slice(-200);
   await db.from("daily_briefings").update({ sections: { ...s, dismissed } }).eq("staff_user_id", userId).eq("briefing_date", todayStr);
-  return { ok: true, ...(await refreshBriefing(db, userId, todayStr)) };
+  // An email is filed the way Georgia files it (labelled, read, out of the Inbox) so Gmail and the briefing agree; without the permission it just comes off today's briefing.
+  let filed = false;
+  const emailId = key.startsWith("email:") ? key.slice(6).replace(/[^A-Za-z0-9]/g, "") : "";
+  if (emailId) {
+    try {
+      const { data: tok } = await db.from("google_tokens").select("scopes").eq("user_id", userId).maybeSingle();
+      if (((tok?.scopes ?? []) as string[]).includes(GMAIL_MODIFY_SCOPE)) {
+        const gm = gmailFor(await getValidGoogleAccessToken(db, userId));
+        const labelId = await handledLabelId(gm);
+        if (labelId) filed = (await gm("messages/batchModify", { method: "POST", body: JSON.stringify({ ids: [emailId], addLabelIds: [labelId], removeLabelIds: ["INBOX", "UNREAD"] }) })).ok;
+      }
+    } catch { /* it still comes off the briefing */ }
+  }
+  return { ok: true, filed, ...(await refreshBriefing(db, userId, todayStr)) };
 }
 
 export async function refreshBriefing(db: any, userId: string, todayStr: string) {

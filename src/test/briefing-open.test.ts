@@ -79,3 +79,15 @@ describe("the Done button on the briefing", () => {
     expect(readFileSync("supabase/functions/daily-briefing-generate/index.ts", "utf8")).toContain('"ea_dismiss"');
   });
 });
+
+describe("the Georgia/Handled label", async () => {
+  const { stillInInbox, GMAIL_MODIFY_SCOPE } = await import("../../supabase/functions/_shared/gmail-handled");
+  it("takes an email off the briefing whether it was labelled by hand or filed out of the Inbox", () => {
+    expect(stillInInbox(["INBOX", "UNREAD"], "Label_52")).toBe(true);
+    expect(stillInInbox(["INBOX", "Label_52"], "Label_52")).toBe(false); // labelled by hand, still in the Inbox
+    expect(stillInInbox(["Label_52"], "Label_52")).toBe(false); // filed
+    expect(stillInInbox(["INBOX"], null)).toBe(true); // no label yet
+    expect(stillInInbox(undefined, null)).toBe(false);
+  });
+  it("needs the Gmail change permission", () => expect(GMAIL_MODIFY_SCOPE).toContain("gmail.modify"));
+});
