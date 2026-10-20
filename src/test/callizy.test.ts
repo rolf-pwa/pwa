@@ -48,3 +48,17 @@ describe("more than one signing secret", () => {
     expect(await verifyCallizySignature(body, sig, "first,third")).toBe(false);
   });
 });
+
+describe("choosing the line a text goes out from", () => {
+  it("takes the first company line the API can use, from Callizy's /numbers/ answer", async () => {
+    const { pickFromLine } = await import("../../supabase/functions/_shared/callizy");
+    const answer = { results: [
+      { phone_e164: "+14385550001", kind: "ai_agent", api_usable: false, label: "", is_toll_free: false },
+      { phone_e164: "+14385550002", kind: "company", api_usable: false, label: "", is_toll_free: false },
+      { phone_e164: "+14385550003", kind: "company", api_usable: true, label: "Main", is_toll_free: false },
+    ] };
+    expect(pickFromLine(answer)).toBe("+14385550003");
+    expect(pickFromLine({ results: [{ phone_e164: "+14385550002", kind: "company", api_usable: false }] })).toBeNull();
+    expect(pickFromLine({ results: [] })).toBeNull();
+  });
+});

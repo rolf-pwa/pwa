@@ -98,12 +98,17 @@ export async function callizyFromNumber(): Promise<string> {
   if (!c) throw new Error("Callizy is not set up (CALLIZY_API_KEY / CALLIZY_API_SECRET)");
   const r = await fetch(`${API}/numbers/`, { headers: { "X-API-Key": c.key, "X-API-Secret": c.secret } });
   if (!r.ok) throw new Error(`Callizy numbers ${r.status}`);
-  const j = await r.json();
-  const list: any[] = Array.isArray(j) ? j : j.results ?? [];
-  const usable = list.find((n) => n.api_usable !== false && (n.kind === undefined || n.kind === "company")) ?? list[0];
-  const num = first(usable?.e164, usable?.number, usable?.phone, usable?.phone_number);
-  if (!num) throw new Error("Callizy has no line this key may send from");
-  return e164(num);
+  const picked = pickFromLine(await r.json());
+  if (!picked) throw new Error("Callizy has no line this key may send from");
+  return picked;
+}
+
+/** The company line a text can go out from, from the /numbers/ answer ({ results: [{ phone_e164, kind, api_usable }] }). Null when there is none. */
+export function pickFromLine(answer: any): string | null {
+  const list: any[] = Array.isArray(answer) ? answer : answer?.results ?? [];
+  const line = list.find((n) => n?.kind === "company" && n?.api_usable === true);
+  const num = first(line?.phone_e164, line?.e164, line?.number);
+  return num ? e164(num) : null;
 }
 
 /** Sends one text through Callizy. Returns the id Callizy gives it and the number it was sent from. */
