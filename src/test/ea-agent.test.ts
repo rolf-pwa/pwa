@@ -297,16 +297,22 @@ describe("going through the inbox sweep in the morning meeting", () => {
   });
 });
 
-describe("marking briefing emails read after the meeting covered them", () => {
+describe("filing the emails she goes through in the meeting", () => {
   const handlers = readFileSync("supabase/functions/_shared/ea-handlers.ts", "utf8");
-  const block = handlers.slice(handlers.indexOf('case "mark_emails_read"'), handlers.indexOf('case "draft_email"'));
-  it("is a tool, and the prompt says to use it only for what she covered", () => {
-    expect(TOOL_DECLARATIONS.map((t) => t.name)).toContain("mark_emails_read");
-    expect(SYSTEM_PROMPT).toMatch(/mark them read with mark_emails_read, only the ones you actually covered/);
+  const block = handlers.slice(handlers.indexOf('case "file_emails"'), handlers.indexOf('case "draft_email"'));
+  it("has file and undo tools, and the prompt says to make the task first when action is needed", () => {
+    const names = TOOL_DECLARATIONS.map((t) => t.name);
+    expect(names).toEqual(expect.arrayContaining(["file_emails", "unfile_emails"]));
+    expect(SYSTEM_PROMPT).toMatch(/make the task first \(create_task with a due date/);
+    expect(SYSTEM_PROMPT).toMatch(/never delete anything/);
   });
-  it("only removes the UNREAD label from today's briefing emails, and needs the Gmail change permission", () => {
-    expect(block).toContain('removeLabelIds: ["UNREAD"]');
+  it("labels, reads and removes from the Inbox only; never deletes; leaves starred mail; needs the Gmail change permission", () => {
+    expect(block).toContain('removeLabelIds: ["INBOX", "UNREAD"]');
+    expect(block).toContain("STARRED");
     expect(block).toContain("gmail.modify");
-    expect(block).not.toMatch(/INBOX|trash|delete\(/);
+    expect(block).not.toMatch(/trash|delete\(|messages\/\$\{[a-z]+\}\/modify/);
+  });
+  it("gives her the email's link to put in the task", () => {
+    expect(handlers).toContain("https://mail.google.com/mail/u/0/#all/");
   });
 });
