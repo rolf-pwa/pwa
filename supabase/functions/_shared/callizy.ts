@@ -111,16 +111,24 @@ export function pickFromLine(answer: any): string | null {
   return num ? e164(num) : null;
 }
 
+/** A readable reason for a failed Callizy call: their error if they gave one, never a raw HTML error page. */
+export function callizyErrorText(status: number, body: string, parsed: any): string {
+  if (parsed?.error) return `Callizy ${status}: ${parsed.error}${parsed.how_to_fix ? ` ${parsed.how_to_fix}` : ""}${parsed.code ? ` (${parsed.code})` : ""}`;
+  if (/^\s*</.test(body)) return `Callizy had a server error (${status}). Try again, and tell Callizy support if it keeps happening.`;
+  return `Callizy ${status}: ${body.slice(0, 200)}`;
+}
+
 /** Sends one text through Callizy. Returns the id Callizy gives it and the number it was sent from. */
 export async function callizySend(to: string, message: string): Promise<{ id: string; from: string }> {
   const c = callizyCreds();
   if (!c) throw new Error("Callizy is not set up (CALLIZY_API_KEY / CALLIZY_API_SECRET)");
   const from = await callizyFromNumber();
+  if (e164(to) === from) throw new Error(`That is the same number as your Callizy line (${from}): a number cannot text itself. Send to a different phone.`);
   const r = await fetch(`${API}/sms/`, { method: "POST", headers: { "X-API-Key": c.key, "X-API-Secret": c.secret, "Content-Type": "application/json" }, body: JSON.stringify({ toE164: e164(to), message, fromE164: from }) });
   const text = await r.text();
   let j: any = {};
   try { j = text ? JSON.parse(text) : {}; } catch { /* leave empty */ }
-  if (!r.ok) throw new Error(`Callizy ${r.status}: ${j.error ?? text.slice(0, 200)}${j.code ? ` (${j.code})` : ""}`);
+  if (!r.ok) throw new Error(callizyErrorText(r.status, text, j));
   return { id: first(j.id), from };
 }
 
