@@ -62,3 +62,13 @@ describe("choosing the line a text goes out from", () => {
     expect(pickFromLine({ results: [] })).toBeNull();
   });
 });
+
+describe("Callizy error messages", () => {
+  it("shows their reason, or a plain sentence instead of an HTML error page", async () => {
+    const { callizyErrorText } = await import("../../supabase/functions/_shared/callizy");
+    expect(callizyErrorText(400, "{}", { error: "Opted out", code: "OPTED_OUT" })).toBe("Callizy 400: Opted out (OPTED_OUT)");
+    expect(callizyErrorText(500, "<!doctype html><title>Server Error (500)</title>", {})).toMatch(/server error \(500\)/i);
+    expect(callizyErrorText(500, "<!doctype html>", {})).not.toContain("<");
+    expect(callizyErrorText(429, "slow down", {})).toBe("Callizy 429: slow down");
+  });
+});
