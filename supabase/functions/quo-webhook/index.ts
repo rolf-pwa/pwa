@@ -165,9 +165,8 @@ async function findContactByPhone(admin: any, phone: string): Promise<string | n
 }
 
 /** Callizy posts here with ?provider=callizy. Its texts and calls are stored in the same tables as Quo's, marked provider = callizy. */
-async function handleCallizy(req: Request): Promise<Response> {
+async function handleCallizy(req: Request, rawBody: string): Promise<Response> {
   const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-  const rawBody = await req.text();
   const valid = await verifyCallizySignature(rawBody, req.headers.get("x-callizy-signature"), Deno.env.get("CALLIZY_WEBHOOK_SIGNING_SECRET"));
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   let payload: any = {};
@@ -231,9 +230,12 @@ serve(async (req) => {
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405, headers: corsHeaders });
   }
-  if (new URL(req.url).searchParams.get("provider") === "callizy") return await handleCallizy(req);
 
   const rawBody = await req.text();
+  // Callizy is told by the ?provider=callizy on its webhook address, its own signature header, or its body shape (an "event" and no Quo "type").
+  const looksCallizy = new URL(req.url).searchParams.get("provider") === "callizy" || req.headers.has("x-callizy-signature") ||
+    (() => { try { const j = JSON.parse(rawBody); return typeof j?.event === "string" && j?.type === undefined; } catch { return false; } })();
+  if (looksCallizy) return await handleCallizy(req, rawBody);
   const sigHeader =
     req.headers.get("openphone-signature") ||
     req.headers.get("x-openphone-signature") ||
