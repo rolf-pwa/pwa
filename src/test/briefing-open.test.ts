@@ -91,3 +91,12 @@ describe("the Georgia/Handled label", async () => {
   });
   it("needs the Gmail change permission", () => expect(GMAIL_MODIFY_SCOPE).toContain("gmail.modify"));
 });
+
+describe("regenerating the briefing", () => {
+  it("keeps the items Rolf marked done and cleans out what is already handled before showing it", async () => {
+    const { readFileSync } = await import("node:fs");
+    const gen = readFileSync("supabase/functions/daily-briefing-generate/index.ts", "utf8");
+    expect(gen).toContain("sections.dismissed = earlier.sections.dismissed");
+    expect(gen).toMatch(/generated_at: new Date\(\)\.toISOString\(\),[\s\S]*?await refreshBriefing\(db, userId, todayStr\)/);
+  });
+});
