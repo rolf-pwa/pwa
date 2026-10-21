@@ -15,6 +15,7 @@ import { getValidGoogleAccessToken } from "../_shared/google-token.ts";
 import { dismissBriefingItem, refreshBriefing } from "../_shared/briefing-refresh.ts";
 import { eaApply, eaChat, eaDecide, eaForget, eaHistory, eaNudge } from "../_shared/ea-handlers.ts";
 import { isMutedSender } from "../_shared/ea-agent.ts";
+import { addRule, decideSuggestion, rulebook, suggestRules, undoAction } from "../_shared/georgia-rules.ts";
 import { runNoticeProcessor } from "../_shared/notice-service.ts";
 import { sweepArchive, sweepFeedback, sweepForgetSender, sweepList, sweepMorning, sweepRun, sweepSetAuto, sweepUndoArchive } from "../_shared/inbox-sweep-handlers.ts";
 import { sweepLine } from "../_shared/inbox-sweep.ts";
@@ -630,6 +631,12 @@ Deno.serve(async (req) => {
       EdgeRuntime.waitUntil(runNoticeProcessor(db).then((r) => r.length && console.log("[notice-processor]", r.join("; "))).catch((e: unknown) => console.error("[notice-processor]", e)));
       return json({ started: true });
     }
+    // Sundays: look for answers Rolf has given the same way more than once, and suggest them as standing rules.
+    if (cronBody.job === "rule_suggestions") {
+      // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+      EdgeRuntime.waitUntil((async () => { const { resolveUserIdByEmail, ADMIN_INBOX_EMAIL } = await import("../_shared/google-token.ts"); const n = await suggestRules(db, await resolveUserIdByEmail(db, ADMIN_INBOX_EMAIL)); console.log("[rule-suggestions]", n); })().catch((e: unknown) => console.error("[rule-suggestions]", e)));
+      return json({ started: true });
+    }
     if (cronBody.job === "georgia_tasks") {
       // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
       EdgeRuntime.waitUntil(runGeorgiaTasks(db).catch((e: unknown) => console.error("[georgia-tasks]", e)));
@@ -666,6 +673,11 @@ Deno.serve(async (req) => {
       if (body.action === "ea_decide") return json(await eaDecide(db, userId, String(body.actionId ?? ""), body.decision === "done" ? "done" : "dismissed"));
       if (body.action === "ea_apply") return json(await eaApply(db, userId, String(body.actionId ?? "")));
       if (body.action === "ea_forget") return json(await eaForget(db, userId, String(body.prefId ?? "")));
+      if (body.action === "ea_rules") return json({ ok: true, ...(await rulebook(db, userId)) });
+      if (body.action === "ea_rule_add") { const r = await addRule(db, userId, (body as any).value, (body as any).area); return json(r, "error" in r ? 400 : 200); }
+      if (body.action === "ea_suggestion") { const r = await decideSuggestion(db, userId, String((body as any).id ?? ""), (body as any).decision === "accept" ? "accept" : "dismiss"); return json(r, "error" in r ? 400 : 200); }
+      if (body.action === "ea_undo") { const r = await undoAction(db, userId, String((body as any).actionId ?? "")); return json(r, "error" in r ? 400 : 200); }
+      if (body.action === "ea_rules_scan") return json({ ok: true, added: await suggestRules(db, userId) });
       if (body.action === "ea_dismiss") return json(await dismissBriefingItem(db, userId, todayStr, String((body as any).key ?? "").slice(0, 200)));
       if (body.action === "ea_sweep_run") return json({ ok: true, ...(await sweepRun(db, userId)) });
       if (body.action === "ea_sweep_list") return json(await sweepList(db, userId));

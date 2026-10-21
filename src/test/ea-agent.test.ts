@@ -280,7 +280,8 @@ describe("going through the inbox sweep in the morning meeting", () => {
     expect(SYSTEM_PROMPT).toMatch(/a handful at a time/);
     expect(SYSTEM_PROMPT).toMatch(/never rate a sort on your own/);
     expect(SYSTEM_PROMPT).toMatch(/told you to walk him through the sweep every morning/);
-    expect(handlers).toContain("one line on the inbox sweep");
+    expect(handlers).toContain("the inbox sorts if there are any waiting");
+    expect(handlers).toContain("Run it by exception");
   });
   it("shows the morning's sweep, and how many are unrated, in her context", () => {
     const c = buildContextBlock({ nowLabel: "Tuesday", briefing: "", tasks: [], preferences: [], sweep: "Inbox sweep: 4 need you, 6 FYI. Review the sorts. 7 not yet rated." });
