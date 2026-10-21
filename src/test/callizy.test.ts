@@ -88,3 +88,12 @@ describe("Callizy softphone calls and recording links", () => {
     expect(firstUrl(null)).toBeNull();
   });
 });
+
+describe("photos in Callizy texts", () => {
+  it("keeps the attachment links and drops anything that is not a web address", async () => {
+    const { smsFromEvent: sms } = await import("../../supabase/functions/_shared/callizy");
+    const m = sms("sms.received", { sms_id: "sms_9", from_number: "+14385551234", to_number: "+17787215084", message: "", has_media: true, media_urls: ["https://api.callizy.ca/m/1.jpg", "not a link", 5] });
+    expect(m.media).toEqual(["https://api.callizy.ca/m/1.jpg"]);
+    expect(sms("sms.received", { sms_id: "sms_10", message: "hi" }).media).toEqual([]);
+  });
+});

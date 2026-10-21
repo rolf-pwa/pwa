@@ -86,6 +86,7 @@ interface QuoMessage {
   from_number: string | null;
   to_number: string | null;
   read_at: string | null;
+  media_urls?: string[] | null;
 }
 
 interface QuoCall {
@@ -644,6 +645,7 @@ function ThreadCard({
                   onTogglePortal={() => onToggle("message", entry.item.id, entry.item.portal_visible)}
                   body={entry.item.body}
                   piiBlocked={entry.item.pii_blocked}
+                  media={entry.item.media_urls}
                 />
               ) : (
                 <ChatBubble
@@ -680,7 +682,7 @@ function ThreadCard({
 }
 
 function ChatBubble({
-  kind, isOut, occurredAt, isUnread, portalVisible, onTogglePortal, body, piiBlocked, call,
+  kind, isOut, occurredAt, isUnread, portalVisible, onTogglePortal, body, piiBlocked, call, media,
 }: {
   kind: "msg" | "call";
   isOut: boolean;
@@ -691,6 +693,7 @@ function ChatBubble({
   body?: string;
   piiBlocked?: boolean;
   call?: QuoCall;
+  media?: string[] | null;
 }) {
   const align = isOut ? "justify-end" : "justify-start";
   const bubble = isOut
@@ -706,7 +709,12 @@ function ChatBubble({
           {piiBlocked && <Badge variant="destructive" className="text-[10px]">BLOCKED</Badge>}
         </div>
         {kind === "msg" ? (
-          <p className="whitespace-pre-wrap">{body}</p>
+          <>
+            <p className="whitespace-pre-wrap">{body}</p>
+            {(media ?? []).map((u, i) => (
+              <a key={i} href={u} target="_blank" rel="noopener noreferrer" className="block text-xs text-amber-500 hover:underline">📎 Attachment {(media ?? []).length > 1 ? i + 1 : ""}</a>
+            ))}
+          </>
         ) : call ? (
           <div className="space-y-1">
             <p className="font-medium flex items-center gap-1.5">

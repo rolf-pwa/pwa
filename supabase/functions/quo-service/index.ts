@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkOutboundPii, piiBlockMessage } from "../_shared/pii-shield.ts";
-import { callizyGet, callizySend, currentProvider, firstUrl } from "../_shared/callizy.ts";
+import { callizyGet, callizySend, callizyUpsertContact, currentProvider, firstUrl } from "../_shared/callizy.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -451,6 +451,15 @@ serve(async (req) => {
         return new Response(JSON.stringify({ error: "Contact has no phone" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
+      }
+
+      // With Callizy as the provider, the person is put in Callizy's address book instead (by phone number).
+      if ((await currentProvider(adminClient)) === "callizy") {
+        const callizyId = await callizyUpsertContact({ phone: contact.phone, firstName: contact.first_name, lastName: contact.last_name });
+        if (callizyId) {
+          await adminClient.from("quo_contact_sync").upsert({ contact_id: contactId, quo_contact_id: callizyId, last_synced_at: new Date().toISOString(), sync_direction: "bidirectional" }, { onConflict: "contact_id" });
+        }
+        return new Response(JSON.stringify({ success: true, quoContactId: callizyId }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
       const payload = {
