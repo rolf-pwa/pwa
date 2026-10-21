@@ -24,6 +24,32 @@ import {
 } from "@/shared/components/ui/alert-dialog";
 import { toast } from "sonner";
 
+/** For a Callizy call: its transcript, summary and a fresh recording link are fetched when asked for (the links last an hour). */
+function CallizyCallExtras({ call }: { call: { id: string; is_voicemail?: boolean; transcript?: string | null } }) {
+  const [busy, setBusy] = useState(false);
+  const [audio, setAudio] = useState<string | null>(null);
+  const [text, setText] = useState<string | null>(call.transcript ?? null);
+  const [note, setNote] = useState<string | null>(null);
+  const open = async () => {
+    setBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("quo-service", { body: { action: "callizyCall", callId: call.id } });
+      if (error) throw error;
+      setAudio(data?.audio ?? null);
+      setText(data?.transcript || null);
+      setNote(!data?.audio && !data?.transcript ? "Nothing is available yet. Callizy may still be processing this call." : null);
+    } catch { toast.error("Couldn't load the call from Callizy"); } finally { setBusy(false); }
+  };
+  return (
+    <div className="mt-1 space-y-1">
+      <button type="button" onClick={() => void open()} disabled={busy} className="text-xs text-amber-500 hover:underline">{busy ? "Loading…" : call.is_voicemail ? "▶ Play voicemail" : "▶ Recording and transcript"}</button>
+      {audio && <audio controls autoPlay src={audio} className="w-full h-8" />}
+      {text && <details className="text-xs"><summary className="cursor-pointer text-muted-foreground">View transcript</summary><pre className="whitespace-pre-wrap mt-1 max-h-60 overflow-y-auto">{text}</pre></details>}
+      {note && <p className="text-xs text-muted-foreground">{note}</p>}
+    </div>
+  );
+}
+
 /** Which phone provider texts are sent through from the CRM: Quo, or the Callizy trial. Incoming texts and calls from both land in this inbox. */
 function ProviderSwitch() {
   const [provider, setProvider] = useState<"quo" | "callizy" | null>(null);
@@ -77,6 +103,7 @@ interface QuoCall {
   read_at: string | null;
   is_voicemail?: boolean;
   voicemail_url?: string | null;
+  provider?: string;
 }
 
 interface ContactLite {
@@ -707,6 +734,7 @@ function ChatBubble({
                 ▶ Listen to recording
               </a>
             )}
+            {call.provider === "callizy" && <CallizyCallExtras call={call} />}
           </div>
         ) : null}
         <div className="flex items-center gap-1 mt-1.5 -mb-1 text-[10px] text-muted-foreground">
