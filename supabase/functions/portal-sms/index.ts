@@ -5,6 +5,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkOutboundPii, piiBlockMessage } from "../_shared/pii-shield.ts";
+import { callizyFromNumber, currentProvider } from "../_shared/callizy.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -42,6 +43,12 @@ async function quoFetch(path: string, init: RequestInit = {}) {
   try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
   if (!res.ok) throw new Error(`Quo API ${res.status}: ${JSON.stringify(data)}`);
   return data;
+}
+
+/** The line a client's portal message is recorded as sent to: the advisor line of whichever provider the CRM uses. */
+async function advisorLine(admin: any): Promise<string> {
+  try { if ((await currentProvider(admin)) === "callizy") return await callizyFromNumber(); } catch { /* fall back to Quo's line */ }
+  return QUO_PHONE_NUMBER_ID;
 }
 
 function normalizePhone(phone: string): string {
@@ -189,7 +196,7 @@ serve(async (req) => {
           contact_id: contact.id,
           direction: "inbound",
           from_number: normalizePhone(contact.phone),
-          to_number: QUO_PHONE_NUMBER_ID,
+          to_number: await advisorLine(admin),
           body: content,
           status: "received",
           portal_visible: true,

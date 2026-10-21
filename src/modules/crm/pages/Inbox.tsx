@@ -4,6 +4,7 @@ import { AppLayout } from "@/shared/components/AppLayout";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { withAuthRaceRetry } from "@/shared/lib/authRaceRetry";
+import { setDialProvider } from "@/shared/lib/quo-dial";
 import { Card } from "@/shared/components/ui/card";
 import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
@@ -61,6 +62,7 @@ function ProviderSwitch() {
     const prev = provider;
     setProvider(next);
     const { error } = await supabase.functions.invoke("quo-service", { body: { action: "setProvider", provider: next } });
+    if (!error) setDialProvider(next);
     if (error) { setProvider(prev); toast.error("Couldn't switch the texting provider"); } else toast.success(next === "callizy" ? "Texts from the CRM now go out through Callizy" : "Texts from the CRM now go out through Quo");
   };
   return (
