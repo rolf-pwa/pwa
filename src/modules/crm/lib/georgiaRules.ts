@@ -30,6 +30,7 @@ export const scanForRules = () => call<{ ok: true; added: number }>("ea_rules_sc
 export const BUILT_IN_RULES: { area: string; text: string }[] = [
   { area: "Notices", text: "iA and Adobe Sign notices are handled every 30 minutes. She comments on the client's matching task (the client sees it if the task is shared), closes it only when the notice clearly completes the work, and never closes money tasks, repeating tasks or tasks with open subtasks. Anything uncertain or reporting a problem is left for you." },
   { area: "Texts", text: "When you are in a meeting, away, after hours or on a weekend, she answers a client's text once as Georgia, your assistant. She gives no account details, alerts you in the app for urgent matters, and holds off for two hours after you reply yourself." },
+  { area: "Calendar", text: "Webinars and training invitations that fit (under three hours, within two months, no clash, from an organizer you do not know) are accepted for you every 30 minutes. She never declines on her own: everything else, including clashes and invitations from clients or professionals, is left for you and listed in the meeting." },
   { area: "Email", text: "Mail she handles or goes through with you is marked read, labelled Georgia/Handled and taken out of the Inbox. Nothing is deleted. Starred mail is left alone." },
   { area: "Always", text: "She never sends email, never moves money, never deletes, and never contacts a client outside the portal and the text rule above." },
 ];

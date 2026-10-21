@@ -1,7 +1,7 @@
 // georgia-rules-core.ts: the pure parts of Georgia's rulebook (no network, no Deno), so they can be tested.
 
 /** What she does without being asked, so it can be listed and reviewed. */
-export const AUTONOMOUS_KINDS = ["notice_handled", "notice_flagged", "text_replied", "text_flagged", "emails_filed", "emails_unfiled", "texts_marked_read"];
+export const AUTONOMOUS_KINDS = ["notice_handled", "notice_flagged", "text_replied", "text_flagged", "emails_filed", "emails_unfiled", "texts_marked_read", "calendar_accepted", "calendar_flagged"];
 
 export const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 /** True when two rule wordings say the same thing closely enough not to be suggested twice. */
