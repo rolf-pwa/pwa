@@ -51,6 +51,27 @@ function CallizyCallExtras({ call }: { call: { id: string; is_voicemail?: boolea
   );
 }
 
+/** Georgia answers clients' texts for Rolf when he is in a meeting, away or after hours. This is the off switch. */
+function GeorgiaAnswersSwitch() {
+  const [on, setOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    supabase.functions.invoke("quo-service", { body: { action: "getTextAssistant" } }).then(({ data }) => setOn(data?.enabled !== false)).catch(() => setOn(null));
+  }, []);
+  if (on === null) return null;
+  const change = async (next: boolean) => {
+    const prev = on;
+    setOn(next);
+    const { error } = await supabase.functions.invoke("quo-service", { body: { action: "setTextAssistant", enabled: next } });
+    if (error) { setOn(prev); toast.error("Couldn't change that"); } else toast.success(next ? "Georgia will answer clients' texts when you can't" : "Georgia will not answer texts");
+  };
+  return (
+    <label className="flex items-center gap-1.5 text-xs text-muted-foreground" title="When you are in a meeting, away, or after hours, Georgia answers a client's text once, as your assistant">
+      <input type="checkbox" checked={on} onChange={(e) => void change(e.target.checked)} aria-label="Georgia answers texts when I can't" />
+      Georgia answers when I can't
+    </label>
+  );
+}
+
 /** Which phone provider texts are sent through from the CRM: Quo, or the Callizy trial. Incoming texts and calls from both land in this inbox. */
 function ProviderSwitch() {
   const [provider, setProvider] = useState<"quo" | "callizy" | null>(null);
@@ -395,6 +416,7 @@ export default function Inbox() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <GeorgiaAnswersSwitch />
             <ProviderSwitch />
             <Button variant="outline" size="sm" onClick={load}>
               <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Refresh

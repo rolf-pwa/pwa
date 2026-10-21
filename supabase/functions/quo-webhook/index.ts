@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { georgiaTextReply } from "../_shared/text-assistant.ts";
 import { callFromEvent, callizySend, currentProvider, e164 as callizyE164, signatureDiagnosis, smsFromEvent, verifyCallizySignature, voicemailFromEvent } from "../_shared/callizy.ts";
 
 // PUBLIC endpoint — Quo posts here. HMAC signature is the only auth.
@@ -207,7 +208,11 @@ async function handleCallizy(req: Request, rawBody: string): Promise<Response> {
         ...(m.direction === "outbound" ? { read_at: new Date().toISOString() } : {}),
       }, { onConflict: "quo_message_id" });
       // The same after-hours reply Quo sends, but only while Callizy is the provider the CRM sends through.
-      if (m.direction === "inbound" && isAfterHoursPacific() && (await currentProvider(admin)) === "callizy") await sendCallizyAutoReply(admin, m.from);
+      if (m.direction === "inbound" && (await currentProvider(admin)) === "callizy") {
+        let outcome: string = "none";
+        try { outcome = await georgiaTextReply(admin, { provider: "callizy", from: m.from, to: m.to, body: m.body, contactId }); } catch (e) { console.error("[quo-webhook] georgia text reply", e); }
+        if (outcome === "none" && isAfterHoursPacific()) await sendCallizyAutoReply(admin, m.from);
+      }
     } else if (event === "call.completed" || event === "call.missed") {
       const c = callFromEvent(event, data, at);
       if (!c.id) throw new Error("call event without an id");
@@ -323,8 +328,10 @@ serve(async (req) => {
           occurred_at: data?.createdAt || new Date().toISOString(),
         }, { onConflict: "quo_message_id" });
 
-        // After-hours auto-reply (Mon–Fri 9am–5pm PT)
-        if (isAfterHoursPacific() && fromNum) {
+        // Georgia answers a client's text when Rolf cannot (meeting, away, after hours). Anyone else gets the plain after-hours reply, as before.
+        let outcome: string = "none";
+        try { outcome = await georgiaTextReply(admin, { provider: "quo", from: fromNum, to: toNum, body: data?.body || data?.text || "", contactId }); } catch (e) { console.error("[quo-webhook] georgia text reply", e); }
+        if (outcome === "none" && isAfterHoursPacific() && fromNum) {
           await sendAutoReply(admin, fromNum);
         }
       } else {

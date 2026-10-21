@@ -133,6 +133,16 @@ serve(async (req) => {
       return new Response(JSON.stringify({ transcript, summary, audio }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // ---- Georgia answering clients' texts when Rolf cannot: on or off ----
+    if (action === "getTextAssistant") {
+      const { data } = await adminClient.from("text_assistant_config").select("enabled").eq("id", true).maybeSingle();
+      return new Response(JSON.stringify({ enabled: data?.enabled !== false }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    if (action === "setTextAssistant") {
+      await adminClient.from("text_assistant_config").upsert({ id: true, enabled: body.enabled === true, updated_at: new Date().toISOString() }, { onConflict: "id" });
+      return new Response(JSON.stringify({ ok: true, enabled: body.enabled === true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     // ---- which phone provider the CRM sends through ----
     if (action === "getProvider") {
       return new Response(JSON.stringify({ provider: await currentProvider(adminClient) }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
