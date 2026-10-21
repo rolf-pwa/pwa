@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkOutboundPii, piiBlockMessage } from "../_shared/pii-shield.ts";
-import { callizySend, currentProvider } from "../_shared/callizy.ts";
+import { callizyGet, callizySend, currentProvider, firstUrl } from "../_shared/callizy.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -110,6 +110,28 @@ serve(async (req) => {
 
     const body = await req.json();
     const { action } = body;
+
+    // ---- a Callizy call's transcript, summary and (short-lived) recording or voicemail link, fetched when someone opens it ----
+    if (action === "callizyCall") {
+      const { data: call } = await adminClient.from("quo_calls").select("id, quo_call_id, provider, is_voicemail, transcript, summary").eq("id", String(body.callId ?? "")).maybeSingle();
+      if (!call || call.provider !== "callizy") {
+        return new Response(JSON.stringify({ error: "Not a Callizy call" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const id = encodeURIComponent(call.quo_call_id);
+      let transcript = call.transcript ?? "", summary = call.summary ?? "";
+      if (!transcript || !summary) {
+        const t = await callizyGet(`/calls/${id}/transcription/`);
+        if (t) {
+          transcript = transcript || String(t.transcript_by_speaker || t.transcript || "");
+          summary = summary || String(t.conversation_summary || "");
+          if (transcript !== (call.transcript ?? "") || summary !== (call.summary ?? "")) {
+            await adminClient.from("quo_calls").update({ transcript: transcript || null, summary: summary || null }).eq("id", call.id);
+          }
+        }
+      }
+      const audio = call.is_voicemail ? firstUrl(await callizyGet(`/voicemails/${id}/`)) : firstUrl(await callizyGet(`/calls/${id}/recording/`));
+      return new Response(JSON.stringify({ transcript, summary, audio }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     // ---- which phone provider the CRM sends through ----
     if (action === "getProvider") {

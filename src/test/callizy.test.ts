@@ -72,3 +72,19 @@ describe("Callizy error messages", () => {
     expect(callizyErrorText(429, "slow down", {})).toBe("Callizy 429: slow down");
   });
 });
+
+describe("Callizy softphone calls and recording links", () => {
+  it("does not turn a softphone identity into a phone number", async () => {
+    const { e164: e, callFromEvent: call } = await import("../../supabase/functions/_shared/callizy");
+    expect(e("client:agent_336_258")).toBe("");
+    const c = call("call.completed", { call_id: "cal_1", direction: "outbound", from_number: "client:agent_336_258", to_number: "+17787215208", duration: 12 });
+    expect(c.from).toBe(""); // no CALLIZY_FROM_NUMBER in tests
+    expect(c.to).toBe("+17787215208");
+  });
+  it("finds the first web address in a recording answer", async () => {
+    const { firstUrl } = await import("../../supabase/functions/_shared/callizy");
+    expect(firstUrl({ call_id: "cal_1", recordings: [{ id: 1, kind: "call", url: "https://api.callizy.ca/r/abc" }] })).toBe("https://api.callizy.ca/r/abc");
+    expect(firstUrl({ recordings: [] })).toBeNull();
+    expect(firstUrl(null)).toBeNull();
+  });
+});

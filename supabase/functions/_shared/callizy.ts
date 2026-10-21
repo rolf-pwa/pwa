@@ -43,6 +43,7 @@ export function signatureDiagnosis(headers: Headers, secret: string | undefined)
 const first = (...vals: unknown[]): string => { for (const v of vals) if (v !== undefined && v !== null && String(v) !== "") return String(v); return ""; };
 
 export function e164(phone: string): string {
+  if (/^client:/i.test((phone || "").trim())) return ""; // a Callizy softphone identity, not a phone number
   const digits = (phone || "").replace(/\D/g, "");
   if (digits.length === 10) return `+1${digits}`;
   if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
@@ -67,7 +68,8 @@ export function callFromEvent(event: string, data: any, timestamp?: string): Cal
   return {
     id: first(data?.call_id, data?.id),
     direction: first(data?.direction) === "outbound" ? "outbound" : "inbound",
-    from: e164(first(data?.from_number, data?.from)),
+    // A call placed from the Callizy softphone has no phone number on its own side: it went out from the company line.
+    from: e164(first(data?.from_number, data?.from)) || (first(data?.direction) === "outbound" ? e164(env("CALLIZY_FROM_NUMBER") ?? "") : ""),
     to: e164(first(data?.to_number, data?.to)),
     status: event === "call.missed" ? "missed" : first(data?.status) || "completed",
     duration: Number(data?.duration ?? 0) || 0,
@@ -136,4 +138,22 @@ export async function callizySend(to: string, message: string): Promise<{ id: st
 export async function currentProvider(db: any): Promise<Provider> {
   const { data } = await db.from("phone_provider_config").select("provider").eq("id", true).maybeSingle();
   return data?.provider === "callizy" ? "callizy" : "quo";
+}
+
+/** The first web address found anywhere in a small JSON answer (Callizy does not describe the recording objects). */
+export function firstUrl(v: unknown): string | null {
+  if (typeof v === "string") return /^https?:\/\//i.test(v) ? v : null;
+  if (Array.isArray(v)) { for (const x of v) { const u = firstUrl(x); if (u) return u; } return null; }
+  if (v && typeof v === "object") { for (const x of Object.values(v as Record<string, unknown>)) { const u = firstUrl(x); if (u) return u; } }
+  return null;
+}
+
+/** GET from Callizy's API; null when the thing does not exist yet (404). */
+export async function callizyGet(path: string): Promise<any | null> {
+  const c = callizyCreds();
+  if (!c) throw new Error("Callizy is not set up (CALLIZY_API_KEY / CALLIZY_API_SECRET)");
+  const r = await fetch(`${API}${path}`, { headers: { "X-API-Key": c.key, "X-API-Secret": c.secret } });
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`Callizy ${r.status}`);
+  return await r.json();
 }
