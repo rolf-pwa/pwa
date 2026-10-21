@@ -97,3 +97,14 @@ describe("photos in Callizy texts", () => {
     expect(sms("sms.received", { sms_id: "sms_10", message: "hi" }).media).toEqual([]);
   });
 });
+
+describe("click-to-call follows the provider", () => {
+  it("opens Callizy's softphone link when Callizy is the provider, and keeps Quo's links otherwise", async () => {
+    const { readFileSync } = await import("node:fs");
+    const dial = readFileSync("src/shared/lib/quo-dial.ts", "utf8");
+    expect(dial).toContain("https://app.callizy.ca/call?number=");
+    expect(dial).toContain("openphone://dial");
+    expect(dial).toMatch(/provider === "callizy"/);
+    expect(readFileSync("src/modules/crm/pages/Inbox.tsx", "utf8")).toContain("setDialProvider(next)");
+  });
+});
