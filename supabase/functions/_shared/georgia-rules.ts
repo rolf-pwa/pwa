@@ -8,42 +8,7 @@ import { gmailFor } from "./gmail-handled.ts";
 import { postTaskEvent } from "./task-events.ts";
 import { GEMINI_EXTRACT_MODEL, generateVertexContent, parseServiceAccountKey, withThinking } from "./vertex-ai.ts";
 
-/** What she does without being asked, so it can be listed and reviewed. */
-export const AUTONOMOUS_KINDS = ["notice_handled", "notice_flagged", "text_replied", "text_flagged", "emails_filed", "emails_unfiled", "texts_marked_read"];
-
-export const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-/** True when two rule wordings say the same thing closely enough not to be suggested twice. */
-export function sameRule(a: string, b: string): boolean {
-  const x = norm(a), y = norm(b);
-  if (!x || !y) return false;
-  return x === y || x.includes(y) || y.includes(x);
-}
-/** Rules that would move money, delete, or reach out in a new way are never suggested. */
-export const UNSAFE_RULE = /\b(withdraw|transfer|wire|pay(?:ment)?s?|delete|remove all|trade|buy|sell|send (?:an )?email to (?:the )?client)\b/i;
-
-export const SUGGEST_TOOL = {
-  name: "suggest_rules",
-  description: "List standing rules Rolf has effectively already set by giving the same answer to the same kind of question more than once.",
-  parameters: {
-    type: "OBJECT",
-    properties: {
-      rules: {
-        type: "ARRAY",
-        items: {
-          type: "OBJECT",
-          properties: {
-            rule: { type: "STRING", description: "An instruction to Georgia, one sentence, specific, e.g. 'When an iA acknowledgement arrives for a client, log it on their task and do not ask me.'" },
-            area: { type: "STRING", description: "email, texts, calendar, tasks, notices or general" },
-            times: { type: "INTEGER", description: "How many separate times he gave this answer" },
-            evidence: { type: "STRING", description: "One short sentence: what she asked and what he said." },
-          },
-          required: ["rule", "times", "evidence"],
-        },
-      },
-    },
-    required: ["rules"],
-  },
-};
+import { AUTONOMOUS_KINDS, SUGGEST_TOOL, sameRule, UNSAFE_RULE } from "./georgia-rules-core.ts";
 
 export async function rulebook(db: any, userId: string) {
   const since = new Date(Date.now() - 7 * 86_400_000).toISOString();

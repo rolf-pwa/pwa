@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { AUTONOMOUS_KINDS, UNSAFE_RULE, sameRule } from "../../supabase/functions/_shared/georgia-rules";
+import { AUTONOMOUS_KINDS, UNSAFE_RULE, sameRule } from "../../supabase/functions/_shared/georgia-rules-core";
 
 describe("rule wording", () => {
   it("treats the same rule worded slightly differently as the same", () => {
