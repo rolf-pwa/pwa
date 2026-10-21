@@ -15,6 +15,7 @@ import { getValidGoogleAccessToken } from "../_shared/google-token.ts";
 import { dismissBriefingItem, refreshBriefing } from "../_shared/briefing-refresh.ts";
 import { eaApply, eaChat, eaDecide, eaForget, eaHistory, eaNudge } from "../_shared/ea-handlers.ts";
 import { isMutedSender } from "../_shared/ea-agent.ts";
+import { runNoticeProcessor } from "../_shared/notice-service.ts";
 import { sweepArchive, sweepFeedback, sweepForgetSender, sweepList, sweepMorning, sweepRun, sweepSetAuto, sweepUndoArchive } from "../_shared/inbox-sweep-handlers.ts";
 import { sweepLine } from "../_shared/inbox-sweep.ts";
 import { scanMeetingNotes } from "../_shared/meeting-followup-service.ts";
@@ -621,6 +622,12 @@ Deno.serve(async (req) => {
     if (cronBody.job === "inbox_sweep_morning") {
       // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
       EdgeRuntime.waitUntil(sweepMorning(db).then((r) => console.log("[inbox-sweep-morning]", r.join("; "))).catch((e: unknown) => console.error("[inbox-sweep-morning]", e)));
+      return json({ started: true });
+    }
+    // iA and Adobe Sign notices: Georgia comments on the matching task, closes it when the notice completes it, and flags the rest.
+    if (cronBody.job === "notice_processor") {
+      // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+      EdgeRuntime.waitUntil(runNoticeProcessor(db).then((r) => r.length && console.log("[notice-processor]", r.join("; "))).catch((e: unknown) => console.error("[notice-processor]", e)));
       return json({ started: true });
     }
     if (cronBody.job === "georgia_tasks") {
