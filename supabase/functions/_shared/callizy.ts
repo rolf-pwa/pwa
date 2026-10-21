@@ -50,7 +50,7 @@ export function e164(phone: string): string {
   return phone?.startsWith("+") ? phone : digits ? `+${digits}` : "";
 }
 
-export interface CallizySms { id: string; direction: "inbound" | "outbound"; from: string; to: string; body: string; at: string }
+export interface CallizySms { id: string; direction: "inbound" | "outbound"; from: string; to: string; body: string; at: string; media: string[] }
 export function smsFromEvent(event: string, data: any, timestamp?: string): CallizySms {
   const inbound = event === "sms.received";
   return {
@@ -60,6 +60,7 @@ export function smsFromEvent(event: string, data: any, timestamp?: string): Call
     to: e164(first(data?.to_number, data?.to, data?.recipient, data?.toE164)),
     body: first(data?.message, data?.body, data?.text, data?.content),
     at: first(data?.created_at, data?.sent_at, data?.received_at, timestamp) || new Date().toISOString(),
+    media: Array.isArray(data?.media_urls) ? data.media_urls.filter((u: unknown): u is string => typeof u === "string" && /^https?:\/\//i.test(u)) : [],
   };
 }
 
@@ -156,4 +157,22 @@ export async function callizyGet(path: string): Promise<any | null> {
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`Callizy ${r.status}`);
   return await r.json();
+}
+
+/** Creates or updates the person in Callizy's address book, by phone number (their API upserts on it), so their name shows in the Callizy app. Returns Callizy's contact id. */
+export async function callizyUpsertContact(c: { phone: string; firstName?: string | null; lastName?: string | null }): Promise<string> {
+  const creds = callizyCreds();
+  if (!creds) throw new Error("Callizy is not set up (CALLIZY_API_KEY / CALLIZY_API_SECRET)");
+  const phone = e164(c.phone);
+  if (!phone) throw new Error("That contact has no usable phone number");
+  const r = await fetch(`${API}/contacts/`, {
+    method: "POST",
+    headers: { "X-API-Key": creds.key, "X-API-Secret": creds.secret, "Content-Type": "application/json" },
+    body: JSON.stringify({ phone_number: phone, ...(c.firstName ? { first_name: c.firstName } : {}), ...(c.lastName ? { last_name: c.lastName } : {}), source: "api" }),
+  });
+  const text = await r.text();
+  let j: any = {};
+  try { j = text ? JSON.parse(text) : {}; } catch { /* leave empty */ }
+  if (!r.ok) throw new Error(callizyErrorText(r.status, text, j));
+  return first(j.id);
 }

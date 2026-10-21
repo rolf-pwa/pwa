@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { callFromEvent, signatureDiagnosis, smsFromEvent, verifyCallizySignature, voicemailFromEvent } from "../_shared/callizy.ts";
+import { callFromEvent, callizySend, currentProvider, e164 as callizyE164, signatureDiagnosis, smsFromEvent, verifyCallizySignature, voicemailFromEvent } from "../_shared/callizy.ts";
 
 // PUBLIC endpoint — Quo posts here. HMAC signature is the only auth.
 
@@ -164,6 +164,20 @@ async function findContactByPhone(admin: any, phone: string): Promise<string | n
   return null;
 }
 
+async function sendCallizyAutoReply(admin: any, toNumber: string): Promise<void> {
+  if (callizyE164(toNumber).replace(/\D/g, "").length < 10) return; // short codes and blanks
+  const to = callizyE164(toNumber);
+  const cutoff = new Date(Date.now() - AUTO_REPLY_COOLDOWN_HOURS * 60 * 60 * 1000).toISOString();
+  const { data: recent } = await admin.from("quo_messages").select("id").eq("direction", "outbound").eq("to_number", to).gte("occurred_at", cutoff).limit(1);
+  if (recent && recent.length > 0) return;
+  try {
+    const sent = await callizySend(to, AFTER_HOURS_REPLY);
+    await admin.from("quo_messages").insert({ quo_message_id: sent.id || null, provider: "callizy", contact_id: null, direction: "outbound", from_number: sent.from, to_number: to, body: AFTER_HOURS_REPLY, status: "sent", portal_visible: true, occurred_at: new Date().toISOString(), read_at: new Date().toISOString() });
+  } catch (e) {
+    console.error("[quo-webhook] callizy auto-reply error", e);
+  }
+}
+
 /** Callizy posts here with ?provider=callizy. Its texts and calls are stored in the same tables as Quo's, marked provider = callizy. */
 async function handleCallizy(req: Request, rawBody: string): Promise<Response> {
   const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -189,9 +203,11 @@ async function handleCallizy(req: Request, rawBody: string): Promise<Response> {
       const contactId = await findContactByPhone(admin, m.direction === "inbound" ? m.from : m.to);
       await admin.from("quo_messages").upsert({
         quo_message_id: m.id, provider: "callizy", contact_id: contactId, direction: m.direction, from_number: m.from, to_number: m.to, body: m.body,
-        status: m.direction === "inbound" ? "received" : "delivered", media_urls: [], portal_visible: true, occurred_at: m.at,
+        status: m.direction === "inbound" ? "received" : "delivered", media_urls: m.media, portal_visible: true, occurred_at: m.at,
         ...(m.direction === "outbound" ? { read_at: new Date().toISOString() } : {}),
       }, { onConflict: "quo_message_id" });
+      // The same after-hours reply Quo sends, but only while Callizy is the provider the CRM sends through.
+      if (m.direction === "inbound" && isAfterHoursPacific() && (await currentProvider(admin)) === "callizy") await sendCallizyAutoReply(admin, m.from);
     } else if (event === "call.completed" || event === "call.missed") {
       const c = callFromEvent(event, data, at);
       if (!c.id) throw new Error("call event without an id");
@@ -219,8 +235,14 @@ async function handleCallizy(req: Request, rawBody: string): Promise<Response> {
         link = `/contacts/${contactId}`;
       }
       await admin.from("staff_notifications").insert({ title, body: v.transcript || `Voicemail received at ${new Date().toLocaleString()}`, link, contact_id: contactId, source_type: "voicemail" });
+    } else if (event === "contact.created" || event === "contact.updated") {
+      // Link a Callizy contact to the CRM contact with the same phone number, as is done for Quo.
+      const callizyContactId = String(data?.contact_id ?? data?.id ?? "");
+      const phone = String(data?.phone_number ?? data?.phone ?? "");
+      const contactId = callizyContactId && phone ? await findContactByPhone(admin, phone) : null;
+      if (contactId) await admin.from("quo_contact_sync").upsert({ contact_id: contactId, quo_contact_id: callizyContactId, last_synced_at: new Date().toISOString(), sync_direction: "bidirectional" }, { onConflict: "contact_id" });
     }
-    // Contact events and call.started are logged above and otherwise ignored. No auto-reply is sent for Callizy texts yet.
+    // call.started and contact.deleted are logged above and otherwise ignored.
     if (logRow?.id) await admin.from("quo_webhook_events").update({ processed: true }).eq("id", logRow.id);
     return json({ ok: true });
   } catch (err: any) {
