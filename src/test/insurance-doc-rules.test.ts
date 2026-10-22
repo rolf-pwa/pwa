@@ -84,3 +84,49 @@ describe("the frozen PDF", () => {
     entries.forEach((off, i) => expect(s.slice(off, off + 12)).toMatch(new RegExp(`^${i + 1} 0 obj`)));
   });
 });
+
+import { alternativesParagraph, costParagraph, fillReasonWhy, needsParagraph, statementFor } from "../../supabase/functions/_shared/insurance-doc-rules";
+// The "Reason Why: Life" master as Drive exports it.
+const RW = [
+  "Hi Edna", "Thanks for entrusting me with your life insurance needs. ", "You indicated that you wanted coverage that would provide coverage for \\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_.",
+  "The \\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_ policy offered by \\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_is a great option for your needs. It provides the following benefits:",
+  "  - \\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_", "  - \\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_", "  - \\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_",
+  "If you need to update any of your personal information in the future, please let me know right away.", "Regards, ", "Rolf Issler, BMgt, CLU", "ProsperWise Advisors",
+].join("\n");
+
+describe("the letter in the PDF", () => {
+  it("sets a bold lead-in on its own bold line", () => {
+    const b = signedPdfBlocks({ md: "**What it costs.** The premium is $85 a month.", hash: "h", templateModified: null, templateVersion: null, sentAt: "2026-10-22T00:00:00Z", signers: [] });
+    expect(b[0]).toEqual({ kind: "p", text: "What it costs.", bold: true });
+    expect(b[1]).toEqual({ kind: "p", text: "The premium is $85 a month." });
+  });
+});
+
+describe("the reason-why letter", () => {
+  const v = { firstNames: ["Thomas", "Sarah"], need: "your family's income, the mortgage and final expenses.", product: "20-year term", carrier: "iA Financial Group", benefits: ["Level premiums for 20 years", "Convertible to permanent"], extra: ["**What it costs.** $85 a month."] };
+  const r = fillReasonWhy(RW, v);
+  it("fills the greeting, the three blanks and the benefits", () => {
+    expect(r.md).toContain("Hi Thomas and Sarah,");
+    expect(r.md).toContain("provide coverage for your family's income, the mortgage and final expenses.");
+    expect(r.md).toContain("The 20-year term policy offered by iA Financial Group is a great option");
+    expect(r.md).toContain("- Level premiums for 20 years\n- Convertible to permanent");
+    expect(r.md).not.toMatch(/_{3,}/);
+    expect(r.missing).toEqual([]);
+  });
+  it("puts the extra paragraphs after the benefits and before the closing", () => {
+    expect(r.md.indexOf("Convertible to permanent")).toBeLessThan(r.md.indexOf("What it costs"));
+    expect(r.md.indexOf("What it costs")).toBeLessThan(r.md.indexOf("If you need to update"));
+  });
+  it("says what could not be filled", () => { expect(fillReasonWhy(RW, { ...v, carrier: "", benefits: [] }).missing).toEqual(["benefits", "the carrier"]); });
+  it("builds the needs, cost and alternatives paragraphs", () => {
+    const n = needsParagraph([{ name: "Thomas", need: 1500000, available: 552500, shortfall: 947500, surplus: 0, percentMet: 37 }], 1000000);
+    expect(n).toContain("a total need of $1,500,000, against $552,500");
+    expect(n).toContain("a shortfall of $947,500");
+    expect(n).toContain("recommended here is $1,000,000");
+    expect(needsParagraph([], null)).toBe("");
+    expect(costParagraph(85, "monthly", "20-year term")).toBe("**What it costs.** The premium for the 20-year term is $85 a month.");
+    expect(costParagraph(null, null, "x")).toBe("");
+    expect(alternativesParagraph("  ")).toBe("");
+  });
+  it("has its own statement for a letter", () => { expect(statementFor("reason_why")).toMatch(/received and read this letter/); expect(statementFor("disclosure_privacy")).toMatch(/read this document/); });
+});

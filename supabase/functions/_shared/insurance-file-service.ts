@@ -17,7 +17,7 @@ export async function listFiles(db: any, householdId: string) {
   const { data: files } = await db.from("insurance_files").select("id, policy_id, contact_id, title, kind, status, opened_at, package_url, packaged_at").eq("household_id", householdId).order("opened_at", { ascending: false });
   const ids = (files ?? []).map((f: any) => f.id);
   const { data: items } = ids.length ? await db.from("insurance_file_items").select("id, file_id, kind, status, drive_name, drive_url, meeting_task_id, note, added_by, added_at").in("file_id", ids).order("added_at", { ascending: true }) : { data: [] as any[] };
-  const { data: policies } = await db.from("insurance_policies").select("id, carrier, policy_type, policy_number, insured_name, contact_id").in("contact_id", (await db.from("contacts").select("id").eq("household_id", householdId)).data?.map((c: any) => c.id) ?? []);
+  const { data: policies } = await db.from("insurance_policies").select("id, carrier, policy_type, policy_number, insured_name, contact_id, coverage_amount, premium_amount, premium_frequency").in("contact_id", (await db.from("contacts").select("id").eq("household_id", householdId)).data?.map((c: any) => c.id) ?? []);
   const { data: meetings } = await db.from("meeting_records").select("task_id, doc_name, doc_url, filed_for_completion").eq("household_id", householdId);
   const out = (files ?? []).map((f: any) => {
     const its = ((items ?? []) as any[]).filter((i) => i.file_id === f.id);

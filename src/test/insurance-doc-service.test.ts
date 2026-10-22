@@ -92,6 +92,21 @@ describe("signing in the portal", () => {
   });
 });
 
+describe("the reason-why letter in the portal", () => {
+  it("asks the signer to confirm they received and read the letter, not to sign a disclosure", async () => {
+    const sd = seed();
+    sd.insurance_documents.push({ id: "d2", household_id: "h1", status: "sent", title: "Your Life Insurance Recommendation", body_md: "Hi Thomas,\n\nLetter.", body_hash: "x", sent_at: "2026-10-22T00:00:00Z", kind: "reason_why", task_id: null, file_id: null } as any);
+    sd.insurance_document_signers.push({ id: "s3", document_id: "d2", contact_id: "c1", name: "Thomas Wolfe", status: "pending" } as any);
+    const { db, tables } = fakeDb(sd);
+    const g: any = await clientGet(db, "c1", "d2");
+    expect(g.statement).toMatch(/received and read this letter/);
+    expect(g.needsCasl).toBe(false);
+    const r: any = await clientSign(db, "c1", "d2", { typedName: "Thomas Wolfe", agree: true }, "1.1.1.1", "UA");
+    expect(r).toMatchObject({ ok: true, complete: true });
+    expect(tables.insurance_document_signers.find((x: any) => x.id === "s3").statement_text).toMatch(/received and read this letter/);
+  });
+});
+
 describe("wiring", () => {
   it("keeps the client's list of covered checklist items in step with the server's", () => { expect(CLIENT_ITEMS).toEqual(DOC_ITEMS); });
   it("has a migration with grants, and the portal and advisor entry points", () => {
@@ -101,6 +116,7 @@ describe("wiring", () => {
     expect(readFileSync("supabase/functions/portal-pm-tasks/index.ts", "utf8")).toMatch(/docSign/);
     expect(readFileSync("supabase/functions/review-agent-admin/index.ts", "utf8")).toMatch(/insDocSend/);
     expect(readFileSync("src/App.tsx", "utf8")).toContain("/portal/:token/documents");
+    expect(readFileSync("supabase/functions/review-agent-admin/index.ts", "utf8")).toMatch(/insDocPreview[^\n]*body\?\.fields/);
   });
   it("uses the house look with the ProsperWise Advisors entity, not the Strategy line", () => {
     const pdf = readFileSync("supabase/functions/_shared/insurance-doc-service.ts", "utf8");

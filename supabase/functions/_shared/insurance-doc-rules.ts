@@ -7,6 +7,9 @@ import type { Block } from "./simple-pdf.ts";
 export const CASL_MARKER = "{{casl_choice}}";
 export const SIGN_STATEMENT_VERSION = "2026-10-a";
 export const SIGN_STATEMENT = "I have read this document and I agree to it. I understand that typing my name below is my electronic signature, and that it has the same effect as signing on paper.";
+export const SIGN_STATEMENT_LETTER = "I confirm that I have received and read this letter, and that what it says about my needs and circumstances is correct. I understand that typing my name below is my electronic signature, and that it has the same effect as signing on paper.";
+/** What the signer agrees to, by kind of document. */
+export const statementFor = (kind: string) => (kind === "reason_why" ? SIGN_STATEMENT_LETTER : SIGN_STATEMENT);
 
 /** Drive's Markdown export escapes punctuation with a backslash; take those off. */
 export const unescapeMd = (s: string) => s.replace(/\\([\\`*_{}\[\]()#+\-.!<>|~])/g, "$1");
@@ -83,7 +86,7 @@ export function checkSignature(input: SignInput, signerName: string, needsCasl: 
 
 /** The blocks of the frozen PDF: the document as signed, then the record of each signature. */
 export interface SignedRecord { name: string; typedName: string; signedAt: string; ip: string | null; caslChoice: string | null; caslInitials: string | null; caslEmail: string | null }
-export function signedPdfBlocks(i: { md: string; hash: string; templateModified: string | null; templateVersion: string | null; sentAt: string; signers: SignedRecord[] }): Block[] {
+export function signedPdfBlocks(i: { statement?: string; md: string; hash: string; templateModified: string | null; templateVersion: string | null; sentAt: string; signers: SignedRecord[] }): Block[] {
   const blocks: Block[] = [];
   const plainOf = (t: string) => t.replace(/\*\*\*?(.+?)\*\*\*?/g, "$1").replace(/(^|[^*])\*(?!\*)(.+?)\*/g, "$1$2").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/^\s*[-*]\s+/, "\u2022 ").replace(/\*{2,3}/g, "").replace(/ {2,}$/, "");
   const render = (md: string) => {
@@ -96,13 +99,17 @@ export function signedPdfBlocks(i: { md: string; hash: string; templateModified:
       const wholeBold = /^\*{2,3}[^*]+\*{2,3}:?$/.test(t) || /^\*{2,3}[^*]+$/.test(t);
       if (h) blocks.push({ kind: "h", text: plainOf(h[1]) });
       else if (wholeBold) blocks.push({ kind: "h", text: plainOf(t).replace(/:$/, "") });
-      else blocks.push({ kind: "p", text: plainOf(t) });
+      else {
+        // A bold lead-in ("**What it costs.** The premium is...") becomes its own bold line, since a line is set in one weight.
+        const lead = t.match(/^\*\*([^*]+?)\*\*\s+(\S.*)$/);
+        if (lead) { blocks.push({ kind: "p", text: plainOf(lead[1]), bold: true }, { kind: "p", text: plainOf(lead[2]) }); } else blocks.push({ kind: "p", text: plainOf(t) });
+      }
     }
   };
   const parts = i.md.split(CASL_MARKER);
   render(parts[0]);
   if (parts.length > 1) { blocks.push({ kind: "p", text: "Canada's Anti-Spam Legislation (CASL) consent: each signer's choice is recorded in the signature record below.", bold: true }); render(parts.slice(1).join("")); }
-  blocks.push({ kind: "gap", h: 10 }, { kind: "h", text: "Electronic signatures" }, { kind: "p", text: SIGN_STATEMENT, small: true });
+  blocks.push({ kind: "gap", h: 10 }, { kind: "h", text: "Electronic signatures" }, { kind: "p", text: i.statement ?? SIGN_STATEMENT, small: true });
   for (const s of i.signers) {
     const when = new Date(s.signedAt).toLocaleString("en-CA", { timeZone: "America/Vancouver", dateStyle: "long", timeStyle: "short" });
     const lines = [`Signed ${when} Pacific${s.ip ? `, from IP address ${s.ip}` : ""}`];
@@ -112,3 +119,67 @@ export function signedPdfBlocks(i: { md: string; hash: string; templateModified:
   blocks.push({ kind: "gap", h: 6 }, { kind: "p", small: true, text: `Sent ${new Date(i.sentAt).toLocaleDateString("en-CA", { timeZone: "America/Vancouver", dateStyle: "long" })}. Wording fingerprint (SHA-256): ${i.hash}. Master document version: ${i.templateVersion ?? "not stated"}; last edited ${i.templateModified ?? "unknown"}. Statement version ${SIGN_STATEMENT_VERSION}.` });
   return blocks;
 }
+
+// ── The reason-why letter ─────────────────────────────────────────────────────────────────────────────────────────────
+export interface ReasonWhyInput { firstNames: string[]; need: string; product: string; carrier: string; benefits: string[]; extra: string[] }
+const BLANK_BULLET = /^\s*[-*]\s*_{3,}\s*$/;
+const UNDERSCORES = /_{3,}/;
+const stripEnd = (s: string) => s.trim().replace(/[.\s]+$/, "");
+
+/**
+ * Fills the "Reason Why" master. The master has blanks to fill, in the order: the need ("coverage for ____"), the product ("The ____ policy"), the carrier
+ * ("offered by ____"), then a bullet list of benefits. Explicit markers ({{names}}, {{need}}, {{product}}, {{carrier}}, {{benefits}}, {{extra}}) work too and
+ * win. Extra paragraphs (needs summary, cost, alternatives) go after the benefits. `missing` names whatever could not be filled.
+ */
+export function fillReasonWhy(raw: string, v: ReasonWhyInput): { md: string; missing: string[] } {
+  let lines = unescapeMd(String(raw ?? "")).replace(/\r/g, "").split("\n");
+  const missing: string[] = [];
+  const names = joinNames(v.firstNames);
+  const bullets = v.benefits.map((b) => b.trim()).filter(Boolean).map((b) => `- ${b}`);
+  const extra = v.extra.filter((e) => e.trim());
+  // Greeting
+  lines = lines.map((l) => (/^\s*Hi\s+[^\n]*$/i.test(l) && !/\{\{/.test(l) ? `Hi ${names},` : l.split("{{names}}").join(names)));
+  // The benefit bullets: the blank bullet lines become the real ones, with the extra paragraphs after them.
+  const at = lines.findIndex((l) => BLANK_BULLET.test(l) || l.includes("{{benefits}}"));
+  const tail = (extra.length ? ["", ...extra.flatMap((e) => [e, ""])] : []);
+  if (at >= 0) {
+    const kept = lines.filter((l, i) => i < at || !BLANK_BULLET.test(l));
+    kept.splice(at, 0, ...(bullets.length ? bullets : []), ...tail);
+    lines = kept.filter((l) => !l.includes("{{benefits}}") || false);
+    if (!bullets.length) missing.push("benefits");
+  } else {
+    const k = lines.findIndex((l) => /following benefits/i.test(l));
+    if (k >= 0) lines.splice(k + 1, 0, ...bullets, ...tail); else lines.push("", ...bullets, ...tail);
+    if (!bullets.length) missing.push("benefits");
+  }
+  lines = lines.filter((l) => !l.includes("{{extra}}"));
+  // The three blanks, in order, then any named markers.
+  const blanks = [stripEnd(v.need), v.product.trim(), v.carrier.trim()];
+  const labels = ["what the coverage is for", "the product", "the carrier"];
+  let n = 0;
+  // The master sometimes runs a blank straight into the next word ("____is a great option"), so a word that follows gets its space back.
+  lines = lines.map((l) => l.replace(/_{3,}/g, (m, off: number, str: string) => { const val = blanks[n]; if (!val) missing.push(labels[n] ?? "a blank"); n++; return (val || "____") + (/[A-Za-z0-9]/.test(str[off + m.length] ?? "") ? " " : ""); }));
+  const md = lines.join("\n").split("{{need}}").join(blanks[0]).split("{{product}}").join(blanks[1]).split("{{carrier}}").join(blanks[2]).replace(/\n{3,}/g, "\n\n").trim();
+  return { md, missing: [...new Set(missing)] };
+}
+
+export const money = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
+export interface AnalysisLite { name: string; need: number; available: number; shortfall: number; surplus: number; percentMet: number }
+
+/** The paragraph on how the amount of cover was worked out, from the saved DIME analyses. */
+export function needsParagraph(rows: AnalysisLite[], recommendedAmount: number | null): string {
+  if (!rows.length) return "";
+  const parts = rows.map((r) => `${r.name}: a total need of ${money(r.need)}, against ${money(r.available)} already available (existing insurance, savings you would use, and the CPP death benefit), ${r.shortfall > 0 ? `leaving a shortfall of ${money(r.shortfall)}` : `which covers the need`}.`);
+  return [
+    "**How we worked out the amount of coverage.** We added up four things: debts other than the mortgage, the income your family would need to replace, the mortgage, and the costs of an estate (final expenses, taxes at death and legal costs). We then took off what your family already has.",
+    ...parts.map((p) => `- ${p}`),
+    ...(recommendedAmount && recommendedAmount > 0 ? [`The coverage recommended here is ${money(recommendedAmount)}.`] : []),
+  ].join("\n");
+}
+export function costParagraph(premium: number | null, frequency: string | null, product: string): string {
+  if (!premium || premium <= 0) return "";
+  const per: Record<string, string> = { monthly: "a month", quarterly: "a quarter", semi_annual: "every six months", annual: "a year" };
+  return `**What it costs.** The premium for the ${product || "policy"} is ${money(premium)} ${per[frequency ?? ""] ?? ""}`.trim() + ".";
+}
+export const alternativesParagraph = (t: string) => (t.trim() ? `**Alternatives we considered.** ${t.trim()}` : "");
+export const replacementParagraph = (t: string) => (t.trim() ? `**Replacing existing coverage.** ${t.trim()}` : "");
