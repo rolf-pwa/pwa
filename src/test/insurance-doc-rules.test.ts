@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { CASL_MARKER, checkSignature, cleanTemplate, fillTemplate, footerVersion, joinNames, nameMatches, sha256Hex, signedPdfLines } from "../../supabase/functions/_shared/insurance-doc-rules";
-import { buildPdf, wrap } from "../../supabase/functions/_shared/simple-pdf";
+import { CASL_MARKER, checkSignature, cleanTemplate, fillTemplate, footerVersion, joinNames, nameMatches, sha256Hex, signedPdfBlocks } from "../../supabase/functions/_shared/insurance-doc-rules";
+import { buildBrandedPdf, wrap } from "../../supabase/functions/_shared/simple-pdf";
 
 // A cut of the real disclosure as Drive exports it (Markdown, with escaped punctuation).
 const SAMPLE = [
@@ -62,19 +62,25 @@ describe("names and signatures", () => {
 });
 
 describe("the frozen PDF", () => {
+  const blocks = () => signedPdfBlocks({ md: cleanTemplate(SAMPLE).md, hash: "abc123", templateModified: "2026-10-22", templateVersion: "2023-2", sentAt: "2026-10-22T20:00:00Z", signers: [{ name: "Sarah Wolfe", typedName: "Sarah Wolfe", signedAt: "2026-10-23T18:00:00Z", ip: "1.2.3.4", caslChoice: "yes", caslInitials: "SW", caslEmail: "s@x.ca" }] });
   it("wraps long lines", () => { expect(wrap("word ".repeat(60), 10.5, false, 200).length).toBeGreaterThan(3); });
-  it("builds a valid-looking PDF with the document, the signatures and the fingerprint", () => {
-    const lines = signedPdfLines({ title: "Advisor Disclosure", md: c().md, hash: "abc123", templateModified: "2026-10-22", templateVersion: "2023-2", sentAt: "2026-10-22T20:00:00Z", signers: [{ name: "Sarah Wolfe", typedName: "Sarah Wolfe", signedAt: "2026-10-23T18:00:00Z", ip: "1.2.3.4", caslChoice: "yes", caslInitials: "SW", caslEmail: "s@x.ca" }] });
-    const text = lines.map((l) => l.text).join("\n");
-    expect(text).toContain("Sarah Wolfe");
-    expect(text).toContain("1.2.3.4");
-    expect(text).toContain("abc123");
-    const bytes = buildPdf(lines, "Advisor Disclosure");
+  it("carries the document, the signatures and the fingerprint", () => {
+    const text = JSON.stringify(blocks());
+    for (const t of ["Sarah Wolfe", "1.2.3.4", "abc123", "We abide by PIPEDA", "CASL"]) expect(text).toContain(t);
+    expect(blocks().some((b) => b.kind === "h" && b.text === "ADVISOR DISCLOSURE")).toBe(true);
+  });
+  it("builds a well-formed branded PDF: every xref entry points at its object, with the logo and the ProsperWise Advisors line", () => {
+    const bytes = buildBrandedPdf({ eyebrow: "ProsperWise Advisors", title: "Advisor Disclosure and Privacy Consent", subtitle: "Signed electronically", footer: "\u00A9 2026 ProsperWise Advisors", blocks: [...blocks(), ...blocks(), ...blocks()] });
     const s = new TextDecoder("latin1").decode(bytes);
     expect(s.startsWith("%PDF-1.4")).toBe(true);
     expect(s.trimEnd().endsWith("%%EOF")).toBe(true);
-    expect(s).toContain("/Type /Catalog");
-    expect(s).toMatch(/startxref\n\d+\n%%EOF$/);
+    expect(s).toContain("PROSPERWISE ADVISORS");
+    expect(s).toContain("/Logo Do");
+    expect(s).toMatch(/Page 1 of [2-9]/);
+    const xrefAt = Number(s.match(/startxref\n(\d+)\n%%EOF$/)![1]);
+    expect(s.slice(xrefAt, xrefAt + 4)).toBe("xref");
+    const entries = [...s.slice(xrefAt).matchAll(/(\d{10}) 00000 n/g)].map((m) => Number(m[1]));
+    expect(entries.length).toBeGreaterThan(10);
+    entries.forEach((off, i) => expect(s.slice(off, off + 12)).toMatch(new RegExp(`^${i + 1} 0 obj`)));
   });
-  function c() { return cleanTemplate(SAMPLE); }
 });
