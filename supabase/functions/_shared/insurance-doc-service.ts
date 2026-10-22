@@ -8,6 +8,7 @@ import { getServiceGoogleAccessToken } from "./google-token.ts";
 import { driveEnsureFolder, driveFindFolder } from "./meeting-record-service.ts";
 import { alternativesParagraph, cleanTemplate, costParagraph, fillReasonWhy, fillTemplate, footerVersion, needsParagraph, replacementParagraph, sha256Hex, signedPdfBlocks, statementFor, type AnalysisLite } from "./insurance-doc-rules.ts";
 import { buildBrandedPdf } from "./simple-pdf.ts";
+import { needsAnalysisBlocks } from "./needs-analysis-pdf.ts";
 import { DOC_ITEMS, type DocKind } from "./insurance-doc-client.ts";
 
 const DRIVE = "https://www.googleapis.com/drive/v3";
@@ -159,6 +160,26 @@ export async function voidDoc(db: any, id: string, reason: string, who: string) 
   return { ok: true };
 }
 
+
+/** Puts a PDF in a folder under the household's Advisor Files (created if needed). Additive: nothing is moved or deleted. */
+export async function uploadToAdvisorFiles(db: any, householdId: string, folderName: string, name: string, pdf: Uint8Array): Promise<{ id: string; url: string; name: string }> {
+  const { data: hh } = await db.from("households").select("vault_folder_id").eq("id", householdId).maybeSingle();
+  if (!hh?.vault_folder_id) throw new Error("This household has no Vault folder yet.");
+  const token = await getServiceGoogleAccessToken(db);
+  const advisor = await driveFindFolder(hh.vault_folder_id, "Advisor Files", token);
+  if (!advisor) throw new Error("I could not find the Advisor Files folder.");
+  const folder = await driveEnsureFolder(advisor, folderName, token);
+  const boundary = `pwsig${crypto.randomUUID().replace(/-/g, "")}`;
+  const head = new TextEncoder().encode(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, mimeType: "application/pdf", parents: [folder] })}\r\n--${boundary}\r\nContent-Type: application/pdf\r\n\r\n`);
+  const tail = new TextEncoder().encode(`\r\n--${boundary}--`);
+  const body = new Uint8Array(head.length + pdf.length + tail.length);
+  body.set(head, 0); body.set(pdf, head.length); body.set(tail, head.length + pdf.length);
+  const up = await fetch(`${UPLOAD}/files?uploadType=multipart&supportsAllDrives=true&fields=id,webViewLink`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": `multipart/related; boundary=${boundary}` }, body, signal: sig() });
+  if (!up.ok) throw new Error(`Drive said no (${up.status}).`);
+  const f = await up.json();
+  return { id: f.id, url: f.webViewLink ?? `https://drive.google.com/file/d/${f.id}/view`, name };
+}
+
 /** Builds the signed PDF, files it in Advisor Files, ticks the checklist and closes the client's task. Safe to run again: it does only what is not yet done. */
 export async function finalizeDoc(db: any, documentId: string): Promise<{ ok: boolean; message: string }> {
   const { data: d } = await db.from("insurance_documents").select("*").eq("id", documentId).maybeSingle();
@@ -170,22 +191,8 @@ export async function finalizeDoc(db: any, documentId: string): Promise<{ ok: bo
   const blocks = signedPdfBlocks({ statement: statementFor(d.kind), md: d.body_md, hash: d.body_hash, templateModified: d.template_modified, templateVersion: d.template_version, sentAt: d.sent_at, signers: ((signers ?? []) as any[]).map((s) => ({ name: s.name, typedName: s.typed_name, signedAt: s.signed_at, ip: s.ip, caslChoice: s.casl_choice, caslInitials: s.casl_initials, caslEmail: s.casl_email })) });
   const pdf = buildBrandedPdf({ eyebrow: ADVISORS_EYEBROW, title: d.title, subtitle: `Signed electronically \u00B7 fingerprint ${d.body_hash.slice(0, 16)}`, footer: ADVISORS_FOOTER(), blocks });
   try {
-    const { data: hh } = await db.from("households").select("label, vault_folder_id").eq("id", d.household_id).maybeSingle();
-    if (!hh?.vault_folder_id) throw new Error("This household has no Vault folder yet.");
-    const token = await getServiceGoogleAccessToken(db);
-    const advisor = await driveFindFolder(hh.vault_folder_id, "Advisor Files", token);
-    if (!advisor) throw new Error("I could not find the Advisor Files folder.");
-    const folder = await driveEnsureFolder(advisor, "Signed Documents", token);
-    const name = `${d.title} (signed ${ymd()}).pdf`;
-    const boundary = `pwsig${crypto.randomUUID().replace(/-/g, "")}`;
-    const head = new TextEncoder().encode(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, mimeType: "application/pdf", parents: [folder] })}\r\n--${boundary}\r\nContent-Type: application/pdf\r\n\r\n`);
-    const tail = new TextEncoder().encode(`\r\n--${boundary}--`);
-    const body = new Uint8Array(head.length + pdf.length + tail.length);
-    body.set(head, 0); body.set(pdf, head.length); body.set(tail, head.length + pdf.length);
-    const up = await fetch(`${UPLOAD}/files?uploadType=multipart&supportsAllDrives=true&fields=id,webViewLink`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": `multipart/related; boundary=${boundary}` }, body, signal: sig() });
-    if (!up.ok) throw new Error(`Drive said no (${up.status}).`);
-    const f = await up.json();
-    const url = f.webViewLink ?? `https://drive.google.com/file/d/${f.id}/view`;
+    const f = await uploadToAdvisorFiles(db, d.household_id, "Signed Documents", `${d.title} (signed ${ymd()}).pdf`, pdf);
+    const url = f.url, name = f.name;
     await db.from("insurance_documents").update({ pdf_drive_id: f.id, pdf_url: url }).eq("id", documentId);
     if (d.file_id) {
       const names = ((signers ?? []) as any[]).map((s) => s.typed_name).join(" and ");
@@ -200,4 +207,31 @@ export async function finalizeDoc(db: any, documentId: string): Promise<{ ok: bo
     await db.from("staff_notifications").insert({ title: `Signed ${d.title} could not be filed`, body: `${why} The signatures are saved. Open Compliance and use "File the signed copy" to try again.`, link: `/insurance/${d.household_id}/compliance`, source_type: "insurance_document" });
     return { ok: false, message: why };
   }
+}
+
+/** Files a saved needs analysis as a branded PDF in Advisor Files / Needs Analyses, and attaches it to an insurance file as the needs-analysis evidence. */
+export async function fileNeedsAnalysis(db: any, who: string, analysisId: string, fileId?: unknown): Promise<{ ok: true; url: string; attached: boolean } | { error: string }> {
+  const { data: a } = await db.from("insurance_needs_analyses").select("id, household_id, contact_id, inputs, results, note, created_at, pdf_drive_id, pdf_url").eq("id", analysisId).maybeSingle();
+  if (!a) return { error: "Analysis not found." };
+  const { data: c } = await db.from("contacts").select("full_name, first_name, last_name, household_id").eq("id", a.contact_id).maybeSingle();
+  const householdId = a.household_id ?? c?.household_id;
+  if (!householdId) return { error: "This person is not in a household, so there is no Advisor Files folder to put it in." };
+  const person = (c?.full_name || `${c?.first_name ?? ""} ${c?.last_name ?? ""}`).trim() || "Client";
+  const day = ymd(new Date(a.created_at));
+  let drive = a.pdf_drive_id ? { id: a.pdf_drive_id as string, url: a.pdf_url as string, name: `Life Insurance Needs Analysis - ${person} (${day}).pdf` } : null;
+  if (!drive) {
+    const pdf = buildBrandedPdf({ eyebrow: ADVISORS_EYEBROW, title: "Life Insurance Needs Analysis", subtitle: `${person} \u00B7 ${new Date(a.created_at).toLocaleDateString("en-CA", { timeZone: "America/Vancouver", dateStyle: "long" })}`, footer: ADVISORS_FOOTER(), blocks: needsAnalysisBlocks({ inputs: a.inputs ?? {}, results: a.results ?? {}, note: a.note, savedAt: a.created_at, person }) });
+    try { drive = await uploadToAdvisorFiles(db, householdId, "Needs Analyses", `Life Insurance Needs Analysis - ${person.replace(/[\\/]/g, "-")} (${day}).pdf`, pdf); } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+    await db.from("insurance_needs_analyses").update({ pdf_drive_id: drive.id, pdf_url: drive.url, filed_at: new Date().toISOString() }).eq("id", a.id);
+  }
+  let attached = false;
+  if (fileId) {
+    const { data: f } = await db.from("insurance_files").select("id").eq("id", String(fileId)).eq("household_id", householdId).maybeSingle();
+    if (f) {
+      const { data: have } = await db.from("insurance_file_items").select("id").eq("file_id", f.id).eq("kind", "needs_analysis").eq("drive_file_id", drive.id).maybeSingle();
+      if (!have) await db.from("insurance_file_items").insert({ file_id: f.id, kind: "needs_analysis", status: "provided", drive_file_id: drive.id, drive_name: drive.name, drive_url: drive.url, note: `Saved analysis of ${day}`, added_by: who });
+      attached = true;
+    }
+  }
+  return { ok: true, url: drive.url, attached };
 }

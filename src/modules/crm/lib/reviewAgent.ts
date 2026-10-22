@@ -224,3 +224,5 @@ export const getFactFinds = (householdId: string) => call<{ adults: { id: string
 export const compileFactFind = (householdId: string, contactId: string, fileId?: string) => call<{ ok: true; id: string; note: string; asks: string[]; fromNotes: number; dropped: number }>("ffCompile", { householdId, contactId, fileId });
 export const saveFactFind = (id: string, edits: { key: string; value: string }[]) => call<{ ok: true; facts: FactRow[] }>("ffSave", { id, edits });
 export const sendFactFind = (id: string, fileId?: string) => call<{ ok: true; documentId: string }>("ffSend", { id, fileId });
+
+export const fileNeedsAnalysisPdf = (analysisId: string, fileId?: string) => call<{ ok: true; url: string; attached: boolean }>("naFile", { analysisId, fileId });

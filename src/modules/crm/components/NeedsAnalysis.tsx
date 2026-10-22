@@ -5,6 +5,7 @@ import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { Input } from "@/shared/components/ui/input";
 import { supabase } from "@/shared/integrations/supabase/client";
+import { fileNeedsAnalysisPdf, getInsuranceFiles, type InsFile } from "@/modules/crm/lib/reviewAgent";
 import { DIME_DEFAULTS, dime, splitLiabilities, type DimeInputs } from "@/shared/lib/needsAnalysis";
 
 const money = (n: number) => n.toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 });
@@ -22,7 +23,7 @@ const FIELDS: { key: keyof DimeInputs; label: string; hint?: string; group: stri
   { key: "cppDeathBenefit", label: "CPP/QPP death benefit", group: "Available" },
 ];
 
-interface Saved { id: string; created_at: string; inputs: Partial<DimeInputs>; results: ReturnType<typeof dime>; note: string | null }
+interface Saved { id: string; created_at: string; inputs: Partial<DimeInputs>; results: ReturnType<typeof dime>; note: string | null; pdf_url: string | null }
 
 /**
  * The life insurance need for one person by DIME (Debt, Income, Mortgage, Estate). Debts and the mortgage come from the liabilities on file and the cover
@@ -34,11 +35,14 @@ export function NeedsAnalysis({ person, householdId, lifeInsurance }: { person: 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState("");
+  const [files, setFiles] = useState<InsFile[]>([]);
+  const [fileId, setFileId] = useState("");
+  const [filing, setFiling] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [{ data: liabs }, { data: prior }] = await Promise.all([
       supabase.from("liabilities").select("liability_type, current_balance").eq("contact_id", person.id),
-      (supabase.from("insurance_needs_analyses" as any) as any).select("id, created_at, inputs, results, note").eq("contact_id", person.id).order("created_at", { ascending: false }).limit(10),
+      (supabase.from("insurance_needs_analyses" as any) as any).select("id, created_at, inputs, results, note, pdf_url").eq("contact_id", person.id).order("created_at", { ascending: false }).limit(10),
     ]);
     const { debt, mortgage } = splitLiabilities((liabs ?? []) as any[]);
     const last = (prior ?? [])[0] as Saved | undefined;
@@ -48,6 +52,12 @@ export function NeedsAnalysis({ person, householdId, lifeInsurance }: { person: 
     setLoading(false);
   }, [person.id, lifeInsurance]);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (householdId) getInsuranceFiles(householdId).then((r) => { const open = r.files.filter((f) => f.status === "open"); setFiles(open); setFileId((c) => c || open[0]?.id || ""); }).catch(() => setFiles([])); }, [householdId]);
+
+  const filePdf = async (analysisId: string) => {
+    setFiling(analysisId);
+    try { const r = await fileNeedsAnalysisPdf(analysisId, fileId || undefined); toast.success(r.attached ? "Filed as a PDF and added to the insurance file" : "Filed as a PDF in Advisor Files"); await load(); } catch (e) { toast.error(e instanceof Error ? e.message : "Could not file the PDF"); } finally { setFiling(null); }
+  };
 
   const r = useMemo(() => dime(inputs), [inputs]);
   const set = (key: keyof DimeInputs, v: string) => setInputs((p) => ({ ...p, [key]: v === "" ? 0 : Number(v) }));
@@ -94,8 +104,14 @@ export function NeedsAnalysis({ person, householdId, lifeInsurance }: { person: 
         </div>
         {saved.length > 0 && (
           <div className="space-y-1 text-xs text-muted-foreground" data-testid="needs-history">
-            <p className="font-medium text-foreground">Saved versions</p>
-            {saved.map((s) => <p key={s.id}>{new Date(s.created_at).toLocaleDateString("en-CA")}: need {money(s.results.need)}, shortfall {money(s.results.shortfall)}{s.note ? `, ${s.note}` : ""}</p>)}
+            <div className="flex flex-wrap items-center gap-3"><p className="font-medium text-foreground">Saved versions</p>{files.length > 0 && <label className="flex items-center gap-1.5">Add the PDF to<select className="h-7 rounded-md border bg-background px-1.5" value={fileId} onChange={(e) => setFileId(e.target.value)}><option value="">no file</option>{files.map((f) => <option key={f.id} value={f.id}>{f.title}</option>)}</select></label>}</div>
+            {saved.map((s) => (
+              <p key={s.id} className="flex flex-wrap items-center gap-2">
+                <span>{new Date(s.created_at).toLocaleDateString("en-CA")}: need {money(s.results.need)}, shortfall {money(s.results.shortfall)}{s.note ? `, ${s.note}` : ""}</span>
+                {s.pdf_url && <a href={s.pdf_url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">PDF</a>}
+                <button type="button" className="text-primary hover:underline disabled:opacity-50" disabled={filing === s.id || (!!s.pdf_url && !fileId)} onClick={() => void filePdf(s.id)}>{filing === s.id ? "Filing…" : s.pdf_url ? "Add to the file" : "File as PDF"}</button>
+              </p>
+            ))}
           </div>
         )}
       </CardContent>
