@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui
 import { supabase } from "@/shared/integrations/supabase/client";
 import { InsurancePanel } from "@/modules/crm/components/InsurancePanel";
 import { InsuranceFiles } from "@/modules/crm/components/InsuranceFiles";
+import { NeedsAnalysis } from "@/modules/crm/components/NeedsAnalysis";
 import { CATEGORY_LABEL, summarize, type Category, type SummaryPolicy } from "@/shared/lib/insuranceSummary";
 import { policyTypeLabel } from "@/shared/lib/insurance";
 
@@ -97,6 +98,10 @@ export function InsuranceTab({ householdId, contactId }: { householdId: string |
           {(showPeople.length > 1) && <h3 className="font-serif text-base font-semibold">{p.name}</h3>}
           <InsurancePanel scope={{ kind: "contact", contactId: p.id }} storehouses={storehouses} onStorehousesChanged={() => void load()} />
         </section>
+      ))}
+
+      {showPeople.map((p) => (
+        <NeedsAnalysis key={p.id} person={p} householdId={householdId} lifeInsurance={summary.byPerson.find((r) => r.id === p.id)?.coverage.life ?? 0} />
       ))}
 
       {householdId && <InsuranceFiles householdId={householdId} />}
