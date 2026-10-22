@@ -12,6 +12,7 @@ import { CLASS_LABEL, rebalancingWorksheet, type AssetClass, type DriftStatus, t
 import { SERVICE_TIER_LABEL, type ServiceTier } from "@/shared/lib/serviceTier";
 import { IaModelUpload } from "@/modules/crm/components/IaModelUpload";
 import { PublishToClient } from "@/modules/crm/components/PublishToClient";
+import { VaultScanButton } from "@/modules/crm/components/vault/VaultScanButton";
 
 const money = (n: number | null | undefined) => (n === null || n === undefined ? "—" : n.toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }));
 const pct = (n: number | null | undefined) => (n === null || n === undefined ? "—" : `${n.toFixed(1)}%`);
@@ -92,9 +93,34 @@ export default function PortfolioReview() {
                 <h1 className="font-serif text-2xl font-semibold">Portfolio Review: {data.household.label}</h1>
                 <p className="text-sm text-muted-foreground">{data.household.family_name} · values as of {day(p.asOf)}{p.holdings?.asOf ? <span className={p.holdings.stale ? "font-medium text-amber-700" : ""}> · holdings as of {day(p.holdings.asOf)}{p.holdings.stale ? ` (${p.holdings.ageDays} days old)` : ""}</span> : null}{data.household.service_tier ? ` · ${SERVICE_TIER_LABEL[data.household.service_tier as ServiceTier] ?? data.household.service_tier}` : ""}</p>
               </div>
-              <Badge variant="outline" className="text-[10px]">Staff only</Badge>
+              <div className="flex items-center gap-2">
+                <VaultScanButton householdId={data.household.id} onDone={load} />
+                <Badge variant="outline" className="text-[10px]">Staff only</Badge>
+              </div>
             </div>
 
+            <Card>
+              <CardHeader className="pb-3"><CardTitle className="text-lg">Investor Profile</CardTitle></CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <p className="text-muted-foreground">The target mix from the client's Investor Profile (kept in their Investment folder). If it isn't on file, enter it during the review. An account's own profile overrides the household's.</p>
+                {data.profiles.map((pr) => (
+                  <div key={pr.id} className="flex items-center justify-between gap-2 rounded-md border px-3 py-2">
+                    <span>{pr.account_number ? `Account ${pr.account_number}` : "Whole household"}{pr.label ? ` · ${pr.label}` : ""}: {(() => { const m = data.models.find((x) => x.key === pr.profile_key); return m ? `iA model, income ${m.incomeMin}–${m.incomeMax}% (model mix ${m.incomeTarget}/${100 - m.incomeTarget})` : `${pr.income_pct}% income / ${pr.equity_pct}% equity${Number(pr.band_pct) > 0 ? ` (±${pr.band_pct})` : ""}`; })()}{pr.updated_by ? <span className="text-xs text-muted-foreground"> · set by {pr.updated_by}</span> : null}</span>
+                    <Button size="icon" variant="ghost" className="h-7 w-7" aria-label="Remove profile" onClick={async () => { try { await deleteInvestorProfile(id!, pr.account_number); await load(); } catch (e: any) { toast.error(e?.message ?? "Couldn't remove"); } }}><Trash2 className="h-3.5 w-3.5" /></Button>
+                  </div>
+                ))}
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="text-xs">Applies to<select value={account} onChange={(e) => setAccount(e.target.value)} className="mt-1 block h-9 rounded-md border bg-background px-2 text-sm"><option value="">Whole household</option><option value="__all__">Every account (same profile)</option>{p.accounts.filter((a) => a.number).map((a) => <option key={a.id} value={a.number!}>{a.name || a.number}</option>)}</select></label>
+                  <label className="text-xs">Profile<select value={profileKey} onChange={(e) => setProfileKey(e.target.value)} className="mt-1 block h-9 rounded-md border bg-background px-2 text-sm"><option value="">Choose…</option>{data.models.map((m) => <option key={m.key} value={m.key}>{m.label} (income {m.incomeMin}–{m.incomeMax}%)</option>)}<option value="custom">Custom</option></select></label>
+                  {profileKey === "custom" && (<>
+                    <label className="text-xs">Profile name<Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Name" className="mt-1 w-36" /></label>
+                    <label className="text-xs">Income %<Input value={income} onChange={(e) => setIncome(e.target.value)} inputMode="decimal" placeholder="40" className="mt-1 w-20" /></label>
+                    <label className="text-xs" title="Leave at 0 to hold the account to the target, as iA does.">Band ±<Input value={band} onChange={(e) => setBand(e.target.value)} inputMode="decimal" className="mt-1 w-16" /></label>
+                  </>)}
+                  <Button size="sm" onClick={save} disabled={saving}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}</Button>
+                </div>
+              </CardContent>
+            </Card>
             <PublishToClient householdId={data.household.id} householdLabel={data.household.label ?? "Household"} pack={p} publication={data.publication} rebalancePublication={data.rebalancePublication} rebalancingObligation={data.rebalancingObligation} rebalanceProgress={data.rebalanceProgress} onChanged={load} />
 
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -270,28 +296,6 @@ export default function PortfolioReview() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-lg">Investor Profile</CardTitle></CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <p className="text-muted-foreground">The target mix from the client's Investor Profile (kept in their Investment folder). If it isn't on file, enter it during the review. An account's own profile overrides the household's.</p>
-                {data.profiles.map((pr) => (
-                  <div key={pr.id} className="flex items-center justify-between gap-2 rounded-md border px-3 py-2">
-                    <span>{pr.account_number ? `Account ${pr.account_number}` : "Whole household"}{pr.label ? ` · ${pr.label}` : ""}: {(() => { const m = data.models.find((x) => x.key === pr.profile_key); return m ? `iA model, income ${m.incomeMin}–${m.incomeMax}% (model mix ${m.incomeTarget}/${100 - m.incomeTarget})` : `${pr.income_pct}% income / ${pr.equity_pct}% equity${Number(pr.band_pct) > 0 ? ` (±${pr.band_pct})` : ""}`; })()}{pr.updated_by ? <span className="text-xs text-muted-foreground"> · set by {pr.updated_by}</span> : null}</span>
-                    <Button size="icon" variant="ghost" className="h-7 w-7" aria-label="Remove profile" onClick={async () => { try { await deleteInvestorProfile(id!, pr.account_number); await load(); } catch (e: any) { toast.error(e?.message ?? "Couldn't remove"); } }}><Trash2 className="h-3.5 w-3.5" /></Button>
-                  </div>
-                ))}
-                <div className="flex flex-wrap items-end gap-2">
-                  <label className="text-xs">Applies to<select value={account} onChange={(e) => setAccount(e.target.value)} className="mt-1 block h-9 rounded-md border bg-background px-2 text-sm"><option value="">Whole household</option><option value="__all__">Every account (same profile)</option>{p.accounts.filter((a) => a.number).map((a) => <option key={a.id} value={a.number!}>{a.name || a.number}</option>)}</select></label>
-                  <label className="text-xs">Profile<select value={profileKey} onChange={(e) => setProfileKey(e.target.value)} className="mt-1 block h-9 rounded-md border bg-background px-2 text-sm"><option value="">Choose…</option>{data.models.map((m) => <option key={m.key} value={m.key}>{m.label} (income {m.incomeMin}–{m.incomeMax}%)</option>)}<option value="custom">Custom</option></select></label>
-                  {profileKey === "custom" && (<>
-                    <label className="text-xs">Profile name<Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Name" className="mt-1 w-36" /></label>
-                    <label className="text-xs">Income %<Input value={income} onChange={(e) => setIncome(e.target.value)} inputMode="decimal" placeholder="40" className="mt-1 w-20" /></label>
-                    <label className="text-xs" title="Leave at 0 to hold the account to the target, as iA does.">Band ±<Input value={band} onChange={(e) => setBand(e.target.value)} inputMode="decimal" className="mt-1 w-16" /></label>
-                  </>)}
-                  <Button size="sm" onClick={save} disabled={saving}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}</Button>
-                </div>
-              </CardContent>
-            </Card>
             <IaModelUpload currentAsOf={data.models[0]?.asOf ?? null} onSaved={load} />
           </>
         )}
