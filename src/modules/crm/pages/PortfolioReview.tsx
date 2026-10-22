@@ -12,6 +12,7 @@ import { CLASS_LABEL, rebalancingWorksheet, type AssetClass, type DriftStatus, t
 import { SERVICE_TIER_LABEL, type ServiceTier } from "@/shared/lib/serviceTier";
 import { IaModelUpload } from "@/modules/crm/components/IaModelUpload";
 import { PublishToClient } from "@/modules/crm/components/PublishToClient";
+import { RebalanceAuthorizations } from "@/modules/crm/components/RebalanceAuthorizations";
 import { VaultScanButton } from "@/modules/crm/components/vault/VaultScanButton";
 
 const money = (n: number | null | undefined) => (n === null || n === undefined ? "—" : n.toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }));
@@ -58,6 +59,8 @@ export default function PortfolioReview() {
     try { setError(null); setData(await getPortfolioPack(id)); } catch (e: any) { setError(e?.message ?? "Couldn't load the pack"); }
   }, [id]);
   useEffect(() => { void load(); }, [load]);
+  // A link from Rolf's task ends in #authorizations: scroll there once the pack is on screen.
+  useEffect(() => { if (data && window.location.hash === "#authorizations") document.getElementById("authorizations")?.scrollIntoView({ block: "start" }); }, [data]);
 
   const save = async () => {
     const v = Number(income);
@@ -121,6 +124,8 @@ export default function PortfolioReview() {
                 </div>
               </CardContent>
             </Card>
+            {data.authorizations && <RebalanceAuthorizations a={data.authorizations} />}
+
             <PublishToClient householdId={data.household.id} householdLabel={data.household.label ?? "Household"} pack={p} publication={data.publication} rebalancePublication={data.rebalancePublication} rebalancingObligation={data.rebalancingObligation} rebalanceProgress={data.rebalanceProgress} onChanged={load} />
 
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">

@@ -329,7 +329,7 @@ export function rebalanceTaskPlan(items: ProposalItem[], opts: { clientName: str
   }
   const description = [
     `${opts.clientName} reviewed the ${opts.label} rebalancing you published and authorized every change below in the portal on ${opts.today}.`,
-    opts.packUrl ? `Advisor pack: ${opts.packUrl}` : "",
+    opts.packUrl ? `Exactly what they authorized, by whom and when: ${opts.packUrl}` : "",
     "",
     "Confirm the amounts with them first, as they move with markets. Do the switches and resets on the iA advisor site, check off each subtask as you go, then mark the rebalancing done on Georgia Reviews so the family is told. The figures are to the dollar as of the day you published; the client saw them rounded.",
     "",
@@ -344,34 +344,8 @@ export function rebalanceTaskPlan(items: ProposalItem[], opts: { clientName: str
   return { description, subtasks };
 }
 
-
-/**
- * The instructions to carry out, in plain text, from what the client was shown: your note to them, the switches by account, the death benefit resets
- * and, for each model, what is held against the model. Put in the task so the work can be done without reopening the pack.
- */
-export function publishedInstructions(view: Partial<ClientView> | null | undefined, opts: { note?: string | null } = {}): string[] {
-  if (!view && !opts.note) return [];
-  const out: string[] = [];
-  const m = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
-  const note = String(opts.note ?? view?.note ?? "").trim();
-  if (note) out.push("What you told the client:", note, "");
-  const rows = view?.rebalance?.rows ?? [];
-  if (rows.length) {
-    out.push("Switches, by account:");
-    for (const r of rows) out.push(`- ${r.label}${r.owner ? ` (${r.owner})` : ""}: switch about ${m(r.amount)} ${r.direction === "to_income" ? "from equity into income funds" : "from income into equity funds"}${r.taxable ? " [TAXABLE]" : ""}`);
-    out.push("");
-  }
-  const resets = view?.reset?.rows ?? [];
-  if (resets.length) {
-    out.push("Death benefit resets:");
-    for (const r of resets) out.push(`- ${r.name}${r.last4 ? ` …${r.last4}` : ""}${r.owner ? ` (${r.owner})` : ""}: guarantee from ${m(r.currentGuarantee)} to ${m(r.newGuarantee)}`);
-    out.push("");
-  }
-  const sets = view?.fundsSets?.length ? view.fundsSets : view?.funds ? [{ ...view.funds, accounts: [] as string[] }] : [];
-  for (const set of sets) {
-    out.push(`Funds held against the ${set.modelLabel} model${set.accounts.length ? ` (${set.accounts.join(", ")})` : ""}, as of ${set.modelAsOf}:`);
-    for (const f of set.rows.slice(0, 30)) out.push(`- ${f.name}: held ${Math.round(f.heldPct * 10) / 10}%, model ${f.modelPct === null ? "not in the model" : `${Math.round(f.modelPct * 10) / 10}%`}`);
-    out.push("");
-  }
-  return out;
+/** One proposal item in words, with the exact amount the client authorized, for the authorizations view. */
+export function describeAuthorizedItem(i: ProposalItem): string {
+  const who = i.owner ? ` (${i.owner})` : "";
+  return `${i.label}${who}: ${itemAction(i)}${i.kind === "switch" && i.taxable ? ` [TAXABLE: ${gainPhrase(i.estGain)}]` : ""}`;
 }

@@ -44,6 +44,8 @@ export interface PortfolioPackResponse {
   models: ModelPortfolio[];
   rebalancePublication: { id: string; published_at: string; published_by: string; note: string | null; includes: { returns: boolean; mix: boolean; funds: boolean; reset: boolean; rebalancing?: boolean; narratives?: { mix?: string | null; funds?: string | null } } } | null;
   rebalanceProgress: { owner: string; total: number; authorized: number; at: string | null }[];
+  /** Exactly what the clients authorized in the latest published rebalancing, even after it is done. */
+  authorizations: RebalanceAuthorizations | null;
   rebalancingObligation: { id: string; window_start: string; window_end: string; status: string; published_at: string | null; acknowledged_at: string | null; completed_at: string | null } | null;
   publication: { id: string; published_at: string; published_by: string; note: string | null; includes: { returns: boolean; mix: boolean; funds: boolean; reset: boolean; rebalancing?: boolean; narratives?: { mix?: string | null; funds?: string | null } } } | null;
 }
@@ -187,3 +189,9 @@ export const reviewSupportConversation = (id: string) => call<{ ok: true }>("sup
 export const setAway = (a: Away) => call<{ ok: true }>("setAway", a as unknown as Record<string, unknown>);
 export const replyToSupportConversation = (id: string, content: string) => call<{ ok: true; messages: SupportConversation["messages"] }>("supportReply", { id, content });
 export const handBackSupportConversation = (id: string) => call<{ ok: true }>("supportHandBack", { id });
+
+export interface RebalanceAuthorizations {
+  obligationId: string; windowStart: string; windowEnd: string; publishedAt: string; allAuthorized: boolean; completedAt: string | null; note: string | null;
+  items: { id: string; text: string; authorizedBy: string | null; authorizedAt: string | null }[];
+  responses: { who: string; decision: "acknowledged" | "wants_meeting"; at: string; count: number | null; statementVersion: string; statementText: string }[];
+}

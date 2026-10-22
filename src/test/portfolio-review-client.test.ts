@@ -198,7 +198,7 @@ describe("Rolf's task to carry out an authorized rebalancing", () => {
   const plan = rebalanceTaskPlan(items, { clientName: "Albert Parent", label: "Q3 2027", today: "2027-08-12", packUrl: "https://app.prosperwise.ca/households/h1/portfolio-review" });
 
   it("links the pack, and groups each account's switch and reset together with the exact figures", () => {
-    expect(plan.description).toContain("Advisor pack: https://app.prosperwise.ca/households/h1/portfolio-review");
+    expect(plan.description).toContain("Exactly what they authorized, by whom and when: https://app.prosperwise.ca/households/h1/portfolio-review");
     expect(plan.description).toMatch(/TFSA …3190 \(Albert\)\n  - Switch \$9,366 from equity into income funds\n  - Reset the death benefit guarantee from \$136,018 to \$145,261 \(up \$9,243\)/);
     expect(plan.description).toMatch(/Non-registered …6067 \(Albert\)  \[TAXABLE: check the gain first\]\n  - Switch \$7,512/);
     expect(plan.description).not.toContain("$9,400");
