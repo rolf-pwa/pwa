@@ -15,6 +15,7 @@ import { storableMessages } from "../_shared/support-context.ts";
 import { MODEL_PROMPT, validateModels } from "../_shared/ia-model-parse.ts";
 import { isPooledFamily } from "../_shared/review-units.ts";
 import { buildClientProposal, buildClientView, describeAuthorizedItem, narrativeParagraphs, portfolioReviewReadyEmail, type ClientIncludes } from "../_shared/portfolio-review-client.ts";
+import { attachItem, buildPackage, createFile, listFiles, removeItem } from "../_shared/insurance-file-service.ts";
 import { planVaultCatchUp } from "../_shared/vault-catchup.ts";
 import { ensurePersonalDrawers, provisionClientFolderTree } from "../_shared/vault-provisioning.ts";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
@@ -185,6 +186,17 @@ Deno.serve(async (req) => {
     }
 
     // ── Portfolio Review pack: a household's allocation, returns and drift from its Investor Profile ──
+    // ── Insurance files: a compliance checklist per sale or policy, and the audit package built in Drive ──
+    if (action === "insFiles") {
+      const householdId = String(body?.householdId ?? "");
+      if (!householdId) return json({ error: "householdId required" }, 400);
+      return json(await listFiles(db, householdId));
+    }
+    if (action === "insFileCreate") { const r = await createFile(db, staff.email, String(body?.householdId ?? ""), body?.title, body?.kind, body?.policyId, body?.contactId); return json(r, "error" in r ? 400 : 200); }
+    if (action === "insFileAttach") { const r = await attachItem(db, staff.email, String(body?.fileId ?? ""), String(body?.kind ?? ""), { driveLink: body?.driveLink, meetingTaskId: body?.meetingTaskId, notApplicable: body?.notApplicable, note: body?.note }); return json(r, "error" in r ? 400 : 200); }
+    if (action === "insFileRemoveItem") return json(await removeItem(db, String(body?.itemId ?? "")));
+    if (action === "insFilePackage") { const r = await buildPackage(db, staff.email, String(body?.fileId ?? "")); return json(r, "error" in r ? 400 : 200); }
+
     if (action === "portfolioPack") {
       const householdId = String(body?.householdId ?? "");
       if (!householdId) return json({ error: "householdId required" }, 400);

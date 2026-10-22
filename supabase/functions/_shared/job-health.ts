@@ -13,6 +13,7 @@ export const JOBS: JobDef[] = [
   { key: "review_agent_tick", label: "Review and rebalancing reminders", everyMinutes: 30, graceMinutes: 45 },
   { key: "inbox_sweep_morning", label: "Morning inbox sweep", everyMinutes: 24 * 60, graceMinutes: 180 },
   { key: "briefing", label: "Morning briefing", everyMinutes: 24 * 60, graceMinutes: 180 },
+  { key: "insurance_file_check", label: "Insurance file checks", everyMinutes: 24 * 60, graceMinutes: 180 },
   { key: "rule_suggestions", label: "Weekly rule suggestions", everyMinutes: 7 * 24 * 60, graceMinutes: 24 * 60 },
 ];
 

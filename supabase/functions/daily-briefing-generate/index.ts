@@ -15,6 +15,7 @@ import { getValidGoogleAccessToken } from "../_shared/google-token.ts";
 import { dismissBriefingItem, refreshBriefing } from "../_shared/briefing-refresh.ts";
 import { eaApply, eaChat, eaDecide, eaForget, eaHistory, eaNudge } from "../_shared/ea-handlers.ts";
 import { isMutedSender } from "../_shared/ea-agent.ts";
+import { checkOpenFiles } from "../_shared/insurance-file-service.ts";
 import { setSwitch } from "../_shared/georgia-switches.ts";
 import { JOBS, evaluateJob, recordHeartbeat, runWatchdog, trackJob, type Heartbeat } from "../_shared/job-health.ts";
 import { addRule, decideSuggestion, rulebook, suggestRules, undoAction } from "../_shared/georgia-rules.ts";
@@ -680,6 +681,12 @@ Deno.serve(async (req) => {
     if (cronBody.job === "calendar_invites") {
       // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
       EdgeRuntime.waitUntil(trackJob(db, "calendar_invites", () => runCalendarInvites(db)));
+      return json({ started: true });
+    }
+    // Open insurance files: one task a week for any with required items missing.
+    if (cronBody.job === "insurance_file_check") {
+      // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+      EdgeRuntime.waitUntil(trackJob(db, "insurance_file_check", () => checkOpenFiles(db)));
       return json({ started: true });
     }
     if (cronBody.job === "georgia_tasks") {
