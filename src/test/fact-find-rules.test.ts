@@ -110,8 +110,12 @@ describe("wiring", () => {
     expect(m).toMatch(/GRANT ALL ON public\.insurance_fact_finds TO service_role;/);
     expect(m).toContain("'fact_find'");
   });
-  it("is offered on the Compliance page and reachable from the staff function", () => {
-    expect(readFileSync("src/modules/insurance/InsuranceHouseholdPages.tsx", "utf8")).toContain("ComplianceFactFind");
+  it("has a page of its own, in the sidebar, and is reachable from the staff function", () => {
+    const pages = readFileSync("src/modules/insurance/InsuranceHouseholdPages.tsx", "utf8");
+    expect(pages).toContain("FactFindPage");
+    expect(pages.slice(pages.indexOf("export function CompliancePage"))).not.toContain("FactFind");
+    expect(readFileSync("src/modules/insurance/InsuranceLayout.tsx", "utf8")).toContain('to: "fact-find"');
+    expect(readFileSync("src/App.tsx", "utf8")).toContain('path="fact-find"');
     expect(readFileSync("supabase/functions/review-agent-admin/index.ts", "utf8")).toMatch(/ffCompile/);
   });
 });

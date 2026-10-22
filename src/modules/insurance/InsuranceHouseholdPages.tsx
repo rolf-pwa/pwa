@@ -3,7 +3,7 @@ import { useOutletContext } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { QuotingWorkspace } from "@/modules/insurance/QuotingWorkspace";
 import { ComplianceReplacement } from "@/modules/insurance/ComplianceReplacement";
-import { ComplianceFactFind } from "@/modules/insurance/ComplianceFactFind";
+import { FactFind } from "@/modules/insurance/FactFind";
 import { ComplianceDocuments } from "@/modules/insurance/ComplianceDocuments";
 import { ComplianceRoadmap } from "@/modules/insurance/ComplianceRoadmap";
 import type { InsuranceStage } from "@/shared/lib/insurancePipeline";
@@ -16,6 +16,8 @@ const Title = ({ children }: { children: string }) => <h1 className="mb-4 font-s
 export function OverviewPage() { const { householdId, name } = useCtx(); return <><Title>{name ?? "Overview"}</Title><InsuranceTab householdId={householdId} sections={["summary"]} workspaceLink={false} /></>; }
 export function PoliciesPage() { const { householdId } = useCtx(); return <><Title>Policies</Title><InsuranceTab householdId={householdId} sections={["policies"]} workspaceLink={false} /></>; }
 export function NeedsPage() { const { householdId } = useCtx(); return <><Title>Needs analysis</Title><InsuranceTab householdId={householdId} sections={["needs"]} workspaceLink={false} /></>; }
+export function FactFindPage() { const { householdId } = useCtx(); return <><Title>Fact find</Title><FactFind householdId={householdId} /></>; }
+
 export function CompliancePage() {
   const { householdId, stage } = useCtx();
   const [version, setVersion] = useState(0);
@@ -24,7 +26,6 @@ export function CompliancePage() {
       <Title>Compliance</Title>
       <ComplianceRoadmap key={version} householdId={householdId} stage={stage} />
       <div className="mt-6"><ComplianceReplacement householdId={householdId} onChanged={() => setVersion((v) => v + 1)} /></div>
-      <div className="mt-6"><ComplianceFactFind householdId={householdId} onChanged={() => setVersion((v) => v + 1)} /></div>
       <div className="mt-6"><ComplianceDocuments householdId={householdId} onChanged={() => setVersion((v) => v + 1)} /></div>
       <h2 className="mb-3 mt-8 text-sm font-semibold">All files</h2>
       <InsuranceTab householdId={householdId} sections={["files"]} workspaceLink={false} />
