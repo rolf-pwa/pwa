@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
+import { QuotingWorkspace } from "@/modules/insurance/QuotingWorkspace";
 import { ComplianceReplacement } from "@/modules/insurance/ComplianceReplacement";
 import { ComplianceFactFind } from "@/modules/insurance/ComplianceFactFind";
 import { ComplianceDocuments } from "@/modules/insurance/ComplianceDocuments";
@@ -30,6 +31,4 @@ export function CompliancePage() {
     </>
   );
 }
-export function QuotingPage() {
-  return <><Title>Quoting</Title><Card><CardHeader><CardTitle className="text-lg">Carrier quotes</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">Quotes and illustrations compared for the recommendation will live here, and feed the evidence of alternatives in the compliance file.</CardContent></Card></>;
-}
+export function QuotingPage() { const { householdId } = useCtx(); return <><Title>Quoting</Title><QuotingWorkspace householdId={householdId} /></>; }

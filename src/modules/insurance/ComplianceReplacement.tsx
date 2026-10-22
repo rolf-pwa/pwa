@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui
 import { Input } from "@/shared/components/ui/input";
 import { compileReplacement, getInsuranceFiles, getReplacements, saveReplacement, sendReplacement, type InsFile, type ReplacementRow } from "@/modules/crm/lib/reviewAgent";
 import { policyTypeLabel } from "@/shared/lib/insurance";
+import { supabase } from "@/shared/integrations/supabase/client";
+import type { Quote } from "@/shared/lib/quotes";
 import { AGENT_STATEMENT, REPL_SECTIONS } from "@/shared/lib/replacement";
 
 const STATUS: Record<ReplacementRow["status"], string> = { draft: "Draft", sent: "Sent, waiting on the client", confirmed: "Signed by everyone" };
@@ -33,10 +35,12 @@ export function ComplianceReplacement({ householdId, onChanged }: { householdId:
   const [noApp, setNoApp] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
+  const [quotes, setQuotes] = useState<(Quote & { contact_id: string })[]>([]);
 
   const load = useCallback(async () => {
     try {
-      const [d, f] = await Promise.all([getReplacements(householdId), getInsuranceFiles(householdId)]);
+      const [d, f, qs] = await Promise.all([getReplacements(householdId), getInsuranceFiles(householdId), (supabase.from("insurance_quotes" as any) as any).select("*").eq("household_id", householdId).order("created_at")]);
+      setQuotes((qs.data ?? []) as any[]);
       setData(d); setFiles(f.files.filter((x) => x.status === "open" && x.kind === "replacement").concat(f.files.filter((x) => x.status === "open" && x.kind !== "replacement")));
     } catch (e) { toast.error(e instanceof Error ? e.message : "Couldn't load replacements"); setData({ adults: [], policies: [], replacements: [], declaration: "" }); }
   }, [householdId]);
@@ -67,6 +71,7 @@ export function ComplianceReplacement({ householdId, onChanged }: { householdId:
             <fieldset className="flex flex-wrap items-center gap-3"><legend className="mb-1 text-xs">Who signs (the client, and the life insured if another person)</legend>{data.adults.map((a) => <label key={a.id} className="flex items-center gap-1.5"><input type="checkbox" checked={clients.includes(a.id)} onChange={() => setClients(clients.includes(a.id) ? clients.filter((x) => x !== a.id) : [...clients, a.id])} />{a.name}</label>)}</fieldset>
             <label className="block text-xs">Policy being replaced<select className="mt-1 block h-9 w-full rounded-md border bg-background px-2 text-sm" value={policyId} onChange={(e) => setPolicyId(e.target.value)}><option value="">Choose a policy on file</option>{data.policies.map((p) => <option key={p.id} value={p.id}>{p.carrier}, {policyTypeLabel(p.policy_type)}{p.policy_number ? `, ${p.policy_number}` : ""}{p.insured_name ? `, ${p.insured_name}` : ""}</option>)}</select></label>
             {data.policies.length === 0 && <p className="text-xs text-amber-700">No policies are on file for this household yet. Add the policy being replaced under Policies first.</p>}
+            {quotes.some((q) => q.status !== "rejected") && <label className="block text-xs">Prefill the new policy from a quote<select className="mt-1 block h-9 w-full rounded-md border bg-background px-2 text-sm" defaultValue="" onChange={(e) => { const q = quotes.find((x) => x.id === e.target.value); if (q) setNp({ product: q.product, carrier: q.carrier, coverage: q.coverage_amount ? String(q.coverage_amount) : "", premium: q.premium_amount ? String(q.premium_amount) : "", frequency: q.premium_frequency && q.premium_frequency !== "single" ? q.premium_frequency : "monthly" }); }}><option value="">None</option>{quotes.filter((q) => q.status !== "rejected").sort((a, b) => (a.status === "recommended" ? -1 : 0) - (b.status === "recommended" ? -1 : 0)).map((q) => <option key={q.id} value={q.id}>{q.status === "recommended" ? "Recommended: " : ""}{q.carrier}, {q.product} ({data.adults.find((p) => p.id === q.contact_id)?.name ?? ""})</option>)}</select></label>}
             <div className="grid gap-3 md:grid-cols-2">
               <label className="text-xs">New policy<Input className="mt-1" placeholder="for example: 20-year term" value={np.product} onChange={(e) => setNp({ ...np, product: e.target.value })} /></label>
               <label className="text-xs">New carrier<Input className="mt-1" value={np.carrier} onChange={(e) => setNp({ ...np, carrier: e.target.value })} /></label>

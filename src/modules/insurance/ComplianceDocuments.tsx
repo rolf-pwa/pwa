@@ -6,6 +6,8 @@ import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { policyTypeLabel } from "@/shared/lib/insurance";
+import { supabase } from "@/shared/integrations/supabase/client";
+import { alternativesText, type Quote } from "@/shared/lib/quotes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { finalizeInsuranceDoc, getInsuranceFiles, listInsuranceDocs, previewInsuranceDoc, sendInsuranceDoc, voidInsuranceDoc, type InsDoc, type InsDocPreview, type InsFile, type InsFiles, type ReasonWhyFields } from "@/modules/crm/lib/reviewAgent";
 
@@ -32,10 +34,12 @@ export function ComplianceDocuments({ householdId, onChanged }: { householdId: s
   const [rw, setRw] = useState<RwForm | null>(null);
   const [rwPreview, setRwPreview] = useState<InsDocPreview | null>(null);
   const [rwText, setRwText] = useState("");
+  const [quotes, setQuotes] = useState<(Quote & { contact_id: string })[]>([]);
 
   const load = useCallback(async () => {
     try {
-      const [d, f] = await Promise.all([listInsuranceDocs(householdId), getInsuranceFiles(householdId)]);
+      const [d, f, qs] = await Promise.all([listInsuranceDocs(householdId), getInsuranceFiles(householdId), (supabase.from("insurance_quotes" as any) as any).select("*").eq("household_id", householdId).order("created_at")]);
+      setQuotes((qs.data ?? []) as any[]);
       setDocs(d.documents); setPeople((d.adults ?? []).map((a) => ({ id: a.id, name: a.name }))); setFiles(f.files.filter((x) => x.status === "open")); setPolicies(f.policies);
     } catch (e) { toast.error(e instanceof Error ? e.message : "Couldn't load the documents"); setDocs([]); }
   }, [householdId]);
@@ -56,6 +60,12 @@ export function ComplianceDocuments({ householdId, onChanged }: { householdId: s
   const prefill = (policyId: string) => {
     const pol = policies.find((x) => x.id === policyId);
     setRw((cur) => cur && ({ ...cur, policyId, ...(pol ? { product: policyTypeLabel(pol.policy_type), carrier: pol.carrier, coverageAmount: pol.coverage_amount ? String(pol.coverage_amount) : "", premium: pol.premium_amount ? String(pol.premium_amount) : "", frequency: pol.premium_frequency && pol.premium_frequency !== "single" ? pol.premium_frequency : "monthly", insuredId: pol.contact_id || cur.insuredId } : {}) }));
+  };
+  const prefillQuote = (quoteId: string) => {
+    const q = quotes.find((x) => x.id === quoteId);
+    if (!q) return;
+    const same = quotes.filter((x) => x.contact_id === q.contact_id && x.policy_type === q.policy_type);
+    setRw((cur) => cur && ({ ...cur, insuredId: q.contact_id, product: q.product, carrier: q.carrier, coverageAmount: q.coverage_amount ? String(q.coverage_amount) : "", premium: q.premium_amount ? String(q.premium_amount) : "", frequency: q.premium_frequency && q.premium_frequency !== "single" ? q.premium_frequency : "monthly", alternatives: alternativesText(same) }));
   };
   const draftRw = () => run(async () => { const p = await previewInsuranceDoc(householdId, "reason_why", rw ? [rw.insuredId] : undefined, rw ? toFields(rw) : undefined); setRwPreview(p); setRwText(p.md); });
 
@@ -102,6 +112,7 @@ export function ComplianceDocuments({ householdId, onChanged }: { householdId: s
             <div className="grid gap-3 md:grid-cols-2">
               <label className="text-xs">Insured<select className="mt-1 block h-9 w-full rounded-md border bg-background px-2 text-sm" value={rw.insuredId} onChange={(e) => setRw({ ...rw, insuredId: e.target.value })}>{people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
               <label className="text-xs">Prefill from a policy on file<select className="mt-1 block h-9 w-full rounded-md border bg-background px-2 text-sm" value={rw.policyId} onChange={(e) => prefill(e.target.value)}><option value="">None</option>{policies.map((p) => <option key={p.id} value={p.id}>{p.carrier}, {policyTypeLabel(p.policy_type)}{p.insured_name ? `, ${p.insured_name}` : ""}</option>)}</select></label>
+              {quotes.some((q) => q.status !== "rejected") && <label className="text-xs md:col-span-2">Prefill from a quote (also fills the alternatives considered)<select className="mt-1 block h-9 w-full rounded-md border bg-background px-2 text-sm" defaultValue="" onChange={(e) => prefillQuote(e.target.value)}><option value="">None</option>{quotes.filter((q) => q.status !== "rejected").sort((a, b) => (a.status === "recommended" ? -1 : 0) - (b.status === "recommended" ? -1 : 0)).map((q) => <option key={q.id} value={q.id}>{q.status === "recommended" ? "Recommended: " : ""}{q.carrier}, {q.product} ({people.find((p) => p.id === q.contact_id)?.name ?? ""})</option>)}</select></label>}
               <label className="text-xs md:col-span-2">What the client wants the coverage to do<Input className="mt-1" placeholder="for example: replace your income, pay off the mortgage and cover final expenses" value={rw.need} onChange={(e) => setRw({ ...rw, need: e.target.value })} /></label>
               <label className="text-xs">Product<Input className="mt-1" placeholder="for example: 20-year term" value={rw.product} onChange={(e) => setRw({ ...rw, product: e.target.value })} /></label>
               <label className="text-xs">Carrier<Input className="mt-1" value={rw.carrier} onChange={(e) => setRw({ ...rw, carrier: e.target.value })} /></label>
