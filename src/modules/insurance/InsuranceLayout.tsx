@@ -67,7 +67,7 @@ export default function InsuranceLayout() {
           )}
         </nav>
       </aside>
-      <main className="min-w-0 flex-1 p-6"><div className="max-w-screen-xl"><Outlet context={{ householdId, name }} /></div></main>
+      <main className="min-w-0 flex-1 p-6"><div className="max-w-screen-xl"><Outlet context={{ householdId, name, stage }} /></div></main>
     </div>
   );
 }
