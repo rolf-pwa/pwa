@@ -234,3 +234,5 @@ export const getReplacements = (householdId: string) => call<{ adults: { id: str
 export const compileReplacement = (householdId: string, clientIds: string[], policyId: string, newPolicy: NewPolicyInput, fileId?: string) => call<{ ok: true; id: string; note: string; asks: string[]; fromNotes: number; dropped: number }>("rCompile", { householdId, clientIds, policyId, newPolicy, fileId });
 export const saveReplacement = (id: string, edits: { key: string; value: string }[]) => call<{ ok: true; facts: FactRow[] }>("rSave", { id, edits });
 export const sendReplacement = (id: string, typedName: string, agree: boolean, noApplication: boolean, fileId?: string) => call<{ ok: true }>("rSend", { id, typedName, agree, noApplication, fileId });
+
+export const fileQuoteComparison = (householdId: string, contactId: string, policyType: string, fileId?: string) => call<{ ok: true; url: string; attached: boolean; illustration: string }>("qFile", { householdId, contactId, policyType, fileId });
