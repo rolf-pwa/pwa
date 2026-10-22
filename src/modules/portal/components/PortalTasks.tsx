@@ -120,36 +120,42 @@ export function PortalTasks({ portalToken, clientName, contactId, completedTarge
   const [selectedTask, setSelectedTask] = useState<PmTask | null>(null);
   const [interactedIds, setInteractedIds] = useState<Set<string>>(new Set());
 
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      try {
-        const [tasksRes, interactionsRes] = await Promise.all([
-          supabase.functions.invoke("portal-pm-tasks", {
-            body: { action: "list", portal_token: portalToken },
-          }),
-          contactId
-            ? supabase.functions.invoke("portal-track", {
-                body: { action: "get_interactions", contact_id: contactId, portal_token: portalToken },
-              }).then(r => ({ data: r.data?.data || [] }))
-            : Promise.resolve({ data: [] }),
-        ]);
-        if (tasksRes.error) throw tasksRes.error;
-        if (tasksRes.data?.error) {
-          setError(tasksRes.data.error);
-        } else {
+      // One quiet retry: a momentary failure (the page had just refreshed) should not show the client an error.
+      for (let tries = 0; tries < 2; tries++) {
+        try {
+          const [tasksRes, interactionsRes] = await Promise.all([
+            supabase.functions.invoke("portal-pm-tasks", {
+              body: { action: "list", portal_token: portalToken },
+            }),
+            contactId
+              ? supabase.functions.invoke("portal-track", {
+                  body: { action: "get_interactions", contact_id: contactId, portal_token: portalToken },
+                }).then(r => ({ data: r.data?.data || [] }))
+              : Promise.resolve({ data: [] }),
+          ]);
+          if (cancelled) return;
+          if (tasksRes.error) throw tasksRes.error;
+          if (tasksRes.data?.error) throw new Error(tasksRes.data.error);
           setTasks(tasksRes.data?.tasks || []);
+          setError(null);
+          // Load previously interacted task ids
+          if (interactionsRes && "data" in interactionsRes && interactionsRes.data) {
+            setInteractedIds(new Set((interactionsRes.data as any[]).map((r: any) => r.task_gid)));
+          }
+          setLoading(false);
+          return;
+        } catch (e: any) {
+          if (tries === 1) { if (!cancelled) { setError(e?.message || "Failed to load tasks"); setLoading(false); } }
+          else await new Promise((r) => setTimeout(r, 1500));
         }
-        // Load previously interacted task ids
-        if (interactionsRes && "data" in interactionsRes && interactionsRes.data) {
-          setInteractedIds(new Set((interactionsRes.data as any[]).map((r: any) => r.task_gid)));
-        }
-      } catch (e: any) {
-        setError(e.message || "Failed to load tasks");
-      } finally {
-        setLoading(false);
       }
     })();
-  }, [portalToken, contactId]);
+    return () => { cancelled = true; };
+  }, [portalToken, contactId, attempt]);
 
   if (loading) {
     return (
@@ -166,6 +172,7 @@ export function PortalTasks({ portalToken, clientName, contactId, completedTarge
         <AlertCircle className="h-12 w-12 text-muted-foreground/40 mb-4" />
         <h3 className="text-lg font-semibold text-foreground font-serif">Unable to Load Tasks</h3>
         <p className="text-sm text-muted-foreground mt-2 max-w-sm">{error}</p>
+        <button type="button" className="mt-4 text-sm underline underline-offset-4 text-foreground" onClick={() => { setError(null); setLoading(true); setAttempt((n) => n + 1); }}>Try again</button>
       </div>
     );
   }
