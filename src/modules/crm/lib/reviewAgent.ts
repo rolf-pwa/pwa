@@ -216,3 +216,11 @@ export const previewInsuranceDoc = (householdId: string, kind: string, contactId
 export const sendInsuranceDoc = (householdId: string, kind: string, contactIds: string[], fileId?: string, fields?: ReasonWhyFields, bodyMd?: string) => call<{ ok: true; id: string }>("insDocSend", { householdId, kind, contactIds, fileId, fields, bodyMd });
 export const voidInsuranceDoc = (documentId: string, reason: string) => call<{ ok: true }>("insDocVoid", { documentId, reason });
 export const finalizeInsuranceDoc = (documentId: string) => call<{ ok: boolean; message: string }>("insDocFinalize", { documentId });
+
+export interface FactSource { type: "file" | "onboarding" | "meeting" | "call" | "client" | "none"; label: string; quote?: string; date?: string }
+export interface FactRow { key: string; label: string; section: string; value: string; source: FactSource; status: "proposed" | "edited" | "confirmed" | "missing" }
+export interface FactFindRow { id: string; contact_id: string; file_id: string | null; facts: FactRow[]; evidence: { id: string; type: string; label: string; date: string; chars: number }[]; dropped: number; status: "draft" | "sent" | "confirmed"; document_id: string | null; created_at: string; updated_at: string }
+export const getFactFinds = (householdId: string) => call<{ adults: { id: string; name: string; email: string | null }[]; finds: FactFindRow[] }>("ffGet", { householdId });
+export const compileFactFind = (householdId: string, contactId: string, fileId?: string) => call<{ ok: true; id: string; note: string; asks: string[]; fromNotes: number; dropped: number }>("ffCompile", { householdId, contactId, fileId });
+export const saveFactFind = (id: string, edits: { key: string; value: string }[]) => call<{ ok: true; facts: FactRow[] }>("ffSave", { id, edits });
+export const sendFactFind = (id: string, fileId?: string) => call<{ ok: true; documentId: string }>("ffSend", { id, fileId });

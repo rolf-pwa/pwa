@@ -16,6 +16,7 @@ import { MODEL_PROMPT, validateModels } from "../_shared/ia-model-parse.ts";
 import { isPooledFamily } from "../_shared/review-units.ts";
 import { buildClientProposal, buildClientView, describeAuthorizedItem, narrativeParagraphs, portfolioReviewReadyEmail, type ClientIncludes } from "../_shared/portfolio-review-client.ts";
 import { attachItem, buildPackage, createFile, listFiles, removeItem } from "../_shared/insurance-file-service.ts";
+import { ffCompile, ffGet, ffSave, ffSend } from "../_shared/fact-find-service.ts";
 import { adults, finalizeDoc, listDocs, previewDoc, sendDoc, voidDoc } from "../_shared/insurance-doc-service.ts";
 import { planVaultCatchUp } from "../_shared/vault-catchup.ts";
 import { ensurePersonalDrawers, provisionClientFolderTree } from "../_shared/vault-provisioning.ts";
@@ -196,6 +197,10 @@ Deno.serve(async (req) => {
     if (action === "insFileCreate") { const r = await createFile(db, staff.email, String(body?.householdId ?? ""), body?.title, body?.kind, body?.policyId, body?.contactId); return json(r, "error" in r ? 400 : 200); }
     if (action === "insFileAttach") { const r = await attachItem(db, staff.email, String(body?.fileId ?? ""), String(body?.kind ?? ""), { driveLink: body?.driveLink, meetingTaskId: body?.meetingTaskId, notApplicable: body?.notApplicable, note: body?.note }); return json(r, "error" in r ? 400 : 200); }
     if (action === "insFileRemoveItem") return json(await removeItem(db, String(body?.itemId ?? "")));
+    if (action === "ffGet") return json(await ffGet(db, String(body?.householdId ?? "")));
+    if (action === "ffCompile") { const r = await ffCompile(db, staff.email, String(body?.householdId ?? ""), String(body?.contactId ?? ""), body?.fileId); return json(r, "error" in r ? 400 : 200); }
+    if (action === "ffSave") { const r = await ffSave(db, String(body?.id ?? ""), body?.edits); return json(r, "error" in r ? 400 : 200); }
+    if (action === "ffSend") { const r = await ffSend(db, staff.email, String(body?.id ?? ""), body?.fileId); return json(r, "error" in r ? 400 : 200); }
     if (action === "insDocList") return json({ documents: await listDocs(db, String(body?.householdId ?? "")), adults: await adults(db, String(body?.householdId ?? "")) });
     if (action === "insDocPreview") { const r = await previewDoc(db, String(body?.householdId ?? ""), body?.kind, body?.contactIds, body?.fields); return json(r, "error" in r ? 400 : 200); }
     if (action === "insDocSend") { const r = await sendDoc(db, staff.email, { householdId: String(body?.householdId ?? ""), kind: body?.kind, contactIds: body?.contactIds, fileId: body?.fileId, fields: body?.fields, bodyMd: body?.bodyMd }); return json(r, "error" in r ? 400 : 200); }

@@ -4,12 +4,13 @@
 // stands where the CASL choice goes. Explicit markers in the master win if they are used: {{client_names}}, {{advisor_contact}}, {{casl_choice}}, {{date}}.
 
 import type { Block } from "./simple-pdf.ts";
+import { FACT_FIND_STATEMENT } from "./fact-find-rules.ts";
 export const CASL_MARKER = "{{casl_choice}}";
 export const SIGN_STATEMENT_VERSION = "2026-10-a";
 export const SIGN_STATEMENT = "I have read this document and I agree to it. I understand that typing my name below is my electronic signature, and that it has the same effect as signing on paper.";
 export const SIGN_STATEMENT_LETTER = "I confirm that I have received and read this letter, and that what it says about my needs and circumstances is correct. I understand that typing my name below is my electronic signature, and that it has the same effect as signing on paper.";
 /** What the signer agrees to, by kind of document. */
-export const statementFor = (kind: string) => (kind === "reason_why" ? SIGN_STATEMENT_LETTER : SIGN_STATEMENT);
+export const statementFor = (kind: string) => (kind === "reason_why" ? SIGN_STATEMENT_LETTER : kind === "fact_find" ? FACT_FIND_STATEMENT : SIGN_STATEMENT);
 
 /** Drive's Markdown export escapes punctuation with a backslash; take those off. */
 export const unescapeMd = (s: string) => s.replace(/\\([\\`*_{}\[\]()#+\-.!<>|~])/g, "$1");
@@ -102,7 +103,8 @@ export function signedPdfBlocks(i: { statement?: string; md: string; hash: strin
       else {
         // A bold lead-in ("**What it costs.** The premium is...") becomes its own bold line, since a line is set in one weight.
         const lead = t.match(/^\*\*([^*]+?)\*\*\s+(\S.*)$/);
-        if (lead) { blocks.push({ kind: "p", text: plainOf(lead[1]), bold: true }, { kind: "p", text: plainOf(lead[2]) }); } else blocks.push({ kind: "p", text: plainOf(t) });
+        if (lead && lead[1].trim().endsWith(":") && lead[1].length <= 40) blocks.push({ kind: "kv", label: plainOf(lead[1]), value: plainOf(lead[2]) });
+        else if (lead) { blocks.push({ kind: "p", text: plainOf(lead[1]), bold: true }, { kind: "p", text: plainOf(lead[2]) }); } else blocks.push({ kind: "p", text: plainOf(t) });
       }
     }
   };

@@ -21,7 +21,7 @@ const RW_TITLE = "Your Life Insurance Recommendation";
 const ADVISORS_EYEBROW = "ProsperWise Advisors";
 const ADVISORS_FOOTER = () => `\u00A9 ${new Date().getFullYear()} Issler Group Management & Consulting Inc. o/a ProsperWise Advisors \u00B7 www.prosperwise.ca`;
 
-const isKind = (k: unknown): k is DocKind => k === "disclosure_privacy" || k === "reason_why";
+const isKind = (k: unknown): k is DocKind => k === "disclosure_privacy" || k === "reason_why" || k === "fact_find";
 
 async function readMaster(db: any, kind: DocKind) {
   const { data: t } = await db.from("insurance_doc_templates").select("kind, title, drive_file_id, advisor_contact").eq("kind", kind).maybeSingle();
@@ -80,6 +80,7 @@ async function latestAnalyses(db: any, people: { id: string; name: string }[]): 
 /** The document as the client would get it, for Rolf to read before sending. Nothing is stored. */
 export async function previewDoc(db: any, householdId: string, kind: unknown, contactIds: unknown, rawFields?: unknown) {
   if (!isKind(kind)) return { error: "Unknown document." };
+  if (kind === "fact_find") return { error: "The fact find is built on the Fact find card." };
   const all = await adults(db, householdId);
   const fields = cleanFields(rawFields);
   const asked = Array.isArray(contactIds) && contactIds.length ? (contactIds as string[]) : kind === "reason_why" && fields.insuredId ? [fields.insuredId] : null;
@@ -111,25 +112,35 @@ export async function sendDoc(db: any, who: string, input: { householdId: string
   // The letter is Rolf's own words: he can edit the draft before it goes. The disclosure is always the master's wording.
   if (input.kind === "reason_why" && typeof input.bodyMd === "string" && input.bodyMd.trim()) { p.md = input.bodyMd.trim().slice(0, 30_000); p.hash = await sha256Hex(p.md); }
   if (input.kind === "reason_why" && /_{3,}/.test(p.md)) return { error: "The letter still has blanks to fill in." };
+  return await createAndSend(db, who, { householdId: input.householdId, kind: input.kind as DocKind, title: p.title, md: p.md, hash: p.hash, driveId: p.driveId, modified: p.modified, version: p.version, signers: p.signers, fileId: input.fileId });
+}
+
+/** Stores a document exactly as it will be read, names who must sign, and puts a task in the client's portal. Used by every kind of document. */
+export async function createAndSend(db: any, who: string, p: { householdId: string; kind: DocKind; title: string; md: string; hash: string; driveId: string; modified: string | null; version: string | null; signers: { id: string; name: string }[]; fileId?: unknown }) {
   let fileId: string | null = null;
-  if (input.fileId) {
-    const { data: f } = await db.from("insurance_files").select("id").eq("id", String(input.fileId)).eq("household_id", input.householdId).maybeSingle();
+  if (p.fileId) {
+    const { data: f } = await db.from("insurance_files").select("id").eq("id", String(p.fileId)).eq("household_id", p.householdId).maybeSingle();
     fileId = f?.id ?? null;
   }
-  // One live copy of a document per household: the earlier one is voided so a client is never asked to sign two versions.
-  // (Letters are per person, so a new letter does not void another person's pending one.)
-  const { data: earlier } = input.kind === "disclosure_privacy" ? await db.from("insurance_documents").select("id, task_id").eq("household_id", input.householdId).eq("kind", input.kind).in("status", ["sent", "partly_signed"]) : { data: [] as any[] };
+  // One live copy of the disclosure per household: the earlier one is voided so a client is never asked to sign two versions.
+  // (Letters and fact finds are per person, so a new one does not void another person's pending one.)
+  const { data: earlier } = p.kind === "disclosure_privacy" ? await db.from("insurance_documents").select("id, task_id").eq("household_id", p.householdId).eq("kind", p.kind).in("status", ["sent", "partly_signed"]) : { data: [] as any[] };
   for (const e of (earlier ?? []) as any[]) await voidDoc(db, e.id, "Replaced by a newer copy", who);
-  const { data: doc, error } = await db.from("insurance_documents").insert({ household_id: input.householdId, file_id: fileId, kind: input.kind, title: p.title, template_drive_id: p.driveId, template_modified: p.modified, template_version: p.version, body_md: p.md, body_hash: p.hash, sent_by: who }).select("id").single();
+  const { data: doc, error } = await db.from("insurance_documents").insert({ household_id: p.householdId, file_id: fileId, kind: p.kind, title: p.title, template_drive_id: p.driveId, template_modified: p.modified, template_version: p.version, body_md: p.md, body_hash: p.hash, sent_by: who }).select("id").single();
   if (error) return { error: error.message };
-  await db.from("insurance_document_signers").insert(p.signers.map((s: any) => ({ document_id: doc.id, contact_id: s.id, name: s.name })));
+  await db.from("insurance_document_signers").insert(p.signers.map((s) => ({ document_id: doc.id, contact_id: s.id, name: s.name })));
   const { data: rolf } = await db.from("profiles").select("user_id").eq("email", ROLF).maybeSingle();
   if (rolf?.user_id) {
     const due = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
-    const { data: task } = await db.from("pm_tasks").insert({ title: input.kind === "reason_why" ? `Review and confirm your ${p.title}` : `Sign your ${p.title}`, description: input.kind === "reason_why" ? `Please read ${p.title} in your portal and confirm it: open Documents. If anything about your needs or circumstances is not right, tell me before you confirm.` : `Please read and sign your ${p.title} in your portal: open Documents to sign. It takes a couple of minutes. If you have questions first, reply here and I will answer them.`, status: "open", client_visible: true, assignee_id: rolf.user_id, created_by: rolf.user_id, household_id: input.householdId, due_date: due }).select("id").maybeSingle();
+    const confirmOnly = p.kind !== "disclosure_privacy";
+    const { data: task } = await db.from("pm_tasks").insert({
+      title: confirmOnly ? `Review and confirm your ${p.title}` : `Sign your ${p.title}`,
+      description: confirmOnly ? `Please read ${p.title} in your portal and confirm it: open Documents. If anything is missing or not right, tell me before you confirm.` : `Please read and sign your ${p.title} in your portal: open Documents to sign. It takes a couple of minutes. If you have questions first, reply here and I will answer them.`,
+      status: "open", client_visible: true, assignee_id: rolf.user_id, created_by: rolf.user_id, household_id: p.householdId, due_date: due,
+    }).select("id").maybeSingle();
     if (task?.id) await db.from("insurance_documents").update({ task_id: task.id }).eq("id", doc.id);
   }
-  return { ok: true as const, id: doc.id };
+  return { ok: true as const, id: doc.id as string };
 }
 
 export async function listDocs(db: any, householdId: string) {
@@ -153,6 +164,7 @@ export async function finalizeDoc(db: any, documentId: string): Promise<{ ok: bo
   const { data: d } = await db.from("insurance_documents").select("*").eq("id", documentId).maybeSingle();
   if (!d || d.status !== "signed") return { ok: false, message: "The document is not fully signed." };
   if (d.task_id) await db.from("pm_tasks").update({ status: "done", completed_at: new Date().toISOString() }).eq("id", d.task_id).neq("status", "done");
+  if (d.kind === "fact_find") await db.from("insurance_fact_finds").update({ status: "confirmed", updated_at: new Date().toISOString() }).eq("document_id", d.id);
   if (d.pdf_drive_id) return { ok: true, message: "Already filed." };
   const { data: signers } = await db.from("insurance_document_signers").select("name, typed_name, signed_at, ip, casl_choice, casl_initials, casl_email").eq("document_id", documentId).order("signed_at");
   const blocks = signedPdfBlocks({ statement: statementFor(d.kind), md: d.body_md, hash: d.body_hash, templateModified: d.template_modified, templateVersion: d.template_version, sentAt: d.sent_at, signers: ((signers ?? []) as any[]).map((s) => ({ name: s.name, typedName: s.typed_name, signedAt: s.signed_at, ip: s.ip, caslChoice: s.casl_choice, caslInitials: s.casl_initials, caslEmail: s.casl_email })) });
