@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
+import { ComplianceReplacement } from "@/modules/insurance/ComplianceReplacement";
 import { ComplianceFactFind } from "@/modules/insurance/ComplianceFactFind";
 import { ComplianceDocuments } from "@/modules/insurance/ComplianceDocuments";
 import { ComplianceRoadmap } from "@/modules/insurance/ComplianceRoadmap";
@@ -21,6 +22,7 @@ export function CompliancePage() {
     <>
       <Title>Compliance</Title>
       <ComplianceRoadmap key={version} householdId={householdId} stage={stage} />
+      <div className="mt-6"><ComplianceReplacement householdId={householdId} onChanged={() => setVersion((v) => v + 1)} /></div>
       <div className="mt-6"><ComplianceFactFind householdId={householdId} onChanged={() => setVersion((v) => v + 1)} /></div>
       <div className="mt-6"><ComplianceDocuments householdId={householdId} onChanged={() => setVersion((v) => v + 1)} /></div>
       <h2 className="mb-3 mt-8 text-sm font-semibold">All files</h2>

@@ -19,7 +19,7 @@ const FACT_TOOL = {
   parameters: { type: "OBJECT", properties: { facts: { type: "ARRAY", items: { type: "OBJECT", properties: { key: { type: "STRING" }, value: { type: "STRING" }, evidence_id: { type: "STRING" }, quote: { type: "STRING" } }, required: ["key", "value", "evidence_id", "quote"] } } }, required: ["facts"] },
 };
 
-async function gatherEvidence(db: any, householdId: string, memberIds: string[]): Promise<Evidence[]> {
+export async function gatherEvidence(db: any, householdId: string, memberIds: string[]): Promise<Evidence[]> {
   const out: Evidence[] = [];
   const { data: calls } = memberIds.length ? await db.from("quo_calls").select("occurred_at, direction, transcript, summary").in("contact_id", memberIds).order("occurred_at", { ascending: false }).limit(10) : { data: [] as any[] };
   for (const c of (calls ?? []) as any[]) {

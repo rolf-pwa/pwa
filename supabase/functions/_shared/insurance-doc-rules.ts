@@ -5,12 +5,13 @@
 
 import type { Block } from "./simple-pdf.ts";
 import { FACT_FIND_STATEMENT } from "./fact-find-rules.ts";
+import { LIRD_CLIENT_STATEMENT } from "./replacement-rules.ts";
 export const CASL_MARKER = "{{casl_choice}}";
 export const SIGN_STATEMENT_VERSION = "2026-10-a";
 export const SIGN_STATEMENT = "I have read this document and I agree to it. I understand that typing my name below is my electronic signature, and that it has the same effect as signing on paper.";
 export const SIGN_STATEMENT_LETTER = "I confirm that I have received and read this letter, and that what it says about my needs and circumstances is correct. I understand that typing my name below is my electronic signature, and that it has the same effect as signing on paper.";
 /** What the signer agrees to, by kind of document. */
-export const statementFor = (kind: string) => (kind === "reason_why" ? SIGN_STATEMENT_LETTER : kind === "fact_find" ? FACT_FIND_STATEMENT : SIGN_STATEMENT);
+export const statementFor = (kind: string) => (kind === "reason_why" || kind === "replacement_explanation" ? SIGN_STATEMENT_LETTER : kind === "fact_find" ? FACT_FIND_STATEMENT : kind === "replacement_declaration" ? LIRD_CLIENT_STATEMENT : SIGN_STATEMENT);
 
 /** Drive's Markdown export escapes punctuation with a backslash; take those off. */
 export const unescapeMd = (s: string) => s.replace(/\\([\\`*_{}\[\]()#+\-.!<>|~])/g, "$1");
@@ -87,7 +88,7 @@ export function checkSignature(input: SignInput, signerName: string, needsCasl: 
 
 /** The blocks of the frozen PDF: the document as signed, then the record of each signature. */
 export interface SignedRecord { name: string; typedName: string; signedAt: string; ip: string | null; caslChoice: string | null; caslInitials: string | null; caslEmail: string | null }
-export function signedPdfBlocks(i: { statement?: string; md: string; hash: string; templateModified: string | null; templateVersion: string | null; sentAt: string; signers: SignedRecord[] }): Block[] {
+export function signedPdfBlocks(i: { agent?: { typedName: string; signedAt: string; ip: string | null; statement: string } | null; statement?: string; md: string; hash: string; templateModified: string | null; templateVersion: string | null; sentAt: string; signers: SignedRecord[] }): Block[] {
   const blocks: Block[] = [];
   const plainOf = (t: string) => t.replace(/\*\*\*?(.+?)\*\*\*?/g, "$1").replace(/(^|[^*])\*(?!\*)(.+?)\*/g, "$1$2").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/^\s*[-*]\s+/, "\u2022 ").replace(/\*{2,3}/g, "").replace(/ {2,}$/, "");
   const render = (md: string) => {
@@ -118,7 +119,11 @@ export function signedPdfBlocks(i: { statement?: string; md: string; hash: strin
     if (s.caslChoice) lines.push(`Commercial electronic messages (CASL): ${s.caslChoice === "yes" ? `agreed, at ${s.caslEmail}` : "not agreed"}. Initials: ${s.caslInitials}`);
     blocks.push({ kind: "card", title: s.typedName.trim().toLowerCase() === s.name.trim().toLowerCase() ? s.typedName : `${s.typedName} (on file as ${s.name})`, lines });
   }
-  blocks.push({ kind: "gap", h: 6 }, { kind: "p", small: true, text: `Sent ${new Date(i.sentAt).toLocaleDateString("en-CA", { timeZone: "America/Vancouver", dateStyle: "long" })}. Wording fingerprint (SHA-256): ${i.hash}. Master document version: ${i.templateVersion ?? "not stated"}; last edited ${i.templateModified ?? "unknown"}. Statement version ${SIGN_STATEMENT_VERSION}.` });
+  if (i.agent) {
+    const when = new Date(i.agent.signedAt).toLocaleString("en-CA", { timeZone: "America/Vancouver", dateStyle: "long", timeStyle: "short" });
+    blocks.push({ kind: "card", title: `${i.agent.typedName} (agent)`, lines: [i.agent.statement, `Signed ${when} Pacific${i.agent.ip ? `, from IP address ${i.agent.ip}` : ""}`] });
+  }
+  blocks.push({ kind: "gap", h: 6 }, { kind: "p", small: true, text: `Sent ${new Date(i.sentAt).toLocaleDateString("en-CA", { timeZone: "America/Vancouver", dateStyle: "long" })}. Wording fingerprint (SHA-256): ${i.hash}. ${i.templateVersion || i.templateModified ? `Master document version: ${i.templateVersion ?? "not stated"}${i.templateModified ? `; last edited ${i.templateModified}` : ""}. ` : ""}Statement version ${SIGN_STATEMENT_VERSION}.` });
   return blocks;
 }
 

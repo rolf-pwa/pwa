@@ -226,3 +226,11 @@ export const saveFactFind = (id: string, edits: { key: string; value: string }[]
 export const sendFactFind = (id: string, fileId?: string) => call<{ ok: true; documentId: string }>("ffSend", { id, fileId });
 
 export const fileNeedsAnalysisPdf = (analysisId: string, fileId?: string) => call<{ ok: true; url: string; attached: boolean }>("naFile", { analysisId, fileId });
+
+export interface ReplacementRow { id: string; file_id: string | null; client_ids: string[]; replaced_policy_id: string | null; new_policy: { product?: string; carrier?: string }; facts: FactRow[]; evidence: { id: string; type: string; label: string; date: string; chars: number }[]; dropped: number; status: "draft" | "sent" | "confirmed"; explanation_doc_id: string | null; declaration_doc_id: string | null; created_at: string; sent_at: string | null }
+export interface ReplacementPolicy { id: string; carrier: string; policy_type: string; policy_number: string | null; insured_name: string | null; contact_id: string }
+export interface NewPolicyInput { product: string; carrier: string; coverage?: number | null; premium?: number | null; frequency?: string | null }
+export const getReplacements = (householdId: string) => call<{ adults: { id: string; name: string }[]; policies: ReplacementPolicy[]; replacements: ReplacementRow[]; declaration: string }>("rGet", { householdId });
+export const compileReplacement = (householdId: string, clientIds: string[], policyId: string, newPolicy: NewPolicyInput, fileId?: string) => call<{ ok: true; id: string; note: string; asks: string[]; fromNotes: number; dropped: number }>("rCompile", { householdId, clientIds, policyId, newPolicy, fileId });
+export const saveReplacement = (id: string, edits: { key: string; value: string }[]) => call<{ ok: true; facts: FactRow[] }>("rSave", { id, edits });
+export const sendReplacement = (id: string, typedName: string, agree: boolean, noApplication: boolean, fileId?: string) => call<{ ok: true }>("rSend", { id, typedName, agree, noApplication, fileId });

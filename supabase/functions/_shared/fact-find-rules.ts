@@ -9,7 +9,7 @@ export const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: "health", label: "Health and lifestyle" }, { key: "insurance", label: "Insurance" }, { key: "estate", label: "Estate planning" }, { key: "goals", label: "Goals and what matters to you" },
 ];
 
-export interface FieldDef { key: string; label: string; section: SectionKey; origin: "file" | "model"; ask: string }
+export interface FieldDef { key: string; label: string; section: string; origin: "file" | "model"; ask: string }
 export const FIELDS: FieldDef[] = [
   { key: "legal_name", label: "Legal name", section: "personal", origin: "file", ask: "Confirm your full legal name" },
   { key: "date_of_birth", label: "Date of birth", section: "personal", origin: "file", ask: "Date of birth" },
@@ -34,24 +34,25 @@ export const FIELDS: FieldDef[] = [
   { key: "pressures", label: "What is weighing on you", section: "goals", origin: "file", ask: "Pressures or decisions on your mind" },
 ];
 export const MODEL_KEYS = new Set(FIELDS.filter((f) => f.origin === "model").map((f) => f.key));
+const modelKeysOf = (fields: FieldDef[]) => fields.filter((f) => f.origin === "model").map((f) => f.key);
 
 export type SourceType = "file" | "onboarding" | "meeting" | "call" | "client" | "none";
 export interface FactSource { type: SourceType; label: string; quote?: string; date?: string }
 export type FactStatus = "proposed" | "edited" | "confirmed" | "missing";
-export interface Fact { key: string; label: string; section: SectionKey; value: string; source: FactSource; status: FactStatus }
+export interface Fact { key: string; label: string; section: string; value: string; source: FactSource; status: FactStatus }
 
 export interface Evidence { id: string; type: "meeting" | "call"; label: string; date: string; text: string }
 
 const norm = (s: string) => String(s ?? "").toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, " ").trim();
 
 /** Facts the model proposed, kept only if the key is known, the source exists and the quote really appears in it. */
-export function validateModelFacts(raw: unknown, evidence: Evidence[]): { facts: Fact[]; dropped: number } {
+export function validateModelFacts(raw: unknown, evidence: Evidence[], fields: FieldDef[] = FIELDS): { facts: Fact[]; dropped: number } {
   const list = Array.isArray(raw) ? raw : [];
   const facts: Fact[] = [];
   const seen = new Set<string>();
   let dropped = 0;
   for (const r of list as any[]) {
-    const def = FIELDS.find((f) => f.key === r?.key && f.origin === "model");
+    const def = fields.find((f) => f.key === r?.key && f.origin === "model");
     const ev = evidence.find((e) => e.id === r?.evidence_id);
     const value = String(r?.value ?? "").trim().slice(0, 400);
     const quote = String(r?.quote ?? "").trim();
@@ -63,15 +64,15 @@ export function validateModelFacts(raw: unknown, evidence: Evidence[]): { facts:
 }
 
 /** One fact per field, in the order of the form: from the file if there, else the model's, else missing. */
-export function assemble(fileFacts: Fact[], modelFacts: Fact[]): Fact[] {
-  return FIELDS.map((f) => {
+export function assemble(fileFacts: Fact[], modelFacts: Fact[], fields: FieldDef[] = FIELDS): Fact[] {
+  return fields.map((f) => {
     const hit = fileFacts.find((x) => x.key === f.key && x.value.trim()) ?? modelFacts.find((x) => x.key === f.key);
     return hit ?? { key: f.key, label: f.label, section: f.section, value: "", source: { type: "none", label: "Not found" }, status: "missing" as const };
   });
 }
 
 export const missingFacts = (facts: Fact[]) => facts.filter((f) => !f.value.trim());
-export const askList = (facts: Fact[]) => missingFacts(facts).map((f) => FIELDS.find((d) => d.key === f.key)?.ask ?? f.label);
+export const askList = (facts: Fact[], fields: FieldDef[] = FIELDS) => missingFacts(facts).map((f) => fields.find((d) => d.key === f.key)?.ask ?? f.label);
 
 /** The document the client reads and confirms: each fact with where it came from (never the raw quotes), and what is still to be provided. */
 export function factFindMarkdown(name: string, facts: Fact[]): string {
@@ -92,11 +93,11 @@ export function factFindMarkdown(name: string, facts: Fact[]): string {
 export const FACT_FIND_STATEMENT = "I confirm that the information about me in this document is correct and complete to the best of my knowledge, and that I have had the chance to correct it. I understand that typing my name below is my electronic signature, and that it has the same effect as signing on paper.";
 
 /** The text for the model: each source with its id, so every fact can point at one. */
-export function evidencePrompt(person: string, evidence: Evidence[]): string {
+export function evidencePrompt(person: string, evidence: Evidence[], fields: FieldDef[] = FIELDS, task = "for an insurance know-your-client form"): string {
   return [
-    `You are reading the notes of meetings and calls between a financial advisor (Rolf) and clients. Extract facts about ${person} only, for an insurance know-your-client form.`,
+    `You are reading the notes of meetings and calls between a financial advisor (Rolf) and clients. Extract facts about ${person} only, ${task}.`,
     "Rules: a fact must be stated in the text, about this person, not guessed. Health, tobacco and income only if said plainly. Leave out anything about other people unless it is clearly about this person. If the speaker is unclear, leave it out.",
-    `For each fact give: key (one of ${[...MODEL_KEYS].join(", ")}), value (a short plain statement), evidence_id (the id of the source), and quote (an exact copy of 10 to 200 characters from that source that supports it, word for word). One fact per key. If nothing is stated for a key, do not include it.`,
+    `For each fact give: key (one of ${modelKeysOf(fields).join(", ")}), value (a short plain statement), evidence_id (the id of the source), and quote (an exact copy of 10 to 200 characters from that source that supports it, word for word). One fact per key. If nothing is stated for a key, do not include it.`,
     "",
     ...evidence.map((e) => `=== SOURCE ${e.id}: ${e.label} ===\n${e.text}`),
   ].join("\n");

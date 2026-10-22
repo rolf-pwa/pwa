@@ -5,8 +5,8 @@
 import { notifyStaffOfClientReply, type TaskRef } from "../_shared/task-notify.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validatePortalContact } from "../_shared/portal-auth.ts";
-import { clientGet, clientPending, clientSign } from "../_shared/insurance-doc-client.ts";
-import { finalizeDoc } from "../_shared/insurance-doc-service.ts";
+import { clientGet, clientPending, clientSign, clientSigned } from "../_shared/insurance-doc-client.ts";
+import { clientDownload, finalizeDoc } from "../_shared/insurance-doc-service.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -150,6 +150,8 @@ Deno.serve(async (req) => {
 
     // Documents the client signs (the advisor disclosure and privacy consent). Only a person named as a signer on a document can see or sign it.
     if (action === "docList") return json({ documents: await clientPending(supabase, contactId) });
+    if (action === "docSigned") return json({ documents: await clientSigned(supabase, contactId) });
+    if (action === "docDownload") { const r = await clientDownload(supabase, contactId, String(body.document_id ?? "")); return json(r, "error" in r ? 404 : 200); }
     if (action === "docGet") { const r = await clientGet(supabase, contactId, String(body.document_id ?? "")); return json(r, "error" in r ? 404 : 200); }
     if (action === "docSign") {
       const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || null;

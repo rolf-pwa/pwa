@@ -9,7 +9,8 @@ import { Input } from "@/shared/components/ui/input";
 import pwLogoWhite from "@/assets/prosperwise-logo-white.png";
 
 interface Pending { id: string; title: string; sent_at: string }
-interface Doc { id: string; title: string; before: string; after: string | null; needsCasl: boolean; statement: string; signerName: string; signed: boolean; signedAt: string | null; email: string; others: { name: string; signed: boolean }[] }
+interface Signed { id: string; title: string; signed_at: string }
+interface Doc { id: string; title: string; before: string; after: string | null; needsCasl: boolean; statement: string; agent?: { name: string; signedAt: string } | null; signerName: string; signed: boolean; signedAt: string | null; email: string; others: { name: string; signed: boolean }[] }
 
 const call = async <T,>(portalToken: string, action: string, extra: Record<string, unknown> = {}): Promise<T> => {
   const { data, error } = await supabase.functions.invoke("portal-pm-tasks", { body: { portal_token: portalToken, action, ...extra } });
@@ -20,8 +21,16 @@ const call = async <T,>(portalToken: string, action: string, extra: Record<strin
 /** A card on the dashboard when documents are waiting for this person's signature. Shows nothing otherwise. */
 export function PortalDocumentsTeaser({ portalToken, onOpen }: { portalToken: string; onOpen: () => void }) {
   const [docs, setDocs] = useState<Pending[]>([]);
-  useEffect(() => { if (portalToken) call<{ documents: Pending[] }>(portalToken, "docList").then((r) => setDocs(r.documents)).catch(() => setDocs([])); }, [portalToken]);
-  if (!docs.length) return null;
+  const [signed, setSigned] = useState<Signed[]>([]);
+  useEffect(() => {
+    if (!portalToken) return;
+    call<{ documents: Pending[] }>(portalToken, "docList").then((r) => setDocs(r.documents)).catch(() => setDocs([]));
+    call<{ documents: Signed[] }>(portalToken, "docSigned").then((r) => setSigned(r.documents)).catch(() => setSigned([]));
+  }, [portalToken]);
+  if (!docs.length && !signed.length) return null;
+  if (!docs.length) return (
+    <Card data-testid="documents-signed-link"><CardContent className="flex flex-wrap items-center gap-3 p-3"><FileSignature className="h-4 w-4 text-muted-foreground" /><p className="flex-1 text-sm text-muted-foreground">Your signed documents ({signed.length})</p><Button size="sm" variant="outline" onClick={onOpen}>View</Button></CardContent></Card>
+  );
   return (
     <Card className="border-primary/40" data-testid="documents-teaser">
       <CardContent className="flex flex-wrap items-center gap-3 p-4">
@@ -65,6 +74,7 @@ function SignOne({ portalToken, id, onDone }: { portalToken: string; id: string;
     <div className="space-y-5">
       <h1 className="font-serif text-2xl font-semibold">{doc.title}</h1>
       <Card><CardContent className="p-5 text-sm leading-relaxed">{md(doc.before)}</CardContent></Card>
+      {doc.agent && <p className="text-xs text-muted-foreground" data-testid="agent-signed">Signed by your advisor, {doc.agent.name}, on {new Date(doc.agent.signedAt).toLocaleDateString("en-CA", { dateStyle: "long" })}.</p>}
       {doc.needsCasl && (
         <Card data-testid="casl-choice"><CardContent className="space-y-3 p-5 text-sm">
           <p className="font-medium">Commercial electronic messages</p>
@@ -89,7 +99,21 @@ function SignOne({ portalToken, id, onDone }: { portalToken: string; id: string;
 export function PortalDocumentsPage({ portalToken, onBack }: { portalToken: string; onBack: () => void }) {
   const [docs, setDocs] = useState<Pending[] | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
-  const load = useCallback(() => { call<{ documents: Pending[] }>(portalToken, "docList").then((r) => setDocs(r.documents)).catch(() => setDocs([])); }, [portalToken]);
+  const [signed, setSigned] = useState<Signed[]>([]);
+  const [getting, setGetting] = useState<string | null>(null);
+  const load = useCallback(() => {
+    call<{ documents: Pending[] }>(portalToken, "docList").then((r) => setDocs(r.documents)).catch(() => setDocs([]));
+    call<{ documents: Signed[] }>(portalToken, "docSigned").then((r) => setSigned(r.documents)).catch(() => setSigned([]));
+  }, [portalToken]);
+  const download = async (d: Signed) => {
+    setGetting(d.id);
+    try {
+      const r = await call<{ name: string; base64: string }>(portalToken, "docDownload", { document_id: d.id });
+      const bytes = Uint8Array.from(atob(r.base64), (c) => c.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      const a = document.createElement("a"); a.href = url; a.download = r.name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "The copy could not be opened. Please try again."); } finally { setGetting(null); }
+  };
   useEffect(() => { load(); }, [load]);
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4">
@@ -98,12 +122,23 @@ export function PortalDocumentsPage({ portalToken, onBack }: { portalToken: stri
         <p className="mt-3 text-[11px] font-light uppercase tracking-[0.1em] text-white/55">ProsperWise Advisors</p>
       </div>
       <button type="button" className="flex items-center gap-1 text-sm text-muted-foreground hover:underline" onClick={openId ? () => { setOpenId(null); load(); } : onBack}><ArrowLeft className="h-4 w-4" /> {openId ? "All documents" : "Back"}</button>
-      {openId ? <SignOne portalToken={portalToken} id={openId} onDone={load} /> : docs === null ? <Loader2 className="h-5 w-5 animate-spin" /> : docs.length === 0 ? (
-        <Card><CardContent className="p-5 text-sm text-muted-foreground">Nothing is waiting for your signature. Signed documents are kept in your records.</CardContent></Card>
-      ) : (
+      {openId ? <SignOne portalToken={portalToken} id={openId} onDone={load} /> : docs === null ? <Loader2 className="h-5 w-5 animate-spin" /> : (
         <>
-          <h1 className="font-serif text-2xl font-semibold">Documents to sign</h1>
-          {docs.map((d) => <Card key={d.id}><CardContent className="flex items-center gap-3 p-4"><FileSignature className="h-5 w-5" /><span className="flex-1 font-medium">{d.title}</span><Button onClick={() => setOpenId(d.id)}>Review and sign</Button></CardContent></Card>)}
+          {docs.length === 0 ? (
+            <Card><CardContent className="p-5 text-sm text-muted-foreground">Nothing is waiting for your signature.</CardContent></Card>
+          ) : (
+            <>
+              <h1 className="font-serif text-2xl font-semibold">Documents to sign</h1>
+              {docs.map((d) => <Card key={d.id}><CardContent className="flex items-center gap-3 p-4"><FileSignature className="h-5 w-5" /><span className="flex-1 font-medium">{d.title}</span><Button onClick={() => setOpenId(d.id)}>Review and sign</Button></CardContent></Card>)}
+            </>
+          )}
+          {signed.length > 0 && (
+            <section className="space-y-2" data-testid="signed-documents">
+              <h2 className="font-serif text-xl font-semibold">Your signed documents</h2>
+              <p className="text-xs text-muted-foreground">A copy of everything you have signed, to keep.</p>
+              {signed.map((d) => <Card key={d.id}><CardContent className="flex items-center gap-3 p-3"><Check className="h-4 w-4 text-green-700" /><span className="flex-1 text-sm">{d.title}<span className="ml-2 text-xs text-muted-foreground">signed {new Date(d.signed_at).toLocaleDateString("en-CA", { dateStyle: "medium" })}</span></span><Button size="sm" variant="outline" disabled={getting === d.id} onClick={() => void download(d)}>{getting === d.id ? "Opening…" : "Download PDF"}</Button></CardContent></Card>)}
+            </section>
+          )}
         </>
       )}
     </div>
