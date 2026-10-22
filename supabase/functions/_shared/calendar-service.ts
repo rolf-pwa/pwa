@@ -4,6 +4,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { ADMIN_INBOX_EMAIL, getServiceGoogleAccessToken, resolveUserIdByEmail } from "./google-token.ts";
 import { GEMINI_EXTRACT_MODEL, generateVertexContent, parseServiceAccountKey, withThinking } from "./vertex-ai.ts";
+import { isOn } from "./georgia-switches.ts";
 import { INVITE_TOOL, clashes, invitePrompt, mayAutoAccept, type InviteCategory, type Slot } from "./calendar-rules.ts";
 
 const zone = "America/Vancouver";
@@ -24,6 +25,7 @@ export async function respondToEvent(token: string, eventId: string, response: "
 
 export async function runCalendarInvites(db: any): Promise<string[]> {
   const out: string[] = [];
+  if (!(await isOn(db, "calendar_invites"))) return ["switched off"];
   const rolfId = await resolveUserIdByEmail(db, ADMIN_INBOX_EMAIL);
   const token = await getServiceGoogleAccessToken(db);
   const now = new Date();

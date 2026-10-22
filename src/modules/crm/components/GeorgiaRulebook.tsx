@@ -6,7 +6,7 @@ import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
-import { BUILT_IN_RULES, addRule, decideSuggestion, forgetRule, getRulebook, scanForRules, undoActivity, type Rulebook } from "@/modules/crm/lib/georgiaRules";
+import { BUILT_IN_RULES, addRule, decideSuggestion, forgetRule, getRulebook, scanForRules, setGeorgiaSwitch, undoActivity, type Rulebook } from "@/modules/crm/lib/georgiaRules";
 
 /** What Georgia follows every day, what she did on her own this week (with an undo where one is possible), and rules she suggests from your repeated answers. */
 export function GeorgiaRulebook() {
@@ -28,6 +28,18 @@ export function GeorgiaRulebook() {
         <p className="text-muted-foreground">The standing rules she follows every day without asking again, what she did on her own this week, and rules she suggests after you give the same answer more than once. She only adds a rule when you accept it.</p>
         {!data ? <Loader2 className="h-4 w-4 animate-spin" /> : (
           <>
+            {(data.switches ?? []).length > 0 && (
+              <div className="space-y-1.5">
+                <p className="font-medium">What she does on her own</p>
+                {data.switches.map((sw) => (
+                  <label key={sw.key} className="flex items-start gap-2">
+                    <input type="checkbox" className="mt-1" checked={sw.enabled} disabled={busy} aria-label={sw.label} onChange={(e) => void run(() => setGeorgiaSwitch(sw.key, e.target.checked), e.target.checked ? "Switched on" : "Switched off")} />
+                    <span><span className="font-medium">{sw.label}</span><span className="block text-xs text-muted-foreground">{sw.detail}</span></span>
+                  </label>
+                ))}
+              </div>
+            )}
+
             {data.suggestions.length > 0 && (
               <div className="space-y-2 rounded-md border border-accent/40 p-3">
                 <p className="font-medium">She suggests ({data.suggestions.length})</p>

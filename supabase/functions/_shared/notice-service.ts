@@ -13,6 +13,7 @@ import { postTaskEvent } from "./task-events.ts";
 import { maybeCreateMeetingRecord } from "./meeting-record-service.ts";
 import { notifyClientsOfComment, notifyProsOfComment } from "./task-notify.ts";
 import { GMAIL_MODIFY_SCOPE, gmailFor, handledLabelId } from "./gmail-handled.ts";
+import { isOn } from "./georgia-switches.ts";
 
 const MAX_PER_RUN = 8;
 const zone = "America/Vancouver";
@@ -23,6 +24,7 @@ const PROBLEM = /\b(requested|missing|rejected|declined|outstanding|not received
 
 export async function runNoticeProcessor(db: any): Promise<string[]> {
   const out: string[] = [];
+  if (!(await isOn(db, "notice_processor"))) return ["switched off"];
   const rolfId = await resolveUserIdByEmail(db, ADMIN_INBOX_EMAIL);
   const token = await getValidGoogleAccessToken(db, rolfId);
   const auth = { headers: { Authorization: `Bearer ${token}` } };
