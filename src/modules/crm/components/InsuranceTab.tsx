@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ExternalLink, Loader2 } from "lucide-react";
 import { Badge } from "@/shared/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { supabase } from "@/shared/integrations/supabase/client";
@@ -17,7 +18,11 @@ const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Vancou
  * The Insurance tab on a household or contact: what is in force by person and type, renewals coming up, each person's policies (add and edit), and the
  * insurance files with their compliance checklist and audit package. On a contact page it shows that person's policies; the summary still covers the household.
  */
-export function InsuranceTab({ householdId, contactId }: { householdId: string | null; contactId?: string | null }) {
+export type InsuranceSection = "summary" | "policies" | "needs" | "files";
+const ALL_SECTIONS: InsuranceSection[] = ["summary", "policies", "needs", "files"];
+
+export function InsuranceTab({ householdId, contactId, sections = ALL_SECTIONS, workspaceLink = true }: { householdId: string | null; contactId?: string | null; sections?: InsuranceSection[]; workspaceLink?: boolean }) {
+  const show = (k: InsuranceSection) => sections.includes(k);
   const [people, setPeople] = useState<{ id: string; name: string }[]>([]);
   const [policies, setPolicies] = useState<(SummaryPolicy & { carrier: string; policy_type: string })[]>([]);
   const [storehouses, setStorehouses] = useState<{ id: string; storehouse_number: number; label: string }[]>([]);
@@ -50,6 +55,11 @@ export function InsuranceTab({ householdId, contactId }: { householdId: string |
   if (loading) return <Loader2 className="h-5 w-5 animate-spin" />;
   return (
     <div className="space-y-5">
+      {householdId && workspaceLink && (
+        <Link to={`/insurance/${householdId}`} className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline" data-testid="open-insurance-workspace"><ExternalLink className="h-3.5 w-3.5" /> Open the insurance workspace</Link>
+      )}
+      {show("summary") && (
+        <>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         {[["Life coverage", money(summary.overall.coverage.life)], ["Critical illness", money(summary.overall.coverage.critical_illness)], ["Disability", money(summary.overall.coverage.disability)], ["Premiums a year", money(summary.overall.premiumsPerYear)], ["Cash value", money(summary.overall.cashValue)]].map(([k, v]) => (
           <Card key={k}><CardContent className="p-4"><p className="text-xs text-muted-foreground">{k}</p><p className="mt-1 font-serif text-xl font-semibold">{v}</p></CardContent></Card>
@@ -93,18 +103,21 @@ export function InsuranceTab({ householdId, contactId }: { householdId: string |
         </Card>
       )}
 
-      {showPeople.map((p) => (
+        </>
+      )}
+
+      {show("policies") && showPeople.map((p) => (
         <section key={p.id} className="space-y-2" aria-label={`${p.name}'s policies`}>
           {(showPeople.length > 1) && <h3 className="font-serif text-base font-semibold">{p.name}</h3>}
           <InsurancePanel scope={{ kind: "contact", contactId: p.id }} storehouses={storehouses} onStorehousesChanged={() => void load()} />
         </section>
       ))}
 
-      {showPeople.map((p) => (
+      {show("needs") && showPeople.map((p) => (
         <NeedsAnalysis key={p.id} person={p} householdId={householdId} lifeInsurance={summary.byPerson.find((r) => r.id === p.id)?.coverage.life ?? 0} />
       ))}
 
-      {householdId && <InsuranceFiles householdId={householdId} />}
+      {show("files") && householdId && <InsuranceFiles householdId={householdId} />}
     </div>
   );
 }

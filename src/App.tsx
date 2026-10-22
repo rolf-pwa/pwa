@@ -16,6 +16,13 @@ import AccessDenied from "@/pages/AccessDenied";
 import NotFound from "@/pages/NotFound";
 
 // Lazy: everything else is fetched on demand.
+const InsuranceLayout = lazy(() => import("@/modules/insurance/InsuranceLayout"));
+const InsuranceBoard = lazy(() => import("@/modules/insurance/InsuranceBoard"));
+const InsOverview = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.OverviewPage })));
+const InsPolicies = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.PoliciesPage })));
+const InsNeeds = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.NeedsPage })));
+const InsQuoting = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.QuotingPage })));
+const InsCompliance = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.CompliancePage })));
 const Dashboard = lazy(() => import("@/modules/crm/pages/Dashboard"));
 const Contacts = lazy(() => import("@/modules/crm/pages/Contacts"));
 const ContactDetail = lazy(() => import("@/modules/crm/pages/ContactDetail"));
@@ -145,6 +152,16 @@ const App = () => (
               <Route path="/families" element={<ProtectedRoute><Families /></ProtectedRoute>} />
               <Route path="/families/:id" element={<ProtectedRoute><FamilyDetail /></ProtectedRoute>} />
               <Route path="/households" element={<ProtectedRoute><Households /></ProtectedRoute>} />
+              <Route path="/insurance" element={<ProtectedRoute><InsuranceLayout /></ProtectedRoute>}>
+                <Route index element={<InsuranceBoard />} />
+                <Route path=":householdId">
+                  <Route index element={<InsOverview />} />
+                  <Route path="policies" element={<InsPolicies />} />
+                  <Route path="needs" element={<InsNeeds />} />
+                  <Route path="quoting" element={<InsQuoting />} />
+                  <Route path="compliance" element={<InsCompliance />} />
+                </Route>
+              </Route>
               <Route path="/households/:id" element={<ProtectedRoute><HouseholdDetail /></ProtectedRoute>} />
               <Route path="/corporations" element={<ProtectedRoute><Corporations /></ProtectedRoute>} />
               <Route path="/corporations/:id" element={<ProtectedRoute><CorporationDetail /></ProtectedRoute>} />
