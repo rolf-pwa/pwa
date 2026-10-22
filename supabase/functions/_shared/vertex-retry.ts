@@ -28,3 +28,20 @@ export async function fetchWithVertexRetry(
   }
   return res;
 }
+
+/** Whether Vertex answered "busy" (rate limited or temporarily unavailable). */
+export const isVertexBusy = (status: number): boolean => RETRYABLE_STATUS.has(status);
+
+/**
+ * Posts with the primary model; if it is still busy after its own retries, once more with the fallback model (the same region, so client data
+ * stays in Canada). Returns whichever response came last. `post` makes one attempt (with its retries) for the given model.
+ */
+export async function withModelFallback(post: (model: string) => Promise<Response>, model: string, fallback?: string | null): Promise<Response> {
+  const res = await post(model);
+  if (!isVertexBusy(res.status) || !fallback || fallback === model) return res;
+  console.warn(`[vertex] ${model} is busy (${res.status}); trying ${fallback}`);
+  await res.body?.cancel();
+  return await post(fallback);
+}
+
+export const VERTEX_BUSY_MESSAGE = "Georgia's AI service is busy right now (Google is limiting requests). Please try again in a minute.";

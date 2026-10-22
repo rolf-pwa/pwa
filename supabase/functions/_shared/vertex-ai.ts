@@ -10,10 +10,10 @@ export interface ServiceAccountKey {
   token_uri: string;
 }
 
-import { fetchWithVertexRetry } from "./vertex-retry.ts";
+import { fetchWithVertexRetry, isVertexBusy, withModelFallback, VERTEX_BUSY_MESSAGE } from "./vertex-retry.ts";
 
 // Re-exported so call sites keep importing everything from ./vertex-ai.ts.
-export { fetchWithVertexRetry };
+export { fetchWithVertexRetry, isVertexBusy, withModelFallback, VERTEX_BUSY_MESSAGE };
 
 const REGION = "northamerica-northeast1";
 
@@ -62,6 +62,15 @@ export const GEMINI_CLIENT_CHAT_MODEL = envVar("GEMINI_CLIENT_CHAT_MODEL") ?? "g
 // get a larger output cap because thinking tokens count against it). On charter
 // ingestion 3.5 Flash passed 4/4 where 2.5 Pro failed 2/4 (MAX_TOKENS,
 // UNEXPECTED_TOOL_CALL). Roll back with GEMINI_PRO_MODEL=gemini-2.5-pro.
+// When the main model stays busy (Vertex 429 or 503 after retries) a call is tried once more on this model, in the same Montréal region. 2.5 Flash
+// serves from Montréal until it retires on 2027-03-31; set GEMINI_FALLBACK_MODEL to another model to change it (or to the main model to turn it off).
+export const GEMINI_FALLBACK_MODEL = envVar("GEMINI_FALLBACK_MODEL") ?? "gemini-2.5-flash";
+/** The same generation settings for the fallback model: 3.x "thinking" settings mean nothing to 2.5, so they are left out. */
+export function configFor(model: string, config: Record<string, unknown>): Record<string, unknown> {
+  if (/^gemini-3/.test(model) || !("thinkingConfig" in config)) return config;
+  const { thinkingConfig: _t, ...rest } = config;
+  return rest;
+}
 export const GEMINI_PRO_MODEL = envVar("GEMINI_PRO_MODEL") ?? "gemini-3.5-flash";
 
 // 3.x models think by default and thinking tokens count against
@@ -250,8 +259,7 @@ export async function generateVertexContent(
   retry?: { maxRetries?: number },
 ): Promise<any> {
   const accessToken = await getGcpAccessToken(sa);
-  const url = vertexModelUrl(sa.project_id, model);
-  const res = await fetchWithVertexRetry(url, {
+  const res = await withModelFallback((m) => fetchWithVertexRetry(vertexModelUrl(sa.project_id, m), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -260,13 +268,13 @@ export async function generateVertexContent(
     body: JSON.stringify({
       contents,
       ...(toolsConfig ? { tools: toolsConfig.tools, toolConfig: toolsConfig.toolConfig } : {}),
-      generationConfig: {
+      generationConfig: configFor(m, {
         temperature: 0.3,
         maxOutputTokens: 1024,
         ...generationConfig,
-      },
+      }),
     }),
-  }, retry);
+  }, retry), model, GEMINI_FALLBACK_MODEL);
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Vertex AI error ${res.status}: ${text.slice(0, 500)}`);
