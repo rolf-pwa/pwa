@@ -43,11 +43,13 @@ Scheduled job names in the database (for stopping one, section 4): `daily-briefi
 | Texts going out through Callizy (or Quo) | Inbox page, "Send texts through" |
 | The morning sweep running by itself | Ask Georgia, Inbox sweep card, the "Run every morning" switch |
 | Review and rebalancing emails to families | Georgia Reviews page, set the mode to Off (or Shadow, which records but sends nothing) |
+| iA and Adobe Sign notices handled on her own | Ask Georgia, rulebook, "What she does on her own", untick the notices switch |
+| Webinar and training invitations accepted on her own | Same place, untick the invitations switch |
 | A rule she follows | Ask Georgia, her rulebook, "Forget" |
 | One thing she did | Ask Georgia, "What she did on her own this week", Undo (filed mail, closed notice tasks, accepted invitations) |
 | An item in your briefing | The small tick on the item (files the email in Gmail) |
 
-**There is no switch yet for the notice processor or calendar invitations.** To stop either, unschedule its job (section 4). Adding switches is a sensible next step.
+Switching one off leaves its job running but doing nothing, so the health card keeps showing it as running. To stop a job completely, unschedule it (section 4).
 
 ---
 
@@ -155,7 +157,6 @@ These are written into the code. If Georgia ever seems to break one, switch her 
 
 ## 10. Things this runbook still needs
 
-- A switch for the notice processor and for calendar invitations (today: unschedule the job).
 - The list of who has access to what, and where recovery details are kept.
 - A decision on backups.
 - A named person who can act if you are unavailable (how that person gets in, and what they may do).
