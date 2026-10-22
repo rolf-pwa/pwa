@@ -2,7 +2,7 @@
 // it; each signature is stored with exactly what was agreed, when, and from where. Filing the signed PDF is passed in, so this file has no Google code.
 
 // deno-lint-ignore-file no-explicit-any
-import { CASL_MARKER, SIGN_STATEMENT, SIGN_STATEMENT_VERSION, checkSignature } from "./insurance-doc-rules.ts";
+import { CASL_MARKER, SIGN_STATEMENT_VERSION, checkSignature, statementFor } from "./insurance-doc-rules.ts";
 
 export type DocKind = "disclosure_privacy" | "reason_why";
 /** Which checklist items a signed document covers. */
@@ -20,24 +20,24 @@ export async function clientPending(db: any, contactId: string) {
 export async function clientGet(db: any, contactId: string, documentId: string) {
   const { data: me } = await db.from("insurance_document_signers").select("id, name, status, signed_at").eq("document_id", documentId).eq("contact_id", contactId).maybeSingle();
   if (!me) return { error: "Not available" };
-  const { data: d } = await db.from("insurance_documents").select("id, title, body_md, status, completed_at").eq("id", documentId).maybeSingle();
+  const { data: d } = await db.from("insurance_documents").select("id, kind, title, body_md, status, completed_at").eq("id", documentId).maybeSingle();
   if (!d || d.status === "void") return { error: "This document is no longer waiting for your signature." };
   const { data: c } = await db.from("contacts").select("email").eq("id", contactId).maybeSingle();
   const { data: others } = await db.from("insurance_document_signers").select("name, status").eq("document_id", documentId).neq("contact_id", contactId);
   const parts = String(d.body_md).split(CASL_MARKER);
-  return { id: d.id, title: d.title, before: parts[0], after: parts.length > 1 ? parts.slice(1).join("") : null, needsCasl: parts.length > 1, statement: SIGN_STATEMENT, signerName: me.name, signed: me.status === "signed", signedAt: me.signed_at, email: c?.email ?? "", others: (others ?? []).map((o: any) => ({ name: o.name, signed: o.status === "signed" })) };
+  return { id: d.id, title: d.title, before: parts[0], after: parts.length > 1 ? parts.slice(1).join("") : null, needsCasl: parts.length > 1, statement: statementFor(d.kind), signerName: me.name, signed: me.status === "signed", signedAt: me.signed_at, email: c?.email ?? "", others: (others ?? []).map((o: any) => ({ name: o.name, signed: o.status === "signed" })) };
 }
 
 export async function clientSign(db: any, contactId: string, documentId: string, input: any, ip: string | null, ua: string | null, onComplete: (documentId: string) => Promise<unknown> = async () => {}) {
   const { data: me } = await db.from("insurance_document_signers").select("id, name, status").eq("document_id", documentId).eq("contact_id", contactId).maybeSingle();
   if (!me) return { error: "Not available" };
   if (me.status === "signed") return { ok: true as const, alreadySigned: true };
-  const { data: d } = await db.from("insurance_documents").select("id, status, body_md").eq("id", documentId).maybeSingle();
+  const { data: d } = await db.from("insurance_documents").select("id, kind, status, body_md").eq("id", documentId).maybeSingle();
   if (!d || d.status === "void" || d.status === "signed") return { error: "This document is no longer waiting for your signature." };
   const check = checkSignature(input ?? {}, me.name, String(d.body_md).includes(CASL_MARKER));
   if ("error" in check) return { error: check.error };
   // Only the first of two quick submissions counts: the update is conditional on the signer still being pending.
-  const { data: upd } = await db.from("insurance_document_signers").update({ status: "signed", typed_name: check.typedName, casl_choice: check.caslChoice, casl_initials: check.caslInitials, casl_email: check.caslEmail, statement_text: `${SIGN_STATEMENT} (version ${SIGN_STATEMENT_VERSION})`, signed_at: new Date().toISOString(), ip, user_agent: ua }).eq("id", me.id).eq("status", "pending").select("id");
+  const { data: upd } = await db.from("insurance_document_signers").update({ status: "signed", typed_name: check.typedName, casl_choice: check.caslChoice, casl_initials: check.caslInitials, casl_email: check.caslEmail, statement_text: `${statementFor(d.kind)} (version ${SIGN_STATEMENT_VERSION})`, signed_at: new Date().toISOString(), ip, user_agent: ua }).eq("id", me.id).eq("status", "pending").select("id");
   if (!upd?.length) return { ok: true as const, alreadySigned: true };
   const { data: rest } = await db.from("insurance_document_signers").select("id").eq("document_id", documentId).eq("status", "pending");
   const everyone = !(rest ?? []).length;
