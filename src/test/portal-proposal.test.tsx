@@ -157,7 +157,7 @@ describe("Talk it through on the rebalancing page", () => {
   it("opens the booking page in a window the client can see, not at the bottom of the page", async () => {
     render(<PortalRebalancingPage rebalancing={withProposal()} portalToken="t" onChanged={() => {}} onBack={() => {}} meetingTypes={[{ label: "Interim Strategy Session", url: "https://book.example/is", embedUrl: "https://book.example/is?embed=1" }]} />);
     fireEvent.click(screen.getByText("Talk it through"));
-    await waitFor(() => expect(screen.getByText("Thank you. I will be in touch.")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Let's talk it through")).toBeTruthy());
     expect(document.querySelector("iframe")?.getAttribute("src")).toBe("https://book.example/is?embed=1");
     expect(invoke).toHaveBeenCalledWith("portal-rebalance", expect.objectContaining({ body: expect.objectContaining({ action: "talk_first" }) }));
   });

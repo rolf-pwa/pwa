@@ -201,7 +201,7 @@ export function PortalRebalancingPage({ rebalancing, portalToken, onChanged, onB
       <Dialog open={talkOpen} onOpenChange={setTalkOpen}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle className="font-serif">Thank you. I will be in touch.</DialogTitle>
+            <DialogTitle className="font-serif">Let's talk it through</DialogTitle>
             <DialogDescription>{booking ? "If you would like to pick a time to talk it through, you can do it here." : "I will reach out to find a time that suits you."}</DialogDescription>
           </DialogHeader>
           {booking && (bookingEmbedSrc(booking.url, booking.embedUrl)
