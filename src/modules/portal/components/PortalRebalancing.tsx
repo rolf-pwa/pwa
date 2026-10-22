@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent } from "@/shared/components/ui/card";
+import { bookingEmbedSrc } from "@/shared/lib/meetingBookingLinks";
 import { PortalProposal } from "./PortalProposal";
 import { PortalPortfolioReview } from "./PortalPortfolioReview";
 import { itemsOwnedBy, type ClientProposal, type ClientView } from "../../../../supabase/functions/_shared/portfolio-review-client";
@@ -203,8 +204,8 @@ export function PortalRebalancingPage({ rebalancing, portalToken, onChanged, onB
             <DialogTitle className="font-serif">Thank you. I will be in touch.</DialogTitle>
             <DialogDescription>{booking ? "If you would like to pick a time to talk it through, you can do it here." : "I will reach out to find a time that suits you."}</DialogDescription>
           </DialogHeader>
-          {booking && (booking.embedUrl && booking.embedUrl !== booking.url
-            ? <iframe src={booking.embedUrl} style={{ border: 0 }} width="100%" height={620} title={booking.label} />
+          {booking && (bookingEmbedSrc(booking.url, booking.embedUrl)
+            ? <iframe src={bookingEmbedSrc(booking.url, booking.embedUrl)!} style={{ border: 0 }} width="100%" height={620} title={booking.label} />
             : <a href={booking.url} target="_blank" rel="noopener noreferrer" className="inline-flex w-fit items-center rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent/90">Pick a time: {booking.label}</a>)}
         </DialogContent>
       </Dialog>

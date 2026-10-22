@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { bookingEmbedSrc } from "@/shared/lib/meetingBookingLinks";
 import { useParams, Link } from "react-router-dom";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
@@ -921,7 +922,7 @@ const VfoPortal = () => {
         onTalkFirst={() => {
           const m = (((data as any)?.meeting_types ?? []) as { label: string; url: string; embedUrl: string }[]).find((t) => /interim strategy/i.test(t.label));
           setTab("meetings");
-          if (m) { if (m.embedUrl && m.embedUrl !== m.url) setEmbeddedBooking({ label: m.label, embedUrl: m.embedUrl }); else window.open(m.url, "_blank", "noopener,noreferrer"); }
+          if (m) { const src = bookingEmbedSrc(m.url, m.embedUrl); if (src) setEmbeddedBooking({ label: m.label, embedUrl: src }); else window.open(m.url, "_blank", "noopener,noreferrer"); }
         }}
       />
     ) : null;

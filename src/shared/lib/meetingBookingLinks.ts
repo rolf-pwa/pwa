@@ -20,3 +20,14 @@ export const MEETING_BOOKING_LINKS = [
     embedUrl: "https://calendar.google.com/calendar/appointments/schedules/AcZssZ0szGL8FEh0_NKc2p1nlspTMjB04I_FbY6kT79edq_rODjTDWiD7SI107MiFJcZIamJXyY4QmTR?gv=true",
   },
 ] as const;
+
+/**
+ * The address to show inside the page for a booking link, or null when it can only open on its own. A meeting type whose address is
+ * already a Google appointment schedule can always be shown in the page: ?gv=true is what Google's own embed code adds, and the stored
+ * embed address may simply be the same as the link.
+ */
+export function bookingEmbedSrc(url: string, embedUrl?: string | null): string | null {
+  if (embedUrl && embedUrl !== url) return embedUrl;
+  if (/^https:\/\/calendar\.google\.com\/calendar\/(?:u\/\d+\/)?appointments\/schedules\//.test(url)) return url.includes("gv=true") ? url : `${url}${url.includes("?") ? "&" : "?"}gv=true`;
+  return null;
+}
