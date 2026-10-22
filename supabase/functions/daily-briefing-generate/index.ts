@@ -15,6 +15,7 @@ import { getValidGoogleAccessToken } from "../_shared/google-token.ts";
 import { dismissBriefingItem, refreshBriefing } from "../_shared/briefing-refresh.ts";
 import { eaApply, eaChat, eaDecide, eaForget, eaHistory, eaNudge } from "../_shared/ea-handlers.ts";
 import { isMutedSender } from "../_shared/ea-agent.ts";
+import { setSwitch } from "../_shared/georgia-switches.ts";
 import { JOBS, evaluateJob, recordHeartbeat, runWatchdog, trackJob, type Heartbeat } from "../_shared/job-health.ts";
 import { addRule, decideSuggestion, rulebook, suggestRules, undoAction } from "../_shared/georgia-rules.ts";
 import { runCalendarInvites } from "../_shared/calendar-service.ts";
@@ -725,6 +726,7 @@ Deno.serve(async (req) => {
       if (body.action === "ea_apply") return json(await eaApply(db, userId, String(body.actionId ?? "")));
       if (body.action === "ea_forget") return json(await eaForget(db, userId, String(body.prefId ?? "")));
       if (body.action === "ea_health") return json({ ok: true, ...(await systemHealth(db, userId)) });
+      if (body.action === "ea_switch") { const r = await setSwitch(db, (body as any).key, (body as any).enabled); return json(r, "error" in r ? 400 : 200); }
       if (body.action === "ea_rules") return json({ ok: true, ...(await rulebook(db, userId)) });
       if (body.action === "ea_rule_add") { const r = await addRule(db, userId, (body as any).value, (body as any).area); return json(r, "error" in r ? 400 : 200); }
       if (body.action === "ea_suggestion") { const r = await decideSuggestion(db, userId, String((body as any).id ?? ""), (body as any).decision === "accept" ? "accept" : "dismiss"); return json(r, "error" in r ? 400 : 200); }

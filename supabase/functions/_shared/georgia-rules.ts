@@ -7,6 +7,7 @@ import { getValidGoogleAccessToken } from "./google-token.ts";
 import { gmailFor } from "./gmail-handled.ts";
 import { postTaskEvent } from "./task-events.ts";
 import { respondToEvent } from "./calendar-service.ts";
+import { switchStates } from "./georgia-switches.ts";
 import { GEMINI_EXTRACT_MODEL, generateVertexContent, parseServiceAccountKey, withThinking } from "./vertex-ai.ts";
 
 import { AUTONOMOUS_KINDS, SUGGEST_TOOL, sameRule, UNSAFE_RULE } from "./georgia-rules-core.ts";
@@ -19,7 +20,7 @@ export async function rulebook(db: any, userId: string) {
     db.from("ea_actions").select("id, kind, status, summary, payload, created_at").eq("staff_user_id", userId).in("kind", AUTONOMOUS_KINDS).gte("created_at", since).order("created_at", { ascending: false }).limit(60),
   ]);
   const acts = ((activity ?? []) as any[]).map((a) => ({ id: a.id, kind: a.kind, summary: a.summary, at: a.created_at, undone: !!a.payload?.undone, canUndo: !a.payload?.undone && (a.kind === "emails_filed" || a.kind === "calendar_accepted" || (a.kind === "notice_handled" && !!a.payload?.closed)) }));
-  return { rules: rules ?? [], suggestions: suggestions ?? [], activity: acts };
+  return { rules: rules ?? [], suggestions: suggestions ?? [], activity: acts, switches: await switchStates(db) };
 }
 
 export async function addRule(db: any, userId: string, text: unknown, area?: unknown) {

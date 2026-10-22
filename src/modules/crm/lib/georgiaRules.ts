@@ -5,7 +5,8 @@ const URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/fun
 export interface Rule { id: string; kind: "mute_sender" | "note"; value: string; source: "asked" | "learned"; area: string | null; created_at: string }
 export interface Suggestion { id: string; rule: string; area: string | null; evidence: string; times: number; created_at: string }
 export interface Activity { id: string; kind: string; summary: string; at: string; undone: boolean; canUndo: boolean }
-export interface Rulebook { rules: Rule[]; suggestions: Suggestion[]; activity: Activity[] }
+export interface GeorgiaSwitch { key: string; label: string; detail: string; enabled: boolean }
+export interface Rulebook { rules: Rule[]; suggestions: Suggestion[]; activity: Activity[]; switches: GeorgiaSwitch[] }
 
 async function call<T>(action: string, payload: Record<string, unknown> = {}): Promise<T> {
   const { data: sess } = await supabase.auth.getSession();
@@ -24,6 +25,7 @@ export const addRule = (value: string) => call<{ ok: true }>("ea_rule_add", { va
 export const forgetRule = (prefId: string) => call<{ ok: true }>("ea_forget", { prefId });
 export const decideSuggestion = (id: string, decision: "accept" | "dismiss") => call<{ ok: true }>("ea_suggestion", { id, decision });
 export const undoActivity = (actionId: string) => call<{ ok: true }>("ea_undo", { actionId });
+export const setGeorgiaSwitch = (key: string, enabled: boolean) => call<{ ok: true }>("ea_switch", { key, enabled });
 export const scanForRules = () => call<{ ok: true; added: number }>("ea_rules_scan");
 
 /** What Georgia does by built-in design, not by a rule Rolf set. Shown so nothing she does on her own is hidden. */
