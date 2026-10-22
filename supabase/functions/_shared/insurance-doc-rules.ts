@@ -3,6 +3,7 @@
 // acknowledgement, the CASL choice with initials, and the signature block. Blank signature lines and the paper Yes/No boxes are dropped, and a marker
 // stands where the CASL choice goes. Explicit markers in the master win if they are used: {{client_names}}, {{advisor_contact}}, {{casl_choice}}, {{date}}.
 
+import type { Block } from "./simple-pdf.ts";
 export const CASL_MARKER = "{{casl_choice}}";
 export const SIGN_STATEMENT_VERSION = "2026-10-a";
 export const SIGN_STATEMENT = "I have read this document and I agree to it. I understand that typing my name below is my electronic signature, and that it has the same effect as signing on paper.";
@@ -80,30 +81,34 @@ export function checkSignature(input: SignInput, signerName: string, needsCasl: 
   return { ok: true, typedName, caslChoice: choice, caslInitials: initials, caslEmail: choice === "yes" ? email : null };
 }
 
-/** The lines of the frozen PDF: the document as signed, then the record of each signature. */
+/** The blocks of the frozen PDF: the document as signed, then the record of each signature. */
 export interface SignedRecord { name: string; typedName: string; signedAt: string; ip: string | null; caslChoice: string | null; caslInitials: string | null; caslEmail: string | null }
-export function signedPdfLines(i: { title: string; md: string; hash: string; templateModified: string | null; templateVersion: string | null; sentAt: string; signers: SignedRecord[] }): { text: string; bold?: boolean; size?: number; gap?: number }[] {
-  const lines: { text: string; bold?: boolean; size?: number; gap?: number }[] = [{ text: i.title, bold: true, size: 16, gap: 10 }];
-  const caslText = (s: SignedRecord) => (s.caslChoice ? `Commercial electronic messages (CASL): ${s.caslChoice === "yes" ? `agreed, at ${s.caslEmail}` : "not agreed"}, initials ${s.caslInitials}` : "");
-  const body = i.md.split(CASL_MARKER);
+export function signedPdfBlocks(i: { md: string; hash: string; templateModified: string | null; templateVersion: string | null; sentAt: string; signers: SignedRecord[] }): Block[] {
+  const blocks: Block[] = [];
+  const plainOf = (t: string) => t.replace(/\*\*\*?(.+?)\*\*\*?/g, "$1").replace(/(^|[^*])\*(?!\*)(.+?)\*/g, "$1$2").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/^\s*[-*]\s+/, "\u2022 ").replace(/\*{2,3}/g, "").replace(/ {2,}$/, "");
   const render = (md: string) => {
     for (const raw of md.split("\n")) {
       const t = raw.trim();
-      if (!t) { lines.push({ text: "", gap: 2 }); continue; }
+      if (!t) { blocks.push({ kind: "gap", h: 3 }); continue; }
+      if (/^\*{2,3}$/.test(t)) continue; // a bold marker left alone on its line
       const h = t.match(/^#{1,4}\s+(.*)$/);
-      const plain = (h ? h[1] : t).replace(/\*\*(.+?)\*\*/g, "$1").replace(/(^|[^*])\*(?!\*)(.+?)\*/g, "$1$2").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
-      const headingish = !!h || /^\*\*[^*]+\*\*$/.test(t) || /^\*\*\*[^*]+\*\*\*$/.test(t);
-      lines.push({ text: plain, bold: headingish, size: h ? 13 : 10.5, gap: headingish ? 3 : 2 });
+      // A line that is all bold is a heading; so is one whose bold opens here and closes on a later (now empty) line.
+      const wholeBold = /^\*{2,3}[^*]+\*{2,3}:?$/.test(t) || /^\*{2,3}[^*]+$/.test(t);
+      if (h) blocks.push({ kind: "h", text: plainOf(h[1]) });
+      else if (wholeBold) blocks.push({ kind: "h", text: plainOf(t).replace(/:$/, "") });
+      else blocks.push({ kind: "p", text: plainOf(t) });
     }
   };
-  render(body[0]);
-  if (body.length > 1) { lines.push({ text: "Canada's Anti-Spam Legislation (CASL) consent: recorded for each signer below.", bold: true }); render(body.slice(1).join("")); }
-  lines.push({ text: "", gap: 8 }, { text: "Electronic signatures", bold: true, size: 13, gap: 4 }, { text: SIGN_STATEMENT, gap: 6 });
+  const parts = i.md.split(CASL_MARKER);
+  render(parts[0]);
+  if (parts.length > 1) { blocks.push({ kind: "p", text: "Canada's Anti-Spam Legislation (CASL) consent: each signer's choice is recorded in the signature record below.", bold: true }); render(parts.slice(1).join("")); }
+  blocks.push({ kind: "gap", h: 10 }, { kind: "h", text: "Electronic signatures" }, { kind: "p", text: SIGN_STATEMENT, small: true });
   for (const s of i.signers) {
-    lines.push({ text: `${s.typedName}  (${s.name})`, bold: true }, { text: `Signed ${new Date(s.signedAt).toLocaleString("en-CA", { timeZone: "America/Vancouver", dateStyle: "long", timeStyle: "short" })} Pacific${s.ip ? `, from IP address ${s.ip}` : ""}` });
-    const c = caslText(s); if (c) lines.push({ text: c });
-    lines.push({ text: "", gap: 6 });
+    const when = new Date(s.signedAt).toLocaleString("en-CA", { timeZone: "America/Vancouver", dateStyle: "long", timeStyle: "short" });
+    const lines = [`Signed ${when} Pacific${s.ip ? `, from IP address ${s.ip}` : ""}`];
+    if (s.caslChoice) lines.push(`Commercial electronic messages (CASL): ${s.caslChoice === "yes" ? `agreed, at ${s.caslEmail}` : "not agreed"}. Initials: ${s.caslInitials}`);
+    blocks.push({ kind: "card", title: s.typedName.trim().toLowerCase() === s.name.trim().toLowerCase() ? s.typedName : `${s.typedName} (on file as ${s.name})`, lines });
   }
-  lines.push({ text: `Sent ${new Date(i.sentAt).toLocaleDateString("en-CA", { timeZone: "America/Vancouver", dateStyle: "long" })}. Wording fingerprint (SHA-256): ${i.hash}. Master document version: ${i.templateVersion ?? "not stated"}; last edited ${i.templateModified ?? "unknown"}. Statement version ${SIGN_STATEMENT_VERSION}.`, size: 8.5 });
-  return lines;
+  blocks.push({ kind: "gap", h: 6 }, { kind: "p", small: true, text: `Sent ${new Date(i.sentAt).toLocaleDateString("en-CA", { timeZone: "America/Vancouver", dateStyle: "long" })}. Wording fingerprint (SHA-256): ${i.hash}. Master document version: ${i.templateVersion ?? "not stated"}; last edited ${i.templateModified ?? "unknown"}. Statement version ${SIGN_STATEMENT_VERSION}.` });
+  return blocks;
 }

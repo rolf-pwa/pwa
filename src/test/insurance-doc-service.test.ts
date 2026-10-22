@@ -102,4 +102,12 @@ describe("wiring", () => {
     expect(readFileSync("supabase/functions/review-agent-admin/index.ts", "utf8")).toMatch(/insDocSend/);
     expect(readFileSync("src/App.tsx", "utf8")).toContain("/portal/:token/documents");
   });
+  it("uses the house look with the ProsperWise Advisors entity, not the Strategy line", () => {
+    const pdf = readFileSync("supabase/functions/_shared/insurance-doc-service.ts", "utf8");
+    expect(pdf).toContain('ADVISORS_EYEBROW = "ProsperWise Advisors"');
+    expect(pdf).not.toMatch(/Sovereignty Operating System|ProsperWise Strategy/);
+    const portal = readFileSync("src/modules/portal/components/PortalDocuments.tsx", "utf8");
+    expect(portal).toContain("prosperwise-logo-white.png");
+    expect(portal).toContain("ProsperWise Advisors");
+  });
 });

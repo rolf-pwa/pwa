@@ -6,8 +6,8 @@
 // deno-lint-ignore-file no-explicit-any
 import { getServiceGoogleAccessToken } from "./google-token.ts";
 import { driveEnsureFolder, driveFindFolder } from "./meeting-record-service.ts";
-import { cleanTemplate, fillTemplate, footerVersion, sha256Hex, signedPdfLines } from "./insurance-doc-rules.ts";
-import { buildPdf } from "./simple-pdf.ts";
+import { cleanTemplate, fillTemplate, footerVersion, sha256Hex, signedPdfBlocks } from "./insurance-doc-rules.ts";
+import { buildBrandedPdf } from "./simple-pdf.ts";
 import { DOC_ITEMS, type DocKind } from "./insurance-doc-client.ts";
 
 const DRIVE = "https://www.googleapis.com/drive/v3";
@@ -15,6 +15,9 @@ const UPLOAD = "https://www.googleapis.com/upload/drive/v3";
 const sig = () => AbortSignal.timeout(25_000);
 const ymd = (d = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Vancouver" }).format(d);
 const ROLF = "rolf@prosperwise.ca";
+/** The entity on insurance documents is ProsperWise Advisors (the Strategy side keeps its own line on its documents). */
+const ADVISORS_EYEBROW = "ProsperWise Advisors";
+const ADVISORS_FOOTER = () => `\u00A9 ${new Date().getFullYear()} Issler Group Management & Consulting Inc. o/a ProsperWise Advisors \u00B7 www.prosperwise.ca`;
 
 const isKind = (k: unknown): k is DocKind => k === "disclosure_privacy" || k === "reason_why";
 
@@ -105,8 +108,8 @@ export async function finalizeDoc(db: any, documentId: string): Promise<{ ok: bo
   if (d.task_id) await db.from("pm_tasks").update({ status: "done", completed_at: new Date().toISOString() }).eq("id", d.task_id).neq("status", "done");
   if (d.pdf_drive_id) return { ok: true, message: "Already filed." };
   const { data: signers } = await db.from("insurance_document_signers").select("name, typed_name, signed_at, ip, casl_choice, casl_initials, casl_email").eq("document_id", documentId).order("signed_at");
-  const lines = signedPdfLines({ title: d.title, md: d.body_md, hash: d.body_hash, templateModified: d.template_modified, templateVersion: d.template_version, sentAt: d.sent_at, signers: ((signers ?? []) as any[]).map((s) => ({ name: s.name, typedName: s.typed_name, signedAt: s.signed_at, ip: s.ip, caslChoice: s.casl_choice, caslInitials: s.casl_initials, caslEmail: s.casl_email })) });
-  const pdf = buildPdf(lines, `${d.title}  |  signed electronically  |  ${d.body_hash.slice(0, 16)}`);
+  const blocks = signedPdfBlocks({ md: d.body_md, hash: d.body_hash, templateModified: d.template_modified, templateVersion: d.template_version, sentAt: d.sent_at, signers: ((signers ?? []) as any[]).map((s) => ({ name: s.name, typedName: s.typed_name, signedAt: s.signed_at, ip: s.ip, caslChoice: s.casl_choice, caslInitials: s.casl_initials, caslEmail: s.casl_email })) });
+  const pdf = buildBrandedPdf({ eyebrow: ADVISORS_EYEBROW, title: d.title, subtitle: `Signed electronically \u00B7 fingerprint ${d.body_hash.slice(0, 16)}`, footer: ADVISORS_FOOTER(), blocks });
   try {
     const { data: hh } = await db.from("households").select("label, vault_folder_id").eq("id", d.household_id).maybeSingle();
     if (!hh?.vault_folder_id) throw new Error("This household has no Vault folder yet.");
