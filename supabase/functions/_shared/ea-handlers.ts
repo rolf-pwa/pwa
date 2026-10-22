@@ -6,7 +6,7 @@ import {
   buildContextBlock, buildEarlierBlock, calendarTemplateUrl, emailText, defaultHouseholdLabel, extractAddresses, gmailComposeUrl, isIsoDate, normalizeMembers, runAgentTurn, SYSTEM_PROMPT, TOOL_DECLARATIONS,
   type Content, type Part, type ToolOutcome,
 } from "./ea-agent.ts";
-import { fetchWithVertexRetry, getGcpAccessToken, GEMINI_DRAFTING_MODEL, parseServiceAccountKey, vertexModelUrl, withThinking, type ServiceAccountKey } from "./vertex-ai.ts";
+import { configFor, fetchWithVertexRetry, GEMINI_FALLBACK_MODEL, getGcpAccessToken, GEMINI_DRAFTING_MODEL, isVertexBusy, parseServiceAccountKey, vertexModelUrl, VERTEX_BUSY_MESSAGE, withModelFallback, withThinking, type ServiceAccountKey } from "./vertex-ai.ts";
 import { getServiceGoogleAccessToken, getValidGoogleAccessToken } from "./google-token.ts";
 import { loadVoice } from "./voice-profile.ts";
 import { maybeCreateMeetingRecord } from "./meeting-record-service.ts";
@@ -106,15 +106,19 @@ async function briefingText(db: any, userId: string, date: string): Promise<stri
 
 export async function callGemini(sa: ServiceAccountKey, systemText: string, contents: Content[], tools: any[] = TOOL_DECLARATIONS): Promise<{ parts: Part[] }> {
   const token = await getGcpAccessToken(sa);
-  const res = await fetchWithVertexRetry(vertexModelUrl(sa.project_id, GEMINI_DRAFTING_MODEL), {
+  const res = await withModelFallback((m) => fetchWithVertexRetry(vertexModelUrl(sa.project_id, m), {
     method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemText }] }, contents,
       tools: [{ functionDeclarations: tools }], toolConfig: { functionCallingConfig: { mode: "AUTO" } },
-      generationConfig: withThinking(GEMINI_DRAFTING_MODEL, { temperature: 0.4, maxOutputTokens: 2048 }, "low"),
+      generationConfig: configFor(m, withThinking(GEMINI_DRAFTING_MODEL, { temperature: 0.4, maxOutputTokens: 2048 }, "low")),
     }),
-  });
-  if (!res.ok) throw new Error(`Vertex AI error ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  }), GEMINI_DRAFTING_MODEL, GEMINI_FALLBACK_MODEL);
+  if (!res.ok) {
+    const detail = (await res.text()).slice(0, 300);
+    console.error(`[ea] Vertex AI error ${res.status}: ${detail}`);
+    throw new Error(isVertexBusy(res.status) ? VERTEX_BUSY_MESSAGE : `Vertex AI error ${res.status}: ${detail}`);
+  }
   const j = await res.json();
   const parts = j.candidates?.[0]?.content?.parts;
   if (!Array.isArray(parts)) throw new Error("The assistant returned nothing.");
