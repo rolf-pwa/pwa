@@ -195,3 +195,14 @@ export interface RebalanceAuthorizations {
   items: { id: string; text: string; authorizedBy: string | null; authorizedAt: string | null }[];
   responses: { who: string; decision: "acknowledged" | "wants_meeting"; at: string; count: number | null; statementVersion: string; statementText: string }[];
 }
+
+// ── Insurance files ──
+export interface InsFileItem { id: string; file_id: string; kind: string; status: "provided" | "not_applicable"; drive_name: string | null; drive_url: string | null; meeting_task_id: string | null; note: string | null; added_by: string | null; added_at: string }
+export interface InsChecklistRow { kind: string; label: string; hint: string; done: boolean }
+export interface InsFile { id: string; title: string; kind: "new_sale" | "replacement" | "in_force_review"; status: "open" | "complete"; opened_at: string; package_url: string | null; packaged_at: string | null; items: InsFileItem[]; checklist: InsChecklistRow[]; optional: { kind: string; label: string; hint: string }[]; progress: { required: number; done: number; complete: boolean } }
+export interface InsFiles { files: InsFile[]; policies: { id: string; carrier: string; policy_type: string; policy_number: string | null; insured_name: string | null; contact_id: string }[]; meetings: { task_id: string; doc_name: string; doc_url: string; filed_for_completion: string | null }[] }
+export const getInsuranceFiles = (householdId: string) => call<InsFiles>("insFiles", { householdId });
+export const createInsuranceFile = (householdId: string, title: string, kind: string, policyId?: string) => call<{ ok: true; id: string }>("insFileCreate", { householdId, title, kind, policyId });
+export const attachInsuranceItem = (fileId: string, kind: string, input: { driveLink?: string; meetingTaskId?: string; notApplicable?: boolean; note?: string }) => call<{ ok: true; name?: string }>("insFileAttach", { fileId, kind, ...input });
+export const removeInsuranceItem = (itemId: string) => call<{ ok: true }>("insFileRemoveItem", { itemId });
+export const buildInsurancePackage = (fileId: string) => call<{ ok: true; url: string; indexUrl: string; complete: boolean; missing: string[]; copyFailures: string[] }>("insFilePackage", { fileId });

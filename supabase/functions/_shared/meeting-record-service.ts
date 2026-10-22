@@ -34,7 +34,7 @@ export async function driveEnsureFolder(parentId: string, name: string, token: s
   return (await res.json()).id;
 }
 
-async function driveCreateDoc(name: string, parentId: string, html: string, token: string): Promise<{ id: string; url: string }> {
+export async function driveCreateDoc(name: string, parentId: string, html: string, token: string): Promise<{ id: string; url: string }> {
   const boundary = `pwrec${crypto.randomUUID().replace(/-/g, "")}`;
   const meta = JSON.stringify({ name, mimeType: "application/vnd.google-apps.document", parents: [parentId] });
   const body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n${html}\r\n--${boundary}--`;

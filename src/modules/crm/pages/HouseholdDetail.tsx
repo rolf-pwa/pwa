@@ -50,6 +50,7 @@ import { OnboardingAgentPanel } from "@/modules/crm/components/OnboardingAgentPa
 import { OnboardingInviteCard } from "@/modules/crm/components/OnboardingInviteCard";
 import { HouseholdWorkbench } from "@/modules/crm/components/HouseholdWorkbench";
 import { HouseholdLiabilities } from "@/modules/crm/components/HouseholdLiabilities";
+import { InsuranceFiles } from "@/modules/crm/components/InsuranceFiles";
 import { VaultScanButton } from "@/modules/crm/components/vault/VaultScanButton";
 import { ShoeboxToolbar } from "@/modules/crm/components/vault/ShoeboxReviewPanel";
 import { VineyardDashboard } from "@/modules/crm/components/VineyardDashboard";
@@ -1061,6 +1062,7 @@ const HouseholdDetail = () => {
               </div>
               }
             />
+            <InsuranceFiles householdId={id!} />
           </TabsContent>
 
           {/* Action Items */}
