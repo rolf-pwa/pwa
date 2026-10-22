@@ -4,9 +4,9 @@
 // deno-lint-ignore-file no-explicit-any
 import { CASL_MARKER, SIGN_STATEMENT_VERSION, checkSignature, statementFor } from "./insurance-doc-rules.ts";
 
-export type DocKind = "disclosure_privacy" | "reason_why" | "fact_find";
+export type DocKind = "disclosure_privacy" | "reason_why" | "fact_find" | "replacement_declaration" | "replacement_explanation";
 /** Which checklist items a signed document covers. */
-export const DOC_ITEMS: Record<DocKind, string[]> = { disclosure_privacy: ["advisor_disclosure", "privacy_consent"], reason_why: ["recommendation"], fact_find: ["fact_find"] };
+export const DOC_ITEMS: Record<DocKind, string[]> = { disclosure_privacy: ["advisor_disclosure", "privacy_consent"], reason_why: ["recommendation"], fact_find: ["fact_find"], replacement_declaration: ["replacement_disclosure"], replacement_explanation: ["replacement_explanation"] };
 
 // ── The client's side ──────────────────────────────────────────────────────────────────────────────────────────────
 export async function clientPending(db: any, contactId: string) {
@@ -20,12 +20,12 @@ export async function clientPending(db: any, contactId: string) {
 export async function clientGet(db: any, contactId: string, documentId: string) {
   const { data: me } = await db.from("insurance_document_signers").select("id, name, status, signed_at").eq("document_id", documentId).eq("contact_id", contactId).maybeSingle();
   if (!me) return { error: "Not available" };
-  const { data: d } = await db.from("insurance_documents").select("id, kind, title, body_md, status, completed_at").eq("id", documentId).maybeSingle();
+  const { data: d } = await db.from("insurance_documents").select("id, kind, title, body_md, status, completed_at, agent_typed_name, agent_signed_at").eq("id", documentId).maybeSingle();
   if (!d || d.status === "void") return { error: "This document is no longer waiting for your signature." };
   const { data: c } = await db.from("contacts").select("email").eq("id", contactId).maybeSingle();
   const { data: others } = await db.from("insurance_document_signers").select("name, status").eq("document_id", documentId).neq("contact_id", contactId);
   const parts = String(d.body_md).split(CASL_MARKER);
-  return { id: d.id, title: d.title, before: parts[0], after: parts.length > 1 ? parts.slice(1).join("") : null, needsCasl: parts.length > 1, statement: statementFor(d.kind), signerName: me.name, signed: me.status === "signed", signedAt: me.signed_at, email: c?.email ?? "", others: (others ?? []).map((o: any) => ({ name: o.name, signed: o.status === "signed" })) };
+  return { id: d.id, title: d.title, before: parts[0], after: parts.length > 1 ? parts.slice(1).join("") : null, needsCasl: parts.length > 1, statement: statementFor(d.kind), agent: d.agent_signed_at ? { name: d.agent_typed_name, signedAt: d.agent_signed_at } : null, signerName: me.name, signed: me.status === "signed", signedAt: me.signed_at, email: c?.email ?? "", others: (others ?? []).map((o: any) => ({ name: o.name, signed: o.status === "signed" })) };
 }
 
 export async function clientSign(db: any, contactId: string, documentId: string, input: any, ip: string | null, ua: string | null, onComplete: (documentId: string) => Promise<unknown> = async () => {}) {
@@ -48,3 +48,13 @@ export async function clientSign(db: any, contactId: string, documentId: string,
   return { ok: true as const, complete: everyone };
 }
 
+
+/** Documents this person has signed, newest first, with whether the signed copy is filed (so they can download it). */
+export async function clientSigned(db: any, contactId: string) {
+  const { data: rows } = await db.from("insurance_document_signers").select("document_id, signed_at").eq("contact_id", contactId).eq("status", "signed");
+  const ids = (rows ?? []).map((r: any) => r.document_id);
+  if (!ids.length) return [];
+  const { data: docs } = await db.from("insurance_documents").select("id, title, status, pdf_drive_id").in("id", ids).neq("status", "void");
+  const at = new Map((rows ?? []).map((r: any) => [r.document_id, r.signed_at]));
+  return ((docs ?? []) as any[]).filter((d) => d.pdf_drive_id).map((d) => ({ id: d.id as string, title: d.title as string, signed_at: at.get(d.id) as string })).sort((a, b) => Date.parse(b.signed_at) - Date.parse(a.signed_at));
+}

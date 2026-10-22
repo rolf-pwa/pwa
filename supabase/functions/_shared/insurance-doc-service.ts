@@ -22,7 +22,7 @@ const RW_TITLE = "Your Life Insurance Recommendation";
 const ADVISORS_EYEBROW = "ProsperWise Advisors";
 const ADVISORS_FOOTER = () => `\u00A9 ${new Date().getFullYear()} Issler Group Management & Consulting Inc. o/a ProsperWise Advisors \u00B7 www.prosperwise.ca`;
 
-const isKind = (k: unknown): k is DocKind => k === "disclosure_privacy" || k === "reason_why" || k === "fact_find";
+const isKind = (k: unknown): k is DocKind => k === "disclosure_privacy" || k === "reason_why" || k === "fact_find" || k === "replacement_declaration" || k === "replacement_explanation";
 
 async function readMaster(db: any, kind: DocKind) {
   const { data: t } = await db.from("insurance_doc_templates").select("kind, title, drive_file_id, advisor_contact").eq("kind", kind).maybeSingle();
@@ -82,6 +82,7 @@ async function latestAnalyses(db: any, people: { id: string; name: string }[]): 
 export async function previewDoc(db: any, householdId: string, kind: unknown, contactIds: unknown, rawFields?: unknown) {
   if (!isKind(kind)) return { error: "Unknown document." };
   if (kind === "fact_find") return { error: "The fact find is built on the Fact find card." };
+  if (kind === "replacement_declaration" || kind === "replacement_explanation") return { error: "The replacement documents are built on the Replacing a policy card." };
   const all = await adults(db, householdId);
   const fields = cleanFields(rawFields);
   const asked = Array.isArray(contactIds) && contactIds.length ? (contactIds as string[]) : kind === "reason_why" && fields.insuredId ? [fields.insuredId] : null;
@@ -186,9 +187,16 @@ export async function finalizeDoc(db: any, documentId: string): Promise<{ ok: bo
   if (!d || d.status !== "signed") return { ok: false, message: "The document is not fully signed." };
   if (d.task_id) await db.from("pm_tasks").update({ status: "done", completed_at: new Date().toISOString() }).eq("id", d.task_id).neq("status", "done");
   if (d.kind === "fact_find") await db.from("insurance_fact_finds").update({ status: "confirmed", updated_at: new Date().toISOString() }).eq("document_id", d.id);
+  if (d.kind === "replacement_declaration" || d.kind === "replacement_explanation") {
+    const { data: rep } = await db.from("insurance_replacements").select("id, explanation_doc_id, declaration_doc_id").or(`explanation_doc_id.eq.${d.id},declaration_doc_id.eq.${d.id}`).maybeSingle();
+    if (rep) {
+      const { data: both } = await db.from("insurance_documents").select("id, status").in("id", [rep.explanation_doc_id, rep.declaration_doc_id].filter(Boolean));
+      if ((both ?? []).length === 2 && (both as any[]).every((x) => x.status === "signed")) await db.from("insurance_replacements").update({ status: "confirmed", updated_at: new Date().toISOString() }).eq("id", rep.id);
+    }
+  }
   if (d.pdf_drive_id) return { ok: true, message: "Already filed." };
   const { data: signers } = await db.from("insurance_document_signers").select("name, typed_name, signed_at, ip, casl_choice, casl_initials, casl_email").eq("document_id", documentId).order("signed_at");
-  const blocks = signedPdfBlocks({ statement: statementFor(d.kind), md: d.body_md, hash: d.body_hash, templateModified: d.template_modified, templateVersion: d.template_version, sentAt: d.sent_at, signers: ((signers ?? []) as any[]).map((s) => ({ name: s.name, typedName: s.typed_name, signedAt: s.signed_at, ip: s.ip, caslChoice: s.casl_choice, caslInitials: s.casl_initials, caslEmail: s.casl_email })) });
+  const blocks = signedPdfBlocks({ agent: d.agent_signed_at ? { typedName: d.agent_typed_name, signedAt: d.agent_signed_at, ip: d.agent_ip, statement: d.agent_statement } : null, statement: statementFor(d.kind), md: d.body_md, hash: d.body_hash, templateModified: d.template_modified, templateVersion: d.template_version, sentAt: d.sent_at, signers: ((signers ?? []) as any[]).map((s) => ({ name: s.name, typedName: s.typed_name, signedAt: s.signed_at, ip: s.ip, caslChoice: s.casl_choice, caslInitials: s.casl_initials, caslEmail: s.casl_email })) });
   const pdf = buildBrandedPdf({ eyebrow: ADVISORS_EYEBROW, title: d.title, subtitle: `Signed electronically \u00B7 fingerprint ${d.body_hash.slice(0, 16)}`, footer: ADVISORS_FOOTER(), blocks });
   try {
     const f = await uploadToAdvisorFiles(db, d.household_id, "Signed Documents", `${d.title} (signed ${ymd()}).pdf`, pdf);
@@ -234,4 +242,20 @@ export async function fileNeedsAnalysis(db: any, who: string, analysisId: string
     }
   }
   return { ok: true, url: drive.url, attached };
+}
+
+/** A signed copy for the person who signed it (every signatory must be given a copy). Read from Drive with the service account; returned as base64. */
+export async function clientDownload(db: any, contactId: string, documentId: string): Promise<{ name: string; base64: string } | { error: string }> {
+  const { data: me } = await db.from("insurance_document_signers").select("status").eq("document_id", documentId).eq("contact_id", contactId).maybeSingle();
+  if (!me || me.status !== "signed") return { error: "Not available" };
+  const { data: d } = await db.from("insurance_documents").select("title, status, pdf_drive_id").eq("id", documentId).maybeSingle();
+  if (!d?.pdf_drive_id || d.status === "void") return { error: "The signed copy is not ready yet." };
+  const token = await getServiceGoogleAccessToken(db);
+  const r = await fetch(`${DRIVE}/files/${d.pdf_drive_id}?alt=media&supportsAllDrives=true`, { headers: { Authorization: `Bearer ${token}` }, signal: sig() });
+  if (!r.ok) return { error: "The signed copy could not be opened just now." };
+  const bytes = new Uint8Array(await r.arrayBuffer());
+  if (bytes.length > 6_000_000) return { error: "The signed copy is too large to download here." };
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return { name: `${String(d.title).replace(/[\\/:*?"<>|]/g, "-")} (signed).pdf`, base64: btoa(bin) };
 }

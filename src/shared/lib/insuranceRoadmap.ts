@@ -12,6 +12,7 @@ export const ITEM_STAGE: Record<string, InsuranceStage> = {
   recommendation: "recommendation",
   illustration: "recommendation",
   replacement_disclosure: "recommendation",
+  replacement_explanation: "recommendation",
   application: "coverage_agreed",
   delivery_confirmation: "coverage_agreed",
 };

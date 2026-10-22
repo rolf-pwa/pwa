@@ -1,0 +1,3 @@
+// The parts of the replacement explanation, in order. Mirrors REPL_SECTIONS in supabase/functions/_shared/replacement-rules.ts (a test keeps them in step).
+export const REPL_SECTIONS = [{ key: "present", label: "Your present policy" }, { key: "why", label: "Why replace, and what else you could do" }, { key: "new", label: "The new policy compared with your present one" }];
+export const AGENT_STATEMENT = "I have given the client this document and a written explanation of the advantages and disadvantages of replacing their life insurance policy, before starting the application for a new policy.";
