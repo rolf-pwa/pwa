@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/shared/components/ui/card";
 import { PortalProposal } from "./PortalProposal";
 import { PortalPortfolioReview } from "./PortalPortfolioReview";
 import { itemsOwnedBy, type ClientProposal, type ClientView } from "../../../../supabase/functions/_shared/portfolio-review-client";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/shared/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/shared/components/ui/alert-dialog";
 
 export interface RebalancingState {
@@ -148,7 +149,9 @@ export interface RebalancingMeetingType { label: string; url: string; embedUrl?:
 
 /** The rebalancing's own page: Rolf's summary, then the proposal to tick, authorize, or talk through. */
 export function PortalRebalancingPage({ rebalancing, portalToken, onChanged, onBack, meetingTypes = [] }: { rebalancing: RebalancingState | null; portalToken: string; onChanged: () => void; onBack: () => void; meetingTypes?: RebalancingMeetingType[] }) {
-  const [embedded, setEmbedded] = useState<RebalancingMeetingType | null>(null);
+  // After "Talk it through" a window opens with the booking page (or a button to it): it used to open at the very bottom of a long page, or in a new tab a browser could block.
+  const [talkOpen, setTalkOpen] = useState(false);
+  const [booking, setBooking] = useState<RebalancingMeetingType | null>(null);
   const send = async (action: "acknowledge" | "talk_first", itemIds?: string[]) => {
     const { data, error } = await supabase.functions.invoke("portal-rebalance", { body: { portal_token: portalToken, action, item_ids: itemIds } });
     if (error || data?.error) throw new Error(data?.error ?? "Something went wrong. Please try again.");
@@ -159,9 +162,10 @@ export function PortalRebalancingPage({ rebalancing, portalToken, onChanged, onB
   };
   const talk = async () => {
     try {
-      await send("talk_first"); toast.success("Thank you. I will be in touch."); onChanged();
-      const t = meetingTypes.find((m) => /interim strategy/i.test(m.label));
-      if (t) { if (t.embedUrl && t.embedUrl !== t.url) setEmbedded(t); else window.open(t.url, "_blank", "noopener,noreferrer"); }
+      await send("talk_first"); toast.success("Thank you. I will be in touch.");
+      setBooking(meetingTypes.find((m) => /interim strategy/i.test(m.label)) ?? null);
+      setTalkOpen(true);
+      onChanged();
     } catch (e: any) { toast.error(e?.message ?? "Something went wrong. Please try again."); }
   };
   const done = rebalancing && (rebalancing.completedAt || rebalancing.acknowledgedAt);
@@ -193,12 +197,17 @@ export function PortalRebalancingPage({ rebalancing, portalToken, onChanged, onB
         </Card>
         )
       )}
-      {embedded && (
-        <div className="overflow-hidden rounded-lg border border-border bg-card">
-          <div className="flex items-center justify-between border-b border-border px-4 py-2.5 font-serif text-sm text-foreground"><span>{embedded.label}</span><button onClick={() => setEmbedded(null)} className="text-xs text-muted-foreground hover:text-accent">Close</button></div>
-          <iframe src={embedded.embedUrl} style={{ border: 0 }} width="100%" height={700} title={embedded.label} />
-        </div>
-      )}
+      <Dialog open={talkOpen} onOpenChange={setTalkOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="font-serif">Thank you. I will be in touch.</DialogTitle>
+            <DialogDescription>{booking ? "If you would like to pick a time to talk it through, you can do it here." : "I will reach out to find a time that suits you."}</DialogDescription>
+          </DialogHeader>
+          {booking && (booking.embedUrl && booking.embedUrl !== booking.url
+            ? <iframe src={booking.embedUrl} style={{ border: 0 }} width="100%" height={620} title={booking.label} />
+            : <a href={booking.url} target="_blank" rel="noopener noreferrer" className="inline-flex w-fit items-center rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent/90">Pick a time: {booking.label}</a>)}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
