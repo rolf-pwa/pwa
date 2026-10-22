@@ -12,6 +12,7 @@ import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Textarea } from "@/shared/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
+import { SystemHealth } from "@/modules/crm/components/SystemHealth";
 import { GeorgiaRulebook } from "@/modules/crm/components/GeorgiaRulebook";
 import { MeetingRecordsCard } from "@/modules/crm/components/MeetingRecordsCard";
 import { getSupportOverview, handBackSupportConversation, replyToSupportConversation, reviewSupportConversation, setAway, type Away, type SupportConversation } from "@/modules/crm/lib/reviewAgent";
@@ -151,6 +152,7 @@ export default function AskGeorgia() {
         {data && (
           <>
             <AwayCard away={data.away} onSaved={load} />
+            <SystemHealth />
             <GeorgiaRulebook />
             <InboxSweep />
             <MeetingRecordsCard />

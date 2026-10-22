@@ -6,6 +6,7 @@
 // Only windows that start after config.since are managed, so nothing already under way is touched.
 // A booking is detected from Rolf's calendar: an event in the window, titled for the meeting, with one of the family's adults.
 
+import { recordHeartbeat } from "../_shared/job-health.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendServiceEmailDetailed } from "../_shared/service-email.ts";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
@@ -135,10 +136,12 @@ Deno.serve(async (req) => {
       catch (e) { summary.errors.push(`${o.family_id}: ${e instanceof Error ? e.message : String(e)}`); }
     }
     if (summary.errors.length) await logSystemHealth(db as any, { function_name: "review-agent-tick", severity: "WARN", error_code: "REVIEW_AGENT_PARTIAL", error_message: summary.errors.join("; ").slice(0, 900) });
+    await recordHeartbeat(db as any, "review_agent_tick", true, `${summary.evaluated ?? 0} evaluated`);
     return json({ ok: true, mode, ...summary });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     await logSystemHealth(db as any, { function_name: "review-agent-tick", severity: "ERROR", error_code: "REVIEW_AGENT_FAILED", error_message: message.slice(0, 900) });
+    await recordHeartbeat(db as any, "review_agent_tick", false, null, message);
     return json({ error: message }, 500);
   }
 });
