@@ -6,6 +6,7 @@
 import { getValidGoogleAccessToken } from "./google-token.ts";
 import { gmailFor } from "./gmail-handled.ts";
 import { postTaskEvent } from "./task-events.ts";
+import { respondToEvent } from "./calendar-service.ts";
 import { GEMINI_EXTRACT_MODEL, generateVertexContent, parseServiceAccountKey, withThinking } from "./vertex-ai.ts";
 
 import { AUTONOMOUS_KINDS, SUGGEST_TOOL, sameRule, UNSAFE_RULE } from "./georgia-rules-core.ts";
@@ -17,7 +18,7 @@ export async function rulebook(db: any, userId: string) {
     db.from("georgia_rule_suggestions").select("id, rule, area, evidence, times, created_at").eq("staff_user_id", userId).eq("status", "pending").order("created_at", { ascending: false }).limit(10),
     db.from("ea_actions").select("id, kind, status, summary, payload, created_at").eq("staff_user_id", userId).in("kind", AUTONOMOUS_KINDS).gte("created_at", since).order("created_at", { ascending: false }).limit(60),
   ]);
-  const acts = ((activity ?? []) as any[]).map((a) => ({ id: a.id, kind: a.kind, summary: a.summary, at: a.created_at, undone: !!a.payload?.undone, canUndo: !a.payload?.undone && (a.kind === "emails_filed" || (a.kind === "notice_handled" && !!a.payload?.closed)) }));
+  const acts = ((activity ?? []) as any[]).map((a) => ({ id: a.id, kind: a.kind, summary: a.summary, at: a.created_at, undone: !!a.payload?.undone, canUndo: !a.payload?.undone && (a.kind === "emails_filed" || a.kind === "calendar_accepted" || (a.kind === "notice_handled" && !!a.payload?.closed)) }));
   return { rules: rules ?? [], suggestions: suggestions ?? [], activity: acts };
 }
 
@@ -48,6 +49,9 @@ export async function undoAction(db: any, userId: string, actionId: string) {
     const gm = gmailFor(await getValidGoogleAccessToken(db, userId));
     const r = await gm("messages/batchModify", { method: "POST", body: JSON.stringify({ ids, addLabelIds: ["INBOX", "UNREAD"], removeLabelIds: a.payload?.label_id ? [a.payload.label_id] : [] }) });
     if (!r.ok) return { error: `Gmail said no (${r.status}).` };
+  } else if (a.kind === "calendar_accepted" && a.payload?.event_id) {
+    const res = await respondToEvent(await getValidGoogleAccessToken(db, userId), String(a.payload.event_id), "needsAction", false);
+    if (!res.ok) return { error: res.error ?? "Google said no." };
   } else if (a.kind === "notice_handled" && a.payload?.closed && a.payload?.task_id) {
     const { data: t } = await db.from("pm_tasks").select("id, title, parent_task_id").eq("id", a.payload.task_id).maybeSingle();
     if (!t) return { error: "That task is gone." };

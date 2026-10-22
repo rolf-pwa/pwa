@@ -16,6 +16,7 @@ import { dismissBriefingItem, refreshBriefing } from "../_shared/briefing-refres
 import { eaApply, eaChat, eaDecide, eaForget, eaHistory, eaNudge } from "../_shared/ea-handlers.ts";
 import { isMutedSender } from "../_shared/ea-agent.ts";
 import { addRule, decideSuggestion, rulebook, suggestRules, undoAction } from "../_shared/georgia-rules.ts";
+import { runCalendarInvites } from "../_shared/calendar-service.ts";
 import { runNoticeProcessor } from "../_shared/notice-service.ts";
 import { sweepArchive, sweepFeedback, sweepForgetSender, sweepList, sweepMorning, sweepRun, sweepSetAuto, sweepUndoArchive } from "../_shared/inbox-sweep-handlers.ts";
 import { sweepLine } from "../_shared/inbox-sweep.ts";
@@ -635,6 +636,12 @@ Deno.serve(async (req) => {
     if (cronBody.job === "rule_suggestions") {
       // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
       EdgeRuntime.waitUntil((async () => { const { resolveUserIdByEmail, ADMIN_INBOX_EMAIL } = await import("../_shared/google-token.ts"); const n = await suggestRules(db, await resolveUserIdByEmail(db, ADMIN_INBOX_EMAIL)); console.log("[rule-suggestions]", n); })().catch((e: unknown) => console.error("[rule-suggestions]", e)));
+      return json({ started: true });
+    }
+    // Calendar invitations Rolf has not answered: webinars and training go in right away, the rest is flagged for the meeting.
+    if (cronBody.job === "calendar_invites") {
+      // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+      EdgeRuntime.waitUntil(runCalendarInvites(db).then((r) => r.length && console.log("[calendar-invites]", r.join("; "))).catch((e: unknown) => console.error("[calendar-invites]", e)));
       return json({ started: true });
     }
     if (cronBody.job === "georgia_tasks") {
