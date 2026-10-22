@@ -33,6 +33,7 @@ import { getPortalSession, setPortalSession, clearPortalSession } from "@/module
 import prosperwiseLogo from "@/assets/prosperwise-icon-paper.png";
 import { policyTypeLabel } from "@/shared/lib/insurance";
 import { PortalRebalancing, PortalRebalancingPage, PortalRebalancingTeaser, PortalRebalancingWaiting, rebalancingNeedsMe, type RebalancingState } from "@/modules/portal/components/PortalRebalancing";
+import { PortalDocumentsPage, PortalDocumentsTeaser } from "@/modules/portal/components/PortalDocuments";
 import { PortalReviewTeaser, PortalReviewPage } from "@/modules/portal/components/PortalReviewTeaser";
 import { withBookedMeetings } from "@/modules/portal/lib/bookedMeetings";
 import { PortalBookedMeetings, type BookedMeeting } from "@/modules/portal/components/PortalBookedMeetings";
@@ -95,7 +96,7 @@ interface DrilldownState {
 }
 
 
-const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = false }: { intakeRoute?: boolean; reviewRoute?: boolean; rebalancingRoute?: boolean }) => {
+const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = false, documentsRoute = false }: { intakeRoute?: boolean; reviewRoute?: boolean; rebalancingRoute?: boolean; documentsRoute?: boolean }) => {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
   const [data, setData] = useState<PortalData | null>(null);
@@ -1198,7 +1199,10 @@ const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = f
                   meetings={meetings}
                   taskCounts={taskCounts}
                   onGo={setActiveTab}
-                  highlight={(rebalancingAwaiting || rebalancingWaiting || (data as any)?.portfolio_review) ? (
+                  highlight={(
+                    <>
+                      <PortalDocumentsTeaser portalToken={portalToken} onOpen={() => navigate(token ? `/portal/${token}/documents` : "/portal/documents")} />
+                      {(rebalancingAwaiting || rebalancingWaiting || (data as any)?.portfolio_review) ? (
                     <>
                       {rebalancingAwaiting && rebalancingState && <PortalRebalancingTeaser rebalancing={rebalancingState} onOpen={() => navigate(token ? `/portal/${token}/rebalancing` : "/portal/rebalancing")} />}
                       {rebalancingWaiting && rebalancingState && <PortalRebalancingWaiting rebalancing={rebalancingState} onOpen={() => navigate(token ? `/portal/${token}/rebalancing` : "/portal/rebalancing")} />}
@@ -1211,7 +1215,9 @@ const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = f
                         />
                       ) : null}
                     </>
-                  ) : null}
+                      ) : null}
+                    </>
+                  )}
                   sidebar={dashboardSidebar}
                   links={isSelf ? <PortalDynamicLinks contact={contact} layout="grid" /> : null}
                 />
@@ -1435,6 +1441,7 @@ const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = f
   // ─── Determine what to render based on drilldown ───
   const renderContent = () => {
     // The Portfolio Review has a page of its own, so the dashboard stays clean.
+    if (documentsRoute) return <PortalDocumentsPage portalToken={portalToken} onBack={() => navigate(token ? `/portal/${token}` : "/portal")} />;
     if (rebalancingRoute) return <PortalRebalancingPage rebalancing={((data as any)?.rebalancing as RebalancingState) ?? null} portalToken={portalToken} onChanged={() => refreshData(portalToken)} onBack={() => navigate(token ? `/portal/${token}` : "/portal")} meetingTypes={(data as any)?.meeting_types ?? []} />;
     if (reviewRoute) return <PortalReviewPage review={(data as any)?.portfolio_review ?? null} onBack={() => navigate(token ? `/portal/${token}` : "/portal")} meetingTypes={(data as any)?.meeting_types ?? []} booked={(data as any)?.booked_meetings ?? []} />;
     if (intakeRoute) {

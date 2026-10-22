@@ -16,6 +16,7 @@ import { MODEL_PROMPT, validateModels } from "../_shared/ia-model-parse.ts";
 import { isPooledFamily } from "../_shared/review-units.ts";
 import { buildClientProposal, buildClientView, describeAuthorizedItem, narrativeParagraphs, portfolioReviewReadyEmail, type ClientIncludes } from "../_shared/portfolio-review-client.ts";
 import { attachItem, buildPackage, createFile, listFiles, removeItem } from "../_shared/insurance-file-service.ts";
+import { finalizeDoc, listDocs, previewDoc, sendDoc, voidDoc } from "../_shared/insurance-doc-service.ts";
 import { planVaultCatchUp } from "../_shared/vault-catchup.ts";
 import { ensurePersonalDrawers, provisionClientFolderTree } from "../_shared/vault-provisioning.ts";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
@@ -195,6 +196,11 @@ Deno.serve(async (req) => {
     if (action === "insFileCreate") { const r = await createFile(db, staff.email, String(body?.householdId ?? ""), body?.title, body?.kind, body?.policyId, body?.contactId); return json(r, "error" in r ? 400 : 200); }
     if (action === "insFileAttach") { const r = await attachItem(db, staff.email, String(body?.fileId ?? ""), String(body?.kind ?? ""), { driveLink: body?.driveLink, meetingTaskId: body?.meetingTaskId, notApplicable: body?.notApplicable, note: body?.note }); return json(r, "error" in r ? 400 : 200); }
     if (action === "insFileRemoveItem") return json(await removeItem(db, String(body?.itemId ?? "")));
+    if (action === "insDocList") return json({ documents: await listDocs(db, String(body?.householdId ?? "")) });
+    if (action === "insDocPreview") { const r = await previewDoc(db, String(body?.householdId ?? ""), body?.kind, body?.contactIds); return json(r, "error" in r ? 400 : 200); }
+    if (action === "insDocSend") { const r = await sendDoc(db, staff.email, { householdId: String(body?.householdId ?? ""), kind: body?.kind, contactIds: body?.contactIds, fileId: body?.fileId }); return json(r, "error" in r ? 400 : 200); }
+    if (action === "insDocVoid") { const r = await voidDoc(db, String(body?.documentId ?? ""), String(body?.reason ?? "Voided"), staff.email); return json(r, "error" in r ? 400 : 200); }
+    if (action === "insDocFinalize") return json(await finalizeDoc(db, String(body?.documentId ?? "")));
     if (action === "insFilePackage") { const r = await buildPackage(db, staff.email, String(body?.fileId ?? "")); return json(r, "error" in r ? 400 : 200); }
 
     if (action === "portfolioPack") {
