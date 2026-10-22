@@ -74,3 +74,13 @@ describe("the plumbing", () => {
     expect(readFileSync("supabase/functions/daily-briefing-generate/index.ts", "utf8")).toContain('trackJob(db, "insurance_file_check"');
   });
 });
+
+describe("the database change", () => {
+  it("is in the repository, with both tables, their grants and the daily job", () => {
+    const sql = readFileSync("supabase/migrations/20261214120000_insurance_files.sql", "utf8");
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS public.insurance_files");
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS public.insurance_file_items");
+    expect(sql).toContain("GRANT ALL ON public.insurance_files, public.insurance_file_items TO service_role");
+    expect(sql).toContain("insurance_file_check");
+  });
+});
