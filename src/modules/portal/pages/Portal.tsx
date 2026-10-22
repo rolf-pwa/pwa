@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
+import { bookingEmbedSrc } from "@/shared/lib/meetingBookingLinks";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/shared/integrations/supabase/client";
@@ -1093,7 +1094,7 @@ const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = f
         onTalkFirst={() => {
           const m = ((data as any).meeting_types ?? []).find((t: { label: string }) => /interim strategy/i.test(t.label));
           setActiveTab("meetings");
-          if (m) { if (m.embedUrl && m.embedUrl !== m.url) setEmbeddedBooking({ label: m.label, embedUrl: m.embedUrl }); else window.open(m.url, "_blank", "noopener,noreferrer"); }
+          if (m) { const src = bookingEmbedSrc(m.url, m.embedUrl); if (src) setEmbeddedBooking({ label: m.label, embedUrl: src }); else window.open(m.url, "_blank", "noopener,noreferrer"); }
         }}
       />
     ) : null;

@@ -33,3 +33,17 @@ describe("ordering", () => {
     expect(moveType(list, "b", 1).map((x) => `${x.id}${x.sort_order}`)).toEqual(["a0", "c1", "b2"]);
   });
 });
+
+import { bookingEmbedSrc } from "@/shared/lib/meetingBookingLinks";
+describe("showing a booking link inside the page", () => {
+  const sched = "https://calendar.google.com/calendar/appointments/schedules/AcZssZ2H6IjhFNJ1SJi1VYOHhShYcKxVttMB-hi06";
+  it("uses the stored embed address when it differs from the link", () => expect(bookingEmbedSrc("https://calendar.app.google/x", "https://calendar.google.com/calendar/appointments/schedules/abc?gv=true")).toBe("https://calendar.google.com/calendar/appointments/schedules/abc?gv=true"));
+  it("turns a Google appointment schedule link into one that can be embedded, even when the embed address is the same as the link", () => {
+    expect(bookingEmbedSrc(sched, sched)).toBe(`${sched}?gv=true`);
+    expect(bookingEmbedSrc(`${sched}?gv=true`, null)).toBe(`${sched}?gv=true`);
+  });
+  it("gives null for a short link or another site, which can only open on its own", () => {
+    expect(bookingEmbedSrc("https://calendar.app.google/iaBTzycNNPDr4BmX9", "https://calendar.app.google/iaBTzycNNPDr4BmX9")).toBeNull();
+    expect(bookingEmbedSrc("https://example.com/book", null)).toBeNull();
+  });
+});

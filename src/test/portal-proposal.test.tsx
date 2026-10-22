@@ -28,7 +28,7 @@ describe("PortalProposal", () => {
   it("ticks everything with Tick all, and offers Talk it through", async () => {
     const onTalk = vi.fn().mockResolvedValue(undefined);
     render(<PortalProposal proposal={proposal} statement="I authorize." onAuthorize={async () => {}} onTalk={onTalk} />);
-    fireEvent.click(screen.getByText("Tick all"));
+    fireEvent.click(screen.getByText("Tick all of mine"));
     expect(screen.getByRole("button", { name: "Authorize" }).hasAttribute("disabled")).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Talk it through" }));
     await waitFor(() => expect(onTalk).toHaveBeenCalled());
@@ -58,7 +58,7 @@ describe("the Tier 1 rebalancing page and pointer", () => {
   it("authorizes by sending every item id, as the acknowledgement", async () => {
     invoke.mockResolvedValue({ data: { ok: true }, error: null });
     render(<PortalRebalancingPage rebalancing={rebalancing()} portalToken="tok" onChanged={() => {}} onBack={() => {}} />);
-    fireEvent.click(screen.getByText("Tick all"));
+    fireEvent.click(screen.getByText("Tick all of mine"));
     fireEvent.click(screen.getByRole("button", { name: "Authorize" }));
     await waitFor(() => expect(invoke).toHaveBeenCalledWith("portal-rebalance", { body: { portal_token: "tok", action: "acknowledge", item_ids: ["switch:a", "switch:c", "reset:a"] } }));
   });
@@ -110,5 +110,64 @@ describe("the rebalance page uses the review's format", () => {
     render(<PortalPortfolioReview view={view} statement="I authorize." authorized={{ at: "2026-10-21T16:00:00Z" }} onAuthorize={async () => {}} onTalk={async () => {}} />);
     expect(screen.getByText(/You authorized this on/)).toBeTruthy();
     expect(screen.queryByTestId("proposal")).toBeNull();
+  });
+});
+
+
+describe("a rebalancing with changes to a spouse's accounts (Steffen and Dana)", () => {
+  const mixed: ClientProposal = {
+    switches: [
+      { id: "switch:s1", label: "RRSP …1111", owner: "Steffen Nieswandt", ownerId: "steffen", direction: "to_income", amount: 4000, taxable: false },
+      { id: "switch:d1", label: "RRSP …2222", owner: "Dana Nieswandt", ownerId: "dana", direction: "to_income", amount: 3000, taxable: false },
+      { id: "switch:d2", label: "TFSA …3333", owner: "Dana Nieswandt", ownerId: "dana", direction: "to_equity", amount: 2000, taxable: false },
+    ],
+    resets: [], totalLift: 0, totalNow: 0, totalAfter: 0, hasTaxable: false,
+  } as unknown as ClientProposal;
+  it("says plainly which changes are not theirs, and ticks all of theirs", async () => {
+    const onAuthorize = vi.fn().mockResolvedValue(undefined);
+    render(<PortalProposal proposal={mixed} statement="I authorize." onAuthorize={onAuthorize} onTalk={async () => {}} viewerId="steffen" authorizedIds={[]} />);
+    expect(screen.getByTestId("not-all-yours").textContent).toMatch(/Dana's accounts/);
+    expect((screen.getByLabelText("Not yours to authorize: RRSP …2222") as HTMLInputElement).disabled).toBe(true);
+    fireEvent.click(screen.getByText("Tick all of mine"));
+    fireEvent.click(screen.getByRole("button", { name: "Authorize" }));
+    await waitFor(() => expect(onAuthorize).toHaveBeenCalledWith(["switch:s1"]));
+  });
+  it("keeps every box ticked as each is ticked (they are not remounted on each tick)", () => {
+    render(<PortalProposal proposal={proposal} statement="I authorize." onAuthorize={async () => {}} onTalk={async () => {}} />);
+    const boxes = [screen.getByLabelText("Acknowledge TFSA …3190"), screen.getByLabelText("Acknowledge Non-registered …6067"), screen.getByLabelText("Acknowledge reset TFSA …3190")] as HTMLInputElement[];
+    boxes.forEach((b) => fireEvent.click(b));
+    expect((screen.getByLabelText("Acknowledge TFSA …3190") as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText("Acknowledge Non-registered …6067") as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText("Acknowledge reset TFSA …3190") as HTMLInputElement).checked).toBe(true);
+  });
+});
+
+describe("the action items list", () => {
+  it("retries once on its own and offers Try again, so a momentary failure does not strand the client", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync("src/modules/portal/components/PortalTasks.tsx", "utf8");
+    expect(src).toContain("tries < 2");
+    expect(src).toContain("Try again");
+  });
+});
+
+describe("Talk it through on the rebalancing page", () => {
+  const withProposal = () => rebalancing({ proposal });
+  beforeEach(() => { invoke.mockReset(); invoke.mockResolvedValue({ data: { ok: true }, error: null }); });
+  it("opens the booking page in a window the client can see, not at the bottom of the page", async () => {
+    render(<PortalRebalancingPage rebalancing={withProposal()} portalToken="t" onChanged={() => {}} onBack={() => {}} meetingTypes={[{ label: "Interim Strategy Session", url: "https://book.example/is", embedUrl: "https://book.example/is?embed=1" }]} />);
+    fireEvent.click(screen.getByText("Talk it through"));
+    await waitFor(() => expect(screen.getByText("Thank you. I will be in touch.")).toBeTruthy());
+    expect(document.querySelector("iframe")?.getAttribute("src")).toBe("https://book.example/is?embed=1");
+    expect(invoke).toHaveBeenCalledWith("portal-rebalance", expect.objectContaining({ body: expect.objectContaining({ action: "talk_first" }) }));
+  });
+  it("offers a button (a click the browser allows) when there is no embed, and a plain promise when there is no meeting type", async () => {
+    const { unmount } = render(<PortalRebalancingPage rebalancing={withProposal()} portalToken="t" onChanged={() => {}} onBack={() => {}} meetingTypes={[{ label: "Interim Strategy Session", url: "https://book.example/is" }]} />);
+    fireEvent.click(screen.getByText("Talk it through"));
+    await waitFor(() => expect(screen.getByText(/Pick a time/)).toBeTruthy());
+    unmount();
+    render(<PortalRebalancingPage rebalancing={withProposal()} portalToken="t" onChanged={() => {}} onBack={() => {}} meetingTypes={[]} />);
+    fireEvent.click(screen.getByText("Talk it through"));
+    await waitFor(() => expect(screen.getByText(/I will reach out to find a time/)).toBeTruthy());
   });
 });
