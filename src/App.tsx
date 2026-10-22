@@ -20,6 +20,7 @@ const InsuranceLayout = lazy(() => import("@/modules/insurance/InsuranceLayout")
 const InsuranceBoard = lazy(() => import("@/modules/insurance/InsuranceBoard"));
 const InsOverview = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.OverviewPage })));
 const InsPolicies = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.PoliciesPage })));
+const InsFactFind = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.FactFindPage })));
 const InsNeeds = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.NeedsPage })));
 const InsQuoting = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.QuotingPage })));
 const InsCompliance = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.CompliancePage })));
@@ -159,6 +160,7 @@ const App = () => (
                 <Route path=":householdId">
                   <Route index element={<InsOverview />} />
                   <Route path="policies" element={<InsPolicies />} />
+                  <Route path="fact-find" element={<InsFactFind />} />
                   <Route path="needs" element={<InsNeeds />} />
                   <Route path="quoting" element={<InsQuoting />} />
                   <Route path="compliance" element={<InsCompliance />} />

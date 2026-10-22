@@ -11,10 +11,10 @@ const SOURCE_LABEL: Record<FactRow["source"]["type"], string> = { file: "On file
 const STATUS: Record<FactFindRow["status"], string> = { draft: "Draft", sent: "Waiting on the client", confirmed: "Confirmed by the client" };
 
 /**
- * The fact find for one person: what is on file, plus what the meeting notes and call transcripts say (each with the quote it came from), and what is still
+ * The Fact find page: the fact find for one person: what is on file, plus what the meeting notes and call transcripts say (each with the quote it came from), and what is still
  * missing. Rolf edits it, then sends it to the client to confirm in the portal; the confirmed copy is filed as a PDF and ticks the checklist.
  */
-export function ComplianceFactFind({ householdId, onChanged }: { householdId: string; onChanged?: () => void }) {
+export function FactFind({ householdId, onChanged }: { householdId: string; onChanged?: () => void }) {
   const [data, setData] = useState<Awaited<ReturnType<typeof getFactFinds>> | null>(null);
   const [files, setFiles] = useState<InsFile[]>([]);
   const [personId, setPersonId] = useState("");
@@ -46,7 +46,7 @@ export function ComplianceFactFind({ householdId, onChanged }: { householdId: st
   const locked = find?.status === "confirmed";
   const missing = (find?.facts ?? []).filter((f) => !(values[f.key] ?? "").trim());
   return (
-    <Card data-testid="compliance-factfind">
+    <Card data-testid="factfind">
       <CardHeader className="pb-3"><CardTitle className="text-lg">Fact find</CardTitle></CardHeader>
       <CardContent className="space-y-4 text-sm">
         <p className="text-muted-foreground">Compiled from the file, your meeting notes and call transcripts. Every fact taken from a meeting or call shows the exact words it came from, and anything the notes do not state stays blank. Edit it, then send it to the client to confirm.</p>

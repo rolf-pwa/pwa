@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, Outlet, useParams } from "react-router-dom";
-import { ArrowLeft, Calculator, ClipboardCheck, FileText, LayoutGrid, Loader2, Shield, Users } from "lucide-react";
+import { ArrowLeft, Calculator, ClipboardCheck, ClipboardList, FileText, LayoutGrid, Loader2, Shield, Users } from "lucide-react";
 import { NavLink } from "@/shared/components/NavLink";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { INSURANCE_STAGES, type InsuranceStage } from "@/shared/lib/insurancePipeline";
@@ -8,6 +8,7 @@ import { INSURANCE_STAGES, type InsuranceStage } from "@/shared/lib/insurancePip
 const ITEMS = [
   { to: "", label: "Overview", icon: LayoutGrid, end: true },
   { to: "policies", label: "Policies", icon: Shield },
+  { to: "fact-find", label: "Fact find", icon: ClipboardList },
   { to: "needs", label: "Needs analysis", icon: Calculator },
   { to: "quoting", label: "Quoting", icon: FileText },
   { to: "compliance", label: "Compliance", icon: ClipboardCheck },

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, Check, Loader2 } from "lucide-react";
 import { Button } from "@/shared/components/ui/button";
@@ -26,6 +27,14 @@ function Ring({ percent }: { percent: number }) {
  * The compliance roadmap for a household's insurance file: what is up next for the stage it is in, what comes later, what is done, and what has happened.
  * Each item opens where you attach the evidence (a Drive link, a meeting record) or mark it not applicable.
  */
+/** Where in the workspace each checklist item is done, when it is not done here. */
+const WORK_PAGE: Record<string, { to: string; label: string }> = {
+  fact_find: { to: "fact-find", label: "Open the Fact find page" },
+  needs_analysis: { to: "needs", label: "Open Needs analysis" },
+  alternatives: { to: "quoting", label: "Open Quoting" },
+  illustration: { to: "quoting", label: "Open Quoting" },
+};
+
 export function ComplianceRoadmap({ householdId, stage }: { householdId: string; stage: InsuranceStage | null }) {
   const [data, setData] = useState<InsFiles | null>(null);
   const [docs, setDocs] = useState<InsDoc[]>([]);
@@ -69,6 +78,7 @@ export function ComplianceRoadmap({ householdId, stage }: { householdId: string;
       {openKind === c.kind && !c.done && (
         <div className="space-y-2 border-t px-3 py-3 text-xs">
           <p className="text-muted-foreground">{c.hint}</p>
+          {WORK_PAGE[c.kind] && <Link to={`/insurance/${householdId}/${WORK_PAGE[c.kind].to}`} className="inline-block font-medium text-primary hover:underline" data-testid="work-page-link">{WORK_PAGE[c.kind].label}</Link>}
           {c.kind === "meeting_records" ? (
             <select className="h-8 rounded-md border bg-background px-2" defaultValue="" aria-label="Attach a meeting record" onChange={(e) => e.target.value && void attach(c.kind, { meetingTaskId: e.target.value }, "Attached")}>
               <option value="">Attach a meeting record…</option>
