@@ -8,6 +8,7 @@ export type Block =
   | { kind: "h"; text: string }
   | { kind: "p"; text: string; bold?: boolean; small?: boolean }
   | { kind: "gap"; h?: number }
+  | { kind: "kv"; label: string; value: string }
   | { kind: "card"; title: string; lines: string[] };
 
 export interface BrandedDoc {
@@ -61,9 +62,26 @@ function layout(blocks: Block[]): string[][] {
     if (b.kind === "gap") { y -= b.h ?? 8; continue; }
     if (b.kind === "h") {
       const size = 14, lines = wrap(b.text, size, false, W - 2 * M, "F3");
-      room(size * 1.3 * lines.length + 18); y -= 8;
+      room(size * 1.3 * lines.length + 18 + 44); y -= 8;
       for (const l of lines) { y -= size * 1.3; put(text("F3", size, M, y, l, SLATE)); }
       y -= 10; put(rect(M, y, 30, 2, BRONZE)); y -= 8;
+      continue;
+    }
+    if (b.kind === "kv") {
+      // A label on the left and its value beside it, for facts ("Occupation: Dentist").
+      const LW = 150, VX = M + LW + 10, size = 9.5, lead = size * 1.42;
+      const ls = wrap(b.label, size, true, LW), vs = wrap(b.value, size, false, W - M - VX);
+      const rows = Math.max(ls.length, vs.length);
+      room(lead * Math.min(rows, 3));
+      ls.forEach((l, i) => { if (y - lead * (i + 1) < FOOT + 22) return; });
+      const top = y;
+      for (let i = 0; i < rows; i++) {
+        if (i > 0 && y - lead < FOOT + 22) { pages.push([]); y = H - HEAD2 - 26; }
+        y -= lead;
+        if (ls[i]) put(text("F2", size, M, y, ls[i], SLATE));
+        if (vs[i]) put(text("F1", size, VX, y, vs[i]));
+      }
+      void top; y -= 5;
       continue;
     }
     if (b.kind === "card") {

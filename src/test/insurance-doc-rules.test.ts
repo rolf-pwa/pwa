@@ -102,6 +102,13 @@ describe("the letter in the PDF", () => {
   });
 });
 
+describe("label and value rows", () => {
+  it("sets a short label ending in a colon beside its value", () => {
+    const b = signedPdfBlocks({ md: "**Occupation:** Dentist (from our meeting)", hash: "h", templateModified: null, templateVersion: null, sentAt: "2026-10-22T00:00:00Z", signers: [] });
+    expect(b[0]).toEqual({ kind: "kv", label: "Occupation:", value: "Dentist (from our meeting)" });
+  });
+});
+
 describe("the reason-why letter", () => {
   const v = { firstNames: ["Thomas", "Sarah"], need: "your family's income, the mortgage and final expenses.", product: "20-year term", carrier: "iA Financial Group", benefits: ["Level premiums for 20 years", "Convertible to permanent"], extra: ["**What it costs.** $85 a month."] };
   const r = fillReasonWhy(RW, v);
