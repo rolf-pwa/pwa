@@ -19,6 +19,7 @@ import { attachItem, buildPackage, createFile, listFiles, removeItem } from "../
 import { ffCompile, ffGet, ffSave, ffSend } from "../_shared/fact-find-service.ts";
 import { rCompile, rGet, rSave, rSend } from "../_shared/replacement-service.ts";
 import { fileComparison } from "../_shared/quote-service.ts";
+import { parseIllustration } from "../_shared/illustration-service.ts";
 import { adults, fileNeedsAnalysis, finalizeDoc, listDocs, previewDoc, sendDoc, voidDoc } from "../_shared/insurance-doc-service.ts";
 import { planVaultCatchUp } from "../_shared/vault-catchup.ts";
 import { ensurePersonalDrawers, provisionClientFolderTree } from "../_shared/vault-provisioning.ts";
@@ -199,6 +200,7 @@ Deno.serve(async (req) => {
     if (action === "insFileCreate") { const r = await createFile(db, staff.email, String(body?.householdId ?? ""), body?.title, body?.kind, body?.policyId, body?.contactId); return json(r, "error" in r ? 400 : 200); }
     if (action === "insFileAttach") { const r = await attachItem(db, staff.email, String(body?.fileId ?? ""), String(body?.kind ?? ""), { driveLink: body?.driveLink, meetingTaskId: body?.meetingTaskId, notApplicable: body?.notApplicable, note: body?.note }); return json(r, "error" in r ? 400 : 200); }
     if (action === "insFileRemoveItem") return json(await removeItem(db, String(body?.itemId ?? "")));
+    if (action === "qParse") { const r = await parseIllustration(db, { householdId: String(body?.householdId ?? ""), contactId: String(body?.contactId ?? ""), fileName: body?.fileName, base64: body?.base64 }); return json(r, "error" in r ? 400 : 200); }
     if (action === "qFile") { const r = await fileComparison(db, staff.email, { householdId: String(body?.householdId ?? ""), contactId: String(body?.contactId ?? ""), policyType: String(body?.policyType ?? ""), fileId: body?.fileId }); return json(r, "error" in r ? 400 : 200); }
     if (action === "rGet") return json(await rGet(db, String(body?.householdId ?? "")));
     if (action === "rCompile") { const r = await rCompile(db, staff.email, { householdId: String(body?.householdId ?? ""), clientIds: body?.clientIds, policyId: body?.policyId, newPolicy: body?.newPolicy, fileId: body?.fileId }); return json(r, "error" in r ? 400 : 200); }

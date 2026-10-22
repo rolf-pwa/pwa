@@ -236,3 +236,6 @@ export const saveReplacement = (id: string, edits: { key: string; value: string 
 export const sendReplacement = (id: string, typedName: string, agree: boolean, noApplication: boolean, fileId?: string) => call<{ ok: true }>("rSend", { id, typedName, agree, noApplication, fileId });
 
 export const fileQuoteComparison = (householdId: string, contactId: string, policyType: string, fileId?: string) => call<{ ok: true; url: string; attached: boolean; illustration: string }>("qFile", { householdId, contactId, policyType, fileId });
+
+export interface IllustrationDraft { policy_type: string; carrier: string; product: string; coverage_amount: string; term_years: string; premium_amount: string; premium_frequency: string; underwriting: string; riders: string; guarantees: string; quote_date: string; valid_until: string; illustration_url: string; notes: string }
+export const parseQuoteIllustration = (householdId: string, contactId: string, fileName: string, base64: string) => call<{ ok: true; drive: { id: string; url: string; name: string }; note: string; draft: IllustrationDraft; sources: Record<string, string>; warnings: string[] }>("qParse", { householdId, contactId, fileName, base64 });
