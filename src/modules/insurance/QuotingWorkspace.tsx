@@ -6,7 +6,7 @@ import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { Input } from "@/shared/components/ui/input";
 import { supabase } from "@/shared/integrations/supabase/client";
-import { fileQuoteComparison, getInsuranceFiles, type InsFile } from "@/modules/crm/lib/reviewAgent";
+import { fileQuoteComparison, getInsuranceFiles, parseQuoteIllustration, type InsFile } from "@/modules/crm/lib/reviewAgent";
 import { POLICY_TYPES, policyTypeLabel } from "@/shared/lib/insurance";
 import { FREQ_LABEL, compare, money, money2, type Quote } from "@/shared/lib/quotes";
 
@@ -30,6 +30,9 @@ export function QuotingWorkspace({ householdId }: { householdId: string }) {
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft());
   const [loading, setLoading] = useState(true);
+  const [reading, setReading] = useState(false);
+  const [sources, setSources] = useState<Record<string, string>>({});
+  const [warnings, setWarnings] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -48,11 +51,22 @@ export function QuotingWorkspace({ householdId }: { householdId: string }) {
     setBusy(true);
     try { await fn(); if (ok) toast.success(ok); await loadQuotes(); } catch (e) { toast.error(e instanceof Error ? e.message : "That didn't work"); } finally { setBusy(false); }
   };
+  const upload = async (file: File) => {
+    if (!personId) return;
+    if (file.size > 6_000_000) return toast.error("That PDF is over 6 MB. Save the illustration with fewer pages, or enter the quote by hand.");
+    setReading(true);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(",")[1] ?? ""); r.onerror = () => reject(new Error("Could not read the file")); r.readAsDataURL(file); });
+      const r = await parseQuoteIllustration(householdId, personId, file.name, base64);
+      setDraft(r.draft as Draft); setSources(r.sources); setWarnings([...(r.note ? [r.note] : []), ...r.warnings]); setEditing("new");
+      toast.success("Illustration saved in Advisor Files. Check what I read, then save the quote.");
+    } catch (e) { toast.error(e instanceof Error ? e.message : "I could not read that file"); } finally { setReading(false); }
+  };
   const save = () => run(async () => {
     const row = { household_id: householdId, contact_id: personId, policy_type: draft.policy_type, carrier: draft.carrier.trim(), product: draft.product.trim(), coverage_amount: numOrNull(draft.coverage_amount), term_years: draft.term_years ? Math.round(Number(draft.term_years)) || null : null, premium_amount: numOrNull(draft.premium_amount), premium_frequency: draft.premium_amount ? draft.premium_frequency : null, underwriting: orNull(draft.underwriting), riders: orNull(draft.riders), guarantees: orNull(draft.guarantees), quote_date: orNull(draft.quote_date), valid_until: orNull(draft.valid_until), illustration_url: orNull(draft.illustration_url), notes: orNull(draft.notes), updated_at: new Date().toISOString() };
     const r = editing === "new" ? await db().insert({ ...row, created_by: "advisor" }) : await db().update(row).eq("id", editing);
     if (r.error) throw new Error("Could not save the quote.");
-    setEditing(null);
+    setEditing(null); setSources({}); setWarnings([]);
   }, "Saved");
   const recommend = (q: Quote) => {
     const reason = window.prompt(`Why is the ${q.carrier} ${q.product} the best fit for this client? This goes in the file.`, q.reason ?? "") ?? "";
@@ -70,18 +84,20 @@ export function QuotingWorkspace({ householdId }: { householdId: string }) {
   const file = (type: string) => void run(async () => { const r = await fileQuoteComparison(householdId, personId, type, fileId || undefined); toast.success(`${r.attached ? "Filed and added to the insurance file" : "Filed in Advisor Files"}${r.illustration === "attached" ? "; illustration attached" : r.illustration.startsWith("not") ? `; illustration ${r.illustration}` : ""}`); });
 
   if (loading) return <Loader2 className="h-5 w-5 animate-spin" />;
-  const field = (label: string, key: keyof Draft, props: Record<string, unknown> = {}) => <label className="text-xs">{label}<Input className="mt-1" value={draft[key]} onChange={(e) => setDraft({ ...draft, [key]: e.target.value })} {...props} /></label>;
+  const field = (label: string, key: keyof Draft, props: Record<string, unknown> = {}) => <label className="text-xs">{label}<Input className="mt-1" value={draft[key]} onChange={(e) => setDraft({ ...draft, [key]: e.target.value })} {...props} />{sources[key === "premium_amount" ? "premium_amount" : key] && <span className="mt-0.5 block italic text-muted-foreground">From the illustration: “{sources[key]}”</span>}</label>;
   return (
     <div className="space-y-5" data-testid="quoting">
       <div className="flex flex-wrap items-end gap-3">
         <label className="text-xs">Insured<select className="mt-1 block h-9 rounded-md border bg-background px-2 text-sm" value={personId} onChange={(e) => { setPersonId(e.target.value); setEditing(null); }}>{people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
-        <Button size="sm" onClick={() => { setDraft(emptyDraft()); setEditing("new"); }} disabled={!personId}>Add a quote</Button>
+        <Button size="sm" onClick={() => { setDraft(emptyDraft()); setSources({}); setWarnings([]); setEditing("new"); }} disabled={!personId}>Add a quote</Button>
+        <label className={`inline-flex h-9 cursor-pointer items-center rounded-md border px-3 text-sm ${reading || !personId ? "pointer-events-none opacity-50" : "hover:bg-muted"}`}>{reading ? "Reading the illustration…" : "Upload an illustration (PDF)"}<input type="file" accept="application/pdf,.pdf" className="sr-only" aria-label="Upload an illustration" disabled={reading || !personId} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void upload(f); }} /></label>
         {files.length > 0 && <label className="text-xs">Filing into<select className="mt-1 block h-9 rounded-md border bg-background px-2 text-sm" value={fileId} onChange={(e) => setFileId(e.target.value)}><option value="">no insurance file</option>{files.map((f) => <option key={f.id} value={f.id}>{f.title}</option>)}</select></label>}
       </div>
 
       {editing && (
         <Card data-testid="quote-form"><CardHeader className="pb-2"><CardTitle className="text-base">{editing === "new" ? "Add a quote" : "Edit the quote"}</CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
+            {(warnings.length > 0 || Object.keys(sources).length > 0) && <div className="rounded-md border border-amber-300 bg-amber-50/60 p-3 text-xs" data-testid="illustration-review"><p className="font-medium">Read from the illustration. Please check every field against it before saving.</p>{warnings.map((w) => <p key={w} className="mt-1 text-amber-800">{w}</p>)}</div>}
             <div className="grid gap-3 md:grid-cols-3">
               <label className="text-xs">Kind of cover<select className="mt-1 block h-9 w-full rounded-md border bg-background px-2 text-sm" value={draft.policy_type} onChange={(e) => setDraft({ ...draft, policy_type: e.target.value })}>{POLICY_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}</select></label>
               {field("Carrier", "carrier")}
@@ -97,7 +113,7 @@ export function QuotingWorkspace({ householdId }: { householdId: string }) {
               <div className="md:col-span-3">{field("Illustration or quote (Drive link)", "illustration_url", { placeholder: "paste the Google Drive link to the carrier's illustration" })}</div>
               <div className="md:col-span-3">{field("Notes", "notes")}</div>
             </div>
-            <div className="flex gap-2"><Button size="sm" disabled={busy || !draft.carrier.trim() || !draft.product.trim()} onClick={() => void save()}>Save</Button><Button size="sm" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button></div>
+            <div className="flex gap-2"><Button size="sm" disabled={busy || !draft.carrier.trim() || !draft.product.trim()} onClick={() => void save()}>Save</Button><Button size="sm" variant="ghost" onClick={() => { setEditing(null); setSources({}); setWarnings([]); }}>Cancel</Button></div>
           </CardContent></Card>
       )}
 
@@ -128,7 +144,7 @@ export function QuotingWorkspace({ householdId }: { householdId: string }) {
                         {q.status !== "recommended" && q.status !== "rejected" && <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={() => recommend(q)}>Recommend</Button>}
                         {q.status === "considered" && <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={busy} onClick={() => reject(q)}>Not this one</Button>}
                         {q.status !== "considered" && <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={busy} onClick={() => restore(q)}>Undo</Button>}
-                        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setDraft(fromQuote(q)); setEditing(q.id); }}>Edit</Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setDraft(fromQuote(q)); setSources({}); setWarnings([]); setEditing(q.id); }}>Edit</Button>
                         <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={busy} onClick={() => remove(q)}>Delete</Button>
                       </div></td>
                     </tr>
