@@ -14,7 +14,7 @@ import { inviteesOf, pacificDate, type FamilyContact } from "../_shared/review-w
 import { storableMessages } from "../_shared/support-context.ts";
 import { MODEL_PROMPT, validateModels } from "../_shared/ia-model-parse.ts";
 import { isPooledFamily } from "../_shared/review-units.ts";
-import { buildClientProposal, buildClientView, narrativeParagraphs, portfolioReviewReadyEmail, type ClientIncludes } from "../_shared/portfolio-review-client.ts";
+import { buildClientProposal, buildClientView, describeAuthorizedItem, narrativeParagraphs, portfolioReviewReadyEmail, type ClientIncludes } from "../_shared/portfolio-review-client.ts";
 import { planVaultCatchUp } from "../_shared/vault-catchup.ts";
 import { ensurePersonalDrawers, provisionClientFolderTree } from "../_shared/vault-provisioning.ts";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
@@ -210,7 +210,24 @@ Deno.serve(async (req) => {
         }
         rebalanceProgress = [...byOwner.values()];
       }
-      return json({ household: { id: hh.id, label: hh.label, family_id: hh.family_id, family_name: (hh as any).families?.name ?? null, service_tier: hh.service_tier }, pack, profiles, models, publication: pub ?? null, rebalancePublication: rebPub ?? null, rebalancingObligation: rebOb ? { id: rebOb.id, window_start: rebOb.window_start, window_end: rebOb.window_end, status: rebOb.status, published_at: rebOb.published_at, acknowledged_at: rebOb.acknowledged_at, completed_at: rebOb.completed_at } : null, rebalanceProgress });
+      // Exactly what the clients authorized: every item they were shown, who ticked it and when, and each person's recorded response with the wording they agreed to.
+      // Looked up for the latest published rebalancing even after it is done.
+      let authorizations: any = null;
+      const { data: authOb } = await db.from("review_obligations").select("id, window_start, window_end, published_at, acknowledged_at, completed_at, proposal, proposal_summary").eq("household_id", householdId).eq("kind", "rebalancing").eq("mode", "live").neq("status", "cancelled").not("published_at", "is", null).order("published_at", { ascending: false }).limit(1).maybeSingle();
+      if (authOb) {
+        const { data: acks } = await db.from("rebalance_acknowledgements").select("contact_id, decision, items, created_at, statement_version, statement_text").eq("obligation_id", authOb.id).order("created_at", { ascending: true });
+        const ids = [...new Set((acks ?? []).map((a: any) => a.contact_id))];
+        const { data: people } = ids.length ? await db.from("contacts").select("id, first_name, last_name").in("id", ids) : { data: [] as any[] };
+        const nameOf = new Map((people ?? []).map((c: any) => [c.id, `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim()]));
+        const by = new Map<string, { who: string; at: string }>();
+        for (const a of acks ?? []) if (a.decision === "acknowledged") for (const i of Array.isArray(a.items) ? a.items : []) by.set(String(i.id), { who: nameOf.get(a.contact_id) ?? "A client", at: a.created_at });
+        const items = [...(authOb.proposal?.switches ?? []).map((i: any) => ({ ...i, kind: "switch" })), ...(authOb.proposal?.resets ?? []).map((i: any) => ({ ...i, kind: "reset" }))].map((i: any) => ({ id: i.id, text: describeAuthorizedItem(i), authorizedBy: by.get(i.id)?.who ?? null, authorizedAt: by.get(i.id)?.at ?? null }));
+        authorizations = {
+          obligationId: authOb.id, windowStart: authOb.window_start, windowEnd: authOb.window_end, publishedAt: authOb.published_at, allAuthorized: !!authOb.acknowledged_at, completedAt: authOb.completed_at, note: authOb.proposal_summary ?? null, items,
+          responses: (acks ?? []).map((a: any) => ({ who: nameOf.get(a.contact_id) ?? "A client", decision: a.decision, at: a.created_at, count: Array.isArray(a.items) ? a.items.length : null, statementVersion: a.statement_version, statementText: a.statement_text })),
+        };
+      }
+      return json({ household: { id: hh.id, label: hh.label, family_id: hh.family_id, family_name: (hh as any).families?.name ?? null, service_tier: hh.service_tier }, pack, profiles, models, publication: pub ?? null, rebalancePublication: rebPub ?? null, authorizations, rebalancingObligation: rebOb ? { id: rebOb.id, window_start: rebOb.window_start, window_end: rebOb.window_end, status: rebOb.status, published_at: rebOb.published_at, acknowledged_at: rebOb.acknowledged_at, completed_at: rebOb.completed_at } : null, rebalanceProgress });
     }
     // ── One-time catch-up: bring existing households into the Drive Vault structure (idempotent; creates folders only) ──
     if (action === "vaultCatchUp") {
