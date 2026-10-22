@@ -15,6 +15,7 @@ import { getValidGoogleAccessToken } from "../_shared/google-token.ts";
 import { dismissBriefingItem, refreshBriefing } from "../_shared/briefing-refresh.ts";
 import { eaApply, eaChat, eaDecide, eaForget, eaHistory, eaNudge } from "../_shared/ea-handlers.ts";
 import { isMutedSender } from "../_shared/ea-agent.ts";
+import { JOBS, evaluateJob, recordHeartbeat, runWatchdog, trackJob, type Heartbeat } from "../_shared/job-health.ts";
 import { addRule, decideSuggestion, rulebook, suggestRules, undoAction } from "../_shared/georgia-rules.ts";
 import { runCalendarInvites } from "../_shared/calendar-service.ts";
 import { runNoticeProcessor } from "../_shared/notice-service.ts";
@@ -477,6 +478,42 @@ function buildSections(calendar: CalendarFacts, email: EmailFacts, quo: QuoFacts
   };
 }
 
+/** What the System health card shows: each scheduled job, and checks on the connections and switches Georgia depends on. */
+async function systemHealth(db: Db, userId: string) {
+  const now = Date.now();
+  const since = new Date(now - 24 * 3_600_000).toISOString();
+  const [{ data: hbs }, { data: tok }, { data: badSig }, { data: failedHooks }, { data: errs }, { data: cfgText }, { data: cfgPhone }, { data: cfgSweep }, { data: flagged }] = await Promise.all([
+    db.from("job_heartbeats").select("job, last_finished, last_ok, last_error, last_summary, created_at, alerted_at"),
+    db.from("google_tokens").select("scopes, refresh_token").eq("user_id", userId).maybeSingle(),
+    db.from("quo_webhook_events").select("id").eq("signature_valid", false).gte("received_at", since).limit(50),
+    db.from("quo_webhook_events").select("id").not("processing_error", "is", null).eq("signature_valid", true).gte("received_at", since).limit(50),
+    db.from("system_health_logs").select("created_at, function_name, severity, error_message").in("severity", ["ERROR", "FATAL"]).gte("created_at", since).order("created_at", { ascending: false }).limit(5),
+    db.from("text_assistant_config").select("enabled").eq("id", true).maybeSingle(),
+    db.from("phone_provider_config").select("provider").eq("id", true).maybeSingle(),
+    db.from("inbox_sweep_config").select("auto").eq("id", true).maybeSingle(),
+    db.from("ea_actions").select("id").eq("staff_user_id", userId).eq("status", "proposed").in("kind", ["notice_flagged", "text_flagged", "calendar_flagged"]).gte("created_at", new Date(now - 7 * 86_400_000).toISOString()).limit(50),
+  ]);
+  const map = new Map<string, Heartbeat>(((hbs ?? []) as Heartbeat[]).map((h) => [h.job, h]));
+  const jobs = JOBS.map((j) => evaluateJob(j, map.get(j.key), now));
+  const scopes = (tok?.scopes ?? []) as string[];
+  const need = [["gmail.readonly", "reading Gmail"], ["calendar.events", "the calendar"], ["drive", "Drive"], ["gmail.modify", "filing and archiving mail (press Allow archiving)"]];
+  const missing = need.filter(([k]) => !scopes.some((x) => x.endsWith(`/${k}`))).map(([, why]) => why);
+  const checks: { label: string; status: "ok" | "warn" | "bad"; detail: string }[] = [
+    !tok ? { label: "Google connection", status: "bad", detail: "Google is not connected. Georgia cannot read mail, the calendar or Drive." }
+      : !tok.refresh_token ? { label: "Google connection", status: "bad", detail: "Google needs to be reconnected." }
+      : missing.length ? { label: "Google connection", status: "warn", detail: `Connected, but not yet allowed for ${missing.join(", ")}.` }
+      : { label: "Google connection", status: "ok", detail: "Connected, with every permission Georgia uses." },
+    (badSig ?? []).length ? { label: "Phone webhooks", status: "warn", detail: `${(badSig ?? []).length} event${(badSig ?? []).length === 1 ? "" : "s"} rejected for a bad signature in the last day.` }
+      : (failedHooks ?? []).length ? { label: "Phone webhooks", status: "warn", detail: `${(failedHooks ?? []).length} event${(failedHooks ?? []).length === 1 ? "" : "s"} failed to process in the last day.` }
+      : { label: "Phone webhooks", status: "ok", detail: "No rejected or failed events in the last day." },
+    { label: "Texts", status: "ok", detail: `Sending through ${cfgPhone?.provider === "callizy" ? "Callizy" : "Quo"}. Georgia ${cfgText?.enabled === false ? "does not answer" : "answers"} clients' texts when you cannot.` },
+    { label: "Morning inbox sweep", status: "ok", detail: cfgSweep?.auto === false ? "Switched off." : "Runs every morning at 4:30." },
+    { label: "Left for you", status: "ok", detail: `${(flagged ?? []).length} flagged notice${(flagged ?? []).length === 1 ? "" : "s"}, texts or invitations from the last week.` },
+  ];
+  const problems = jobs.filter((j) => j.status === "late" || j.status === "failing").length + checks.filter((c) => c.status !== "ok").length;
+  return { jobs, checks, errors: errs ?? [], problems };
+}
+
 async function generateBriefingForUser(db: Db, userId: string, todayStr: string): Promise<void> {
   const [tasks, google, requests, quo, firm] = await Promise.all([
     gatherTaskFacts(db, userId, todayStr),
@@ -616,37 +653,43 @@ Deno.serve(async (req) => {
     // Georgia drafts recaps from new Google Meet notes: one document per run, in the background.
     if (cronBody.job === "meeting_notes_scan") {
       // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
-      EdgeRuntime.waitUntil(scanMeetingNotes(db).catch((e: unknown) => console.error("[meeting-notes-scan]", e)));
+      EdgeRuntime.waitUntil(trackJob(db, "meeting_notes_scan", async () => { await scanMeetingNotes(db); }));
       return json({ started: true });
     }
     // The tasks assigned to Georgia: a couple per pass, in the background.
     // The morning inbox sweep, at 4:30 Pacific, so the 5:30 briefing can say what it found.
     if (cronBody.job === "inbox_sweep_morning") {
       // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
-      EdgeRuntime.waitUntil(sweepMorning(db).then((r) => console.log("[inbox-sweep-morning]", r.join("; "))).catch((e: unknown) => console.error("[inbox-sweep-morning]", e)));
+      EdgeRuntime.waitUntil(trackJob(db, "inbox_sweep_morning", () => sweepMorning(db)));
       return json({ started: true });
     }
     // iA and Adobe Sign notices: Georgia comments on the matching task, closes it when the notice completes it, and flags the rest.
     if (cronBody.job === "notice_processor") {
       // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
-      EdgeRuntime.waitUntil(runNoticeProcessor(db).then((r) => r.length && console.log("[notice-processor]", r.join("; "))).catch((e: unknown) => console.error("[notice-processor]", e)));
+      EdgeRuntime.waitUntil(trackJob(db, "notice_processor", () => runNoticeProcessor(db)));
       return json({ started: true });
     }
     // Sundays: look for answers Rolf has given the same way more than once, and suggest them as standing rules.
     if (cronBody.job === "rule_suggestions") {
       // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
-      EdgeRuntime.waitUntil((async () => { const { resolveUserIdByEmail, ADMIN_INBOX_EMAIL } = await import("../_shared/google-token.ts"); const n = await suggestRules(db, await resolveUserIdByEmail(db, ADMIN_INBOX_EMAIL)); console.log("[rule-suggestions]", n); })().catch((e: unknown) => console.error("[rule-suggestions]", e)));
+      EdgeRuntime.waitUntil(trackJob(db, "rule_suggestions", async () => { const { resolveUserIdByEmail, ADMIN_INBOX_EMAIL } = await import("../_shared/google-token.ts"); return `${await suggestRules(db, await resolveUserIdByEmail(db, ADMIN_INBOX_EMAIL))} suggestions`; }));
       return json({ started: true });
     }
     // Calendar invitations Rolf has not answered: webinars and training go in right away, the rest is flagged for the meeting.
     if (cronBody.job === "calendar_invites") {
       // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
-      EdgeRuntime.waitUntil(runCalendarInvites(db).then((r) => r.length && console.log("[calendar-invites]", r.join("; "))).catch((e: unknown) => console.error("[calendar-invites]", e)));
+      EdgeRuntime.waitUntil(trackJob(db, "calendar_invites", () => runCalendarInvites(db)));
       return json({ started: true });
     }
     if (cronBody.job === "georgia_tasks") {
       // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
-      EdgeRuntime.waitUntil(runGeorgiaTasks(db).catch((e: unknown) => console.error("[georgia-tasks]", e)));
+      EdgeRuntime.waitUntil(trackJob(db, "georgia_tasks", () => runGeorgiaTasks(db)));
+      return json({ started: true });
+    }
+    // Is every scheduled job still running? Alerts Rolf in the app when one is late or failing.
+    if (cronBody.job === "health_watchdog") {
+      // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+      EdgeRuntime.waitUntil(runWatchdog(db).then((r) => r.length && console.log("[health-watchdog]", r.join("; "))).catch((e: unknown) => console.error("[health-watchdog]", e)));
       return json({ started: true });
     }
     if (cronBody.nudge === true) return json(await eaNudge(db));
@@ -664,6 +707,7 @@ Deno.serve(async (req) => {
         errors.push({ userId: s.user_id, message: e instanceof Error ? e.message : String(e) });
       }
     }
+    await recordHeartbeat(db, "briefing", errors.length === 0 && generated > 0, `${generated} generated${skipped ? `, ${skipped} failed` : ""}`, errors[0]?.message ?? (generated === 0 ? "No briefing was generated." : null));
     return json({ generated, skipped, errors });
   }
 
@@ -680,6 +724,7 @@ Deno.serve(async (req) => {
       if (body.action === "ea_decide") return json(await eaDecide(db, userId, String(body.actionId ?? ""), body.decision === "done" ? "done" : "dismissed"));
       if (body.action === "ea_apply") return json(await eaApply(db, userId, String(body.actionId ?? "")));
       if (body.action === "ea_forget") return json(await eaForget(db, userId, String(body.prefId ?? "")));
+      if (body.action === "ea_health") return json({ ok: true, ...(await systemHealth(db, userId)) });
       if (body.action === "ea_rules") return json({ ok: true, ...(await rulebook(db, userId)) });
       if (body.action === "ea_rule_add") { const r = await addRule(db, userId, (body as any).value, (body as any).area); return json(r, "error" in r ? 400 : 200); }
       if (body.action === "ea_suggestion") { const r = await decideSuggestion(db, userId, String((body as any).id ?? ""), (body as any).decision === "accept" ? "accept" : "dismiss"); return json(r, "error" in r ? 400 : 200); }
