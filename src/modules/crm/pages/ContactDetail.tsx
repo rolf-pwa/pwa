@@ -60,7 +60,7 @@ import { HoldingTank } from "@/modules/crm/components/HoldingTank";
 import { LiabilitiesCard } from "@/modules/crm/components/LiabilitiesCard";
 import { AssetContainer, type MoveTarget } from "@/modules/crm/components/AssetContainer";
 import type { WebFormRecord } from "@/modules/crm/components/WebFormEditorDialog";
-import { InsurancePanel } from "@/modules/crm/components/InsurancePanel";
+import { InsuranceTab } from "@/modules/crm/components/InsuranceTab";
 import { StabilizationMapButton } from "@/modules/audit";
 import { QuarterlySystemReviewButton } from "@/modules/audit";
 import { SovereigntyCharterButton } from "@/modules/audit";
@@ -534,14 +534,6 @@ const ContactDetail = () => {
     }
   };
 
-  // Memoize props passed to InsurancePanel. MUST be declared before any early returns
-  // so hook order stays stable across renders.
-  const insuranceScope = useMemo(() => ({ kind: "contact" as const, contactId: id! }), [id]);
-  const insuranceStorehouses = useMemo(
-    () => storehouses.map((s) => ({ id: s.id, storehouse_number: s.storehouse_number, label: s.label })),
-    [storehouses],
-  );
-
   if (loading) {
     return (<AppLayout><p className="text-muted-foreground">Loading...</p></AppLayout>);
   }
@@ -773,6 +765,7 @@ const ContactDetail = () => {
                 <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
                 Vault
               </TabsTrigger>
+              <TabsTrigger value="insurance" className="flex-1">Insurance</TabsTrigger>
               <TabsTrigger value="actions" className="flex-1">
                 <ListChecks className="mr-1.5 h-3.5 w-3.5" />
                 Action Items
@@ -859,6 +852,10 @@ const ContactDetail = () => {
               </TabsContent>
 
               {/* Vault Tab */}
+              <TabsContent value="insurance" className="mt-4">
+                <InsuranceTab householdId={contact.household_id ?? null} contactId={id!} />
+              </TabsContent>
+
               <TabsContent value="vault" className="space-y-4 mt-4">
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -1081,14 +1078,6 @@ const ContactDetail = () => {
 
                 <SidebarSection title="Holding Tank">
                 <HoldingTank contactId={id!} onAccountMoved={() => fetchData()} />
-                </SidebarSection>
-
-                <SidebarSection title="Insurance">
-                <InsurancePanel
-                  scope={insuranceScope}
-                  storehouses={insuranceStorehouses}
-                  onStorehousesChanged={() => fetchData()}
-                />
                 </SidebarSection>
 
                 <SidebarSection title="Liabilities">

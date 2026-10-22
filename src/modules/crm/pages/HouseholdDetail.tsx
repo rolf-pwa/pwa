@@ -50,7 +50,7 @@ import { OnboardingAgentPanel } from "@/modules/crm/components/OnboardingAgentPa
 import { OnboardingInviteCard } from "@/modules/crm/components/OnboardingInviteCard";
 import { HouseholdWorkbench } from "@/modules/crm/components/HouseholdWorkbench";
 import { HouseholdLiabilities } from "@/modules/crm/components/HouseholdLiabilities";
-import { InsuranceFiles } from "@/modules/crm/components/InsuranceFiles";
+import { InsuranceTab } from "@/modules/crm/components/InsuranceTab";
 import { VaultScanButton } from "@/modules/crm/components/vault/VaultScanButton";
 import { ShoeboxToolbar } from "@/modules/crm/components/vault/ShoeboxReviewPanel";
 import { VineyardDashboard } from "@/modules/crm/components/VineyardDashboard";
@@ -679,6 +679,7 @@ const HouseholdDetail = () => {
               <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
               Vault
             </TabsTrigger>
+            <TabsTrigger value="insurance" className="flex-1">Insurance</TabsTrigger>
             <TabsTrigger value="actions" className="flex-1">
               <ListChecks className="mr-1.5 h-3.5 w-3.5" />
               Action Items
@@ -1062,7 +1063,10 @@ const HouseholdDetail = () => {
               </div>
               }
             />
-            <InsuranceFiles householdId={id!} />
+          </TabsContent>
+
+          <TabsContent value="insurance" className="mt-4">
+            <InsuranceTab householdId={id!} />
           </TabsContent>
 
           {/* Action Items */}
