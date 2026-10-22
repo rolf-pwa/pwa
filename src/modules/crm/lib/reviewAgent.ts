@@ -206,3 +206,12 @@ export const createInsuranceFile = (householdId: string, title: string, kind: st
 export const attachInsuranceItem = (fileId: string, kind: string, input: { driveLink?: string; meetingTaskId?: string; notApplicable?: boolean; note?: string }) => call<{ ok: true; name?: string }>("insFileAttach", { fileId, kind, ...input });
 export const removeInsuranceItem = (itemId: string) => call<{ ok: true }>("insFileRemoveItem", { itemId });
 export const buildInsurancePackage = (fileId: string) => call<{ ok: true; url: string; indexUrl: string; complete: boolean; missing: string[]; copyFailures: string[] }>("insFilePackage", { fileId });
+
+export interface InsDocSigner { document_id: string; contact_id: string; name: string; status: "pending" | "signed"; signed_at: string | null; casl_choice: "yes" | "no" | null }
+export interface InsDoc { id: string; file_id: string | null; kind: "disclosure_privacy" | "reason_why"; title: string; status: "sent" | "partly_signed" | "signed" | "void"; sent_at: string; completed_at: string | null; pdf_url: string | null; template_version: string | null; template_modified: string | null; void_reason: string | null; signers: InsDocSigner[] }
+export interface InsDocPreview { ok: true; title: string; md: string; hasCasl: boolean; version: string | null; modified: string; signers: { id: string; name: string; email: string | null }[]; warnings: string[]; hash: string }
+export const listInsuranceDocs = (householdId: string) => call<{ documents: InsDoc[] }>("insDocList", { householdId });
+export const previewInsuranceDoc = (householdId: string, kind: string, contactIds?: string[]) => call<InsDocPreview>("insDocPreview", { householdId, kind, contactIds });
+export const sendInsuranceDoc = (householdId: string, kind: string, contactIds: string[], fileId?: string) => call<{ ok: true; id: string }>("insDocSend", { householdId, kind, contactIds, fileId });
+export const voidInsuranceDoc = (documentId: string, reason: string) => call<{ ok: true }>("insDocVoid", { documentId, reason });
+export const finalizeInsuranceDoc = (documentId: string) => call<{ ok: boolean; message: string }>("insDocFinalize", { documentId });

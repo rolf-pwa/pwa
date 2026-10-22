@@ -4,9 +4,10 @@ import { ChevronDown, ChevronRight, Check, Loader2 } from "lucide-react";
 import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { Input } from "@/shared/components/ui/input";
-import { attachInsuranceItem, getInsuranceFiles, type InsFile, type InsFiles } from "@/modules/crm/lib/reviewAgent";
+import { attachInsuranceItem, getInsuranceFiles, listInsuranceDocs, type InsDoc, type InsFile, type InsFiles } from "@/modules/crm/lib/reviewAgent";
 import { stageLabel, type InsuranceStage } from "@/shared/lib/insurancePipeline";
 import { activity, roadmap, type RoadmapItem } from "@/shared/lib/insuranceRoadmap";
+import { DOC_ITEMS } from "@/shared/lib/insuranceDocuments";
 
 const when = (iso: string) => new Date(iso).toLocaleString("en-CA", { timeZone: "America/Vancouver", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
@@ -27,20 +28,25 @@ function Ring({ percent }: { percent: number }) {
  */
 export function ComplianceRoadmap({ householdId, stage }: { householdId: string; stage: InsuranceStage | null }) {
   const [data, setData] = useState<InsFiles | null>(null);
+  const [docs, setDocs] = useState<InsDoc[]>([]);
   const [fileId, setFileId] = useState<string | null>(null);
   const [openKind, setOpenKind] = useState<string | null>(null);
   const [link, setLink] = useState("");
   const [busy, setBusy] = useState(false);
   const [showLater, setShowLater] = useState(false);
 
-  const load = useCallback(async () => { try { setData(await getInsuranceFiles(householdId)); } catch (e) { toast.error(e instanceof Error ? e.message : "Couldn't load the insurance files"); } }, [householdId]);
+  const load = useCallback(async () => { try { const [f, d] = await Promise.all([getInsuranceFiles(householdId), listInsuranceDocs(householdId).catch(() => ({ documents: [] as InsDoc[] }))]); setData(f); setDocs(d.documents); } catch (e) { toast.error(e instanceof Error ? e.message : "Couldn't load the insurance files"); } }, [householdId]);
   useEffect(() => { void load(); }, [load]);
 
   const open = useMemo(() => (data?.files ?? []).filter((f) => f.status === "open"), [data]);
   const file: InsFile | undefined = useMemo(() => (data?.files ?? []).find((f) => f.id === fileId) ?? open[0] ?? data?.files[0], [data, fileId, open]);
   const road = useMemo(() => (file ? roadmap(file.checklist, stage) : null), [file, stage]);
   const labels = useMemo(() => new Map((file ? [...file.checklist, ...file.optional] : []).map((c) => [c.kind, c.label])), [file]);
-  const events = useMemo(() => (data ? activity(data.files, (k) => labels.get(k) ?? k) : []), [data, labels]);
+  const waiting = useMemo(() => new Set(docs.filter((d) => (d.status === "sent" || d.status === "partly_signed") && (!d.file_id || d.file_id === file?.id)).flatMap((d) => DOC_ITEMS[d.kind] ?? [])), [docs, file]);
+  const events = useMemo(() => {
+    const docEvents = docs.flatMap((d) => [{ at: d.sent_at, text: `Sent the ${d.title} for signature` }, ...d.signers.filter((s) => s.signed_at).map((s) => ({ at: s.signed_at!, text: `${s.name} signed the ${d.title}` })), ...(d.status === "void" ? [{ at: d.sent_at, text: `Voided the ${d.title}` }] : [])]);
+    return [...(data ? activity(data.files, (k) => labels.get(k) ?? k, 30) : []), ...docEvents].sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, 10);
+  }, [data, docs, labels]);
 
   const attach = async (kind: string, input: Parameters<typeof attachInsuranceItem>[2], ok: string) => {
     if (!file) return;
@@ -51,12 +57,13 @@ export function ComplianceRoadmap({ householdId, stage }: { householdId: string;
   if (!data) return <Loader2 className="h-5 w-5 animate-spin" />;
   if (!file || !road) return <Card><CardContent className="p-5 text-sm text-muted-foreground">No insurance file yet. Create one under "All files" below and the roadmap will appear here.</CardContent></Card>;
 
-  const next = road.upNext[0];
+  const next = road.upNext.find((c) => !waiting.has(c.kind));
+  const waitingCount = road.upNext.filter((c) => waiting.has(c.kind)).length + road.later.filter((c) => waiting.has(c.kind)).length;
   const row = (c: RoadmapItem, later = false) => (
     <li key={c.kind} className="rounded-md border bg-card">
       <button type="button" className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm" onClick={() => { setOpenKind(openKind === c.kind ? null : c.kind); setLink(""); }} aria-expanded={openKind === c.kind}>
         {c.done ? <Check className="h-4 w-4 text-green-700" aria-label="Done" /> : <span className="h-4 w-4 rounded-full border" />}
-        <span className="flex-1"><span className="font-medium">{c.label}</span>{later && <span className="ml-2 text-xs text-muted-foreground">{stageLabel(c.stage)}</span>}</span>
+        <span className="flex-1"><span className="font-medium">{c.label}</span>{waiting.has(c.kind) && !c.done && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">Waiting on the client</span>}{later && <span className="ml-2 text-xs text-muted-foreground">{stageLabel(c.stage)}</span>}</span>
         {openKind === c.kind ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
       </button>
       {openKind === c.kind && !c.done && (
@@ -89,14 +96,14 @@ export function ComplianceRoadmap({ householdId, stage }: { householdId: string;
 
       <div className="grid gap-4 rounded-xl bg-slate-800 p-6 text-white md:grid-cols-[1fr_auto]" data-testid="progress-panel">
         <div>
-          <p className="text-xs font-medium uppercase tracking-wider text-white/60">{road.upNext.length ? "Up next" : "All caught up"}</p>
-          <p className="mt-1 font-serif text-2xl font-semibold">{next ? next.label : road.later.length ? "Nothing due at this stage" : "Every required item is in the file"}</p>
+          <p className="text-xs font-medium uppercase tracking-wider text-white/60">{next ? "Up next" : waitingCount ? "Waiting on the client" : "All caught up"}</p>
+          <p className="mt-1 font-serif text-2xl font-semibold">{next ? next.label : waitingCount ? "Documents are with the client to sign" : road.later.length ? "Nothing due at this stage" : "Every required item is in the file"}</p>
           <p className="mt-1 text-sm text-white/70">{file.title}{stage ? ` · ${stageLabel(stage)}` : ""}</p>
           {next && <Button variant="secondary" className="mt-4" onClick={() => setOpenKind(next.kind)}>Open</Button>}
         </div>
         <div className="flex items-center gap-6">
           <Ring percent={road.percent} />
-          <dl className="space-y-1 text-sm"><div className="flex gap-6"><dt className="w-20 text-white/70">Complete</dt><dd className="font-semibold">{road.done}</dd></div><div className="flex gap-6"><dt className="w-20 text-white/70">Remaining</dt><dd className="font-semibold">{road.total - road.done}</dd></div></dl>
+          <dl className="space-y-1 text-sm"><div className="flex gap-6"><dt className="w-20 text-white/70">Complete</dt><dd className="font-semibold">{road.done}</dd></div>{waitingCount > 0 && <div className="flex gap-6"><dt className="w-20 text-white/70">Waiting</dt><dd className="font-semibold text-amber-300">{waitingCount}</dd></div>}<div className="flex gap-6"><dt className="w-20 text-white/70">Remaining</dt><dd className="font-semibold">{road.total - road.done - waitingCount}</dd></div></dl>
         </div>
       </div>
 

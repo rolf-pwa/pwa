@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
+import { ComplianceDocuments } from "@/modules/insurance/ComplianceDocuments";
 import { ComplianceRoadmap } from "@/modules/insurance/ComplianceRoadmap";
 import type { InsuranceStage } from "@/shared/lib/insurancePipeline";
 import { InsuranceTab } from "@/modules/crm/components/InsuranceTab";
@@ -13,7 +15,16 @@ export function PoliciesPage() { const { householdId } = useCtx(); return <><Tit
 export function NeedsPage() { const { householdId } = useCtx(); return <><Title>Needs analysis</Title><InsuranceTab householdId={householdId} sections={["needs"]} workspaceLink={false} /></>; }
 export function CompliancePage() {
   const { householdId, stage } = useCtx();
-  return <><Title>Compliance</Title><ComplianceRoadmap householdId={householdId} stage={stage} /><h2 className="mb-3 mt-8 text-sm font-semibold">All files</h2><InsuranceTab householdId={householdId} sections={["files"]} workspaceLink={false} /></>;
+  const [version, setVersion] = useState(0);
+  return (
+    <>
+      <Title>Compliance</Title>
+      <ComplianceRoadmap key={version} householdId={householdId} stage={stage} />
+      <div className="mt-6"><ComplianceDocuments householdId={householdId} onChanged={() => setVersion((v) => v + 1)} /></div>
+      <h2 className="mb-3 mt-8 text-sm font-semibold">All files</h2>
+      <InsuranceTab householdId={householdId} sections={["files"]} workspaceLink={false} />
+    </>
+  );
 }
 export function QuotingPage() {
   return <><Title>Quoting</Title><Card><CardHeader><CardTitle className="text-lg">Carrier quotes</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">Quotes and illustrations compared for the recommendation will live here, and feed the evidence of alternatives in the compliance file.</CardContent></Card></>;
