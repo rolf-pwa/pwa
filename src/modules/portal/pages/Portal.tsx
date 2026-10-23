@@ -1227,7 +1227,7 @@ const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = f
             {/* Action Items Tab */}
             <TabsContent value="tasks" className="mt-0">
               {isSelf ? (
-                <PortalTasks portalToken={portalToken} clientName={`${contact.first_name} ${contact.last_name || ""}`.trim()} contactId={contact.id} completedTarget={completedEl} completedCollapsed />
+                <PortalTasks portalToken={portalToken} clientName={`${contact.first_name} ${contact.last_name || ""}`.trim()} contactId={contact.id} completedTarget={completedEl} completedCollapsed onOpenDocuments={() => navigate(token ? `/portal/${token}/documents` : "/portal/documents")} />
               ) : (
                 <div className="rounded-lg border border-border bg-muted/30 p-8 text-center">
                   <CheckSquare className="mx-auto h-8 w-8 text-muted-foreground mb-3" />
