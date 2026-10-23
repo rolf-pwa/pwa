@@ -231,6 +231,14 @@ async function handleCallizy(req: Request, rawBody: string): Promise<Response> {
         duration_seconds: v.duration, portal_visible: true, is_voicemail: true, voicemail_url: v.url || null, occurred_at: v.at,
         ...(v.transcript ? { transcript: v.transcript } : {}),
       }, { onConflict: "quo_call_id" });
+      // Callizy's own AI transcription is off, so a voicemail with no transcript is transcribed here and now by our AI, for Georgia and Rolf to read.
+      if (!v.transcript) {
+        const { data: vm } = await admin.from("quo_calls").select("id").eq("quo_call_id", v.id).maybeSingle();
+        if (vm?.id) {
+          // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+          EdgeRuntime.waitUntil((async () => { try { const { archiveCalls } = await import("../_shared/call-archive-service.ts"); await archiveCalls(admin, { callId: vm.id, limit: 1, budgetMs: 100_000 }); } catch (e) { console.error("[voicemail] transcription failed", e); } })());
+        }
+      }
       let title = `New voicemail from ${v.from || "an unknown caller"}`;
       let link = "/inbox";
       if (contactId) {
