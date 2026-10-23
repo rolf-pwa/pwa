@@ -145,6 +145,18 @@ describe("telling the client a document is waiting", () => {
   });
 });
 
+describe("the email for a waiting document", () => {
+  it("has its own subject with the count, Pacific time stamp, no one-tap link", () => {
+    const f = readFileSync("supabase/functions/process-email-digest/index.ts", "utf8");
+    expect(f).toContain('const documentsSubject = (n: number) => `You have ${n} document${n === 1 ? "" : "s"} waiting`');
+    expect(f).toContain("You have documents waiting for your signature.");
+    expect(f).toContain("Please log into your portal (https://app.prosperwise.ca/portal)");
+    expect(f).toContain('timeZone: "America/Vancouver"');
+    expect(f).toContain("if (contactId && !documents)");
+    expect(f).toContain('i.link_tab === "dashboard"');
+  });
+});
+
 describe("wiring", () => {
   it("keeps the client's list of covered checklist items in step with the server's", () => { expect(CLIENT_ITEMS).toEqual(DOC_ITEMS); });
   it("has a migration with grants, and the portal and advisor entry points", () => {
