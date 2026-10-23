@@ -133,6 +133,16 @@ describe("telling the client a document is waiting", () => {
     expect(svc).toMatch(/notifyClientsOfComment\(db, \{ id: task\.id, title: taskTitle, client_visible: true, contact_id: owner\.contact_id, household_id: owner\.household_id \}/);
     expect(svc).toContain("owner = p.signers.length === 1");
   });
+  it("keeps the document task out of the client's Action Items and sends the notification to the dashboard", () => {
+    const svc = readFileSync("supabase/functions/_shared/insurance-doc-service.ts", "utf8");
+    expect(svc).toMatch(/status: "open", client_visible: false, assignee_id: rolf\.user_id,/);
+    expect(svc).toContain('linkTab: "dashboard"');
+    const notify = readFileSync("supabase/functions/notify-portal-request/index.ts", "utf8");
+    expect(notify).toContain('link_tab: linkTab');
+    expect(notify).not.toContain('link_tab: "tasks"');
+    const mig = readFileSync("supabase/migrations/20261225120000_documents_not_action_items.sql", "utf8");
+    expect(mig).toContain("SET client_visible = false");
+  });
 });
 
 describe("wiring", () => {
@@ -152,7 +162,7 @@ describe("wiring", () => {
     expect(pdf).toContain("o/a ProsperWise Advisors");
     expect(pdf).not.toMatch(/Sovereignty Operating System|ProsperWise Strategy/);
     const portal = readFileSync("src/modules/portal/components/PortalDocuments.tsx", "utf8");
-    expect(portal).toContain("prosperwise-logo-white.png");
-    expect(portal).toContain("ProsperWise Advisors");
+    expect(portal).not.toContain("prosperwise-logo-white.png"); // the Documents page has no logo band; the dashboard card is the way in
+    expect(portal).not.toContain("documents-header");
   });
 });

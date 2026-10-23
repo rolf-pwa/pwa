@@ -6,7 +6,6 @@ import { supabase } from "@/shared/integrations/supabase/client";
 import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent } from "@/shared/components/ui/card";
 import { Input } from "@/shared/components/ui/input";
-import pwLogoWhite from "@/assets/prosperwise-logo-white.png";
 
 interface Pending { id: string; title: string; sent_at: string; task_id?: string | null }
 interface Signed { id: string; title: string; signed_at: string }
@@ -117,10 +116,6 @@ export function PortalDocumentsPage({ portalToken, onBack }: { portalToken: stri
   useEffect(() => { load(); }, [load]);
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4">
-      <div className="rounded-lg px-6 py-5 text-white" style={{ backgroundColor: "#1e293b" }} data-testid="documents-header">
-        <img src={pwLogoWhite} alt="ProsperWise" className="h-9 w-auto" />
-        <p className="mt-3 text-[11px] font-light uppercase tracking-[0.1em] text-white/55">ProsperWise Advisors</p>
-      </div>
       <button type="button" className="flex items-center gap-1 text-sm text-muted-foreground hover:underline" onClick={openId ? () => { setOpenId(null); load(); } : onBack}><ArrowLeft className="h-4 w-4" /> {openId ? "All documents" : "Back"}</button>
       {openId ? <SignOne portalToken={portalToken} id={openId} onDone={load} /> : docs === null ? <Loader2 className="h-5 w-5 animate-spin" /> : (
         <>

@@ -249,7 +249,8 @@ if (req.method === "OPTIONS") {
     // ─── Task notifications ───
     if (notify_type === "task") {
       const { contact_id, task_name, task_event } = body;
-      // task_event: "comment" | "completed" | "reopened" | "updated"
+      // task_event: "comment" | "completed" | "reopened" | "updated". link_tab and title are optional (documents link to the dashboard card and word their own title).
+      const linkTab: string = typeof body.link_tab === "string" && /^[a-z]{3,20}$/.test(body.link_tab) ? body.link_tab : "tasks";
 
       if (!contact_id || !task_name) {
         return new Response(JSON.stringify({ error: "contact_id and task_name required" }), {
@@ -269,13 +270,14 @@ if (req.method === "OPTIONS") {
       if (task_event === "comment") notifTitle = `New comment on: ${task_name}`;
       else if (task_event === "completed") notifTitle = `Action item completed: ${task_name}`;
       else if (task_event === "reopened") notifTitle = `Action item reopened: ${task_name}`;
+      if (typeof body.title === "string" && body.title.trim()) notifTitle = body.title.trim().slice(0, 160);
 
       await supabase.from("portal_client_notifications").insert({
         contact_id,
         title: notifTitle,
         body: task_name,
         source_type: `task_${task_event}`,
-        link_tab: "tasks",
+        link_tab: linkTab,
       });
 
       if (!contact?.email) {
@@ -307,7 +309,7 @@ if (req.method === "OPTIONS") {
           // The email never carries what the task says: task names can hold amounts and names. Details stay behind the portal sign-in.
           task_name: "an item in your portal",
           task_event: task_event || "updated",
-          link_tab: "tasks",
+          link_tab: linkTab,
         });
 
       if (enqueueErr) {
