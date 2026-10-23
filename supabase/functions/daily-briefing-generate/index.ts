@@ -689,6 +689,12 @@ Deno.serve(async (req) => {
       EdgeRuntime.waitUntil(trackJob(db, "insurance_file_check", () => checkOpenFiles(db)));
       return json({ started: true });
     }
+    // Call recordings: a few a run, overnight, copied to the client's Advisor Files and transcribed by our own AI.
+    if (cronBody.job === "call_archive") {
+      // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+      EdgeRuntime.waitUntil(trackJob(db, "call_archive", async () => { const { archiveCalls } = await import("../_shared/call-archive-service.ts"); return await archiveCalls(db); }));
+      return json({ started: true });
+    }
     if (cronBody.job === "georgia_tasks") {
       // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
       EdgeRuntime.waitUntil(trackJob(db, "georgia_tasks", () => runGeorgiaTasks(db)));

@@ -27,6 +27,8 @@ import { toast } from "sonner";
 
 /** For a Callizy call: its transcript, summary and a fresh recording link are fetched when asked for (the links last an hour). */
 function CallizyCallExtras({ call }: { call: { id: string; is_voicemail?: boolean; transcript?: string | null } }) {
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState<{ recording: string | null; transcriptFile: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const [audio, setAudio] = useState<string | null>(null);
   const [text, setText] = useState<string | null>(call.transcript ?? null);
@@ -41,12 +43,24 @@ function CallizyCallExtras({ call }: { call: { id: string; is_voicemail?: boolea
       setNote(!data?.audio && !data?.transcript ? "Nothing is available yet. Callizy may still be processing this call." : null);
     } catch { toast.error("Couldn't load the call from Callizy"); } finally { setBusy(false); }
   };
+  // Copies the recording to the client's Advisor Files and transcribes it with our own AI, the same work the nightly job does.
+  const archive = async () => {
+    setSaving(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("quo-service", { body: { action: "callArchive", callId: call.id } });
+      if (error) throw error;
+      if (data?.archived) { setSaved({ recording: data.recording ?? null, transcriptFile: data.transcriptFile ?? null }); toast.success("Saved to the client's Advisor Files"); await open(); }
+      else toast.error(data?.note || "Not copied yet. It needs a matched client with a Vault folder, and the recording must be ready.");
+    } catch { toast.error("Couldn't copy the call"); } finally { setSaving(false); }
+  };
   return (
     <div className="mt-1 space-y-1">
       <button type="button" onClick={() => void open()} disabled={busy} className="text-xs text-amber-500 hover:underline">{busy ? "Loading…" : call.is_voicemail ? "▶ Play voicemail" : "▶ Recording and transcript"}</button>
       {audio && <audio controls autoPlay src={audio} className="w-full h-8" />}
       {text && <details className="text-xs"><summary className="cursor-pointer text-muted-foreground">View transcript</summary><pre className="whitespace-pre-wrap mt-1 max-h-60 overflow-y-auto">{text}</pre></details>}
       {note && <p className="text-xs text-muted-foreground">{note}</p>}
+      {!call.is_voicemail && !text && <button type="button" onClick={() => void archive()} disabled={saving} className="block text-xs text-amber-500 hover:underline">{saving ? "Copying and transcribing…" : "Save to Drive and transcribe now"}</button>}
+      {saved && <p className="text-xs text-muted-foreground">Saved in Advisor Files / Call Recordings{saved.recording ? <> · <a className="underline" href={saved.recording} target="_blank" rel="noopener noreferrer">recording</a></> : null}{saved.transcriptFile ? <> · <a className="underline" href={saved.transcriptFile} target="_blank" rel="noopener noreferrer">transcript</a></> : null}</p>}
     </div>
   );
 }

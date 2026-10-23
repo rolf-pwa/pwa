@@ -174,7 +174,7 @@ export async function voidDoc(db: any, id: string, reason: string, who: string) 
 
 
 /** Puts a PDF in a folder under the household's Advisor Files (created if needed). Additive: nothing is moved or deleted. */
-export async function uploadToAdvisorFiles(db: any, householdId: string, folderName: string, name: string, pdf: Uint8Array): Promise<{ id: string; url: string; name: string }> {
+export async function uploadToAdvisorFiles(db: any, householdId: string, folderName: string, name: string, pdf: Uint8Array, mime = "application/pdf"): Promise<{ id: string; url: string; name: string }> {
   const { data: hh } = await db.from("households").select("vault_folder_id").eq("id", householdId).maybeSingle();
   if (!hh?.vault_folder_id) throw new Error("This household has no Vault folder yet.");
   const token = await getServiceGoogleAccessToken(db);
@@ -182,7 +182,7 @@ export async function uploadToAdvisorFiles(db: any, householdId: string, folderN
   if (!advisor) throw new Error("I could not find the Advisor Files folder.");
   const folder = await driveEnsureFolder(advisor, folderName, token);
   const boundary = `pwsig${crypto.randomUUID().replace(/-/g, "")}`;
-  const head = new TextEncoder().encode(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, mimeType: "application/pdf", parents: [folder] })}\r\n--${boundary}\r\nContent-Type: application/pdf\r\n\r\n`);
+  const head = new TextEncoder().encode(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, mimeType: mime, parents: [folder] })}\r\n--${boundary}\r\nContent-Type: ${mime}\r\n\r\n`);
   const tail = new TextEncoder().encode(`\r\n--${boundary}--`);
   const body = new Uint8Array(head.length + pdf.length + tail.length);
   body.set(head, 0); body.set(pdf, head.length); body.set(tail, head.length + pdf.length);
