@@ -17,7 +17,8 @@ export const statementFor = (kind: string) => (kind === "reason_why" || kind ===
 export const unescapeMd = (s: string) => s.replace(/\\([\\`*_{}\[\]()#+\-.!<>|~])/g, "$1");
 
 const BLANK_LINE = /^\s*[*_]*\s*x?[\s_x]{6,}[*_]*\s*$/i;
-const SIGNATURE_LABEL = /^\s*[*_]*\s*Client\s+Signature(\s+Client\s+Signature)?\s+Date\s*[*_]*\s*$/i;
+// The caption under the signature lines, however it is bolded: "**Client Signature**   **Client Signature**   **Date**" or one bold run.
+const SIGNATURE_LABEL = { test: (line: string) => /^Client\s+Signature(\s+Client\s+Signature)?\s+Date$/i.test(line.replace(/[*_\\]/g, "").replace(/\s+/g, " ").trim()) };
 const CASL_OPTION = /(yes,\s*i agree to receive commercial|no,\s*i do not agree to receive commercial)/i;
 const CASL_INITIALS = /^\s*client\s+initial\(s\):/i;
 const EMPTY_CONTACT = /^\s*[*_]*<>[*_]*\s*$/;

@@ -41,6 +41,21 @@ describe("cleaning the master document", () => {
   });
 });
 
+describe("cleaning after the edit that bolds each word separately", () => {
+  const edited = [
+    "**Client Signature**                **Client Signature**     **Date**", "**My Contact Information:**", "**Rolf Issler, BMgt, CLU**", "**(778) 721-5208**", "[**rolf@prosperwise.ca**](mailto:rolf@prosperwise.ca)",
+    "x\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_   x\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_ \\_\\_\\_\\_\\_\\_\\_\\_",
+    "**Client Signature**             **Client Signature**     **Date**",
+  ].join("\n");
+  const c = cleanTemplate(edited);
+  it("drops the signature caption in either formatting, and keeps the contact details", () => {
+    expect(c.md).not.toMatch(/Client Signature/);
+    expect(c.md).not.toMatch(/_{4,}/);
+    for (const t of ["My Contact Information:", "Rolf Issler, BMgt, CLU", "(778) 721-5208", "rolf@prosperwise.ca"]) expect(c.md).toContain(t);
+    expect(c.usesContactField).toBe(false);
+  });
+});
+
 describe("names and signatures", () => {
   it("joins names", () => { expect(joinNames(["A"])).toBe("A"); expect(joinNames(["A", "B", "C"])).toBe("A, B and C"); });
   it("accepts the full name in any case, with a middle name", () => {
