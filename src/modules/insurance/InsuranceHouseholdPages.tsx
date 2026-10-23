@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { QuotingWorkspace } from "@/modules/insurance/QuotingWorkspace";
+import { PlanningReport } from "@/modules/insurance/PlanningReport";
 import { ApplicationDelivery } from "@/modules/insurance/ApplicationDelivery";
 import { ComplianceReplacement } from "@/modules/insurance/ComplianceReplacement";
 import { FactFind } from "@/modules/insurance/FactFind";
@@ -34,4 +35,5 @@ export function CompliancePage() {
     </>
   );
 }
+export function ReportPage() { const { householdId } = useCtx(); return <><Title>Planning report</Title><PlanningReport householdId={householdId} /></>; }
 export function QuotingPage() { const { householdId } = useCtx(); return <><Title>Quoting</Title><QuotingWorkspace householdId={householdId} /></>; }
