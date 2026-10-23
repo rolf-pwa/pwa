@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { DOC_ITEMS as CLIENT_ITEMS } from "@/shared/lib/insuranceDocuments";
 import { CASL_MARKER } from "../../supabase/functions/_shared/insurance-doc-rules";
-import { DOC_ITEMS, clientGet, clientPending, clientSign } from "../../supabase/functions/_shared/insurance-doc-client";
+import { DOC_ITEMS, clientGet, clientPending, clientSign, documentTaskTitle } from "../../supabase/functions/_shared/insurance-doc-client";
 
 // A tiny in-memory stand-in for the Supabase client: eq/neq/in filters, select, insert, update, maybeSingle.
 function fakeDb(seed: Record<string, any[]>) {
@@ -104,6 +104,16 @@ describe("the reason-why letter in the portal", () => {
     const r: any = await clientSign(db, "c1", "d2", { typedName: "Thomas Wolfe", agree: true }, "1.1.1.1", "UA");
     expect(r).toMatchObject({ ok: true, complete: true });
     expect(tables.insurance_document_signers.find((x: any) => x.id === "s3").statement_text).toMatch(/received and read this letter/);
+  });
+});
+
+describe("what the client's task is called", () => {
+  it("says sign for the documents that are signed and review and confirm for the rest, without doubling 'your'", () => {
+    expect(documentTaskTitle("disclosure_privacy", "Advisor Disclosure and Privacy Consent")).toBe("Sign your Advisor Disclosure and Privacy Consent");
+    expect(documentTaskTitle("replacement_declaration", "Life Insurance Replacement Declaration")).toBe("Sign your Life Insurance Replacement Declaration");
+    expect(documentTaskTitle("reason_why", "Your Life Insurance Recommendation")).toBe("Review and confirm your Life Insurance Recommendation");
+    expect(documentTaskTitle("fact_find", "Your Fact Find")).toBe("Review and confirm your Fact Find");
+    expect(documentTaskTitle("replacement_explanation", "Your Life Insurance Replacement Explanation")).toBe("Review and confirm your Life Insurance Replacement Explanation");
   });
 });
 
