@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/shared/components/ui/card";
 import { Badge } from "@/shared/components/ui/badge";
 import { Shield, ChevronDown, ChevronRight } from "lucide-react";
 import { policyTypeLabel, groupPolicies } from "@/shared/lib/insurance";
+import { categoryOf, coverageSummary, coverageText } from "@/shared/lib/insuranceSummary";
 
 interface PortalInsuranceProps {
   policies: Array<{
@@ -32,7 +33,7 @@ export function PortalInsurance({ policies, defaultCollapsed = false }: PortalIn
   const [openRiders, setOpenRiders] = useState<Set<string>>(new Set());
   if (!policies || policies.length === 0) return null;
 
-  const totalCoverage = policies.reduce((sum, p) => sum + (p.coverage_amount || 0), 0);
+  const summary = coverageSummary(policies);
   const groups = groupPolicies(policies);
   const toggleRiders = (key: string) => setOpenRiders((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
@@ -53,9 +54,13 @@ export function PortalInsurance({ policies, defaultCollapsed = false }: PortalIn
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
           )}
         </div>
-        <p className="font-serif text-lg font-semibold tabular-nums text-foreground">{formatCurrency(totalCoverage)}</p>
+        <div className="space-y-0.5" data-testid="coverage-summary">
+          {summary.map((l) => (
+            <p key={l.category} className="flex items-baseline justify-between gap-3 text-sm"><span className="text-muted-foreground">{l.label}</span><span className="font-serif text-base font-semibold tabular-nums text-foreground">{l.text}</span></p>
+          ))}
+        </div>
         <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-2 border-t border-accent/10">
-          <span>Asset Protection</span>
+          <span>Your protection in force</span>
           <Badge variant="secondary" className="text-[10px]">
             {groups.length} polic{groups.length !== 1 ? "ies" : "y"}
           </Badge>
@@ -81,9 +86,9 @@ export function PortalInsurance({ policies, defaultCollapsed = false }: PortalIn
                     </div>
                   </div>
                   <div className="text-right shrink-0 ml-3">
-                    {g.totalCoverage > 0 && (
-                      <p className="text-sm font-semibold">{formatCurrency(g.totalCoverage)}</p>
-                    )}
+                    {coverageSummary([g.base, ...g.riders]).filter((l) => l.total > 0).map((l) => (
+                      <p key={l.category} className="text-sm font-semibold">{coverageSummary([g.base, ...g.riders]).length > 1 ? `${l.label}: ` : ""}{l.text}</p>
+                    ))}
                     {p.cash_value != null && p.cash_value > 0 && (
                       <p className="text-[10px] text-muted-foreground">Cash Value: {formatCurrency(p.cash_value)}</p>
                     )}
@@ -103,14 +108,14 @@ export function PortalInsurance({ policies, defaultCollapsed = false }: PortalIn
                       <div className="mt-1 ml-1 space-y-1 border-l border-border/60 pl-3">
                         <div className="flex items-center justify-between text-xs">
                           <span className="text-muted-foreground">{policyTypeLabel(p.policy_type)} (base)</span>
-                          <span className="tabular-nums text-foreground">{formatCurrency(p.coverage_amount || 0)}</span>
+                          <span className="tabular-nums text-foreground">{coverageText(categoryOf(p.policy_type), p.coverage_amount || 0)}</span>
                         </div>
                         {g.riders.map((r) => (
                           <div key={r.id} className="flex items-center justify-between text-xs">
                             <span className="text-muted-foreground">
                               {policyTypeLabel(r.policy_type)} rider{r.renewal_date ? ` · renews ${r.renewal_date}` : ""}
                             </span>
-                            <span className="tabular-nums text-foreground">{formatCurrency(r.coverage_amount || 0)}</span>
+                            <span className="tabular-nums text-foreground">{coverageText(categoryOf(r.policy_type), r.coverage_amount || 0)}</span>
                           </div>
                         ))}
                       </div>
@@ -123,5 +128,21 @@ export function PortalInsurance({ policies, defaultCollapsed = false }: PortalIn
         </CardContent>
       )}
     </Card>
+  );
+}
+
+/**
+ * A card on the dashboard: the cover this person has in force, by kind (life, critical illness, disability), each in its own terms. It opens the full list.
+ * Nothing when they have no policies on file.
+ */
+export function PortalCoverageCard({ policies, onOpen }: { policies: PortalInsuranceProps["policies"]; onOpen: () => void }) {
+  const summary = coverageSummary(policies ?? []);
+  if (!summary.length) return null;
+  return (
+    <Card data-testid="coverage-card"><CardContent className="space-y-2 p-4">
+      <div className="flex items-center gap-2"><Shield className="h-4 w-4 text-accent" /><p className="font-serif text-sm font-semibold">Your protection</p></div>
+      <div className="space-y-0.5">{summary.map((l) => <p key={l.category} className="flex items-baseline justify-between gap-3 text-sm"><span className="text-muted-foreground">{l.label}</span><span className="font-semibold tabular-nums">{l.text}</span></p>)}</div>
+      <button type="button" className="text-xs text-primary hover:underline" onClick={onOpen}>See your policies</button>
+    </CardContent></Card>
   );
 }

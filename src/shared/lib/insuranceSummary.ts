@@ -53,3 +53,21 @@ export function summarize(policies: SummaryPolicy[], people: Person[], today: st
     .sort((a, b) => a.days - b.days);
   return { overall: totalsFor(policies), byPerson, others: corp.length ? totalsFor(corp) : null, renewals };
 }
+
+const cad = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
+/** A coverage amount the way a client reads it: a disability benefit is paid monthly, the rest are lump sums or face amounts. */
+export const coverageText = (c: Category, amount: number): string => (c === "disability" ? `${cad(amount)} a month` : cad(amount));
+
+export interface CoverageLine { category: Category; label: string; total: number; text: string; policies: number }
+/** Coverage in force by kind of cover, for the client's portal: only the kinds they have, each in its own terms (never one total across life and disability). */
+export function coverageSummary(policies: SummaryPolicy[]): CoverageLine[] {
+  const out: CoverageLine[] = [];
+  for (const category of ["life", "critical_illness", "disability", "long_term_care", "other"] as Category[]) {
+    const mine = policies.filter((p) => categoryOf(p.policy_type) === category);
+    if (!mine.length) continue;
+    const total = mine.reduce((n, p) => n + num(p.coverage_amount), 0);
+    if (category === "other" && total === 0) continue;
+    out.push({ category, label: CATEGORY_LABEL[category], total, text: coverageText(category, total), policies: groupPolicies(mine).length });
+  }
+  return out;
+}
