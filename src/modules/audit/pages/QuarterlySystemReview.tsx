@@ -34,6 +34,7 @@ type Diag = {
   corp_liabilities_total?: number;
   net_worth?: number;
   insurance_coverage_total?: number;
+  insurance_coverage_by_kind?: { life: number; critical_illness: number; disability_monthly: number; long_term_care: number; other: number };
   deltas?: { aum: number | null; netWorth: number | null; previousLabel: string | null };
   data_completeness?: { total: number; onFile: number; missing: string[] };
   vault_scan?: string;
@@ -487,6 +488,7 @@ export default function QuarterlySystemReview() {
                 )}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4mm" }}>
                   <StatRow label="Asset Protection" value={money(diag.insurance_coverage_total)} tone="#334155" />
+                  {(diag.insurance_coverage_by_kind?.disability_monthly ?? 0) > 0 && <StatRow label="Disability benefit" value={`${money(diag.insurance_coverage_by_kind!.disability_monthly)} a month`} tone="#334155" />}
                   {diag.harvest && <StatRow label="Harvest to date" value={diag.harvest.current === null ? "—" : money(diag.harvest.current)} tone="#334155" />}
                   {typeof diag.accounts === "number" && <StatRow label="Statements read" value={`${diag.tracked_accounts ?? 0}/${diag.accounts}`} tone="#334155" />}
                 </div>
