@@ -7,6 +7,7 @@ import { supabase } from "@/shared/integrations/supabase/client";
 import { InsurancePanel } from "@/modules/crm/components/InsurancePanel";
 import { InsuranceFiles } from "@/modules/crm/components/InsuranceFiles";
 import { NeedsAnalysis } from "@/modules/crm/components/NeedsAnalysis";
+import { CriticalIllnessNeeds, DisabilityNeeds } from "@/modules/crm/components/ProtectionNeeds";
 import { CATEGORY_LABEL, summarize, type Category, type SummaryPolicy } from "@/shared/lib/insuranceSummary";
 import { policyTypeLabel } from "@/shared/lib/insurance";
 
@@ -114,7 +115,11 @@ export function InsuranceTab({ householdId, contactId, sections = ALL_SECTIONS, 
       ))}
 
       {show("needs") && showPeople.map((p) => (
-        <NeedsAnalysis key={p.id} person={p} householdId={householdId} lifeInsurance={summary.byPerson.find((r) => r.id === p.id)?.coverage.life ?? 0} />
+        <div key={p.id} className="space-y-4">
+          <NeedsAnalysis person={p} householdId={householdId} lifeInsurance={summary.byPerson.find((r) => r.id === p.id)?.coverage.life ?? 0} />
+          <DisabilityNeeds person={p} householdId={householdId} inForce={summary.byPerson.find((r) => r.id === p.id)?.coverage.disability ?? 0} />
+          <CriticalIllnessNeeds person={p} householdId={householdId} inForce={summary.byPerson.find((r) => r.id === p.id)?.coverage.critical_illness ?? 0} />
+        </div>
       ))}
 
       {show("files") && householdId && <InsuranceFiles householdId={householdId} />}

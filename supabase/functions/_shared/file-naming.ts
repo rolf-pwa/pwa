@@ -13,6 +13,8 @@ export const DOC_FILE_NAME: Record<string, string> = {
   replacement_explanation: "Replacement Explanation",
   delivery_letter: "Policy Delivery",
   needs_analysis: "Needs Analysis",
+  needs_analysis_disability: "Disability Needs Analysis",
+  needs_analysis_critical_illness: "Critical Illness Needs Analysis",
   alternatives: "Alternatives Considered",
 };
 
