@@ -5,6 +5,7 @@
 import { buildBrandedPdf } from "./simple-pdf.ts";
 import { quoteBlocks, type QuoteRow } from "./quote-rules.ts";
 import { uploadToAdvisorFiles } from "./insurance-doc-service.ts";
+import { conventionFile } from "./file-naming.ts";
 import { attachItem } from "./insurance-file-service.ts";
 
 const TYPE_LABEL: Record<string, string> = { term: "Term Life", whole_life: "Whole Life", universal_life: "Universal Life", critical_illness: "Critical Illness", disability: "Disability", long_term_care: "Long-Term Care", other: "Other" };
@@ -26,7 +27,7 @@ export async function fileComparison(db: any, who: string, input: { householdId:
   const blocks = quoteBlocks({ person, typeLabel, quotes: quotes as QuoteRow[], needLine, preparedOn: ymd() });
   const pdf = buildBrandedPdf({ eyebrow: "ProsperWise Advisors", title: "Alternatives Considered", subtitle: `${person} · ${typeLabel} · ${ymd()}`, footer: footer(), blocks });
   let drive;
-  try { drive = await uploadToAdvisorFiles(db, input.householdId, "Quotes", `Alternatives Considered - ${person.replace(/[\\/]/g, "-")} - ${typeLabel} (${ymd()}).pdf`, pdf); } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+  try { drive = await uploadToAdvisorFiles(db, input.householdId, "Quotes", conventionFile(ymd(), [c ?? {}], `Alternatives Considered ${typeLabel}`), pdf); } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
 
   let attached = false, illustration = "none";
   if (input.fileId) {
