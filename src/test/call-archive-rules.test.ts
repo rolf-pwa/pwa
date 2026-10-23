@@ -48,6 +48,22 @@ describe("the AI's transcript", () => {
   });
 });
 
+describe("voicemail transcripts for Georgia", () => {
+  it("are made as soon as the voicemail arrives, even from a caller who is not yet a client, and saved before any copy to Drive", () => {
+    const svc = readFileSync("supabase/functions/_shared/call-archive-service.ts", "utf8");
+    expect(svc).toContain("if (!hasFolder && !call.is_voicemail)");
+    expect(svc).toContain("if (!hasFolder && call.transcript)");
+    expect(svc.indexOf('transcript_source: "vertex"')).toBeLessThan(svc.indexOf("uploadToAdvisorFiles(db, c.household_id"));
+    expect(svc).toContain('source_type: "voicemail_transcript"');
+    const hook = readFileSync("supabase/functions/quo-webhook/index.ts", "utf8");
+    expect(hook).toContain("archiveCalls(admin, { callId: vm.id");
+    expect(hook).toContain("if (!v.transcript)");
+  });
+  it("is something Georgia already reads: her inbox tool includes voicemail transcripts and summaries", () => {
+    expect(readFileSync("supabase/functions/_shared/ea-handlers.ts", "utf8")).toMatch(/quo_calls"\)\.select\("id, contact_id, from_number, is_voicemail, summary, transcript/);
+  });
+});
+
 describe("wiring", () => {
   it("has a migration with the archive columns and the nightly schedule, and a watched job", () => {
     const m = readFileSync("supabase/migrations/20261223120000_call_archive.sql", "utf8");
