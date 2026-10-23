@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { accuracy, addressOf, archiveTargets, correctionPlan, mutedMatch, ruleVerdict, verdictsFromModel, sweepPrompt, type SweepMessage } from "../../supabase/functions/_shared/inbox-sweep";
+import { accuracy, adminCompanionQuery, sweepQuery, addressOf, archiveTargets, correctionPlan, mutedMatch, ruleVerdict, verdictsFromModel, sweepPrompt, type SweepMessage } from "../../supabase/functions/_shared/inbox-sweep";
 
 const msg = (o: Partial<SweepMessage>): SweepMessage => ({ id: "m1", from: "Someone <x@example.com>", subject: "Hello", snippet: "", ...o });
 const clients = new Set(["ed@weiss.ca"]);
@@ -130,5 +130,16 @@ describe("archiveTargets", () => {
     const got = archiveTargets(items, "all");
     expect(got).toHaveLength(2);
     expect(got.every((i) => i.bucket === "archivable" && i.feedback !== "wrong")).toBe(true);
+  });
+});
+
+describe("the shared admin inbox", () => {
+  it("is part of what the sweep lists, as unread mail wherever it landed", () => {
+    expect(sweepQuery(7)).toBe("{in:inbox (to:admin@prosperwise.ca is:unread -in:trash -in:spam -in:sent)} newer_than:7d");
+  });
+  it("is searched alongside any Inbox search, but not twice", () => {
+    expect(adminCompanionQuery("in:inbox newer_than:1d")).toBe("to:admin@prosperwise.ca in:anywhere -in:trash -in:spam -in:sent newer_than:1d");
+    expect(adminCompanionQuery("from:derek")).toBeNull();
+    expect(adminCompanionQuery("in:inbox to:admin@prosperwise.ca")).toBeNull();
   });
 });

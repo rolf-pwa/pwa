@@ -26,6 +26,18 @@ const FIRM_DOMAIN = /@prosperwise\.ca$/i;
 /** Carriers, the MGA and Rolf's church and community: even their marketing is industry or community news he wants to skim, so it is never "would archive". */
 const KEEP_IN_FYI = /(@([a-z0-9-]+\.)*(ia\.ca|iagto\.ca|foresters\.com|assumption\.ca|wealthlinkfinancial\.ca|idcworldsource\.com|canadaprotectionplan\.com)(\s|$)|church|chapel|ministr|parish|trinitykelowna)/i;
 
+/** admin@prosperwise.ca is a shared Google Group: its mail is not always in Rolf's Inbox, so Georgia looks for it by address as well. */
+export const ADMIN_ADDRESS = "admin@prosperwise.ca";
+
+/** What the sweep lists: the Inbox, plus unread mail to the shared admin address wherever it landed (not trash, spam or sent). Read mail was already dealt with, which includes what Georgia filed. */
+export const sweepQuery = (days: number) => `{in:inbox (to:${ADMIN_ADDRESS} is:unread -in:trash -in:spam -in:sent)} newer_than:${days}d`;
+
+/** For an Inbox search Rolf or Georgia typed: the same search aimed at the admin address, or null when it does not apply (not an Inbox search, or already about admin). */
+export function adminCompanionQuery(q: string): string | null {
+  if (!/\bin:inbox\b/i.test(q) || q.toLowerCase().includes("admin@prosperwise")) return null;
+  return q.replace(/\bin:inbox\b/gi, `to:${ADMIN_ADDRESS} in:anywhere -in:trash -in:spam -in:sent`);
+}
+
 /** The entry in Rolf's "stop showing" list that matches this sender, or null. Only the sender (name or address) counts, never the subject. */
 export function mutedMatch(m: SweepMessage, mutedSenders: string[]): string | null {
   const from = m.from.toLowerCase();
