@@ -17,6 +17,7 @@ export const DOC_FILE_NAME: Record<string, string> = {
   needs_analysis_critical_illness: "Critical Illness Needs Analysis",
   alternatives: "Alternatives Considered",
   planning_report: "Insurance Planning Report",
+  investor_profile: "Investor Profile and Needs Analysis",
 };
 
 const clean = (s: string) => s.replace(/[\\/:*?"<>|]/g, "-").replace(/\s+/g, " ").trim();

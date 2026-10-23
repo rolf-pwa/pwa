@@ -19,6 +19,7 @@ import { attachItem, buildPackage, createFile, listFiles, removeItem } from "../
 import { ffCompile, ffGet, ffSave, ffSend } from "../_shared/fact-find-service.ts";
 import { rCompile, rGet, rSave, rSend } from "../_shared/replacement-service.ts";
 import { fileComparison } from "../_shared/quote-service.ts";
+import * as inv from "../_shared/investment-service.ts";
 import { fileReport, listReports, previewReport, shareReport, unshareReport } from "../_shared/planning-report-service.ts";
 import { parseIllustration } from "../_shared/illustration-service.ts";
 import { iGet, iLetter, iRead, iSave, iSend } from "../_shared/issuance-service.ts";
@@ -208,6 +209,17 @@ Deno.serve(async (req) => {
     if (action === "iLetter") { const r = await iLetter(db, String(body?.id ?? "")); return json(r, "error" in r ? 400 : 200); }
     if (action === "iSend") { const r = await iSend(db, staff.email, String(body?.id ?? ""), { bodyMd: body?.bodyMd, fileId: body?.fileId }); return json(r, "error" in r ? 400 : 200); }
     if (action === "qParse") { const r = await parseIllustration(db, { householdId: String(body?.householdId ?? ""), contactId: String(body?.contactId ?? ""), fileName: body?.fileName, base64: body?.base64 }); return json(r, "error" in r ? 400 : 200); }
+    if (action.startsWith("inv")) {
+      const hh = String(body?.householdId ?? "");
+      const send = (r: any) => json(r, r && typeof r === "object" && "error" in r ? 400 : 200);
+      if (action === "invFiles") return send(await inv.listFiles(db, hh));
+      if (action === "invFileCreate") return send(await inv.createFile(db, staff.email, hh, body?.title, body?.kind, body?.contactId));
+      if (action === "invAttach") return send(await inv.attachItem(db, staff.email, String(body?.fileId ?? ""), String(body?.kind ?? ""), { driveLink: body?.driveLink, meetingTaskId: body?.meetingTaskId, notApplicable: body?.notApplicable, note: body?.note }));
+      if (action === "invRemove") return send(await inv.removeItem(db, String(body?.itemId ?? "")));
+      if (action === "invProfiles") return send(await inv.listProfiles(db, hh));
+      if (action === "invProfileSave") return send(await inv.saveProfile(db, staff.email, { householdId: hh, contactId: String(body?.contactId ?? ""), inputs: body?.inputs, note: body?.note }));
+      if (action === "invProfileFile") return send(await inv.fileProfile(db, String(body?.id ?? "")));
+    }
     if (action === "rpShare") { const r = await shareReport(db, staff.email, String(body?.id ?? ""), body?.notify !== false); return json(r, "error" in r ? 400 : 200); }
     if (action === "rpUnshare") { const r = await unshareReport(db, String(body?.id ?? "")); return json(r, "error" in r ? 400 : 200); }
     if (action === "rpList") return json(await listReports(db, String(body?.householdId ?? "")));
