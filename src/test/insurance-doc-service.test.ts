@@ -148,7 +148,8 @@ describe("wiring", () => {
   });
   it("uses the house look with the ProsperWise Advisors entity, not the Strategy line", () => {
     const pdf = readFileSync("supabase/functions/_shared/insurance-doc-service.ts", "utf8");
-    expect(pdf).toContain('ADVISORS_EYEBROW = "ProsperWise Advisors"');
+    expect(pdf).not.toContain("eyebrow"); // the header has no entity line; ProsperWise Advisors is in the footer
+    expect(pdf).toContain("o/a ProsperWise Advisors");
     expect(pdf).not.toMatch(/Sovereignty Operating System|ProsperWise Strategy/);
     const portal = readFileSync("src/modules/portal/components/PortalDocuments.tsx", "utf8");
     expect(portal).toContain("prosperwise-logo-white.png");

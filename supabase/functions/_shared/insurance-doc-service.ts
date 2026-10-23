@@ -21,7 +21,6 @@ const ROLF = "rolf@prosperwise.ca";
 /** The entity on insurance documents is ProsperWise Advisors (the Strategy side keeps its own line on its documents). */
 /** What the client sees the letter called (the master in Drive is titled "Reason Why: Life" for Rolf). */
 const RW_TITLE = "Your Life Insurance Recommendation";
-const ADVISORS_EYEBROW = "ProsperWise Advisors";
 const ADVISORS_FOOTER = () => `\u00A9 ${new Date().getFullYear()} Issler Group Management & Consulting Inc. o/a ProsperWise Advisors \u00B7 www.prosperwise.ca`;
 
 const isKind = (k: unknown): k is DocKind => k === "disclosure_privacy" || k === "reason_why" || k === "fact_find" || k === "replacement_declaration" || k === "replacement_explanation" || k === "delivery_letter";
@@ -209,7 +208,7 @@ export async function finalizeDoc(db: any, documentId: string): Promise<{ ok: bo
   if (d.pdf_drive_id) return { ok: true, message: "Already filed." };
   const { data: signers } = await db.from("insurance_document_signers").select("name, typed_name, signed_at, ip, casl_choice, casl_initials, casl_email").eq("document_id", documentId).order("signed_at");
   const blocks = signedPdfBlocks({ agent: d.agent_signed_at ? { typedName: d.agent_typed_name, signedAt: d.agent_signed_at, ip: d.agent_ip, statement: d.agent_statement } : null, statement: statementFor(d.kind), md: d.body_md, hash: d.body_hash, templateModified: d.template_modified, templateVersion: d.template_version, sentAt: d.sent_at, signers: ((signers ?? []) as any[]).map((s) => ({ name: s.name, typedName: s.typed_name, signedAt: s.signed_at, ip: s.ip, caslChoice: s.casl_choice, caslInitials: s.casl_initials, caslEmail: s.casl_email })) });
-  const pdf = buildBrandedPdf({ eyebrow: ADVISORS_EYEBROW, title: d.title, subtitle: `Signed electronically \u00B7 fingerprint ${d.body_hash.slice(0, 16)}`, footer: ADVISORS_FOOTER(), blocks });
+  const pdf = buildBrandedPdf({ title: d.title, subtitle: `Signed electronically \u00B7 fingerprint ${d.body_hash.slice(0, 16)}`, footer: ADVISORS_FOOTER(), blocks });
   try {
     const { data: who } = await db.from("insurance_document_signers").select("contact_id").eq("document_id", documentId).order("signed_at");
     const { data: people } = (who ?? []).length ? await db.from("contacts").select("id, first_name, last_name, full_name").in("id", (who as any[]).map((w) => w.contact_id)) : { data: [] as any[] };
@@ -243,7 +242,7 @@ export async function fileNeedsAnalysis(db: any, who: string, analysisId: string
   const day = ymd(new Date(a.created_at));
   let drive = a.pdf_drive_id ? { id: a.pdf_drive_id as string, url: a.pdf_url as string, name: conventionFile(day, [c ?? {}], DOC_FILE_NAME.needs_analysis) } : null;
   if (!drive) {
-    const pdf = buildBrandedPdf({ eyebrow: ADVISORS_EYEBROW, title: "Life Insurance Needs Analysis", subtitle: `${person} \u00B7 ${new Date(a.created_at).toLocaleDateString("en-CA", { timeZone: "America/Vancouver", dateStyle: "long" })}`, footer: ADVISORS_FOOTER(), blocks: needsAnalysisBlocks({ inputs: a.inputs ?? {}, results: a.results ?? {}, note: a.note, savedAt: a.created_at, person }) });
+    const pdf = buildBrandedPdf({ title: "Life Insurance Needs Analysis", subtitle: `${person} \u00B7 ${new Date(a.created_at).toLocaleDateString("en-CA", { timeZone: "America/Vancouver", dateStyle: "long" })}`, footer: ADVISORS_FOOTER(), blocks: needsAnalysisBlocks({ inputs: a.inputs ?? {}, results: a.results ?? {}, note: a.note, savedAt: a.created_at, person }) });
     try { drive = await uploadToAdvisorFiles(db, householdId, "Needs Analyses", conventionFile(day, [c ?? {}], DOC_FILE_NAME.needs_analysis), pdf); } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
     await db.from("insurance_needs_analyses").update({ pdf_drive_id: drive.id, pdf_url: drive.url, filed_at: new Date().toISOString() }).eq("id", a.id);
   }

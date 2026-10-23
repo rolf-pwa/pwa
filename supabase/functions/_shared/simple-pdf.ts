@@ -12,8 +12,8 @@ export type Block =
   | { kind: "card"; title: string; lines: string[] };
 
 export interface BrandedDoc {
-  /** The small uppercase line under the logo, for example the entity: "ProsperWise Advisors". */
-  eyebrow: string;
+  /** An optional small uppercase line under the logo. Left out of the insurance documents: the entity is in the footer and the header breathes. */
+  eyebrow?: string;
   title: string;
   subtitle?: string;
   /** Left side of the bronze footer bar; the page number goes on the right. */
@@ -143,7 +143,7 @@ export function buildBrandedPdf(doc: BrandedDoc): Uint8Array {
       chrome.push(rect(0, H - HEAD1, W, HEAD1, SLATE));
       const lw = 150, lh = (lw * LOGO_H) / LOGO_W;
       chrome.push(`q ${lw} 0 0 ${lh.toFixed(1)} ${M} ${(H - 20 - lh).toFixed(1)} cm /Logo Do Q`);
-      chrome.push(text("F1", 7.5, M, H - 20 - lh - 16, doc.eyebrow.toUpperCase(), MUTED));
+      if (doc.eyebrow) chrome.push(text("F1", 7.5, M, H - 20 - lh - 16, doc.eyebrow.toUpperCase(), MUTED));
       chrome.push(text("F3", 24, M, H - 20 - lh - 44, doc.title, "1 1 1"));
       if (doc.subtitle) chrome.push(text("F1", 8.5, M, H - 20 - lh - 60, doc.subtitle, "0.8 0.84 0.88"));
     } else {

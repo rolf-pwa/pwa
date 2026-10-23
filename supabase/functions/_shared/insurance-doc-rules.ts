@@ -26,8 +26,32 @@ const EMPTY_CONTACT = /^\s*[*_]*<>[*_]*\s*$/;
 const IMAGE_ONLY = /^\s*(\[image\]|!\[[^\]]*\]\([^)]*\))\s*$/i;
 
 export interface Cleaned { md: string; hasCasl: boolean; usesContactField: boolean }
+/** The text of a line without heading, bold, link and escape marks. */
+const bare = (line: string) => line.replace(/^\s*#{1,6}\s*/, "").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[*_\\]/g, "").replace(/\s+/g, " ").trim();
+
+/**
+ * "My Contact Information" followed by the advisor's name, phone and email. Word processors export those lines as headings or bold paragraphs with gaps between;
+ * they belong together as one small paragraph, one line each, with nothing left over (an empty heading shows as a stray "#").
+ */
+export function compactContactBlock(lines: string[]): string[] {
+  const at = lines.findIndex((l) => /^my contact information:?$/i.test(bare(l)));
+  if (at < 0) return lines;
+  const taken: string[] = [];
+  let end = at + 1;
+  for (; end < lines.length && taken.length < 8; end++) {
+    const b = bare(lines[end]);
+    // The block is a few short lines: it ends at the privacy heading, a signature line or caption, or anything long enough to be a paragraph.
+    if (/^privacy statement/i.test(b) || BLANK_LINE.test(lines[end]) || SIGNATURE_LABEL.test(lines[end]) || b.length > 80) break;
+    if (!b) continue;
+    taken.push(b);
+  }
+  // Empty <> markers mean the details are filled in from the settings, not written in the document: leave those to that step.
+  if (!taken.length || taken.some((t) => /^<\s*>$/.test(t))) return lines;
+  return [...lines.slice(0, at + 1), "", taken.join("  \n"), "", ...lines.slice(end)];
+}
+
 export function cleanTemplate(raw: string): Cleaned {
-  const lines = unescapeMd(String(raw ?? "")).replace(/\r/g, "").split("\n");
+  const lines = compactContactBlock(unescapeMd(String(raw ?? "")).replace(/\r/g, "").split("\n")).filter((l) => !/^\s*#{1,6}\s*$/.test(l));
   const out: string[] = [];
   let caslPlaced = /\{\{casl_choice\}\}/.test(raw);
   let contactPlaced = false;
@@ -94,8 +118,14 @@ export function signedPdfBlocks(i: { agent?: { typedName: string; signedAt: stri
   const blocks: Block[] = [];
   const plainOf = (t: string) => t.replace(/\*\*\*?(.+?)\*\*\*?/g, "$1").replace(/(^|[^*])\*(?!\*)(.+?)\*/g, "$1$2").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/^\s*[-*]\s+/, "\u2022 ").replace(/\*{2,3}/g, "").replace(/ {2,}$/, "");
   const render = (md: string) => {
-    for (const raw of md.split("\n")) {
-      const t = raw.trim();
+    const rows = md.split("\n");
+    for (let n = 0; n < rows.length; n++) {
+      let raw = rows[n];
+      // Lines that end in two spaces are one paragraph with line breaks (the contact details): keep them together, one line each.
+      let group = [raw.trim()];
+      while (/ {2}$/.test(raw) && n + 1 < rows.length && rows[n + 1].trim()) { n++; raw = rows[n]; group.push(raw.trim()); }
+      if (group.length > 1) { blocks.push({ kind: "p", text: group.map(plainOf).join("\n") }); continue; }
+      const t = group[0];
       if (!t) { blocks.push({ kind: "gap", h: 3 }); continue; }
       if (/^\*{2,3}$/.test(t)) continue; // a bold marker left alone on its line
       const h = t.match(/^#{1,4}\s+(.*)$/);

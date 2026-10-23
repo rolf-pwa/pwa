@@ -25,7 +25,7 @@ export async function fileComparison(db: any, who: string, input: { householdId:
   }
   const typeLabel = TYPE_LABEL[input.policyType] ?? input.policyType;
   const blocks = quoteBlocks({ person, typeLabel, quotes: quotes as QuoteRow[], needLine, preparedOn: ymd() });
-  const pdf = buildBrandedPdf({ eyebrow: "ProsperWise Advisors", title: "Alternatives Considered", subtitle: `${person} · ${typeLabel} · ${ymd()}`, footer: footer(), blocks });
+  const pdf = buildBrandedPdf({ title: "Alternatives Considered", subtitle: `${person} · ${typeLabel} · ${ymd()}`, footer: footer(), blocks });
   let drive;
   try { drive = await uploadToAdvisorFiles(db, input.householdId, "Quotes", conventionFile(ymd(), [c ?? {}], `Alternatives Considered ${typeLabel}`), pdf); } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
 

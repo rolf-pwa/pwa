@@ -23,9 +23,9 @@ describe("the needs analysis report", () => {
     expect(JSON.stringify(needsAnalysisBlocks({ ...a, results: r, inputs: { mortgage: 100000, lifeInsurance: 500000 } }))).toContain("Surplus:");
   });
   it("builds a branded PDF", () => {
-    const s = new TextDecoder("latin1").decode(buildBrandedPdf({ eyebrow: "ProsperWise Advisors", title: "Life Insurance Needs Analysis", footer: "f", blocks: needsAnalysisBlocks(a) }));
+    const s = new TextDecoder("latin1").decode(buildBrandedPdf({ title: "Life Insurance Needs Analysis", footer: "f", blocks: needsAnalysisBlocks(a) }));
     expect(s.startsWith("%PDF-1.4")).toBe(true);
-    expect(s).toContain("PROSPERWISE ADVISORS");
+    expect(s).not.toContain("PROSPERWISE ADVISORS");
   });
   it("is wired: a migration for the PDF columns, the staff action and the card button", () => {
     expect(readFileSync("supabase/migrations/20261219120000_needs_analysis_pdf.sql", "utf8")).toContain("pdf_url");

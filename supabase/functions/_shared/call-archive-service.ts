@@ -73,7 +73,7 @@ async function archiveOne(db: any, call: any, immediate: boolean): Promise<{ out
   let transcriptUrl: string | null = null;
   if (t) {
     const person = (c.full_name || `${c.first_name} ${c.last_name}`).trim();
-    const pdf = buildBrandedPdf({ eyebrow: "ProsperWise Advisors", title: call.is_voicemail ? "Voicemail Transcript" : "Call Transcript", subtitle: person, footer: footer(), blocks: transcriptBlocks({ person, startedAt: call.occurred_at, durationSeconds: call.duration_seconds, direction: call.direction, t }) });
+    const pdf = buildBrandedPdf({ title: call.is_voicemail ? "Voicemail Transcript" : "Call Transcript", subtitle: person, footer: footer(), blocks: transcriptBlocks({ person, startedAt: call.occurred_at, durationSeconds: call.duration_seconds, direction: call.direction, t }) });
     transcriptUrl = (await uploadToAdvisorFiles(db, c.household_id, "Call Recordings", names.transcript, pdf)).url;
   }
   await db.from("quo_calls").update({ archived_at: new Date().toISOString(), recording_drive_id: rec.id, recording_drive_url: rec.url, transcript_drive_url: transcriptUrl, transcript_source: source, archive_note: noteText }).eq("id", call.id);
