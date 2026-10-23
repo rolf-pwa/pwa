@@ -120,8 +120,18 @@ describe("what the client's task is called", () => {
 describe("who sees the task for a document", () => {
   it("is the one signer's alone when there is one signer, and the household's when there are several", () => {
     const svc = readFileSync("supabase/functions/_shared/insurance-doc-service.ts", "utf8");
-    expect(svc).toContain("p.signers.length === 1 ? { contact_id: p.signers[0].id } : { household_id: p.householdId }");
+    expect(svc).toContain("p.signers.length === 1 ? { contact_id: p.signers[0].id, household_id: null as string | null } : { contact_id: null as string | null, household_id: p.householdId }");
+    expect(svc).toContain("...(owner.contact_id ? { contact_id: owner.contact_id } : { household_id: owner.household_id })");
     expect(svc).not.toMatch(/created_by: rolf\.user_id, household_id: p\.householdId/);
+  });
+});
+
+describe("telling the client a document is waiting", () => {
+  it("notifies the signers the same way as any task shared with them (bell and the short digest email), only for their own task", () => {
+    const svc = readFileSync("supabase/functions/_shared/insurance-doc-service.ts", "utf8");
+    expect(svc).toContain('import { notifyClientsOfComment } from "./task-notify.ts"');
+    expect(svc).toMatch(/notifyClientsOfComment\(db, \{ id: task\.id, title: taskTitle, client_visible: true, contact_id: owner\.contact_id, household_id: owner\.household_id \}/);
+    expect(svc).toContain("owner = p.signers.length === 1");
   });
 });
 
