@@ -4,16 +4,16 @@
 // deno-lint-ignore-file no-explicit-any
 import { GEMINI_EXTRACT_MODEL, generateVertexContent, parseServiceAccountKey, withThinking } from "./vertex-ai.ts";
 import { uploadToAdvisorFiles } from "./insurance-doc-service.ts";
-import { ILLUSTRATION_PROMPT, draftFromIllustration, type ParsedIllustration } from "./illustration-rules.ts";
+import { ILLUSTRATION_PROMPT, draftsFromIllustration, type ParsedIllustration } from "./illustration-rules.ts";
 
 export const MAX_ILLUSTRATION_BYTES = 6_000_000;
 const TOOL = {
   name: "record_quote",
   description: "Record the facts of the quote with an exact quote from the document for each.",
-  parameters: { type: "OBJECT", properties: { facts: { type: "ARRAY", items: { type: "OBJECT", properties: { key: { type: "STRING" }, value: { type: "STRING" }, quote: { type: "STRING" } }, required: ["key", "value", "quote"] } } }, required: ["facts"] },
+  parameters: { type: "OBJECT", properties: { facts: { type: "ARRAY", items: { type: "OBJECT", properties: { coverage: { type: "NUMBER", description: "The coverage number (1, 2, 3...); 0 for facts that apply to every coverage" }, key: { type: "STRING" }, value: { type: "STRING" }, quote: { type: "STRING" } }, required: ["coverage", "key", "value", "quote"] } } }, required: ["facts"] },
 };
 
-export async function parseIllustration(db: any, input: { householdId: string; contactId: string; fileName: unknown; base64: unknown }): Promise<({ ok: true; drive: { id: string; url: string; name: string }; note: string } & ParsedIllustration) | { error: string }> {
+export async function parseIllustration(db: any, input: { householdId: string; contactId: string; fileName: unknown; base64: unknown }): Promise<({ ok: true; drive: { id: string; url: string; name: string }; note: string; drafts: ParsedIllustration[] } & ParsedIllustration) | { error: string }> {
   const b64 = String(input.base64 ?? "");
   if (b64.length < 100) return { error: "No file came through." };
   let bytes: Uint8Array;
@@ -32,6 +32,7 @@ export async function parseIllustration(db: any, input: { householdId: string; c
     const result = await generateVertexContent(sa, GEMINI_EXTRACT_MODEL, [{ role: "user", parts: [{ text: ILLUSTRATION_PROMPT }, { inlineData: { mimeType: "application/pdf", data: b64 } }] }], withThinking(GEMINI_EXTRACT_MODEL, { temperature: 0.1, maxOutputTokens: 4096 }, "low"), { tools: [{ functionDeclarations: [TOOL] }], toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["record_quote"] } } });
     facts = (result.candidates?.[0]?.content?.parts || []).find((p: any) => p.functionCall)?.functionCall?.args?.facts ?? [];
   } catch (e) { note = `I could not read the illustration just now (${e instanceof Error ? e.message.slice(0, 100) : "error"}). The PDF is saved with the quote; fill the fields in by hand.`; }
-  const parsed = draftFromIllustration(facts, person, drive.url);
-  return { ok: true, drive, note, ...parsed };
+  const drafts = draftsFromIllustration(facts, person, drive.url);
+  // The first coverage is what the form shows; the rest follow one at a time (drafts holds them all).
+  return { ok: true, drive, note, ...drafts[0], drafts };
 }

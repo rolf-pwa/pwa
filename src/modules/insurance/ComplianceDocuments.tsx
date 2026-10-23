@@ -7,7 +7,7 @@ import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { policyTypeLabel } from "@/shared/lib/insurance";
 import { supabase } from "@/shared/integrations/supabase/client";
-import { alternativesText, type Quote } from "@/shared/lib/quotes";
+import { alternativesText, groupKey, type Quote } from "@/shared/lib/quotes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { finalizeInsuranceDoc, getInsuranceFiles, listInsuranceDocs, previewInsuranceDoc, sendInsuranceDoc, voidInsuranceDoc, type InsDoc, type InsDocPreview, type InsFile, type InsFiles, type ReasonWhyFields } from "@/modules/crm/lib/reviewAgent";
 
@@ -64,7 +64,7 @@ export function ComplianceDocuments({ householdId, onChanged }: { householdId: s
   const prefillQuote = (quoteId: string) => {
     const q = quotes.find((x) => x.id === quoteId);
     if (!q) return;
-    const same = quotes.filter((x) => x.contact_id === q.contact_id && x.policy_type === q.policy_type);
+    const same = quotes.filter((x) => x.contact_id === q.contact_id && groupKey(x) === groupKey(q));
     setRw((cur) => cur && ({ ...cur, insuredId: q.contact_id, product: q.product, carrier: q.carrier, coverageAmount: q.coverage_amount ? String(q.coverage_amount) : "", premium: q.premium_amount ? String(q.premium_amount) : "", frequency: q.premium_frequency && q.premium_frequency !== "single" ? q.premium_frequency : "monthly", alternatives: alternativesText(same) }));
   };
   const draftRw = () => run(async () => { const p = await previewInsuranceDoc(householdId, "reason_why", rw ? [rw.insuredId] : undefined, rw ? toFields(rw) : undefined); setRwPreview(p); setRwText(p.md); });
