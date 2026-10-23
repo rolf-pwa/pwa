@@ -165,6 +165,15 @@ describe("the bell for a waiting document", () => {
   });
 });
 
+describe("the Family Office portal has the bell too", () => {
+  it("shows it in the header and opens the dashboard, tasks and requests from it", () => {
+    const vfo = readFileSync("src/modules/portal/pages/VfoPortal.tsx", "utf8");
+    expect(vfo).toContain("<PortalNotificationBell");
+    expect(vfo).toContain('onNavigateToDashboard={() => setTab("dashboard")}');
+    expect(vfo).toContain("onNavigateToRequests={() => setRequestsOpen(true)}");
+  });
+});
+
 describe("wiring", () => {
   it("keeps the client's list of covered checklist items in step with the server's", () => { expect(CLIENT_ITEMS).toEqual(DOC_ITEMS); });
   it("has a migration with grants, and the portal and advisor entry points", () => {
