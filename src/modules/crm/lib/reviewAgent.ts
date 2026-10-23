@@ -237,6 +237,12 @@ export const sendReplacement = (id: string, typedName: string, agree: boolean, n
 
 export const fileQuoteComparison = (householdId: string, contactId: string, policyType: string, fileId?: string) => call<{ ok: true; url: string; attached: boolean; illustration: string }>("qFile", { householdId, contactId, policyType, fileId });
 
+export interface ReportRequestFields { householdId: string; contactIds: string[]; kinds: string[]; includeOptions: boolean; coverNote: string }
+export interface FiledReport { id: string; title: string; kinds: string[]; contact_ids: string[]; include_options: boolean; pdf_url: string; pdf_name: string; created_by: string | null; created_at: string }
+export const previewPlanningReport = (r: ReportRequestFields) => call<{ ok: true; name: string; base64: string }>("rpPreview", { ...r });
+export const filePlanningReport = (r: ReportRequestFields) => call<{ ok: true; url: string; name: string }>("rpFile", { ...r });
+export const getPlanningReports = (householdId: string) => call<{ reports: FiledReport[] }>("rpList", { householdId });
+
 export interface IllustrationDraft { benefit_kind: string; waiting_days: string; benefit_period: string; occupation: string; policy_type: string; carrier: string; product: string; coverage_amount: string; term_years: string; premium_amount: string; premium_frequency: string; underwriting: string; riders: string; guarantees: string; quote_date: string; valid_until: string; illustration_url: string; notes: string }
 export const parseQuoteIllustration = (householdId: string, contactId: string, fileName: string, base64: string) => call<{ ok: true; drive: { id: string; url: string; name: string }; note: string; draft: IllustrationDraft; sources: Record<string, string>; warnings: string[]; drafts: { draft: IllustrationDraft; sources: Record<string, string>; warnings: string[] }[] }>("qParse", { householdId, contactId, fileName, base64 });
 

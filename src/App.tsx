@@ -23,6 +23,7 @@ const InsPolicies = lazy(() => import("@/modules/insurance/InsuranceHouseholdPag
 const InsFactFind = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.FactFindPage })));
 const InsNeeds = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.NeedsPage })));
 const InsQuoting = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.QuotingPage })));
+const InsReport = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.ReportPage })));
 const InsCompliance = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.CompliancePage })));
 const FormerClients = lazy(() => import("@/modules/crm/pages/FormerClients"));
 const Dashboard = lazy(() => import("@/modules/crm/pages/Dashboard"));
@@ -165,6 +166,7 @@ const App = () => (
                   <Route path="fact-find" element={<InsFactFind />} />
                   <Route path="needs" element={<InsNeeds />} />
                   <Route path="quoting" element={<InsQuoting />} />
+                  <Route path="report" element={<InsReport />} />
                   <Route path="compliance" element={<InsCompliance />} />
                 </Route>
               </Route>
