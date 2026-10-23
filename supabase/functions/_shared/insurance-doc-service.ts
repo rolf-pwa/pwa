@@ -9,6 +9,7 @@ import { driveEnsureFolder, driveFindFolder } from "./meeting-record-service.ts"
 import { alternativesParagraph, cleanTemplate, costParagraph, fillReasonWhy, fillTemplate, footerVersion, needsParagraph, replacementParagraph, sha256Hex, signedPdfBlocks, statementFor, type AnalysisLite } from "./insurance-doc-rules.ts";
 import { buildBrandedPdf } from "./simple-pdf.ts";
 import { needsAnalysisBlocks } from "./needs-analysis-pdf.ts";
+import { notifyClientsOfComment } from "./task-notify.ts";
 import { DOC_FILE_NAME, conventionFile } from "./file-naming.ts";
 import { DOC_ITEMS, documentTaskTitle, type DocKind } from "./insurance-doc-client.ts";
 
@@ -136,14 +137,20 @@ export async function createAndSend(db: any, who: string, p: { householdId: stri
   if (rolf?.user_id) {
     const due = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
     const confirmOnly = p.kind !== "disclosure_privacy";
+    const owner = p.signers.length === 1 ? { contact_id: p.signers[0].id, household_id: null as string | null } : { contact_id: null as string | null, household_id: p.householdId };
+    const taskTitle = documentTaskTitle(p.kind, p.title);
     const { data: task } = await db.from("pm_tasks").insert({
-      title: documentTaskTitle(p.kind, p.title),
+      title: taskTitle,
       description: confirmOnly ? `Please read ${p.title} and confirm it: open this task and press the button. If anything is missing or not right, tell me before you confirm.` : `Please read and sign your ${p.title}: open this task and press the button. It takes a couple of minutes. If you have questions first, reply here and I will answer them.`,
       status: "open", client_visible: true, assignee_id: rolf.user_id, created_by: rolf.user_id, due_date: due,
       // A document for one person is that person's task alone; a household task would show up in the other adults' portals, where they cannot open it.
-      ...(p.signers.length === 1 ? { contact_id: p.signers[0].id } : { household_id: p.householdId }),
+      ...(owner.contact_id ? { contact_id: owner.contact_id } : { household_id: owner.household_id }),
     }).select("id").maybeSingle();
-    if (task?.id) await db.from("insurance_documents").update({ task_id: task.id }).eq("id", doc.id);
+    if (task?.id) {
+      await db.from("insurance_documents").update({ task_id: task.id }).eq("id", doc.id);
+      // The client is told the way they are for any task shared with them: a bell in the portal and, through the digest, one short email that carries no details.
+      try { await notifyClientsOfComment(db, { id: task.id, title: taskTitle, client_visible: true, contact_id: owner.contact_id, household_id: owner.household_id }, Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, "updated"); } catch (e) { console.error("[insurance-doc] client notification failed", e); }
+    }
   }
   return { ok: true as const, id: doc.id as string };
 }

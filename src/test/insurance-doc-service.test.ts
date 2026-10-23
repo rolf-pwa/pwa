@@ -125,6 +125,15 @@ describe("who sees the task for a document", () => {
   });
 });
 
+describe("telling the client a document is waiting", () => {
+  it("notifies the signers the same way as any task shared with them (bell and the short digest email), only for their own task", () => {
+    const svc = readFileSync("supabase/functions/_shared/insurance-doc-service.ts", "utf8");
+    expect(svc).toContain('import { notifyClientsOfComment } from "./task-notify.ts"');
+    expect(svc).toMatch(/notifyClientsOfComment\(db, \{ id: task\.id, title: taskTitle, client_visible: true, contact_id: owner\.contact_id, household_id: owner\.household_id \}/);
+    expect(svc).toContain("owner = p.signers.length === 1");
+  });
+});
+
 describe("wiring", () => {
   it("keeps the client's list of covered checklist items in step with the server's", () => { expect(CLIENT_ITEMS).toEqual(DOC_ITEMS); });
   it("has a migration with grants, and the portal and advisor entry points", () => {
