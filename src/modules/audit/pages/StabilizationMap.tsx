@@ -50,6 +50,7 @@ type Diagnostics = {
   aum?: number;
   storehouse_reserves?: { liquidity: number; strategic: number; philanthropic: number; legacy: number };
   insurance_coverage_total?: number;
+  insurance_coverage_by_kind?: { life: number; critical_illness: number; disability_monthly: number; long_term_care: number; other: number };
   allocation?: { notes: string[]; income_funds_moved: number; income_funds_on_file: number; cash_value_added: number; real_estate_added?: number; credit_capacity?: number };
   vineyard_total?: number;
   holding_tank_total?: number;
@@ -662,6 +663,7 @@ export default function StabilizationMap() {
                       />
                     )}
                     <StatRow label="Asset Protection" value={fmtCurrency(diag.insurance_coverage_total ?? 0)} />
+                    {(diag.insurance_coverage_by_kind?.disability_monthly ?? 0) > 0 && <StatRow label="Disability benefit" value={`${fmtCurrency(diag.insurance_coverage_by_kind!.disability_monthly)} a month`} />}
                   </div>
                 </div>
 

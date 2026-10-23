@@ -62,7 +62,7 @@ export interface ReviewFacts {
     withdrawalsYtd: number | null; // spent / withdrawn so far this year (the harvest)
   };
   liquidity: { setUp: boolean; target: number | null };
-  strategic: { policyCount: number; coverageTotal: number; missingCoverageCount: number; missingBeneficiaryCount: number; renewalsDueSoon: number; documentsFiled: boolean | null };
+  strategic: { policyCount: number; coverageTotal: number; /** Cover by kind in words (new reports), shown instead of the single total. */ coverageText?: string; missingCoverageCount: number; missingBeneficiaryCount: number; renewalsDueSoon: number; documentsFiled: boolean | null };
   legacy: { realEstate: number; estate: EstateFacts };
   liabilities: {
     total: number; corporate: number; overdueLoans: number;
@@ -305,7 +305,7 @@ export function buildAlignmentCards(f: ReviewFacts): ReviewCard[] {
     let status: AlignStatus;
     if (s.policyCount === 0 && b.strategic <= 0 && credit <= 0) { status = "Not Assessed"; current.push("No insurance policies are on record."); }
     else {
-      if (s.policyCount > 0) current.push(`${plural(s.policyCount, "policy", "policies")} with ${money(s.coverageTotal)} of coverage.`);
+      if (s.policyCount > 0) current.push(`${plural(s.policyCount, "policy", "policies")} with ${s.coverageText ? `${s.coverageText}` : `${money(s.coverageTotal)} of coverage`}.`);
       if (s.missingCoverageCount) actions.push(`Record the coverage amount on ${plural(s.missingCoverageCount, "policy", "policies")}.`);
       if (s.missingBeneficiaryCount) actions.push(`Record the beneficiary on ${plural(s.missingBeneficiaryCount, "policy", "policies")}.`);
       if (s.renewalsDueSoon) actions.push(`Review ${plural(s.renewalsDueSoon, "policy renewal")} due within 90 days.`);

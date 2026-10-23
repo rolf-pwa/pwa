@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { coverageSentence } from "../_shared/coverage-by-kind.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   computeSovereigntyDiagnostics,
@@ -332,7 +333,7 @@ function factsBlock(
   lines.push(
     `Total assets: $${Math.round(diagnostics.aum).toLocaleString()}; total liabilities: $${Math.round((diagnostics.personal_liabilities_total ?? 0) + (diagnostics.corp_liabilities_total ?? 0)).toLocaleString()}; net worth: $${Math.round(diagnostics.net_worth ?? diagnostics.aum).toLocaleString()}${diagnostics.allocation?.notes?.length ? ` (${diagnostics.allocation.notes.join(" ")})` : ""}`,
     `Document readiness: ${diagnostics.document_readiness.criticalSatisfied}/${diagnostics.document_readiness.criticalTotal} required documents filed (${diagnostics.document_readiness.percent}%)`,
-    `Asset protection (total insurance coverage on file): $${Math.round(diagnostics.insurance_coverage_total ?? 0).toLocaleString()}`,
+    `Asset protection (life and critical illness lump sums on file): $${Math.round(diagnostics.insurance_coverage_total ?? 0).toLocaleString()}${diagnostics.insurance_coverage_by_kind && coverageSentence(diagnostics.insurance_coverage_by_kind) ? `. By kind: ${coverageSentence(diagnostics.insurance_coverage_by_kind)} (a disability benefit is monthly income, not capital)` : ""}`,
   );
   if (diagnostics.document_readiness.missingCritical?.length) {
     lines.push(`Missing required documents: ${diagnostics.document_readiness.missingCritical.join(", ")}`);

@@ -8,6 +8,7 @@
 // to draft narrative text around them (situation summary, action plan prose).
 
 import { getServiceGoogleAccessToken } from "./google-token.ts";
+import { coverageByKind, lumpSumCoverage, type CoverageByKind } from "./coverage-by-kind.ts";
 import { driveListChildren, matchVaultCategoryFolder } from "./vault-provisioning.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -366,6 +367,7 @@ export interface HouseholdFinancials {
   vaultRootFolderId: string | null;
   storehouseReserves: StorehouseReserves;
   totalInsuranceCoverage: number;
+  insuranceCoverageByKind: CoverageByKind;
   liabilities: any[];
   totalPersonalLiabilities: number;
   totalCorpLiabilities: number;
@@ -416,6 +418,7 @@ export async function gatherHouseholdFinancials(
       vaultRootFolderId: household?.vault_root_folder_id ?? null,
       storehouseReserves: { liquidity: 0, strategic: 0, philanthropic: 0, legacy: 0 },
       totalInsuranceCoverage: 0,
+      insuranceCoverageByKind: { life: 0, critical_illness: 0, disability_monthly: 0, long_term_care: 0, other: 0 },
       liabilities: [],
       totalPersonalLiabilities: 0,
       totalCorpLiabilities: 0,
@@ -510,10 +513,9 @@ export async function gatherHouseholdFinancials(
   const totalStorehouses =
     storehouseReserves.liquidity + storehouseReserves.strategic + storehouseReserves.philanthropic + storehouseReserves.legacy;
 
-  const totalInsuranceCoverage = insurancePolicies.reduce(
-    (sum: number, p: any) => sum + (Number(p.coverage_amount) || 0),
-    0,
-  );
+  // Lump-sum cover only: a monthly disability benefit is not capital protected, so it is reported on its own.
+  const insuranceCoverageByKind = coverageByKind(insurancePolicies);
+  const totalInsuranceCoverage = lumpSumCoverage(insuranceCoverageByKind);
 
   const totalVineyard = vineyardAccounts.reduce((sum: number, a: any) => sum + (Number(a.current_value) || 0), 0);
 
@@ -539,6 +541,7 @@ export async function gatherHouseholdFinancials(
     vaultRootFolderId: household?.vault_root_folder_id ?? null,
     storehouseReserves,
     totalInsuranceCoverage,
+    insuranceCoverageByKind,
     liabilities,
     totalPersonalLiabilities,
     totalCorpLiabilities,
@@ -563,6 +566,8 @@ export interface SovereigntyDiagnostics {
   family_name: string;
   storehouse_reserves: StorehouseReserves;
   insurance_coverage_total: number;
+  /** Cover in force by kind (new); older saved reports do not have it. */
+  insurance_coverage_by_kind?: CoverageByKind;
   vineyard_total: number;
   holding_tank_total: number;
   net_worth: number;
@@ -593,6 +598,7 @@ export async function computeSovereigntyDiagnostics(
     family_name: financials.familyName,
     storehouse_reserves: financials.storehouseReserves,
     insurance_coverage_total: financials.totalInsuranceCoverage,
+    insurance_coverage_by_kind: financials.insuranceCoverageByKind,
     vineyard_total: financials.totalVineyard,
     holding_tank_total: financials.totalHoldingTank,
     net_worth: financials.netWorth,

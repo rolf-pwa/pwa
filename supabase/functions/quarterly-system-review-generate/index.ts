@@ -5,6 +5,7 @@
 // unavailable the review is still produced, with a rule-based narrative.
 
 // deno-lint-ignore-file no-explicit-any
+import { coverageSentence } from "../_shared/coverage-by-kind.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://esm.sh/zod@3.25.76";
@@ -356,7 +357,7 @@ serve(async (req) => {
       },
       liquidity: { setUp: hasLiquidityReserve({ exists: !!liquidityRow, target: liquidityTarget }), target: liquidityTarget },
       strategic: {
-        policyCount: policies.length, coverageTotal: diag.insurance_coverage_total,
+        policyCount: policies.length, coverageTotal: diag.insurance_coverage_total, coverageText: coverageSentence(diag.insurance_coverage_by_kind),
         missingCoverageCount: policies.filter((p) => !(Number(p.coverage_amount) > 0)).length,
         missingBeneficiaryCount: policies.filter((p) => !p.primary_beneficiary).length,
         renewalsDueSoon: policies.filter((p) => p.renewal_date && new Date(p.renewal_date).getTime() <= soon && new Date(p.renewal_date).getTime() >= Date.now()).length,

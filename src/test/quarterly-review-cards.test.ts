@@ -216,3 +216,16 @@ describe("Strategic Reserve with assigned credit", () => {
     expect(moved).toBeLessThanOrEqual(100_000);
   });
 });
+
+describe("Strategic Reserve cover wording", () => {
+  const strategic = (o: object) => ({ ...good().strategic, ...o });
+  it("says the cover by kind when the report has it, so a monthly disability benefit is not added to the lump sums", () => {
+    const f: ReviewFacts = { ...good(), strategic: strategic({ policyCount: 3, coverageTotal: 850_000, coverageText: "life $750,000; critical illness $100,000; disability $4,100 a month" }) };
+    const text = card(f, "strategic").current.join(" ");
+    expect(text).toContain("3 policies with life $750,000; critical illness $100,000; disability $4,100 a month.");
+    expect(text).not.toContain("of coverage");
+  });
+  it("keeps the single total for reports saved before cover was recorded by kind", () => {
+    expect(card({ ...good(), strategic: strategic({ policyCount: 1, coverageTotal: 300_000 }) }, "strategic").current.join(" ")).toContain("1 policy with $300,000 of coverage.");
+  });
+});
