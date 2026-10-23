@@ -9,7 +9,7 @@ import { driveEnsureFolder, driveFindFolder } from "./meeting-record-service.ts"
 import { alternativesParagraph, cleanTemplate, costParagraph, fillReasonWhy, fillTemplate, footerVersion, needsParagraph, replacementParagraph, sha256Hex, signedPdfBlocks, statementFor, type AnalysisLite } from "./insurance-doc-rules.ts";
 import { buildBrandedPdf } from "./simple-pdf.ts";
 import { needsAnalysisBlocks } from "./needs-analysis-pdf.ts";
-import { DOC_ITEMS, type DocKind } from "./insurance-doc-client.ts";
+import { DOC_ITEMS, documentTaskTitle, type DocKind } from "./insurance-doc-client.ts";
 
 const DRIVE = "https://www.googleapis.com/drive/v3";
 const UPLOAD = "https://www.googleapis.com/upload/drive/v3";
@@ -136,7 +136,7 @@ export async function createAndSend(db: any, who: string, p: { householdId: stri
     const due = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
     const confirmOnly = p.kind !== "disclosure_privacy";
     const { data: task } = await db.from("pm_tasks").insert({
-      title: confirmOnly ? `Review and confirm your ${p.title}` : `Sign your ${p.title}`,
+      title: documentTaskTitle(p.kind, p.title),
       description: confirmOnly ? `Please read ${p.title} and confirm it: open this task and press the button. If anything is missing or not right, tell me before you confirm.` : `Please read and sign your ${p.title}: open this task and press the button. It takes a couple of minutes. If you have questions first, reply here and I will answer them.`,
       status: "open", client_visible: true, assignee_id: rolf.user_id, created_by: rolf.user_id, household_id: p.householdId, due_date: due,
     }).select("id").maybeSingle();

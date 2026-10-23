@@ -58,3 +58,10 @@ export async function clientSigned(db: any, contactId: string) {
   const at = new Map((rows ?? []).map((r: any) => [r.document_id, r.signed_at]));
   return ((docs ?? []) as any[]).filter((d) => d.pdf_drive_id).map((d) => ({ id: d.id as string, title: d.title as string, signed_at: at.get(d.id) as string })).sort((a, b) => Date.parse(b.signed_at) - Date.parse(a.signed_at));
 }
+
+/** What the client's task is called: "Sign your ..." for the documents that are signed, "Review and confirm your ..." for the rest. Titles that already start with "Your" are not doubled. */
+export function documentTaskTitle(kind: string, title: string): string {
+  const signs = kind === "disclosure_privacy" || kind === "replacement_declaration";
+  const yours = /^your\s/i.test(title) ? `your ${title.slice(5)}` : `your ${title}`;
+  return `${signs ? "Sign" : "Review and confirm"} ${yours}`;
+}
