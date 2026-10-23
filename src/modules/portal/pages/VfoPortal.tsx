@@ -36,6 +36,7 @@ import { getPortalSession, setPortalSession, clearPortalSession } from "@/module
 import prosperwiseLogo from "@/assets/prosperwise-logo.png";
 import prosperwiseIconPaper from "@/assets/prosperwise-icon-paper.png";
 import { PortalRebalancing, PortalRebalancingPage, PortalRebalancingTeaser, PortalRebalancingWaiting, rebalancingNeedsMe, type RebalancingState } from "@/modules/portal/components/PortalRebalancing";
+import { PortalNotificationBell } from "@/modules/portal/components/PortalNotificationBell";
 import { PortalDocumentsPage, PortalDocumentsTeaser } from "@/modules/portal/components/PortalDocuments";
 import { PortalReviewTeaser, PortalReviewPage } from "@/modules/portal/components/PortalReviewTeaser";
 import { withBookedMeetings } from "@/modules/portal/lib/bookedMeetings";
@@ -1185,6 +1186,15 @@ const VfoPortal = () => {
               </div>
             </div>
             <div className="flex items-center gap-6 sm:border-l sm:border-primary-foreground/15 sm:pl-6">
+              <PortalNotificationBell
+                requests={portal_requests || []}
+                contactId={contact.id}
+                portalToken={portalToken}
+                onNavigateToRequests={() => setRequestsOpen(true)}
+                onNavigateToTasks={() => setTab("tasks")}
+                onNavigateToDashboard={() => setTab("dashboard")}
+                onOpenGeorgia={() => setGeorgiaOpen(true)}
+              />
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-primary-foreground/60">{headerAumLabel}</p>
                 <p className="font-serif text-2xl text-primary-foreground">{fmt(totalAum)}</p>
