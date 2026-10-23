@@ -8,7 +8,7 @@ import { getServiceGoogleAccessToken } from "./google-token.ts";
 import { driveEnsureFolder, driveFindFolder } from "./meeting-record-service.ts";
 import { alternativesParagraph, cleanTemplate, costParagraph, fillReasonWhy, fillTemplate, footerVersion, needsParagraph, replacementParagraph, sha256Hex, signedPdfBlocks, statementFor, type AnalysisLite } from "./insurance-doc-rules.ts";
 import { buildBrandedPdf } from "./simple-pdf.ts";
-import { needsAnalysisBlocks } from "./needs-analysis-pdf.ts";
+import { criticalIllnessBlocks, disabilityBlocks, needsAnalysisBlocks } from "./needs-analysis-pdf.ts";
 import { notifyClientsOfComment } from "./task-notify.ts";
 import { DOC_FILE_NAME, conventionFile } from "./file-naming.ts";
 import { DOC_ITEMS, documentTaskTitle, type DocKind } from "./insurance-doc-client.ts";
@@ -234,17 +234,20 @@ export async function finalizeDoc(db: any, documentId: string): Promise<{ ok: bo
 
 /** Files a saved needs analysis as a branded PDF in Advisor Files / Needs Analyses, and attaches it to an insurance file as the needs-analysis evidence. */
 export async function fileNeedsAnalysis(db: any, who: string, analysisId: string, fileId?: unknown): Promise<{ ok: true; url: string; attached: boolean } | { error: string }> {
-  const { data: a } = await db.from("insurance_needs_analyses").select("id, household_id, contact_id, inputs, results, note, created_at, pdf_drive_id, pdf_url").eq("id", analysisId).maybeSingle();
+  const { data: a } = await db.from("insurance_needs_analyses").select("id, household_id, contact_id, method, inputs, results, note, created_at, pdf_drive_id, pdf_url").eq("id", analysisId).maybeSingle();
   if (!a) return { error: "Analysis not found." };
   const { data: c } = await db.from("contacts").select("full_name, first_name, last_name, household_id").eq("id", a.contact_id).maybeSingle();
   const householdId = a.household_id ?? c?.household_id;
   if (!householdId) return { error: "This person is not in a household, so there is no Advisor Files folder to put it in." };
   const person = (c?.full_name || `${c?.first_name ?? ""} ${c?.last_name ?? ""}`).trim() || "Client";
   const day = ymd(new Date(a.created_at));
-  let drive = a.pdf_drive_id ? { id: a.pdf_drive_id as string, url: a.pdf_url as string, name: conventionFile(day, [c ?? {}], DOC_FILE_NAME.needs_analysis) } : null;
+  const kind = a.method === "disability" ? { title: "Disability Needs Analysis", docName: DOC_FILE_NAME.needs_analysis_disability, blocks: disabilityBlocks }
+    : a.method === "critical_illness" ? { title: "Critical Illness Needs Analysis", docName: DOC_FILE_NAME.needs_analysis_critical_illness, blocks: criticalIllnessBlocks }
+    : { title: "Life Insurance Needs Analysis", docName: DOC_FILE_NAME.needs_analysis, blocks: needsAnalysisBlocks };
+  let drive = a.pdf_drive_id ? { id: a.pdf_drive_id as string, url: a.pdf_url as string, name: conventionFile(day, [c ?? {}], kind.docName) } : null;
   if (!drive) {
-    const pdf = buildBrandedPdf({ title: "Life Insurance Needs Analysis", subtitle: `${person} \u00B7 ${new Date(a.created_at).toLocaleDateString("en-CA", { timeZone: "America/Vancouver", dateStyle: "long" })}`, footer: ADVISORS_FOOTER(), blocks: needsAnalysisBlocks({ inputs: a.inputs ?? {}, results: a.results ?? {}, note: a.note, savedAt: a.created_at, person }) });
-    try { drive = await uploadToAdvisorFiles(db, householdId, "Needs Analyses", conventionFile(day, [c ?? {}], DOC_FILE_NAME.needs_analysis), pdf); } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+    const pdf = buildBrandedPdf({ title: kind.title, subtitle: `${person} \u00B7 ${new Date(a.created_at).toLocaleDateString("en-CA", { timeZone: "America/Vancouver", dateStyle: "long" })}`, footer: ADVISORS_FOOTER(), blocks: kind.blocks({ inputs: a.inputs ?? {}, results: a.results ?? {}, note: a.note, savedAt: a.created_at, person }) });
+    try { drive = await uploadToAdvisorFiles(db, householdId, "Needs Analyses", conventionFile(day, [c ?? {}], kind.docName), pdf); } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
     await db.from("insurance_needs_analyses").update({ pdf_drive_id: drive.id, pdf_url: drive.url, filed_at: new Date().toISOString() }).eq("id", a.id);
   }
   let attached = false;
