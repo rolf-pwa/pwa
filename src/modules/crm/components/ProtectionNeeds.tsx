@@ -68,7 +68,7 @@ function Versions({ a, summary }: { a: ReturnType<typeof useAnalysis>; summary: 
 
 function Inputs<T extends object>({ fields, values, set }: { fields: Field<T>[]; values: T; set: (k: NumKey<T>, v: string) => void }) {
   return (
-    <div className="grid gap-x-6 gap-y-2 md:grid-cols-2">
+    <div className="grid gap-y-2">
       {fields.map((f) => (
         <label key={String(f.key)} className="flex items-center justify-between gap-3 text-sm">
           <span>{f.label}{f.hint && <span className="block text-xs text-muted-foreground">{f.hint}</span>}</span>

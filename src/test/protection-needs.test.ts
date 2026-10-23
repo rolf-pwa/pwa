@@ -91,3 +91,11 @@ describe("wiring", () => {
     expect(tab).toContain("<CriticalIllnessNeeds");
   });
 });
+
+describe("the needs analysis page", () => {
+  it("has tabs for life, critical illness and disability, with the people side by side", () => {
+    const tab = readFileSync("src/modules/crm/components/InsuranceTab.tsx", "utf8");
+    for (const t of ['value="life"', 'value="critical_illness"', 'value="disability"', "lg:grid-cols-2"]) expect(tab).toContain(t);
+    expect(tab).not.toMatch(/showPeople\.map\(\(p\) => \(\s*<div key=\{p\.id\} className="space-y-4">/);
+  });
+});

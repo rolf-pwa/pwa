@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ExternalLink, Loader2 } from "lucide-react";
 import { Badge } from "@/shared/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { InsurancePanel } from "@/modules/crm/components/InsurancePanel";
 import { InsuranceFiles } from "@/modules/crm/components/InsuranceFiles";
@@ -114,13 +115,28 @@ export function InsuranceTab({ householdId, contactId, sections = ALL_SECTIONS, 
         </section>
       ))}
 
-      {show("needs") && showPeople.map((p) => (
-        <div key={p.id} className="space-y-4">
-          <NeedsAnalysis person={p} householdId={householdId} lifeInsurance={summary.byPerson.find((r) => r.id === p.id)?.coverage.life ?? 0} />
-          <DisabilityNeeds person={p} householdId={householdId} inForce={summary.byPerson.find((r) => r.id === p.id)?.coverage.disability ?? 0} />
-          <CriticalIllnessNeeds person={p} householdId={householdId} inForce={summary.byPerson.find((r) => r.id === p.id)?.coverage.critical_illness ?? 0} />
-        </div>
-      ))}
+      {show("needs") && (
+        <Tabs defaultValue="life" className="space-y-4" data-testid="needs-tabs">
+          <TabsList>
+            <TabsTrigger value="life">Life</TabsTrigger>
+            <TabsTrigger value="critical_illness">Critical illness</TabsTrigger>
+            <TabsTrigger value="disability">Disability</TabsTrigger>
+          </TabsList>
+          {/* One card per person, side by side so spouses can be planned together; a lone person gets the full width. */}
+          {(["life", "critical_illness", "disability"] as const).map((kind) => (
+            <TabsContent key={kind} value={kind} className="mt-0">
+              <div className={showPeople.length > 1 ? "grid items-start gap-4 lg:grid-cols-2 2xl:grid-cols-3" : "grid gap-4"} data-testid={`needs-${kind}`}>
+                {showPeople.map((p) => {
+                  const cover = summary.byPerson.find((r) => r.id === p.id)?.coverage;
+                  return kind === "life" ? <NeedsAnalysis key={p.id} person={p} householdId={householdId} lifeInsurance={cover?.life ?? 0} />
+                    : kind === "critical_illness" ? <CriticalIllnessNeeds key={p.id} person={p} householdId={householdId} inForce={cover?.critical_illness ?? 0} />
+                    : <DisabilityNeeds key={p.id} person={p} householdId={householdId} inForce={cover?.disability ?? 0} />;
+                })}
+              </div>
+            </TabsContent>
+          ))}
+        </Tabs>
+      )}
 
       {show("files") && householdId && <InsuranceFiles householdId={householdId} />}
     </div>
