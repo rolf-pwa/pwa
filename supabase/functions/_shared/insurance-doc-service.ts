@@ -138,7 +138,9 @@ export async function createAndSend(db: any, who: string, p: { householdId: stri
     const { data: task } = await db.from("pm_tasks").insert({
       title: documentTaskTitle(p.kind, p.title),
       description: confirmOnly ? `Please read ${p.title} and confirm it: open this task and press the button. If anything is missing or not right, tell me before you confirm.` : `Please read and sign your ${p.title}: open this task and press the button. It takes a couple of minutes. If you have questions first, reply here and I will answer them.`,
-      status: "open", client_visible: true, assignee_id: rolf.user_id, created_by: rolf.user_id, household_id: p.householdId, due_date: due,
+      status: "open", client_visible: true, assignee_id: rolf.user_id, created_by: rolf.user_id, due_date: due,
+      // A document for one person is that person's task alone; a household task would show up in the other adults' portals, where they cannot open it.
+      ...(p.signers.length === 1 ? { contact_id: p.signers[0].id } : { household_id: p.householdId }),
     }).select("id").maybeSingle();
     if (task?.id) await db.from("insurance_documents").update({ task_id: task.id }).eq("id", doc.id);
   }
