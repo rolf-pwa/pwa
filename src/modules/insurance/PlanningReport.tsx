@@ -5,7 +5,7 @@ import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { Checkbox } from "@/shared/components/ui/checkbox";
 import { supabase } from "@/shared/integrations/supabase/client";
-import { filePlanningReport, getPlanningReports, previewPlanningReport, type FiledReport } from "@/modules/crm/lib/reviewAgent";
+import { filePlanningReport, getPlanningReports, previewPlanningReport, sharePlanningReport, unsharePlanningReport, type FiledReport } from "@/modules/crm/lib/reviewAgent";
 
 const KINDS = [{ key: "life", label: "Life insurance" }, { key: "critical_illness", label: "Critical illness" }, { key: "disability", label: "Disability (with BOE)" }] as const;
 const METHOD_KIND: Record<string, string> = { dime: "life", critical_illness: "critical_illness", disability: "disability" };
@@ -27,6 +27,8 @@ export function PlanningReport({ householdId }: { householdId: string }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<"preview" | "file" | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [notify, setNotify] = useState(true);
+  const [sharing, setSharing] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const { data: cs } = await supabase.from("contacts").select("id, first_name, last_name, full_name, is_minor").eq("household_id", householdId).order("created_at");
@@ -62,6 +64,15 @@ export function PlanningReport({ householdId }: { householdId: string }) {
   const file = async () => {
     setBusy("file");
     try { const r = await filePlanningReport(request()); toast.success(`Filed in Advisor Files: ${r.name}`); await load(); } catch (e) { toast.error(e instanceof Error ? e.message : "Could not file the report"); } finally { setBusy(null); }
+  };
+
+  const share = async (r: FiledReport, on: boolean) => {
+    if (on && !window.confirm(`Share ${r.pdf_name} with ${r.contact_ids.length === 1 ? "the client" : "the clients it was prepared for"} in their portal Documents page?${notify ? " They will get a notice in the portal and one short email." : " They will not be notified."}`)) return;
+    setSharing(r.id);
+    try {
+      if (on) { const x = await sharePlanningReport(r.id, notify); toast.success(x.notified ? "Shared. The client has been notified." : "Shared in the portal."); } else { await unsharePlanningReport(r.id); toast.success("Hidden from the portal. The filed PDF is untouched."); }
+      await load();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "That did not work"); } finally { setSharing(null); }
   };
 
   if (loading) return <Loader2 className="h-5 w-5 animate-spin" />;
@@ -103,13 +114,15 @@ export function PlanningReport({ householdId }: { householdId: string }) {
       {pdfUrl && <iframe title="Report preview" src={pdfUrl} className="h-[80vh] w-full rounded-md border" data-testid="report-preview" />}
 
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base">Filed reports</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><div className="flex flex-wrap items-center gap-4"><CardTitle className="text-base">Filed reports</CardTitle><label className="flex items-center gap-2 text-xs font-normal"><Checkbox checked={notify} onCheckedChange={(v) => setNotify(v === true)} aria-label="Notify the client when sharing" />Notify the client when I share a report</label></div></CardHeader>
         <CardContent className="space-y-1.5 text-sm" data-testid="filed-reports">
           {reports.length === 0 && <p className="text-muted-foreground">Nothing filed yet.</p>}
           {reports.map((r) => (
             <p key={r.id} className="flex flex-wrap items-center gap-2">
               <a href={r.pdf_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline"><ExternalLink className="h-3.5 w-3.5" />{r.pdf_name}</a>
               <span className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleDateString("en-CA")}</span>
+              {r.shared_at ? <><span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs text-emerald-800">Shared in the portal {new Date(r.shared_at).toLocaleDateString("en-CA")}</span><Button size="sm" variant="ghost" className="h-7 text-xs" disabled={sharing === r.id} onClick={() => void share(r, false)}>Hide from the portal</Button></>
+                : <Button size="sm" variant="outline" className="h-7 text-xs" disabled={sharing === r.id} onClick={() => void share(r, true)}>Share in the portal</Button>}
             </p>
           ))}
         </CardContent>

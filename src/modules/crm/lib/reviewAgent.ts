@@ -238,7 +238,9 @@ export const sendReplacement = (id: string, typedName: string, agree: boolean, n
 export const fileQuoteComparison = (householdId: string, contactId: string, policyType: string, fileId?: string) => call<{ ok: true; url: string; attached: boolean; illustration: string }>("qFile", { householdId, contactId, policyType, fileId });
 
 export interface ReportRequestFields { householdId: string; contactIds: string[]; kinds: string[]; includeOptions: boolean; coverNote: string }
-export interface FiledReport { id: string; title: string; kinds: string[]; contact_ids: string[]; include_options: boolean; pdf_url: string; pdf_name: string; created_by: string | null; created_at: string }
+export interface FiledReport { id: string; title: string; kinds: string[]; contact_ids: string[]; include_options: boolean; pdf_url: string; pdf_name: string; created_by: string | null; created_at: string; shared_at: string | null }
+export const sharePlanningReport = (id: string, notify: boolean) => call<{ ok: true; notified: number }>("rpShare", { id, notify });
+export const unsharePlanningReport = (id: string) => call<{ ok: true }>("rpUnshare", { id });
 export const previewPlanningReport = (r: ReportRequestFields) => call<{ ok: true; name: string; base64: string }>("rpPreview", { ...r });
 export const filePlanningReport = (r: ReportRequestFields) => call<{ ok: true; url: string; name: string }>("rpFile", { ...r });
 export const getPlanningReports = (householdId: string) => call<{ reports: FiledReport[] }>("rpList", { householdId });

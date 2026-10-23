@@ -5,7 +5,8 @@
 import { buildBrandedPdf } from "./simple-pdf.ts";
 import { planningReportBlocks, REPORT_KINDS, type ReportKind, type ReportPerson, type SavedAnalysis } from "./planning-report-rules.ts";
 import type { QuoteRow } from "./quote-rules.ts";
-import { uploadToAdvisorFiles } from "./insurance-doc-service.ts";
+import { driveFileBase64, uploadToAdvisorFiles } from "./insurance-doc-service.ts";
+import { notifyClientsOfComment } from "./task-notify.ts";
 import { conventionFile, DOC_FILE_NAME } from "./file-naming.ts";
 
 export interface ReportRequest { householdId: string; contactIds?: unknown; kinds?: unknown; includeOptions?: unknown; coverNote?: unknown }
@@ -67,6 +68,43 @@ export async function fileReport(db: any, who: string, input: ReportRequest): Pr
 }
 
 export async function listReports(db: any, householdId: string) {
-  const { data } = await db.from("insurance_reports").select("id, title, kinds, contact_ids, include_options, pdf_url, pdf_name, created_by, created_at").eq("household_id", householdId).order("created_at", { ascending: false }).limit(20);
+  const { data } = await db.from("insurance_reports").select("id, title, kinds, contact_ids, include_options, pdf_url, pdf_name, created_by, created_at, shared_at").eq("household_id", householdId).order("created_at", { ascending: false }).limit(20);
   return { reports: data ?? [] };
+}
+
+/** The wording of the portal bell for a shared report: it opens the Documents page. */
+export const REPORT_NOTICE_TITLE = "A new report from your advisor is ready";
+
+/** Shares a filed report with the people it was prepared for (their portal Documents page), and tells them the way a waiting document does: a bell and one short email. */
+export async function shareReport(db: any, who: string, id: string, notify: boolean): Promise<{ ok: true; notified: number } | { error: string }> {
+  const { data: r } = await db.from("insurance_reports").select("id, title, contact_ids, shared_at").eq("id", id).maybeSingle();
+  if (!r) return { error: "That report was not found." };
+  const { error } = await db.from("insurance_reports").update({ shared_at: new Date().toISOString(), shared_by: who }).eq("id", id);
+  if (error) return { error: "Could not share the report." };
+  let notified = 0;
+  if (notify && !r.shared_at) { // told once: sharing it again does not email them again
+    for (const contactId of (r.contact_ids ?? []) as string[]) {
+      try { notified += await notifyClientsOfComment(db, { id: r.id, title: r.title, client_visible: true, contact_id: contactId, household_id: null }, Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, "updated", { linkTab: "documents", title: REPORT_NOTICE_TITLE }); } catch (e) { console.error("[report-share] notify failed", e); }
+    }
+  }
+  return { ok: true, notified };
+}
+
+export async function unshareReport(db: any, id: string): Promise<{ ok: true } | { error: string }> {
+  const { error } = await db.from("insurance_reports").update({ shared_at: null, shared_by: null }).eq("id", id);
+  return error ? { error: "Could not hide the report." } : { ok: true };
+}
+
+/** The reports shared with this person (only those prepared for them). */
+export async function clientReports(db: any, contactId: string) {
+  const { data } = await db.from("insurance_reports").select("id, title, shared_at").not("shared_at", "is", null).contains("contact_ids", [contactId]).order("shared_at", { ascending: false });
+  return (data ?? []) as { id: string; title: string; shared_at: string }[];
+}
+
+export async function clientReportDownload(db: any, contactId: string, reportId: string): Promise<{ name: string; base64: string } | { error: string }> {
+  const { data: r } = await db.from("insurance_reports").select("pdf_drive_id, pdf_name, shared_at, contact_ids").eq("id", reportId).maybeSingle();
+  if (!r || !r.shared_at || !((r.contact_ids ?? []) as string[]).includes(contactId)) return { error: "Not available" };
+  const f = await driveFileBase64(db, r.pdf_drive_id, "report");
+  if ("error" in f) return f;
+  return { name: String(r.pdf_name).replace(/[\\/:*?"<>|]/g, "-"), base64: f.base64 };
 }
