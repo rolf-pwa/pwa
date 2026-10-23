@@ -48,6 +48,7 @@ async function search(kind: EntityKind, q: string): Promise<Hit[]> {
   const { data } = await supabase
     .from("households")
     .select("id, label, families(name)")
+    .is("relationship_ended_at", null)
     .ilike("label", `%${q}%`)
     .limit(8);
   return (data || []).map((h: any) => ({ id: h.id, label: `${h.families?.name ?? "Household"} · ${h.label}` }));

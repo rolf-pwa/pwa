@@ -24,6 +24,7 @@ const InsFactFind = lazy(() => import("@/modules/insurance/InsuranceHouseholdPag
 const InsNeeds = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.NeedsPage })));
 const InsQuoting = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.QuotingPage })));
 const InsCompliance = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.CompliancePage })));
+const FormerClients = lazy(() => import("@/modules/crm/pages/FormerClients"));
 const Dashboard = lazy(() => import("@/modules/crm/pages/Dashboard"));
 const Contacts = lazy(() => import("@/modules/crm/pages/Contacts"));
 const ContactDetail = lazy(() => import("@/modules/crm/pages/ContactDetail"));
@@ -154,6 +155,7 @@ const App = () => (
 
               <Route path="/families" element={<ProtectedRoute><Families /></ProtectedRoute>} />
               <Route path="/families/:id" element={<ProtectedRoute><FamilyDetail /></ProtectedRoute>} />
+              <Route path="/former-clients" element={<ProtectedRoute><FormerClients /></ProtectedRoute>} />
               <Route path="/households" element={<ProtectedRoute><Households /></ProtectedRoute>} />
               <Route path="/insurance" element={<ProtectedRoute><InsuranceLayout /></ProtectedRoute>}>
                 <Route index element={<InsuranceBoard />} />

@@ -1,3 +1,4 @@
+import { isFormer } from "@/shared/lib/retention";
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/shared/integrations/supabase/client";
@@ -102,13 +103,15 @@ const Families = () => {
           return a.label.localeCompare(b.label);
         });
 
+      // Households whose relationship has ended are Former clients: out of this tree (and so out of reach of an accidental delete), but still open from the Former clients page.
       return {
         ...f,
-        households: familyHouseholds,
+        households: familyHouseholds.filter((h: any) => !isFormer(h)),
+        allEnded: familyHouseholds.length > 0 && familyHouseholds.every((h: any) => isFormer(h)),
       };
     });
 
-    setFamilies(tree);
+    setFamilies(tree.filter((f: any) => !f.allEnded));
 
     // Contacts with no family at all — otherwise invisible from this page
     const { data: orphanData } = await supabase
@@ -175,7 +178,7 @@ const Families = () => {
     // Unlink contacts first (SET NULL via FK), then delete cascades households
     const { error } = await supabase.from("families" as any).delete().eq("id", familyId);
     if (error) {
-      toast.error("Failed to delete family.");
+      toast.error(error.message?.includes("must be kept for 7 years") ? error.message : "Failed to delete family.");
     } else {
       toast.success("Family deleted.");
       fetchFamilies();
@@ -185,7 +188,7 @@ const Families = () => {
   const deleteHousehold = async (householdId: string) => {
     const { error } = await supabase.from("households" as any).delete().eq("id", householdId);
     if (error) {
-      toast.error("Failed to delete household.");
+      toast.error(error.message?.includes("must be kept for 7 years") ? error.message : "Failed to delete household.");
     } else {
       toast.success("Household deleted.");
       fetchFamilies();
