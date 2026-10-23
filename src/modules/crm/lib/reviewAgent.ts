@@ -237,6 +237,21 @@ export const sendReplacement = (id: string, typedName: string, agree: boolean, n
 
 export const fileQuoteComparison = (householdId: string, contactId: string, policyType: string, fileId?: string) => call<{ ok: true; url: string; attached: boolean; illustration: string }>("qFile", { householdId, contactId, policyType, fileId });
 
+// Investments (segregated funds): kept apart from Insurance.
+export interface InvItem { id: string; file_id: string; kind: string; status: "provided" | "not_applicable"; drive_name: string | null; drive_url: string | null; meeting_task_id: string | null; note: string | null; added_by: string | null; added_at: string }
+export interface InvChecklistItem { kind: string; label: string; hint: string; requiredFor: string[]; done: boolean; covered?: boolean }
+export interface InvFile { id: string; contact_id: string | null; title: string; kind: "new_sale" | "review"; status: string; opened_at: string; items: InvItem[]; checklist: InvChecklistItem[]; optional: InvChecklistItem[]; progress: { required: number; done: number; complete: boolean } }
+export interface InvFiles { files: InvFile[]; meetings: { task_id: string; doc_name: string; doc_url: string }[]; disclosure: { id: string; status: string; sentAt: string; signedAt: string | null } | null; adults: { id: string; name: string }[] }
+export const getInvestmentFiles = (householdId: string) => call<InvFiles>("invFiles", { householdId });
+export const createInvestmentFile = (householdId: string, title: string, kind: string, contactId?: string) => call<{ ok: true; id: string }>("invFileCreate", { householdId, title, kind, contactId });
+export const attachInvestmentItem = (fileId: string, kind: string, input: { driveLink?: string; meetingTaskId?: string; notApplicable?: boolean; note?: string }) => call<{ ok: true; name?: string }>("invAttach", { fileId, kind, ...input });
+export const removeInvestmentItem = (itemId: string) => call<{ ok: true }>("invRemove", { itemId });
+export interface InvModel { profile_key: string; label: string; income_min: number; income_max: number; equity_min: number; equity_max: number }
+export interface InvProfileRow { id: string; contact_id: string; inputs: import("@/shared/lib/investorProfile").ProfileInputs; risk_profile: string | null; note: string | null; pdf_url: string | null; created_at: string; created_by: string | null }
+export const getInvestmentProfiles = (householdId: string) => call<{ adults: { id: string; name: string }[]; profiles: InvProfileRow[]; models: InvModel[] }>("invProfiles", { householdId });
+export const saveInvestmentProfile = (householdId: string, contactId: string, inputs: import("@/shared/lib/investorProfile").ProfileInputs, note?: string) => call<{ ok: true; id: string }>("invProfileSave", { householdId, contactId, inputs, note });
+export const fileInvestmentProfile = (id: string) => call<{ ok: true; url: string }>("invProfileFile", { id });
+
 export interface ReportRequestFields { householdId: string; contactIds: string[]; kinds: string[]; includeOptions: boolean; coverNote: string }
 export interface FiledReport { id: string; title: string; kinds: string[]; contact_ids: string[]; include_options: boolean; pdf_url: string; pdf_name: string; created_by: string | null; created_at: string; shared_at: string | null }
 export const sharePlanningReport = (id: string, notify: boolean) => call<{ ok: true; notified: number }>("rpShare", { id, notify });

@@ -24,6 +24,11 @@ const InsFactFind = lazy(() => import("@/modules/insurance/InsuranceHouseholdPag
 const InsNeeds = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.NeedsPage })));
 const InsQuoting = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.QuotingPage })));
 const InsReport = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.ReportPage })));
+const InvestmentLayout = lazy(() => import("@/modules/investments/InvestmentLayout"));
+const InvestmentBoard = lazy(() => import("@/modules/investments/InvestmentBoard"));
+const InvOverview = lazy(() => import("@/modules/investments/InvestmentHouseholdPages").then((m) => ({ default: m.InvOverviewPage })));
+const InvProfile = lazy(() => import("@/modules/investments/InvestmentHouseholdPages").then((m) => ({ default: m.InvProfilePage })));
+const InvCompliance = lazy(() => import("@/modules/investments/InvestmentHouseholdPages").then((m) => ({ default: m.InvCompliancePage })));
 const InsCompliance = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.CompliancePage })));
 const FormerClients = lazy(() => import("@/modules/crm/pages/FormerClients"));
 const Dashboard = lazy(() => import("@/modules/crm/pages/Dashboard"));
@@ -168,6 +173,14 @@ const App = () => (
                   <Route path="quoting" element={<InsQuoting />} />
                   <Route path="report" element={<InsReport />} />
                   <Route path="compliance" element={<InsCompliance />} />
+                </Route>
+              </Route>
+              <Route path="/investments" element={<ProtectedRoute><InvestmentLayout /></ProtectedRoute>}>
+                <Route index element={<InvestmentBoard />} />
+                <Route path=":householdId">
+                  <Route index element={<InvOverview />} />
+                  <Route path="profile" element={<InvProfile />} />
+                  <Route path="compliance" element={<InvCompliance />} />
                 </Route>
               </Route>
               <Route path="/households/:id" element={<ProtectedRoute><HouseholdDetail /></ProtectedRoute>} />
