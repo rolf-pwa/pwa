@@ -18,7 +18,7 @@ export default function InsuranceBoard() {
   const load = useCallback(async () => {
     const [{ data: rows }, { data: hs }] = await Promise.all([
       (supabase.from("insurance_pipeline" as any) as any).select("household_id, stage, moved_at"),
-      supabase.from("households").select("id, label").order("label"),
+      supabase.from("households").select("id, label").is("relationship_ended_at", null).order("label"),
     ]);
     const ids = (rows ?? []).map((r: any) => r.household_id);
     const { data: members } = ids.length ? await supabase.from("contacts").select("household_id").in("household_id", ids) : { data: [] as { household_id: string }[] };

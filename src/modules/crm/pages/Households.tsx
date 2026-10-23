@@ -1,3 +1,4 @@
+import { isFormer } from "@/shared/lib/retention";
 import { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/shared/integrations/supabase/client";
@@ -111,7 +112,7 @@ const Households = () => {
       }
     }
 
-    const result: HouseholdListItem[] = (hhData || []).map((hh: any) => ({
+    const result: HouseholdListItem[] = (hhData || []).filter((hh: any) => !isFormer(hh)).map((hh: any) => ({
       id: hh.id,
       label: hh.label,
       address: hh.address,

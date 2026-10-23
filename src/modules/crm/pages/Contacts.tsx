@@ -1,3 +1,4 @@
+import { isFormer } from "@/shared/lib/retention";
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/shared/integrations/supabase/client";
@@ -38,7 +39,7 @@ interface Contact {
   phone: string | null;
   address: string | null;
   household_id: string | null;
-  households: { label: string | null; governance_status: string | null; fiduciary_entity: string | null } | null;
+  households: { label: string | null; governance_status: string | null; fiduciary_entity: string | null; relationship_ended_at?: string | null } | null;
   updated_at: string;
 }
 
@@ -51,7 +52,7 @@ const Contacts = () => {
   const fetchContacts = useCallback(async () => {
     const { data } = await supabase
       .from("contacts")
-      .select("id, first_name, last_name, email, phone, address, household_id, households(label, governance_status, fiduciary_entity), updated_at")
+      .select("id, first_name, last_name, email, phone, address, household_id, households(label, governance_status, fiduciary_entity, relationship_ended_at), updated_at")
       .order("last_name")
       .order("first_name");
     setContacts(data || []);
@@ -69,7 +70,8 @@ const Contacts = () => {
 
   const filtered = useMemo(() => {
     const clientEntities = new Set(["pwa", "pws"]);
-    const base = contacts.filter((c) =>
+    // People whose household has ended its relationship are Former clients: not in this list, but still reachable from the Former clients page.
+    const base = contacts.filter((c) => !isFormer(c.households)).filter((c) =>
       view === "general"
         ? !clientEntities.has((c.households?.fiduciary_entity || "").toLowerCase())
         : clientEntities.has((c.households?.fiduciary_entity || "").toLowerCase())

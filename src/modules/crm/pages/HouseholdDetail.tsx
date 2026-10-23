@@ -1,3 +1,4 @@
+import { keepUntilLabel } from "@/shared/lib/retention";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
@@ -447,6 +448,11 @@ const HouseholdDetail = () => {
                         Relationship Ended {format(new Date(household.relationship_ended_at), "MMM yyyy")}
                       </Badge>
                     )}
+                    {household.relationship_ended_at && (
+                      <span className="text-xs text-muted-foreground" data-testid="keep-until">
+                        Records kept until {keepUntilLabel(household.relationship_ended_at)}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -501,9 +507,10 @@ const HouseholdDetail = () => {
                 <AlertDialogHeader>
                   <AlertDialogTitle>End Advisory Relationship</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This starts ProsperWise's 7-year recordkeeping retention clock for this household. It
-                    does not delete or hide any data — it only marks when retention review becomes
-                    eligible.
+                    This starts ProsperWise's 7-year recordkeeping clock for this household. The household
+                    moves out of the main CRM lists to <strong>Former clients</strong>, where staff can still open it.
+                    Its records are kept, and the database will not let them be permanently deleted until 7 years after
+                    the end date{endDate ? <> (until {keepUntilLabel(endDate)})</> : null}. You can reopen the relationship at any time.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <div className="space-y-3">

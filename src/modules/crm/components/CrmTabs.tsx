@@ -44,6 +44,7 @@ export function CrmTabs() {
           </NavLink>
         );
       })}
+      <NavLink to="/former-clients" className={cn("ml-2 px-2 py-1.5 text-xs transition-colors", pathname.startsWith("/former-clients") ? "text-foreground underline" : "text-muted-foreground/70 hover:text-foreground")} data-testid="former-clients-link">Former clients</NavLink>
     </div>
   );
 }
