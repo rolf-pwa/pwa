@@ -9,6 +9,7 @@ import { driveEnsureFolder, driveFindFolder } from "./meeting-record-service.ts"
 import { alternativesParagraph, cleanTemplate, costParagraph, fillReasonWhy, fillTemplate, footerVersion, needsParagraph, replacementParagraph, sha256Hex, signedPdfBlocks, statementFor, type AnalysisLite } from "./insurance-doc-rules.ts";
 import { buildBrandedPdf } from "./simple-pdf.ts";
 import { needsAnalysisBlocks } from "./needs-analysis-pdf.ts";
+import { DOC_FILE_NAME, conventionFile } from "./file-naming.ts";
 import { DOC_ITEMS, documentTaskTitle, type DocKind } from "./insurance-doc-client.ts";
 
 const DRIVE = "https://www.googleapis.com/drive/v3";
@@ -199,7 +200,10 @@ export async function finalizeDoc(db: any, documentId: string): Promise<{ ok: bo
   const blocks = signedPdfBlocks({ agent: d.agent_signed_at ? { typedName: d.agent_typed_name, signedAt: d.agent_signed_at, ip: d.agent_ip, statement: d.agent_statement } : null, statement: statementFor(d.kind), md: d.body_md, hash: d.body_hash, templateModified: d.template_modified, templateVersion: d.template_version, sentAt: d.sent_at, signers: ((signers ?? []) as any[]).map((s) => ({ name: s.name, typedName: s.typed_name, signedAt: s.signed_at, ip: s.ip, caslChoice: s.casl_choice, caslInitials: s.casl_initials, caslEmail: s.casl_email })) });
   const pdf = buildBrandedPdf({ eyebrow: ADVISORS_EYEBROW, title: d.title, subtitle: `Signed electronically \u00B7 fingerprint ${d.body_hash.slice(0, 16)}`, footer: ADVISORS_FOOTER(), blocks });
   try {
-    const f = await uploadToAdvisorFiles(db, d.household_id, "Signed Documents", `${d.title} (signed ${ymd()}).pdf`, pdf);
+    const { data: who } = await db.from("insurance_document_signers").select("contact_id").eq("document_id", documentId).order("signed_at");
+    const { data: people } = (who ?? []).length ? await db.from("contacts").select("id, first_name, last_name, full_name").in("id", (who as any[]).map((w) => w.contact_id)) : { data: [] as any[] };
+    const ordered = (who as any[] ?? []).map((w) => (people ?? []).find((c: any) => c.id === w.contact_id)).filter(Boolean);
+    const f = await uploadToAdvisorFiles(db, d.household_id, "Signed Documents", conventionFile(ymd(), ordered, DOC_FILE_NAME[d.kind] ?? d.title), pdf);
     const url = f.url, name = f.name;
     await db.from("insurance_documents").update({ pdf_drive_id: f.id, pdf_url: url }).eq("id", documentId);
     if (d.file_id) {
@@ -226,10 +230,10 @@ export async function fileNeedsAnalysis(db: any, who: string, analysisId: string
   if (!householdId) return { error: "This person is not in a household, so there is no Advisor Files folder to put it in." };
   const person = (c?.full_name || `${c?.first_name ?? ""} ${c?.last_name ?? ""}`).trim() || "Client";
   const day = ymd(new Date(a.created_at));
-  let drive = a.pdf_drive_id ? { id: a.pdf_drive_id as string, url: a.pdf_url as string, name: `Life Insurance Needs Analysis - ${person} (${day}).pdf` } : null;
+  let drive = a.pdf_drive_id ? { id: a.pdf_drive_id as string, url: a.pdf_url as string, name: conventionFile(day, [c ?? {}], DOC_FILE_NAME.needs_analysis) } : null;
   if (!drive) {
     const pdf = buildBrandedPdf({ eyebrow: ADVISORS_EYEBROW, title: "Life Insurance Needs Analysis", subtitle: `${person} \u00B7 ${new Date(a.created_at).toLocaleDateString("en-CA", { timeZone: "America/Vancouver", dateStyle: "long" })}`, footer: ADVISORS_FOOTER(), blocks: needsAnalysisBlocks({ inputs: a.inputs ?? {}, results: a.results ?? {}, note: a.note, savedAt: a.created_at, person }) });
-    try { drive = await uploadToAdvisorFiles(db, householdId, "Needs Analyses", `Life Insurance Needs Analysis - ${person.replace(/[\\/]/g, "-")} (${day}).pdf`, pdf); } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+    try { drive = await uploadToAdvisorFiles(db, householdId, "Needs Analyses", conventionFile(day, [c ?? {}], DOC_FILE_NAME.needs_analysis), pdf); } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
     await db.from("insurance_needs_analyses").update({ pdf_drive_id: drive.id, pdf_url: drive.url, filed_at: new Date().toISOString() }).eq("id", a.id);
   }
   let attached = false;
