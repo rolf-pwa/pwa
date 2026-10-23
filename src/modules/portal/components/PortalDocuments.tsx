@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/shared/components/ui/card";
 import { Input } from "@/shared/components/ui/input";
 import pwLogoWhite from "@/assets/prosperwise-logo-white.png";
 
-interface Pending { id: string; title: string; sent_at: string }
+interface Pending { id: string; title: string; sent_at: string; task_id?: string | null }
 interface Signed { id: string; title: string; signed_at: string }
 interface Doc { id: string; title: string; before: string; after: string | null; needsCasl: boolean; statement: string; agent?: { name: string; signedAt: string } | null; signerName: string; signed: boolean; signedAt: string | null; email: string; others: { name: string; signed: boolean }[] }
 

@@ -13,8 +13,8 @@ export async function clientPending(db: any, contactId: string) {
   const { data: rows } = await db.from("insurance_document_signers").select("document_id, status").eq("contact_id", contactId).eq("status", "pending");
   const ids = (rows ?? []).map((r: any) => r.document_id);
   if (!ids.length) return [];
-  const { data: docs } = await db.from("insurance_documents").select("id, title, sent_at, status").in("id", ids).in("status", ["sent", "partly_signed"]).order("sent_at", { ascending: false });
-  return (docs ?? []).map((d: any) => ({ id: d.id, title: d.title, sent_at: d.sent_at }));
+  const { data: docs } = await db.from("insurance_documents").select("id, title, sent_at, status, task_id").in("id", ids).in("status", ["sent", "partly_signed"]).order("sent_at", { ascending: false });
+  return (docs ?? []).map((d: any) => ({ id: d.id, title: d.title, sent_at: d.sent_at, task_id: d.task_id ?? null }));
 }
 
 export async function clientGet(db: any, contactId: string, documentId: string) {

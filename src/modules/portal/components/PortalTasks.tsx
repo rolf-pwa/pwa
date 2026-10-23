@@ -4,6 +4,7 @@ import { parseLocalDate } from "@/shared/lib/date-utils";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { CheckSquare, Clock, AlertCircle, ChevronRight, Loader2, Sparkles, RotateCw, X } from "lucide-react";
 import { Badge } from "@/shared/components/ui/badge";
+import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent } from "@/shared/components/ui/card";
 import { PortalTaskConversation } from "./PortalTaskConversation";
 import { cn } from "@/shared/lib/utils";
@@ -25,6 +26,8 @@ interface Props {
   completedTarget?: HTMLElement | null;
   /** Start the sidebar Completed list closed; the header opens it. */
   completedCollapsed?: boolean;
+  /** Opens the page where a document is read and signed. */
+  onOpenDocuments?: () => void;
 }
 
 type TaskCategory = "new" | "ongoing";
@@ -112,13 +115,23 @@ function TaskCard({ task, onClick, isExpanded }: { task: PmTask; onClick: () => 
   );
 }
 
-export function PortalTasks({ portalToken, clientName, contactId, completedTarget, completedCollapsed }: Props) {
+export function PortalTasks({ portalToken, clientName, contactId, completedTarget, completedCollapsed, onOpenDocuments }: Props) {
   const [completedOpen, setCompletedOpen] = useState(!completedCollapsed);
   const [tasks, setTasks] = useState<PmTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<PmTask | null>(null);
   const [interactedIds, setInteractedIds] = useState<Set<string>>(new Set());
+  // Tasks that are a document waiting for this person's signature or confirmation: they get a button that opens the document.
+  const [docTasks, setDocTasks] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!portalToken) return;
+    supabase.functions.invoke("portal-pm-tasks", { body: { action: "docList", portal_token: portalToken } }).then(({ data }) => {
+      const map: Record<string, string> = {};
+      for (const d of ((data as any)?.documents ?? []) as { task_id: string | null; title: string }[]) if (d.task_id) map[d.task_id] = d.title;
+      setDocTasks(map);
+    }).catch(() => setDocTasks({}));
+  }, [portalToken]);
 
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
@@ -233,6 +246,12 @@ export function PortalTasks({ portalToken, clientName, contactId, completedTarge
                 <X className="h-4 w-4 text-muted-foreground" />
               </button>
             </div>
+            {docTasks[task.id] && onOpenDocuments && task.status !== "done" && (
+              <div className="mb-4 flex flex-wrap items-center gap-3 rounded-md border border-primary/30 bg-primary/5 p-3" data-testid="task-document">
+                <p className="min-w-0 flex-1 text-sm">{/^Review and confirm/i.test(task.title) ? "Read this document and confirm it." : "Read this document and sign it."} It opens on its own page and takes a couple of minutes.</p>
+                <Button onClick={onOpenDocuments}>{/^Review and confirm/i.test(task.title) ? "Review and confirm" : "Review and sign"}</Button>
+              </div>
+            )}
             <PortalTaskConversation taskId={task.id} portalToken={portalToken} clientName={clientName} readOnly={task.status === "done"} />
           </div>
         )}
