@@ -6,7 +6,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { getValidGoogleAccessToken } from "./google-token.ts";
 import { GEMINI_EXTRACT_MODEL, generateVertexContent, parseServiceAccountKey, withThinking } from "./vertex-ai.ts";
-import { accuracy, addressOf, archiveTargets, BUCKET_LABEL, correctionPlan, ruleVerdict, SWEEP_TOOL, sweepPrompt, verdictsFromModel, type Learned, type SweepMessage, type Verdict } from "./inbox-sweep.ts";
+import { accuracy, sweepQuery, addressOf, archiveTargets, BUCKET_LABEL, correctionPlan, ruleVerdict, SWEEP_TOOL, sweepPrompt, verdictsFromModel, type Learned, type SweepMessage, type Verdict } from "./inbox-sweep.ts";
 
 const MAX_NEW = 60;
 const WINDOW_DAYS = 7;
@@ -16,7 +16,7 @@ const header = (headers: any[], name: string) => headers?.find((h: any) => h.nam
 export async function sweepRun(db: any, userId: string) {
   const token = await getValidGoogleAccessToken(db, userId);
   const auth = { headers: { Authorization: `Bearer ${token}` } };
-  const list = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?` + new URLSearchParams({ q: `in:inbox newer_than:${WINDOW_DAYS}d`, maxResults: "100" }), auth);
+  const list = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?` + new URLSearchParams({ q: sweepQuery(WINDOW_DAYS), maxResults: "100" }), auth);
   if (!list.ok) throw new Error(`Gmail list error: ${list.status}`);
   const ids: string[] = ((await list.json()).messages || []).map((m: any) => m.id);
   if (!ids.length) return { sorted: 0, remaining: 0 };
