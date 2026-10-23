@@ -78,7 +78,7 @@ export function NeedsAnalysis({ person, householdId, lifeInsurance }: { person: 
     <Card data-testid={`needs-${person.id}`}>
       <CardHeader className="pb-3"><CardTitle className="text-lg">Life insurance need: {person.name}</CardTitle></CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-x-6 gap-y-2 md:grid-cols-2">
+        <div className="grid gap-y-2">
           {FIELDS.map((f) => (
             <label key={f.key} className="flex items-center justify-between gap-3 text-sm">
               <span>{f.label}{f.hint && <span className="block text-xs text-muted-foreground">{f.hint}</span>}</span>
