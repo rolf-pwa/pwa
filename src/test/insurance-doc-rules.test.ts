@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CASL_MARKER, checkSignature, cleanTemplate, fillTemplate, footerVersion, joinNames, nameMatches, sha256Hex, signedPdfBlocks } from "../../supabase/functions/_shared/insurance-doc-rules";
+import { CASL_MARKER, checkSignature, cleanTemplate, compactContactBlock, fillTemplate, footerVersion, joinNames, nameMatches, sha256Hex, signedPdfBlocks } from "../../supabase/functions/_shared/insurance-doc-rules";
 import { buildBrandedPdf, wrap } from "../../supabase/functions/_shared/simple-pdf";
 
 // A cut of the real disclosure as Drive exports it (Markdown, with escaped punctuation).
@@ -56,6 +56,28 @@ describe("cleaning after the edit that bolds each word separately", () => {
   });
 });
 
+describe("the contact block", () => {
+  // As the Google Doc exports it: the name and phone as headings, the email as a link, an empty heading after it.
+  const exported = ["**My Contact Information:**", "", "### **Rolf Issler, BMgt, CLU**", "", "### **(778) 721-5208**", "", "[**rolf@prosperwise.ca**](mailto:rolf@prosperwise.ca)", "", "#", "", "# **Privacy Statement and Consent**", "", "I adhere to PIPEDA."].join("\n");
+  const c = cleanTemplate(exported);
+  it("becomes one paragraph, one line each, with no heading marks and no stray #", () => {
+    expect(c.md).toContain("Rolf Issler, BMgt, CLU  \n(778) 721-5208  \nrolf@prosperwise.ca");
+    expect(c.md).not.toMatch(/^#\s*$/m);
+    expect(c.md).not.toContain("###");
+    expect(c.md).toContain("# **Privacy Statement and Consent**");
+  });
+  it("stays together in the PDF as a single paragraph, not as headings with rules", () => {
+    const b = signedPdfBlocks({ md: c.md, hash: "h", templateModified: null, templateVersion: null, sentAt: "2026-10-22T00:00:00Z", signers: [] });
+    expect(b.find((x) => x.kind === "p" && x.text.includes("(778) 721-5208"))).toEqual({ kind: "p", text: "Rolf Issler, BMgt, CLU\n(778) 721-5208\nrolf@prosperwise.ca" });
+    expect(b.some((x) => x.kind === "h" && /721-5208|Rolf Issler, BMgt/.test(x.text))).toBe(false);
+    expect(b.some((x) => x.kind === "h" && x.text === "My Contact Information")).toBe(true);
+  });
+  it("copes with plain-bold lines too, and leaves a document with no contact block alone", () => {
+    expect(compactContactBlock(["**My Contact Information:**", "**Rolf Issler, BMgt, CLU**", "**(778) 721-5208**", "# **Privacy Statement and Consent**"]).join("|")).toBe("**My Contact Information:**||Rolf Issler, BMgt, CLU  \n(778) 721-5208||# **Privacy Statement and Consent**");
+    expect(compactContactBlock(["Hello", "World"])).toEqual(["Hello", "World"]);
+  });
+});
+
 describe("names and signatures", () => {
   it("joins names", () => { expect(joinNames(["A"])).toBe("A"); expect(joinNames(["A", "B", "C"])).toBe("A, B and C"); });
   it("accepts the full name in any case, with a middle name", () => {
@@ -85,11 +107,11 @@ describe("the frozen PDF", () => {
     expect(blocks().some((b) => b.kind === "h" && b.text === "ADVISOR DISCLOSURE")).toBe(true);
   });
   it("builds a well-formed branded PDF: every xref entry points at its object, with the logo and the ProsperWise Advisors line", () => {
-    const bytes = buildBrandedPdf({ eyebrow: "ProsperWise Advisors", title: "Advisor Disclosure and Privacy Consent", subtitle: "Signed electronically", footer: "\u00A9 2026 ProsperWise Advisors", blocks: [...blocks(), ...blocks(), ...blocks()] });
+    const bytes = buildBrandedPdf({ title: "Advisor Disclosure and Privacy Consent", subtitle: "Signed electronically", footer: "\u00A9 2026 ProsperWise Advisors", blocks: [...blocks(), ...blocks(), ...blocks()] });
     const s = new TextDecoder("latin1").decode(bytes);
     expect(s.startsWith("%PDF-1.4")).toBe(true);
     expect(s.trimEnd().endsWith("%%EOF")).toBe(true);
-    expect(s).toContain("PROSPERWISE ADVISORS");
+    expect(s).not.toContain("PROSPERWISE ADVISORS"); // no entity line under the logo: the header breathes, and the entity is in the footer
     expect(s).toContain("/Logo Do");
     expect(s).toMatch(/Page 1 of [2-9]/);
     const xrefAt = Number(s.match(/startxref\n(\d+)\n%%EOF$/)![1]);
