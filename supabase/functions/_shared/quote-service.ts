@@ -3,7 +3,7 @@
 
 // deno-lint-ignore-file no-explicit-any
 import { buildBrandedPdf } from "./simple-pdf.ts";
-import { quoteBlocks, type QuoteRow } from "./quote-rules.ts";
+import { needLineFor, quoteBlocks, type QuoteRow } from "./quote-rules.ts";
 import { uploadToAdvisorFiles } from "./insurance-doc-service.ts";
 import { conventionFile } from "./file-naming.ts";
 import { attachItem } from "./insurance-file-service.ts";
@@ -14,16 +14,21 @@ const footer = () => `© ${new Date().getFullYear()} Issler Group Management & C
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
 
 export async function fileComparison(db: any, who: string, input: { householdId: string; contactId: string; policyType: string; fileId?: unknown }): Promise<{ ok: true; url: string; attached: boolean; illustration: string } | { error: string }> {
-  const { data: quotes } = await db.from("insurance_quotes").select("*").eq("household_id", input.householdId).eq("contact_id", input.contactId).eq("policy_type", input.policyType).order("created_at");
+  // The group is a kind of cover, or "disability:overhead" for business overhead expense cover, which is compared only with its own kind.
+  const [policyType, groupKind] = input.policyType.split(":");
+  let q = db.from("insurance_quotes").select("*").eq("household_id", input.householdId).eq("contact_id", input.contactId).eq("policy_type", policyType);
+  if (policyType === "disability") q = groupKind === "overhead" ? q.eq("benefit_kind", "overhead") : q.or("benefit_kind.is.null,benefit_kind.eq.income");
+  const { data: quotes } = await q.order("created_at");
   if (!(quotes ?? []).length) return { error: "There are no quotes to compare yet." };
   const { data: c } = await db.from("contacts").select("full_name, first_name, last_name").eq("id", input.contactId).maybeSingle();
   const person = (c?.full_name || `${c?.first_name ?? ""} ${c?.last_name ?? ""}`).trim() || "Client";
   let needLine: string | null = null;
-  if (["term", "whole_life", "universal_life"].includes(input.policyType)) {
-    const { data: a } = await db.from("insurance_needs_analyses").select("results, created_at").eq("contact_id", input.contactId).order("created_at", { ascending: false }).limit(1).maybeSingle();
-    if (a?.results) needLine = `From the needs analysis saved on ${ymd(new Date(a.created_at))}: a total life insurance need of ${money(Number(a.results.need) || 0)}, ${Number(a.results.shortfall) > 0 ? `with a shortfall of ${money(Number(a.results.shortfall))} after what is already in place` : "already covered by what is in place"}.`;
+  const method = policyType === "disability" ? "disability" : policyType === "critical_illness" ? "critical_illness" : ["term", "whole_life", "universal_life"].includes(policyType) ? "dime" : null;
+  if (method) {
+    const { data: a } = await db.from("insurance_needs_analyses").select("results, created_at").eq("contact_id", input.contactId).eq("method", method).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (a?.results) needLine = needLineFor(method, groupKind === "overhead", a.results, ymd(new Date(a.created_at)));
   }
-  const typeLabel = TYPE_LABEL[input.policyType] ?? input.policyType;
+  const typeLabel = groupKind === "overhead" ? "Business Overhead Expense" : TYPE_LABEL[policyType] ?? policyType;
   const blocks = quoteBlocks({ person, typeLabel, quotes: quotes as QuoteRow[], needLine, preparedOn: ymd() });
   const pdf = buildBrandedPdf({ title: "Alternatives Considered", subtitle: `${person} · ${typeLabel} · ${ymd()}`, footer: footer(), blocks });
   let drive;

@@ -67,7 +67,7 @@ export function cleanFields(raw: any): ReasonWhyFields {
 /** The latest saved needs analysis for each of these people. */
 async function latestAnalyses(db: any, people: { id: string; name: string }[]): Promise<AnalysisLite[]> {
   if (!people.length) return [];
-  const { data } = await db.from("insurance_needs_analyses").select("contact_id, results, created_at").in("contact_id", people.map((p) => p.id)).order("created_at", { ascending: false });
+  const { data } = await db.from("insurance_needs_analyses").select("contact_id, results, created_at").eq("method", "dime").in("contact_id", people.map((p) => p.id)).order("created_at", { ascending: false });
   const seen = new Set<string>();
   const out: AnalysisLite[] = [];
   for (const r of (data ?? []) as any[]) {

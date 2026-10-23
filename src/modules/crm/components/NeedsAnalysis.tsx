@@ -42,7 +42,7 @@ export function NeedsAnalysis({ person, householdId, lifeInsurance }: { person: 
   const load = useCallback(async () => {
     const [{ data: liabs }, { data: prior }] = await Promise.all([
       supabase.from("liabilities").select("liability_type, current_balance").eq("contact_id", person.id),
-      (supabase.from("insurance_needs_analyses" as any) as any).select("id, created_at, inputs, results, note, pdf_url").eq("contact_id", person.id).order("created_at", { ascending: false }).limit(10),
+      (supabase.from("insurance_needs_analyses" as any) as any).select("id, created_at, inputs, results, note, pdf_url").eq("contact_id", person.id).eq("method", "dime").order("created_at", { ascending: false }).limit(10),
     ]);
     const { debt, mortgage } = splitLiabilities((liabs ?? []) as any[]);
     const last = (prior ?? [])[0] as Saved | undefined;

@@ -8,12 +8,12 @@ import { Input } from "@/shared/components/ui/input";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { fileQuoteComparison, getInsuranceFiles, parseQuoteIllustration, type InsFile } from "@/modules/crm/lib/reviewAgent";
 import { POLICY_TYPES, policyTypeLabel } from "@/shared/lib/insurance";
-import { FREQ_LABEL, compare, money, money2, type Quote } from "@/shared/lib/quotes";
+import { FREQ_LABEL, compare, groupKey, groupLabel, money, money2, type Quote } from "@/shared/lib/quotes";
 
 const db = () => supabase.from("insurance_quotes" as any) as any;
-interface Draft { policy_type: string; carrier: string; product: string; coverage_amount: string; term_years: string; premium_amount: string; premium_frequency: string; underwriting: string; riders: string; guarantees: string; quote_date: string; valid_until: string; illustration_url: string; notes: string }
-const emptyDraft = (type = "term"): Draft => ({ policy_type: type, carrier: "", product: "", coverage_amount: "", term_years: "", premium_amount: "", premium_frequency: "monthly", underwriting: "", riders: "", guarantees: "", quote_date: new Date().toISOString().slice(0, 10), valid_until: "", illustration_url: "", notes: "" });
-const fromQuote = (q: Quote): Draft => ({ policy_type: q.policy_type, carrier: q.carrier, product: q.product, coverage_amount: q.coverage_amount ? String(q.coverage_amount) : "", term_years: q.term_years ? String(q.term_years) : "", premium_amount: q.premium_amount ? String(q.premium_amount) : "", premium_frequency: q.premium_frequency ?? "monthly", underwriting: q.underwriting ?? "", riders: q.riders ?? "", guarantees: q.guarantees ?? "", quote_date: q.quote_date ?? "", valid_until: q.valid_until ?? "", illustration_url: q.illustration_url ?? "", notes: q.notes ?? "" });
+interface Draft { benefit_kind: string; waiting_days: string; benefit_period: string; occupation: string; policy_type: string; carrier: string; product: string; coverage_amount: string; term_years: string; premium_amount: string; premium_frequency: string; underwriting: string; riders: string; guarantees: string; quote_date: string; valid_until: string; illustration_url: string; notes: string }
+const emptyDraft = (type = "term"): Draft => ({ benefit_kind: "", waiting_days: "", benefit_period: "", occupation: "", policy_type: type, carrier: "", product: "", coverage_amount: "", term_years: "", premium_amount: "", premium_frequency: "monthly", underwriting: "", riders: "", guarantees: "", quote_date: new Date().toISOString().slice(0, 10), valid_until: "", illustration_url: "", notes: "" });
+const fromQuote = (q: Quote): Draft => ({ benefit_kind: q.benefit_kind ?? (q.policy_type === "disability" ? "income" : ""), waiting_days: q.waiting_days !== null && q.waiting_days !== undefined ? String(q.waiting_days) : "", benefit_period: q.benefit_period ?? "", occupation: q.occupation ?? "", policy_type: q.policy_type, carrier: q.carrier, product: q.product, coverage_amount: q.coverage_amount ? String(q.coverage_amount) : "", term_years: q.term_years ? String(q.term_years) : "", premium_amount: q.premium_amount ? String(q.premium_amount) : "", premium_frequency: q.premium_frequency ?? "monthly", underwriting: q.underwriting ?? "", riders: q.riders ?? "", guarantees: q.guarantees ?? "", quote_date: q.quote_date ?? "", valid_until: q.valid_until ?? "", illustration_url: q.illustration_url ?? "", notes: q.notes ?? "" });
 const orNull = (s: string) => (s.trim() ? s.trim() : null);
 const numOrNull = (s: string) => (Number(s) > 0 ? Number(s) : null);
 
@@ -34,6 +34,9 @@ export function QuotingWorkspace({ householdId }: { householdId: string }) {
   const [sources, setSources] = useState<Record<string, string>>({});
   const [warnings, setWarnings] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  /** The other coverages read from the same illustration, shown one after another once this one is saved or skipped. */
+  const [queue, setQueue] = useState<{ draft: Draft; sources: Record<string, string>; warnings: string[] }[]>([]);
+  const next = () => { const [n, ...rest] = queue; if (n) { setDraft(n.draft); setSources(n.sources); setWarnings(n.warnings); setQueue(rest); setEditing("new"); } else { setEditing(null); setSources({}); setWarnings([]); } };
 
   const load = useCallback(async () => {
     const [{ data: cs }, f] = await Promise.all([supabase.from("contacts").select("id, first_name, last_name, full_name, is_minor").eq("household_id", householdId).order("created_at"), getInsuranceFiles(householdId).catch(() => null)]);
@@ -46,7 +49,7 @@ export function QuotingWorkspace({ householdId }: { householdId: string }) {
   const loadQuotes = useCallback(async () => { if (!personId) return; const { data } = await db().select("*").eq("household_id", householdId).eq("contact_id", personId).order("created_at"); setQuotes((data ?? []) as Quote[]); }, [householdId, personId]);
   useEffect(() => { void loadQuotes(); }, [loadQuotes]);
 
-  const types = useMemo(() => [...new Set(quotes.map((q) => q.policy_type))], [quotes]);
+  const types = useMemo(() => [...new Set(quotes.map(groupKey))], [quotes]);
   const run = async (fn: () => Promise<unknown>, ok?: string) => {
     setBusy(true);
     try { await fn(); if (ok) toast.success(ok); await loadQuotes(); } catch (e) { toast.error(e instanceof Error ? e.message : "That didn't work"); } finally { setBusy(false); }
@@ -58,21 +61,24 @@ export function QuotingWorkspace({ householdId }: { householdId: string }) {
     try {
       const base64 = await new Promise<string>((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(",")[1] ?? ""); r.onerror = () => reject(new Error("Could not read the file")); r.readAsDataURL(file); });
       const r = await parseQuoteIllustration(householdId, personId, file.name, base64);
-      setDraft(r.draft as Draft); setSources(r.sources); setWarnings([...(r.note ? [r.note] : []), ...r.warnings]); setEditing("new");
-      toast.success("Illustration saved in Advisor Files. Check what I read, then save the quote.");
+      const all = (r.drafts?.length ? r.drafts : [{ draft: r.draft, sources: r.sources, warnings: r.warnings }]) as { draft: Draft; sources: Record<string, string>; warnings: string[] }[];
+      setDraft(all[0].draft); setSources(all[0].sources); setWarnings([...(r.note ? [r.note] : []), ...all[0].warnings]); setQueue(all.slice(1)); setEditing("new");
+      toast.success(all.length > 1 ? `Illustration saved in Advisor Files. It has ${all.length} coverages: check each one I read, then save it.` : "Illustration saved in Advisor Files. Check what I read, then save the quote.");
     } catch (e) { toast.error(e instanceof Error ? e.message : "I could not read that file"); } finally { setReading(false); }
   };
   const save = () => run(async () => {
-    const row = { household_id: householdId, contact_id: personId, policy_type: draft.policy_type, carrier: draft.carrier.trim(), product: draft.product.trim(), coverage_amount: numOrNull(draft.coverage_amount), term_years: draft.term_years ? Math.round(Number(draft.term_years)) || null : null, premium_amount: numOrNull(draft.premium_amount), premium_frequency: draft.premium_amount ? draft.premium_frequency : null, underwriting: orNull(draft.underwriting), riders: orNull(draft.riders), guarantees: orNull(draft.guarantees), quote_date: orNull(draft.quote_date), valid_until: orNull(draft.valid_until), illustration_url: orNull(draft.illustration_url), notes: orNull(draft.notes), updated_at: new Date().toISOString() };
+    const row = { household_id: householdId, contact_id: personId, policy_type: draft.policy_type, carrier: draft.carrier.trim(), product: draft.product.trim(), coverage_amount: numOrNull(draft.coverage_amount), benefit_kind: draft.policy_type === "disability" ? draft.benefit_kind || "income" : null, waiting_days: draft.policy_type === "disability" && draft.waiting_days.trim() !== "" && Number(draft.waiting_days) >= 0 ? Math.round(Number(draft.waiting_days)) : null, benefit_period: draft.policy_type === "disability" ? orNull(draft.benefit_period) : null, occupation: draft.policy_type === "disability" ? orNull(draft.occupation) : null, term_years: draft.term_years ? Math.round(Number(draft.term_years)) || null : null, premium_amount: numOrNull(draft.premium_amount), premium_frequency: draft.premium_amount ? draft.premium_frequency : null, underwriting: orNull(draft.underwriting), riders: orNull(draft.riders), guarantees: orNull(draft.guarantees), quote_date: orNull(draft.quote_date), valid_until: orNull(draft.valid_until), illustration_url: orNull(draft.illustration_url), notes: orNull(draft.notes), updated_at: new Date().toISOString() };
     const r = editing === "new" ? await db().insert({ ...row, created_by: "advisor" }) : await db().update(row).eq("id", editing);
     if (r.error) throw new Error("Could not save the quote.");
-    setEditing(null); setSources({}); setWarnings([]);
+    next();
   }, "Saved");
   const recommend = (q: Quote) => {
     const reason = window.prompt(`Why is the ${q.carrier} ${q.product} the best fit for this client? This goes in the file.`, q.reason ?? "") ?? "";
     if (!reason.trim()) return;
     void run(async () => {
-      const a = await db().update({ status: "considered" }).eq("contact_id", personId).eq("policy_type", q.policy_type).eq("status", "recommended");
+      let same = db().update({ status: "considered" }).eq("contact_id", personId).eq("policy_type", q.policy_type).eq("status", "recommended");
+      if (q.policy_type === "disability") same = q.benefit_kind === "overhead" ? same.eq("benefit_kind", "overhead") : same.or("benefit_kind.is.null,benefit_kind.eq.income");
+      const a = await same;
       if (a.error) throw new Error("Could not change the earlier recommendation.");
       const b = await db().update({ status: "recommended", reason: reason.trim(), updated_at: new Date().toISOString() }).eq("id", q.id);
       if (b.error) throw new Error("Could not recommend it.");
@@ -102,8 +108,13 @@ export function QuotingWorkspace({ householdId }: { householdId: string }) {
               <label className="text-xs">Kind of cover<select className="mt-1 block h-9 w-full rounded-md border bg-background px-2 text-sm" value={draft.policy_type} onChange={(e) => setDraft({ ...draft, policy_type: e.target.value })}>{POLICY_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}</select></label>
               {field("Carrier", "carrier")}
               {field("Product", "product", { placeholder: "for example: 20-year term" })}
-              {field("Coverage amount", "coverage_amount", { inputMode: "numeric" })}
-              {field("Term (years)", "term_years", { inputMode: "numeric" })}
+              {field(draft.policy_type === "disability" ? "Monthly benefit" : "Coverage amount", "coverage_amount", { inputMode: "numeric" })}
+              {draft.policy_type === "disability" ? <>
+                <label className="text-xs">Kind of benefit<select className="mt-1 block h-9 w-full rounded-md border bg-background px-2 text-sm" value={draft.benefit_kind || "income"} onChange={(e) => setDraft({ ...draft, benefit_kind: e.target.value })}><option value="income">Income replacement</option><option value="overhead">Business overhead expense (BOE)</option></select>{sources.benefit_kind && <span className="mt-0.5 block italic text-muted-foreground">From the illustration: “{sources.benefit_kind}”</span>}</label>
+                {field("Waiting period (days)", "waiting_days", { inputMode: "numeric" })}
+                {field("Benefit period", "benefit_period", { placeholder: "for example: 2 years, to age 65" })}
+                <div className="md:col-span-2">{field("Occupation definition", "occupation", { placeholder: "for example: regular occupation 2 years" })}</div>
+              </> : field("Term (years)", "term_years", { inputMode: "numeric" })}
               <div className="flex gap-2"><div className="flex-1">{field("Premium", "premium_amount", { inputMode: "decimal" })}</div><label className="text-xs">Per<select className="mt-1 block h-9 rounded-md border bg-background px-2 text-sm" value={draft.premium_frequency} onChange={(e) => setDraft({ ...draft, premium_frequency: e.target.value })}><option value="monthly">month</option><option value="quarterly">quarter</option><option value="semi_annual">6 months</option><option value="annual">year</option><option value="single">one payment</option></select></label></div>
               {field("Underwriting class", "underwriting", { placeholder: "for example: Preferred non-smoker" })}
               {field("Quote date", "quote_date", { type: "date" })}
@@ -113,23 +124,25 @@ export function QuotingWorkspace({ householdId }: { householdId: string }) {
               <div className="md:col-span-3">{field("Illustration or quote (Drive link)", "illustration_url", { placeholder: "paste the Google Drive link to the carrier's illustration" })}</div>
               <div className="md:col-span-3">{field("Notes", "notes")}</div>
             </div>
-            <div className="flex gap-2"><Button size="sm" disabled={busy || !draft.carrier.trim() || !draft.product.trim()} onClick={() => void save()}>Save</Button><Button size="sm" variant="ghost" onClick={() => { setEditing(null); setSources({}); setWarnings([]); }}>Cancel</Button></div>
+            <div className="flex gap-2"><Button size="sm" disabled={busy || !draft.carrier.trim() || !draft.product.trim()} onClick={() => void save()}>Save</Button><Button size="sm" variant="ghost" onClick={() => next()}>{queue.length ? "Skip this coverage" : "Cancel"}</Button></div>
           </CardContent></Card>
       )}
 
       {types.length === 0 && !editing && <Card><CardContent className="p-5 text-sm text-muted-foreground">No quotes for this person yet. Add the quotes you get from the carriers, and they will be compared side by side here.</CardContent></Card>}
       {types.map((type) => {
-        const rows = compare(quotes.filter((q) => q.policy_type === type));
+        const rows = compare(quotes.filter((q) => groupKey(q) === type));
+        const di = type.startsWith("disability");
         return (
           <Card key={type} data-testid={`quotes-${type}`}>
-            <CardHeader className="pb-2"><div className="flex flex-wrap items-center gap-3"><CardTitle className="text-lg">{policyTypeLabel(type)}</CardTitle><Button size="sm" variant="outline" disabled={busy} onClick={() => file(type)}>File the comparison as PDF</Button></div></CardHeader>
+            <CardHeader className="pb-2"><div className="flex flex-wrap items-center gap-3"><CardTitle className="text-lg">{groupLabel(type) || policyTypeLabel(type)}</CardTitle><Button size="sm" variant="outline" disabled={busy} onClick={() => file(type)}>File the comparison as PDF</Button></div></CardHeader>
             <CardContent className="overflow-x-auto p-0">
               <table className="w-full text-sm">
-                <thead><tr className="border-b text-left text-xs text-muted-foreground"><th className="px-4 py-2">Option</th><th className="px-2 py-2 text-right">Coverage</th><th className="px-2 py-2 text-right">Premium</th><th className="px-2 py-2 text-right">A year</th><th className="px-2 py-2 text-right">Per $1,000 a year</th><th className="px-2 py-2">Underwriting</th><th className="px-4 py-2" /></tr></thead>
+                <thead><tr className="border-b text-left text-xs text-muted-foreground"><th className="px-4 py-2">Option</th><th className="px-2 py-2 text-right">{di ? "Monthly benefit" : "Coverage"}</th><th className="px-2 py-2 text-right">Premium</th><th className="px-2 py-2 text-right">A year</th><th className="px-2 py-2 text-right">{di ? "Per $100 of benefit a year" : "Per $1,000 a year"}</th><th className="px-2 py-2">Underwriting</th><th className="px-4 py-2" /></tr></thead>
                 <tbody>
-                  {rows.map(({ quote: q, annual, per1000, cheapest }) => (
+                  {rows.map(({ quote: q, annual, perUnit, cheapest }) => (
                     <tr key={q.id} className={`border-b align-top last:border-0 ${q.status === "rejected" ? "text-muted-foreground" : ""}`}>
                       <td className="px-4 py-2"><p className="font-medium">{q.carrier}, {q.product}{q.term_years ? `, ${q.term_years} yr` : ""}</p>
+                        {di && (q.waiting_days !== null && q.waiting_days !== undefined || q.benefit_period || q.occupation) && <p className="mt-1 max-w-md text-xs text-muted-foreground">{[q.waiting_days !== null && q.waiting_days !== undefined && `${q.waiting_days}-day wait`, q.benefit_period && `benefits for ${q.benefit_period}`, q.occupation].filter(Boolean).join(" · ")}</p>}
                         <div className="mt-0.5 flex flex-wrap items-center gap-1.5">{q.status === "recommended" && <Badge className="text-[10px]">Recommended</Badge>}{q.status === "rejected" && <Badge variant="outline" className="text-[10px]">Not chosen</Badge>}{cheapest && <Badge variant="secondary" className="text-[10px]">Lowest per $1,000</Badge>}{q.illustration_url && <a href={q.illustration_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-xs text-accent hover:underline">Illustration<ExternalLink className="h-3 w-3" /></a>}</div>
                         {q.reason && q.status !== "considered" && <p className="mt-1 max-w-md text-xs text-muted-foreground">{q.status === "recommended" ? "Why: " : "Why not: "}{q.reason}</p>}
                         {(q.riders || q.guarantees) && <p className="mt-1 max-w-md text-xs text-muted-foreground">{[q.riders && `Riders: ${q.riders}`, q.guarantees && `Guarantees: ${q.guarantees}`].filter(Boolean).join(" · ")}</p>}
@@ -138,7 +151,7 @@ export function QuotingWorkspace({ householdId }: { householdId: string }) {
                       <td className="px-2 py-2 text-right">{Number(q.coverage_amount) ? money(Number(q.coverage_amount)) : "—"}</td>
                       <td className="px-2 py-2 text-right">{Number(q.premium_amount) ? `${money(Number(q.premium_amount))} ${FREQ_LABEL[q.premium_frequency ?? ""] ?? ""}` : "—"}</td>
                       <td className="px-2 py-2 text-right">{annual ? money(annual) : "—"}</td>
-                      <td className={`px-2 py-2 text-right ${cheapest ? "font-semibold" : ""}`}>{per1000 !== null ? money2(per1000) : "—"}</td>
+                      <td className={`px-2 py-2 text-right ${cheapest ? "font-semibold" : ""}`}>{perUnit !== null ? money2(perUnit) : "—"}</td>
                       <td className="px-2 py-2 text-xs">{q.underwriting ?? "—"}</td>
                       <td className="px-4 py-2"><div className="flex flex-wrap justify-end gap-1">
                         {q.status !== "recommended" && q.status !== "rejected" && <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={() => recommend(q)}>Recommend</Button>}
