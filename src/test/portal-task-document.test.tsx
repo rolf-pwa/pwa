@@ -32,3 +32,17 @@ describe("a document task in the client's Action Items", () => {
     expect(open).toHaveBeenCalled();
   });
 });
+
+import { readFileSync } from "node:fs";
+describe("both client portals can open a document", () => {
+  it("wires the card, the task button and a Documents view into the Family Office portal as well as the main portal", () => {
+    const vfo = readFileSync("src/modules/portal/pages/VfoPortal.tsx", "utf8");
+    expect(vfo).toContain("PortalDocumentsTeaser");
+    expect(vfo).toContain('<TabsContent value="documents"');
+    expect(vfo).toContain('onOpenDocuments={() => setTab("documents")}');
+    expect(vfo).toMatch(/tab === "documents" && !isSelf/);
+    const main = readFileSync("src/modules/portal/pages/Portal.tsx", "utf8");
+    expect(main).toContain("onOpenDocuments=");
+    expect(main).toContain("PortalDocumentsTeaser");
+  });
+});

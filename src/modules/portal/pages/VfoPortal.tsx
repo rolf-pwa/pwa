@@ -36,6 +36,7 @@ import { getPortalSession, setPortalSession, clearPortalSession } from "@/module
 import prosperwiseLogo from "@/assets/prosperwise-logo.png";
 import prosperwiseIconPaper from "@/assets/prosperwise-icon-paper.png";
 import { PortalRebalancing, PortalRebalancingPage, PortalRebalancingTeaser, PortalRebalancingWaiting, rebalancingNeedsMe, type RebalancingState } from "@/modules/portal/components/PortalRebalancing";
+import { PortalDocumentsPage, PortalDocumentsTeaser } from "@/modules/portal/components/PortalDocuments";
 import { PortalReviewTeaser, PortalReviewPage } from "@/modules/portal/components/PortalReviewTeaser";
 import { withBookedMeetings } from "@/modules/portal/lib/bookedMeetings";
 import { PortalBookedMeetings, type BookedMeeting } from "@/modules/portal/components/PortalBookedMeetings";
@@ -902,7 +903,7 @@ const VfoPortal = () => {
       const cash = (ind.insurancePolicies || []).filter((p: any) => !p.cash_value_storehouse_id && p.cv_in_strategic !== false).reduce((a: number, p: any) => a + (Number(p.cash_value) || 0), 0);
       return { assets: sum(ind.vineyardAccounts) + sum(ind.memberStorehouses) + sum(holding_tank) + cash, liabilities: Number(data.liabilities_total) || 0 };
     })();
-    const effectiveTab = (!hasFinancials && tab === "financials") || (!isSelf && tab === "dashboard") || (tab === "review" && !((data as any)?.portfolio_review && isSelf)) || (tab === "rebalancing" && !((data as any)?.rebalancing?.proposal && isSelf)) ? "tasks" : tab;
+    const effectiveTab = (!hasFinancials && tab === "financials") || (!isSelf && tab === "dashboard") || (tab === "review" && !((data as any)?.portfolio_review && isSelf)) || (tab === "rebalancing" && !((data as any)?.rebalancing?.proposal && isSelf)) || (tab === "documents" && !isSelf) ? "tasks" : tab;
     const meetingTypes = (((data as any)?.meeting_types as { label: string; url: string; embedUrl: string }[] | undefined) ?? []);
     const charterUrl = charter?.draft_status === "ratified" ? (contact.charter_url || family?.charter_document_url) : null;
     const fullName = `${contact.first_name || ""} ${contact.last_name || ""}`.trim();
@@ -929,6 +930,7 @@ const VfoPortal = () => {
 
     const dashboardSidebar = (
       <>
+        {isSelf && <PortalDocumentsTeaser portalToken={portalToken} onOpen={() => setTab("documents")} />}
         {rebalancingAwaiting && rebalancingState && <PortalRebalancingTeaser rebalancing={rebalancingState} onOpen={() => setTab("rebalancing")} />}
         {rebalancingWaiting && rebalancingState && <PortalRebalancingWaiting rebalancing={rebalancingState} onOpen={() => setTab("rebalancing")} />}
         {reviewPublished && <PortalReviewTeaser id={reviewPublished.id} view={reviewPublished.view} publishedAt={reviewPublished.publishedAt} onOpen={() => setTab("review")} />}
@@ -990,6 +992,12 @@ const VfoPortal = () => {
               </TabsContent>
             )}
 
+            {isSelf && (
+              <TabsContent value="documents" className="mt-0">
+                <PortalDocumentsPage portalToken={portalToken} onBack={() => setTab("dashboard")} />
+              </TabsContent>
+            )}
+
             {reviewPublished && (
               <TabsContent value="review" className="mt-0">
                 <PortalReviewPage review={reviewPublished} onBack={() => setTab("dashboard")} meetingTypes={meetingTypes} booked={(data as any)?.booked_meetings ?? []} />
@@ -1003,7 +1011,7 @@ const VfoPortal = () => {
 
             <TabsContent value="tasks" className="mt-0">
               {isSelf ? (
-                <PortalTasks portalToken={portalToken} clientName={ind.name} contactId={contact.id} completedTarget={completedEl} completedCollapsed />
+                <PortalTasks portalToken={portalToken} clientName={ind.name} contactId={contact.id} completedTarget={completedEl} completedCollapsed onOpenDocuments={() => setTab("documents")} />
               ) : (
                 <div className="rounded-lg border border-border bg-muted/30 p-8 text-center text-sm text-muted-foreground">
                   Task view is only available on your own profile.
