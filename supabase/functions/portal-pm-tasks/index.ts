@@ -7,6 +7,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validatePortalContact } from "../_shared/portal-auth.ts";
 import { clientGet, clientPending, clientSign, clientSigned } from "../_shared/insurance-doc-client.ts";
 import { clientDownload, finalizeDoc } from "../_shared/insurance-doc-service.ts";
+import { clientReportDownload, clientReports } from "../_shared/planning-report-service.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -151,6 +152,8 @@ Deno.serve(async (req) => {
     // Documents the client signs (the advisor disclosure and privacy consent). Only a person named as a signer on a document can see or sign it.
     if (action === "docList") return json({ documents: await clientPending(supabase, contactId) });
     if (action === "docSigned") return json({ documents: await clientSigned(supabase, contactId) });
+    if (action === "reportList") return json({ reports: await clientReports(supabase, contactId) });
+    if (action === "reportDownload") { const r = await clientReportDownload(supabase, contactId, String(body.report_id ?? "")); return json(r, "error" in r ? 404 : 200); }
     if (action === "docDownload") { const r = await clientDownload(supabase, contactId, String(body.document_id ?? "")); return json(r, "error" in r ? 404 : 200); }
     if (action === "docGet") { const r = await clientGet(supabase, contactId, String(body.document_id ?? "")); return json(r, "error" in r ? 404 : 200); }
     if (action === "docSign") {

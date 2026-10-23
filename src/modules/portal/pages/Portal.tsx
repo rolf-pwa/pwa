@@ -1513,6 +1513,7 @@ const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = f
                 onNavigateToRequests={() => setActiveTab("requests")}
                 onNavigateToTasks={() => setActiveTab("tasks")}
                 onNavigateToDashboard={() => setActiveTab("dashboard")}
+                onNavigateToDocuments={() => navigate(token ? `/portal/${token}/documents` : "/portal/documents")}
                 onOpenGeorgia={() => setGeorgiaOpen(true)}
               />
               <Button

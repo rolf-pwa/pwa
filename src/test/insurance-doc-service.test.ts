@@ -152,7 +152,7 @@ describe("the email for a waiting document", () => {
     expect(f).toContain("You have documents waiting for your signature.");
     expect(f).toContain("Please log into your portal (https://app.prosperwise.ca/portal)");
     expect(f).toContain('timeZone: "America/Vancouver"');
-    expect(f).toContain("if (contactId && !documents)");
+    expect(f).toContain("if (contactId && !documents && !reports)");
     expect(f).toContain('i.link_tab === "dashboard"');
   });
 });

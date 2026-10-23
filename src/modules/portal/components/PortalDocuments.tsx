@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { ArrowLeft, Check, FileSignature, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, FileSignature, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { Button } from "@/shared/components/ui/button";
@@ -9,6 +9,7 @@ import { Input } from "@/shared/components/ui/input";
 
 interface Pending { id: string; title: string; sent_at: string; task_id?: string | null }
 interface Signed { id: string; title: string; signed_at: string }
+interface Report { id: string; title: string; shared_at: string }
 interface Doc { id: string; title: string; before: string; after: string | null; needsCasl: boolean; statement: string; agent?: { name: string; signedAt: string } | null; signerName: string; signed: boolean; signedAt: string | null; email: string; others: { name: string; signed: boolean }[] }
 
 const call = async <T,>(portalToken: string, action: string, extra: Record<string, unknown> = {}): Promise<T> => {
@@ -21,14 +22,16 @@ const call = async <T,>(portalToken: string, action: string, extra: Record<strin
 export function PortalDocumentsTeaser({ portalToken, onOpen }: { portalToken: string; onOpen: () => void }) {
   const [docs, setDocs] = useState<Pending[]>([]);
   const [signed, setSigned] = useState<Signed[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
   useEffect(() => {
     if (!portalToken) return;
+    call<{ reports: Report[] }>(portalToken, "reportList").then((r) => setReports(r.reports ?? [])).catch(() => setReports([]));
     call<{ documents: Pending[] }>(portalToken, "docList").then((r) => setDocs(r.documents)).catch(() => setDocs([]));
     call<{ documents: Signed[] }>(portalToken, "docSigned").then((r) => setSigned(r.documents)).catch(() => setSigned([]));
   }, [portalToken]);
-  if (!docs.length && !signed.length) return null;
+  if (!docs.length && !signed.length && !reports.length) return null;
   if (!docs.length) return (
-    <Card data-testid="documents-signed-link"><CardContent className="flex flex-wrap items-center gap-3 p-3"><FileSignature className="h-4 w-4 text-muted-foreground" /><p className="flex-1 text-sm text-muted-foreground">Your signed documents ({signed.length})</p><Button size="sm" variant="outline" onClick={onOpen}>View</Button></CardContent></Card>
+    <Card data-testid="documents-signed-link"><CardContent className="flex flex-wrap items-center gap-3 p-3"><FileSignature className="h-4 w-4 text-muted-foreground" /><p className="flex-1 text-sm text-muted-foreground">{reports.length ? `${reports.length} report${reports.length === 1 ? "" : "s"} from your advisor` : "Your signed documents"}{signed.length ? ` · ${signed.length} signed document${signed.length === 1 ? "" : "s"}` : ""}</p><Button size="sm" variant="outline" onClick={onOpen}>View</Button></CardContent></Card>
   );
   return (
     <Card className="border-primary/40" data-testid="documents-teaser">
@@ -100,7 +103,9 @@ export function PortalDocumentsPage({ portalToken, onBack }: { portalToken: stri
   const [openId, setOpenId] = useState<string | null>(null);
   const [signed, setSigned] = useState<Signed[]>([]);
   const [getting, setGetting] = useState<string | null>(null);
+  const [reports, setReports] = useState<Report[]>([]);
   const load = useCallback(() => {
+    call<{ reports: Report[] }>(portalToken, "reportList").then((r) => setReports(r.reports ?? [])).catch(() => setReports([]));
     call<{ documents: Pending[] }>(portalToken, "docList").then((r) => setDocs(r.documents)).catch(() => setDocs([]));
     call<{ documents: Signed[] }>(portalToken, "docSigned").then((r) => setSigned(r.documents)).catch(() => setSigned([]));
   }, [portalToken]);
@@ -112,6 +117,15 @@ export function PortalDocumentsPage({ portalToken, onBack }: { portalToken: stri
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       const a = document.createElement("a"); a.href = url; a.download = r.name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 10_000);
     } catch (e) { toast.error(e instanceof Error ? e.message : "The copy could not be opened. Please try again."); } finally { setGetting(null); }
+  };
+  const downloadReport = async (r: Report) => {
+    setGetting(r.id);
+    try {
+      const res = await call<{ name: string; base64: string }>(portalToken, "reportDownload", { report_id: r.id });
+      const bytes = Uint8Array.from(atob(res.base64), (c) => c.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      const a = document.createElement("a"); a.href = url; a.download = res.name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "The report could not be opened. Please try again."); } finally { setGetting(null); }
   };
   useEffect(() => { load(); }, [load]);
   return (
@@ -126,6 +140,12 @@ export function PortalDocumentsPage({ portalToken, onBack }: { portalToken: stri
               <h1 className="font-serif text-2xl font-semibold">Documents to sign</h1>
               {docs.map((d) => <Card key={d.id}><CardContent className="flex items-center gap-3 p-4"><FileSignature className="h-5 w-5" /><span className="flex-1 font-medium">{d.title}</span><Button onClick={() => setOpenId(d.id)}>Review and sign</Button></CardContent></Card>)}
             </>
+          )}
+          {reports.length > 0 && (
+            <section className="space-y-2" data-testid="shared-reports">
+              <h2 className="font-serif text-xl font-semibold">Reports from your advisor</h2>
+              {reports.map((r) => <Card key={r.id}><CardContent className="flex items-center gap-3 p-3"><FileText className="h-4 w-4 text-primary" /><span className="flex-1 text-sm">{r.title}<span className="ml-2 text-xs text-muted-foreground">shared {new Date(r.shared_at).toLocaleDateString("en-CA", { dateStyle: "long" })}</span></span><Button size="sm" variant="outline" disabled={getting === r.id} onClick={() => void downloadReport(r)}>{getting === r.id ? "Opening…" : "Download PDF"}</Button></CardContent></Card>)}
+            </section>
           )}
           {signed.length > 0 && (
             <section className="space-y-2" data-testid="signed-documents">

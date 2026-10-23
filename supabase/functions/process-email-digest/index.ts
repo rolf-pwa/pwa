@@ -26,6 +26,11 @@ const EVENT_LABEL: Record<string, string> = {
 };
 
 const isDocumentRow = (i: { link_tab: string | null }) => i.link_tab === "dashboard";
+/** A report the advisor shared opens the portal Documents page. */
+const isReportRow = (i: { link_tab: string | null }) => i.link_tab === "documents";
+const reportsSubject = (n: number) => (n === 1 ? "A new report is ready in your portal" : `${n} new reports are ready in your portal`);
+const reportsMessage = (firstName: string) =>
+  `Hi ${firstName},\n\nYour advisor has shared a report with you in your portal.\n\nPlease log into your portal (https://app.prosperwise.ca/portal)\n\nThank you,\nProsperWise Team`;
 const documentsSubject = (n: number) => `You have ${n} document${n === 1 ? "" : "s"} waiting`;
 const documentsMessage = (firstName: string) =>
   `Hi ${firstName},\n\nYou have documents waiting for your signature.\n\nPlease log into your portal (https://app.prosperwise.ca/portal)\n\nThank you,\nProsperWise Team`;
@@ -157,22 +162,24 @@ serve(async (req) => {
     const errors: string[] = [];
 
     // A waiting document gets its own short email (no one-tap link: they sign in); everything else stays in the action-items digest.
-    const units: { email: string; items: typeof pending; documents: boolean }[] = [];
+    const units: { email: string; items: typeof pending; documents: boolean; reports?: boolean }[] = [];
     for (const [email, all] of groups.entries()) {
       const docs = all.filter((i) => isDocumentRow(i));
-      const rest = all.filter((i) => !isDocumentRow(i));
+      const reports = all.filter((i) => isReportRow(i));
+      const rest = all.filter((i) => !isDocumentRow(i) && !isReportRow(i));
       if (docs.length) units.push({ email, items: docs, documents: true });
+      if (reports.length) units.push({ email, items: reports, documents: false, reports: true });
       if (rest.length) units.push({ email, items: rest, documents: false });
     }
 
-    for (const { email, items, documents } of units) {
+    for (const { email, items, documents, reports } of units) {
       const firstName = items[0].first_name || "there";
       const contactId = items[0].contact_id;
       const count = items.length;
 
       // Mint a single magic link to the tasks tab (not for documents)
       let url = plainPortalUrl();
-      if (contactId && !documents) {
+      if (contactId && !documents && !reports) {
         const link = await mintMagicLink(supabase, { contactId, targetHash: "tasks" });
         if (link?.url) url = link.url;
       }
@@ -182,13 +189,15 @@ serve(async (req) => {
         .map((i) => `• ${EVENT_LABEL[i.task_event] || "Update"}: ${i.task_name}`)
         .join("\n");
 
-      const subject = documents
+      const subject = reports
+        ? reportsSubject(count)
+        : documents
         ? documentsSubject(count)
         : count === 1
           ? `1 update on your action items`
           : `${count} updates on your action items`;
 
-      const message = documents ? documentsMessage(firstName) : `Hi ${firstName},\n\nYou have ${count === 1 ? "a new update" : `${count} new updates`} on your action items:\n\n${lines}\n\nOpen your portal:\n${url}\n\n(This one-tap link is valid for 1 hour and works once. After that, sign in at https://app.prosperwise.ca)\n\nThank you,\nProsperWise Team`;
+      const message = reports ? reportsMessage(firstName) : documents ? documentsMessage(firstName) : `Hi ${firstName},\n\nYou have ${count === 1 ? "a new update" : `${count} new updates`} on your action items:\n\n${lines}\n\nOpen your portal:\n${url}\n\n(This one-tap link is valid for 1 hour and works once. After that, sign in at https://app.prosperwise.ca)\n\nThank you,\nProsperWise Team`;
 
       const tasks: Promise<{ sent: boolean; reason?: string }>[] = [];
       if (channels.gmail) tasks.push(sendViaGmail(email, uniqueifySubject(subject), message));

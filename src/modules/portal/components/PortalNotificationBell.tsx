@@ -65,10 +65,11 @@ interface Props {
   onNavigateToRequests: () => void;
   onNavigateToTasks?: () => void;
   onNavigateToDashboard?: () => void;
+  onNavigateToDocuments?: () => void;
   onOpenGeorgia?: () => void;
 }
 
-export function PortalNotificationBell({ requests, contactId, portalToken, onNavigateToRequests, onNavigateToTasks, onNavigateToDashboard, onOpenGeorgia }: Props) {
+export function PortalNotificationBell({ requests, contactId, portalToken, onNavigateToRequests, onNavigateToTasks, onNavigateToDashboard, onNavigateToDocuments, onOpenGeorgia }: Props) {
   const [open, setOpen] = useState(false);
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
   const [clientNotifs, setClientNotifs] = useState<ClientNotification[]>([]);
@@ -167,6 +168,7 @@ export function PortalNotificationBell({ requests, contactId, portalToken, onNav
       setClientNotifs((prev) => prev.filter((n) => n.id !== notif.id));
       setOpen(false);
       if ((notif as { sourceType?: string }).sourceType === "ask_georgia_reply" && onOpenGeorgia) onOpenGeorgia();
+      else if ((notif as { linkTab?: string | null }).linkTab === "documents" && onNavigateToDocuments) onNavigateToDocuments(); // a report the advisor shared: the Documents page
       else if ((notif as { linkTab?: string | null }).linkTab === "dashboard" && onNavigateToDashboard) onNavigateToDashboard(); // a waiting document: the card on the dashboard
       else if (onNavigateToTasks) onNavigateToTasks();
     }

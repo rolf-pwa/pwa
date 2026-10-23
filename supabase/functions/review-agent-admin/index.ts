@@ -19,7 +19,7 @@ import { attachItem, buildPackage, createFile, listFiles, removeItem } from "../
 import { ffCompile, ffGet, ffSave, ffSend } from "../_shared/fact-find-service.ts";
 import { rCompile, rGet, rSave, rSend } from "../_shared/replacement-service.ts";
 import { fileComparison } from "../_shared/quote-service.ts";
-import { fileReport, listReports, previewReport } from "../_shared/planning-report-service.ts";
+import { fileReport, listReports, previewReport, shareReport, unshareReport } from "../_shared/planning-report-service.ts";
 import { parseIllustration } from "../_shared/illustration-service.ts";
 import { iGet, iLetter, iRead, iSave, iSend } from "../_shared/issuance-service.ts";
 import { adults, fileNeedsAnalysis, finalizeDoc, listDocs, previewDoc, sendDoc, voidDoc } from "../_shared/insurance-doc-service.ts";
@@ -208,6 +208,8 @@ Deno.serve(async (req) => {
     if (action === "iLetter") { const r = await iLetter(db, String(body?.id ?? "")); return json(r, "error" in r ? 400 : 200); }
     if (action === "iSend") { const r = await iSend(db, staff.email, String(body?.id ?? ""), { bodyMd: body?.bodyMd, fileId: body?.fileId }); return json(r, "error" in r ? 400 : 200); }
     if (action === "qParse") { const r = await parseIllustration(db, { householdId: String(body?.householdId ?? ""), contactId: String(body?.contactId ?? ""), fileName: body?.fileName, base64: body?.base64 }); return json(r, "error" in r ? 400 : 200); }
+    if (action === "rpShare") { const r = await shareReport(db, staff.email, String(body?.id ?? ""), body?.notify !== false); return json(r, "error" in r ? 400 : 200); }
+    if (action === "rpUnshare") { const r = await unshareReport(db, String(body?.id ?? "")); return json(r, "error" in r ? 400 : 200); }
     if (action === "rpList") return json(await listReports(db, String(body?.householdId ?? "")));
     if (action === "rpPreview" || action === "rpFile") {
       const input = { householdId: String(body?.householdId ?? ""), contactIds: body?.contactIds, kinds: body?.kinds, includeOptions: body?.includeOptions, coverNote: body?.coverNote };

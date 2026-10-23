@@ -263,6 +263,18 @@ export async function fileNeedsAnalysis(db: any, who: string, analysisId: string
 }
 
 /** A signed copy for the person who signed it (every signatory must be given a copy). Read from Drive with the service account; returned as base64. */
+/** A Drive file as base64, read with the service account. For files a client is entitled to; the caller checks that. */
+export async function driveFileBase64(db: any, driveId: string, label: string): Promise<{ base64: string } | { error: string }> {
+  const token = await getServiceGoogleAccessToken(db);
+  const r = await fetch(`${DRIVE}/files/${driveId}?alt=media&supportsAllDrives=true`, { headers: { Authorization: `Bearer ${token}` }, signal: sig() });
+  if (!r.ok) return { error: `The ${label} could not be opened just now.` };
+  const bytes = new Uint8Array(await r.arrayBuffer());
+  if (bytes.length > 6_000_000) return { error: `The ${label} is too large to download here.` };
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return { base64: btoa(bin) };
+}
+
 export async function clientDownload(db: any, contactId: string, documentId: string): Promise<{ name: string; base64: string } | { error: string }> {
   const { data: me } = await db.from("insurance_document_signers").select("status").eq("document_id", documentId).eq("contact_id", contactId).maybeSingle();
   if (!me || me.status !== "signed") return { error: "Not available" };

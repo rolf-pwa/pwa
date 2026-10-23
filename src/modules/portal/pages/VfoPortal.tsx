@@ -1193,6 +1193,7 @@ const VfoPortal = () => {
                 onNavigateToRequests={() => setRequestsOpen(true)}
                 onNavigateToTasks={() => setTab("tasks")}
                 onNavigateToDashboard={() => setTab("dashboard")}
+                onNavigateToDocuments={() => setTab("documents")}
                 onOpenGeorgia={() => setGeorgiaOpen(true)}
               />
               <div>
