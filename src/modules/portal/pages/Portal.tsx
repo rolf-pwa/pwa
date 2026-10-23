@@ -9,7 +9,7 @@ import { useIsMobile } from "@/shared/hooks/use-mobile";
 import { PortalDynamicLinks } from "@/modules/portal/components/PortalDynamicLinks";
 import { PortalTerritory } from "@/modules/portal/components/PortalTerritory";
 import { PortalHoldingTank } from "@/modules/portal/components/PortalHoldingTank";
-import { PortalInsurance } from "@/modules/portal/components/PortalInsurance";
+import { PortalInsurance, PortalCoverageCard } from "@/modules/portal/components/PortalInsurance";
 import { PortalRequests } from "@/modules/portal/components/PortalRequests";
 import { PortalMeetings } from "@/modules/portal/components/PortalMeetings";
 import { PortalCharter } from "@/modules/portal/components/PortalCharter";
@@ -32,6 +32,7 @@ import { Grape, ScrollText, Clock, Calendar, FolderOpen, CheckSquare, ShieldChec
 import { getPortalSession, setPortalSession, clearPortalSession } from "@/modules/portal/lib/portalSession";
 import prosperwiseLogo from "@/assets/prosperwise-icon-paper.png";
 import { policyTypeLabel } from "@/shared/lib/insurance";
+import { totalsFor } from "@/shared/lib/insuranceSummary";
 import { PortalRebalancing, PortalRebalancingPage, PortalRebalancingTeaser, PortalRebalancingWaiting, rebalancingNeedsMe, type RebalancingState } from "@/modules/portal/components/PortalRebalancing";
 import { PortalDocumentsPage, PortalDocumentsTeaser } from "@/modules/portal/components/PortalDocuments";
 import { PortalReviewTeaser, PortalReviewPage } from "@/modules/portal/components/PortalReviewTeaser";
@@ -916,7 +917,7 @@ const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = f
               { label: "Holding Tank", total: sumValues(tank), items: tank.map((a: any) => ({ id: a.id, name: a.account_name, value: Number(a.current_value) || 0 })) },
               { label: "Vineyard", total: sumValues(hhAssets.vineyard), items: hhAssets.vineyard.map((a: any) => ({ id: a.id, name: a.account_name, value: Number(a.current_value) || 0 })) },
               { label: "Storehouses", total: sumValues(storeAccts) + insuranceCashForStorehouses(visibleInsurance), items: storeAccts.map((a: any) => ({ id: a.id, name: a.label || a.asset_type || a.notes || "Account", value: Number(a.current_value) || 0 })) },
-              { label: "Insurance", total: visibleInsurance.reduce((n: number, p: any) => n + (p.coverage_amount || 0), 0), suffix: "coverage", items: visibleInsurance.map((p: any) => ({ id: p.id, name: policyTypeLabel(p.policy_type), value: Number(p.coverage_amount) || 0 })) },
+              { label: "Insurance", total: totalsFor(visibleInsurance).coverage.life, suffix: "life coverage", items: visibleInsurance.map((p: any) => ({ id: p.id, name: policyTypeLabel(p.policy_type), value: Number(p.coverage_amount) || 0 })) },
             ].filter((r) => r.items.length > 0 || r.label === "Vineyard" || r.label === "Storehouses");
             return (
               <Card>
@@ -1202,6 +1203,7 @@ const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = f
                   highlight={(
                     <>
                       <PortalDocumentsTeaser portalToken={portalToken} onOpen={() => navigate(token ? `/portal/${token}/documents` : "/portal/documents")} />
+                      <PortalCoverageCard policies={ind.insurancePolicies ?? []} onOpen={() => setActiveTab("financials")} />
                       {(rebalancingAwaiting || rebalancingWaiting || (data as any)?.portfolio_review) ? (
                     <>
                       {rebalancingAwaiting && rebalancingState && <PortalRebalancingTeaser rebalancing={rebalancingState} onOpen={() => navigate(token ? `/portal/${token}/rebalancing` : "/portal/rebalancing")} />}
