@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { QuotingWorkspace } from "@/modules/insurance/QuotingWorkspace";
+import { ApplicationDelivery } from "@/modules/insurance/ApplicationDelivery";
 import { ComplianceReplacement } from "@/modules/insurance/ComplianceReplacement";
 import { FactFind } from "@/modules/insurance/FactFind";
 import { ComplianceDocuments } from "@/modules/insurance/ComplianceDocuments";
@@ -26,6 +27,7 @@ export function CompliancePage() {
       <Title>Compliance</Title>
       <ComplianceRoadmap key={version} householdId={householdId} stage={stage} />
       <div className="mt-6"><ComplianceReplacement householdId={householdId} onChanged={() => setVersion((v) => v + 1)} /></div>
+      <div className="mt-6"><ApplicationDelivery householdId={householdId} onChanged={() => setVersion((v) => v + 1)} /></div>
       <div className="mt-6"><ComplianceDocuments householdId={householdId} onChanged={() => setVersion((v) => v + 1)} /></div>
       <h2 className="mb-3 mt-8 text-sm font-semibold">All files</h2>
       <InsuranceTab householdId={householdId} sections={["files"]} workspaceLink={false} />

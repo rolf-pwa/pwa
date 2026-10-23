@@ -24,7 +24,7 @@ const RW_TITLE = "Your Life Insurance Recommendation";
 const ADVISORS_EYEBROW = "ProsperWise Advisors";
 const ADVISORS_FOOTER = () => `\u00A9 ${new Date().getFullYear()} Issler Group Management & Consulting Inc. o/a ProsperWise Advisors \u00B7 www.prosperwise.ca`;
 
-const isKind = (k: unknown): k is DocKind => k === "disclosure_privacy" || k === "reason_why" || k === "fact_find" || k === "replacement_declaration" || k === "replacement_explanation";
+const isKind = (k: unknown): k is DocKind => k === "disclosure_privacy" || k === "reason_why" || k === "fact_find" || k === "replacement_declaration" || k === "replacement_explanation" || k === "delivery_letter";
 
 async function readMaster(db: any, kind: DocKind) {
   const { data: t } = await db.from("insurance_doc_templates").select("kind, title, drive_file_id, advisor_contact").eq("kind", kind).maybeSingle();
@@ -84,6 +84,7 @@ async function latestAnalyses(db: any, people: { id: string; name: string }[]): 
 export async function previewDoc(db: any, householdId: string, kind: unknown, contactIds: unknown, rawFields?: unknown) {
   if (!isKind(kind)) return { error: "Unknown document." };
   if (kind === "fact_find") return { error: "The fact find is built on the Fact find card." };
+  if (kind === "delivery_letter") return { error: "The closing letter is built on the Application and delivery card." };
   if (kind === "replacement_declaration" || kind === "replacement_explanation") return { error: "The replacement documents are built on the Replacing a policy card." };
   const all = await adults(db, householdId);
   const fields = cleanFields(rawFields);
@@ -197,6 +198,7 @@ export async function finalizeDoc(db: any, documentId: string): Promise<{ ok: bo
   if (!d || d.status !== "signed") return { ok: false, message: "The document is not fully signed." };
   if (d.task_id) await db.from("pm_tasks").update({ status: "done", completed_at: new Date().toISOString() }).eq("id", d.task_id).neq("status", "done");
   if (d.kind === "fact_find") await db.from("insurance_fact_finds").update({ status: "confirmed", updated_at: new Date().toISOString() }).eq("document_id", d.id);
+  if (d.kind === "delivery_letter") await db.from("insurance_issuances").update({ status: "confirmed", updated_at: new Date().toISOString() }).eq("letter_document_id", d.id);
   if (d.kind === "replacement_declaration" || d.kind === "replacement_explanation") {
     const { data: rep } = await db.from("insurance_replacements").select("id, explanation_doc_id, declaration_doc_id").or(`explanation_doc_id.eq.${d.id},declaration_doc_id.eq.${d.id}`).maybeSingle();
     if (rep) {
