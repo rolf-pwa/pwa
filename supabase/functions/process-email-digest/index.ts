@@ -25,6 +25,11 @@ const EVENT_LABEL: Record<string, string> = {
   updated: "Updated",
 };
 
+const isDocumentRow = (i: { link_tab: string | null }) => i.link_tab === "dashboard";
+const documentsSubject = (n: number) => `You have ${n} document${n === 1 ? "" : "s"} waiting`;
+const documentsMessage = (firstName: string) =>
+  `Hi ${firstName},\n\nYou have documents waiting for your signature.\n\nPlease log into your portal (https://app.prosperwise.ca/portal)\n\nThank you,\nProsperWise Team`;
+
 function getChannels(): { wix: boolean; gmail: boolean } {
   const ch = (Deno.env.get("NOTIFICATION_CHANNEL") || "wix").toLowerCase();
   return { wix: ch === "wix" || ch === "both", gmail: ch === "gmail" || ch === "both" };
@@ -35,9 +40,9 @@ function uniqueifySubject(subject: string): string {
     const stamp = new Date().toLocaleTimeString("en-US", {
       hour: "numeric",
       minute: "2-digit",
-      timeZone: "America/Toronto",
+      timeZone: "America/Vancouver",
     });
-    return `${subject} · ${stamp} ET`;
+    return `${subject} · ${stamp} PT`;
   } catch {
     return `${subject} · ${new Date().toISOString().slice(11, 16)} UTC`;
   }
@@ -151,14 +156,23 @@ serve(async (req) => {
     let itemsProcessed = 0;
     const errors: string[] = [];
 
-    for (const [email, items] of groups.entries()) {
+    // A waiting document gets its own short email (no one-tap link: they sign in); everything else stays in the action-items digest.
+    const units: { email: string; items: typeof pending; documents: boolean }[] = [];
+    for (const [email, all] of groups.entries()) {
+      const docs = all.filter((i) => isDocumentRow(i));
+      const rest = all.filter((i) => !isDocumentRow(i));
+      if (docs.length) units.push({ email, items: docs, documents: true });
+      if (rest.length) units.push({ email, items: rest, documents: false });
+    }
+
+    for (const { email, items, documents } of units) {
       const firstName = items[0].first_name || "there";
       const contactId = items[0].contact_id;
       const count = items.length;
 
-      // Mint a single magic link to the tasks tab
+      // Mint a single magic link to the tasks tab (not for documents)
       let url = plainPortalUrl();
-      if (contactId) {
+      if (contactId && !documents) {
         const link = await mintMagicLink(supabase, { contactId, targetHash: "tasks" });
         if (link?.url) url = link.url;
       }
@@ -168,12 +182,13 @@ serve(async (req) => {
         .map((i) => `• ${EVENT_LABEL[i.task_event] || "Update"}: ${i.task_name}`)
         .join("\n");
 
-      const subject =
-        count === 1
+      const subject = documents
+        ? documentsSubject(count)
+        : count === 1
           ? `1 update on your action items`
           : `${count} updates on your action items`;
 
-      const message = `Hi ${firstName},\n\nYou have ${count === 1 ? "a new update" : `${count} new updates`} on your action items:\n\n${lines}\n\nOpen your portal:\n${url}\n\n(This one-tap link is valid for 1 hour and works once. After that, sign in at https://app.prosperwise.ca)\n\nThank you,\nProsperWise Team`;
+      const message = documents ? documentsMessage(firstName) : `Hi ${firstName},\n\nYou have ${count === 1 ? "a new update" : `${count} new updates`} on your action items:\n\n${lines}\n\nOpen your portal:\n${url}\n\n(This one-tap link is valid for 1 hour and works once. After that, sign in at https://app.prosperwise.ca)\n\nThank you,\nProsperWise Team`;
 
       const tasks: Promise<{ sent: boolean; reason?: string }>[] = [];
       if (channels.gmail) tasks.push(sendViaGmail(email, uniqueifySubject(subject), message));

@@ -142,14 +142,15 @@ export async function createAndSend(db: any, who: string, p: { householdId: stri
     const { data: task } = await db.from("pm_tasks").insert({
       title: taskTitle,
       description: confirmOnly ? `Please read ${p.title} and confirm it: open this task and press the button. If anything is missing or not right, tell me before you confirm.` : `Please read and sign your ${p.title}: open this task and press the button. It takes a couple of minutes. If you have questions first, reply here and I will answer them.`,
-      status: "open", client_visible: true, assignee_id: rolf.user_id, created_by: rolf.user_id, due_date: due,
+      status: "open", client_visible: false, assignee_id: rolf.user_id, created_by: rolf.user_id, due_date: due,
       // A document for one person is that person's task alone; a household task would show up in the other adults' portals, where they cannot open it.
       ...(owner.contact_id ? { contact_id: owner.contact_id } : { household_id: owner.household_id }),
     }).select("id").maybeSingle();
     if (task?.id) {
       await db.from("insurance_documents").update({ task_id: task.id }).eq("id", doc.id);
-      // The client is told the way they are for any task shared with them: a bell in the portal and, through the digest, one short email that carries no details.
-      try { await notifyClientsOfComment(db, { id: task.id, title: taskTitle, client_visible: true, contact_id: owner.contact_id, household_id: owner.household_id }, Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, "updated"); } catch (e) { console.error("[insurance-doc] client notification failed", e); }
+      // The task is Rolf's own tracker (hidden from the client: the documents card on their dashboard is where they find the document). The client is told the way they are
+      // for any task shared with them: a bell in the portal and, through the digest, one short email that carries no details; both open the dashboard.
+      try { await notifyClientsOfComment(db, { id: task.id, title: taskTitle, client_visible: true, contact_id: owner.contact_id, household_id: owner.household_id }, Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, "updated", { linkTab: "dashboard", title: `${p.kind === "disclosure_privacy" || p.kind === "replacement_declaration" ? "Please sign" : "Please review and confirm"}: ${p.title}` }); } catch (e) { console.error("[insurance-doc] client notification failed", e); }
     }
   }
   return { ok: true as const, id: doc.id as string };
