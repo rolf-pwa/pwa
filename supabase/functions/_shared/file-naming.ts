@@ -11,6 +11,7 @@ export const DOC_FILE_NAME: Record<string, string> = {
   fact_find: "Fact Find",
   replacement_declaration: "Replacement Declaration",
   replacement_explanation: "Replacement Explanation",
+  delivery_letter: "Policy Delivery",
   needs_analysis: "Needs Analysis",
   alternatives: "Alternatives Considered",
 };
