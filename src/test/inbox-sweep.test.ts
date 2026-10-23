@@ -29,6 +29,17 @@ describe("ruleVerdict", () => {
     expect(ruleVerdict(msg({ from: "Ed <ed@weiss.ca>" }), clients, [], learned)?.bucket).toBe("client");
     expect(ruleVerdict(msg({ from: "x@example.com", subject: "Action required" }), clients, [], learned)?.bucket).toBe("archivable");
   });
+  it("keeps carrier, MGA, church and community mail in FYI without asking the model, but a deadline, a learned sender or a mute still wins", () => {
+    for (const from of ["Kayla <info@wealthlinkfinancial.ca>", "iA <web@mail-corpo.ia.ca>", "Foresters <sales@email.foresters.com>", "Trinity Church Family <hello@trinitykelowna.ca>", "Jenn <mailer@churchcenteronline.com>"]) {
+      expect(ruleVerdict(msg({ from, subject: "Announcing the growth challenge" }), clients, [])?.bucket).toBe("fyi");
+    }
+    expect(ruleVerdict(msg({ from: "Kayla <info@wealthlinkfinancial.ca>", subject: "Action required: renew by Friday" }), clients, [])?.bucket).toBe("needs_you");
+    expect(ruleVerdict(msg({ from: "Kayla <info@wealthlinkfinancial.ca>" }), clients, [], new Map([["info@wealthlinkfinancial.ca", "archivable" as const]]))?.bucket).toBe("archivable");
+    expect(ruleVerdict(msg({ from: "Capital One <capitalone@notification.capitalone.com>", subject: "Want to repay faster?" }), clients, [])).toBeNull(); // retail still goes to the model
+  });
+  it("tells the model that carrier, MGA and community mail is never archivable", () => {
+    expect(sweepPrompt([msg({})])).toContain("Never mail from insurance carriers");
+  });
   it("flags deadlines and leaves the rest to the model", () => {
     expect(ruleVerdict(msg({ subject: "Action required: sign by Friday" }), clients, [])?.bucket).toBe("needs_you");
     expect(ruleVerdict(msg({}), clients, [])).toBeNull();
@@ -46,7 +57,7 @@ describe("verdictsFromModel", () => {
 
 describe("helpers", () => {
   it("reads the address", () => expect(addressOf("Ed <Ed@Weiss.ca>")).toBe("ed@weiss.ca"));
-  it("puts only message headers in the prompt", () => expect(sweepPrompt([msg({ snippet: "x".repeat(500) })]).length).toBeLessThan(900));
+  it("puts only message headers in the prompt", () => expect(sweepPrompt([msg({ snippet: "x".repeat(500) })]).length).toBeLessThan(1300));
   it("judges accuracy on what Georgia first proposed, even after Rolf moved the message", () => {
     const a = accuracy([{ bucket: "fyi", proposed_bucket: "archivable", feedback: "wrong" }, { bucket: "archivable", proposed_bucket: "archivable", feedback: "right" }, { bucket: "fyi", proposed_bucket: "fyi", feedback: "right" }]);
     expect(a.archivable).toEqual({ rated: 2, right: 1 });
