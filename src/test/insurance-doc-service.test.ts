@@ -157,6 +157,14 @@ describe("the email for a waiting document", () => {
   });
 });
 
+describe("the bell for a waiting document", () => {
+  it("opens the dashboard, where the documents card is", () => {
+    const bell = readFileSync("src/modules/portal/components/PortalNotificationBell.tsx", "utf8");
+    expect(bell).toContain('linkTab?: string | null }).linkTab === "dashboard" && onNavigateToDashboard');
+    expect(readFileSync("src/modules/portal/pages/Portal.tsx", "utf8")).toContain('onNavigateToDashboard={() => setActiveTab("dashboard")}');
+  });
+});
+
 describe("wiring", () => {
   it("keeps the client's list of covered checklist items in step with the server's", () => { expect(CLIENT_ITEMS).toEqual(DOC_ITEMS); });
   it("has a migration with grants, and the portal and advisor entry points", () => {
