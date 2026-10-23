@@ -159,6 +159,17 @@ export async function callizyGet(path: string): Promise<any | null> {
   return await r.json();
 }
 
+/** Downloads a recording from the short-lived link Callizy gives. Tries the plain link first and, if it asks for credentials, again with the API key. */
+export async function callizyDownload(url: string, maxBytes: number): Promise<{ bytes: Uint8Array; contentType: string | null }> {
+  let r = await fetch(url, { signal: AbortSignal.timeout(60_000) });
+  if (r.status === 401 || r.status === 403) { const c = callizyCreds(); if (c) r = await fetch(url, { headers: { "X-API-Key": c.key, "X-API-Secret": c.secret }, signal: AbortSignal.timeout(60_000) }); }
+  if (!r.ok) throw new Error(`The recording could not be downloaded (${r.status})`);
+  if (Number(r.headers.get("content-length") ?? 0) > maxBytes) throw new Error("The recording is too large to copy");
+  const bytes = new Uint8Array(await r.arrayBuffer());
+  if (bytes.length > maxBytes) throw new Error("The recording is too large to copy");
+  return { bytes, contentType: r.headers.get("content-type") };
+}
+
 /** Creates or updates the person in Callizy's address book, by phone number (their API upserts on it), so their name shows in the Callizy app. Returns Callizy's contact id. */
 export async function callizyUpsertContact(c: { phone: string; firstName?: string | null; lastName?: string | null }): Promise<string> {
   const creds = callizyCreds();

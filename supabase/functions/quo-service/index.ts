@@ -133,6 +133,14 @@ serve(async (req) => {
       return new Response(JSON.stringify({ transcript, summary, audio }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // ---- copy one call's recording to the client's Advisor Files and transcribe it now (the same work the nightly job does) ----
+    if (action === "callArchive") {
+      const { archiveCalls } = await import("../_shared/call-archive-service.ts");
+      const summary = await archiveCalls(adminClient, { callId: String(body.callId ?? ""), limit: 1, budgetMs: 100_000 });
+      const { data: call } = await adminClient.from("quo_calls").select("archived_at, archive_note, recording_drive_url, transcript_drive_url").eq("id", String(body.callId ?? "")).maybeSingle();
+      return new Response(JSON.stringify({ summary, archived: !!call?.archived_at, note: call?.archive_note ?? null, recording: call?.recording_drive_url ?? null, transcriptFile: call?.transcript_drive_url ?? null }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     // ---- Georgia answering clients' texts when Rolf cannot: on or off ----
     if (action === "getTextAssistant") {
       const { data } = await adminClient.from("text_assistant_config").select("enabled").eq("id", true).maybeSingle();
