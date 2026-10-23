@@ -252,6 +252,15 @@ export const getInvestmentProfiles = (householdId: string) => call<{ adults: { i
 export const saveInvestmentProfile = (householdId: string, contactId: string, inputs: import("@/shared/lib/investorProfile").ProfileInputs, note?: string) => call<{ ok: true; id: string }>("invProfileSave", { householdId, contactId, inputs, note });
 export const fileInvestmentProfile = (id: string) => call<{ ok: true; url: string }>("invProfileFile", { id });
 
+export interface InvModelFull extends InvModel { funds: { name: string; weight: number }[]; as_of?: string }
+export interface InvRecRow { id: string; contact_id: string; profile_key: string; model_as_of: string | null; amount: number | null; accounts: string | null; guarantee: string | null; fees: string | null; reason: string | null; deviation_reason: string | null; letter_document_id: string | null; created_at: string; letter: { id: string; status: "sent" | "partly_signed" | "signed" | "void"; sent_at: string; completed_at: string | null; pdf_url: string | null } | null }
+export interface InvRecPerson { id: string; name: string; riskProfile: string | null; suggestedReason: string; rec: InvRecRow | null }
+export interface InvRecFields { profileKey: string; amount: number; accounts: string; guarantee: string; fees: string; reason: string; deviationReason: string }
+export const getInvestmentRecs = (householdId: string) => call<{ people: InvRecPerson[]; models: InvModelFull[] }>("invRecs", { householdId });
+export const saveInvestmentRec = (householdId: string, contactId: string, rec: InvRecFields) => call<{ ok: true; id: string }>("invRecSave", { householdId, contactId, rec });
+export const draftInvestmentLetter = (id: string) => call<{ ok: true; md: string; blanks: number }>("invRecLetter", { id });
+export const sendInvestmentLetter = (id: string, bodyMd: string) => call<{ ok: true; documentId: string }>("invRecSend", { id, bodyMd });
+
 export interface ReportRequestFields { householdId: string; contactIds: string[]; kinds: string[]; includeOptions: boolean; coverNote: string }
 export interface FiledReport { id: string; title: string; kinds: string[]; contact_ids: string[]; include_options: boolean; pdf_url: string; pdf_name: string; created_by: string | null; created_at: string; shared_at: string | null }
 export const sharePlanningReport = (id: string, notify: boolean) => call<{ ok: true; notified: number }>("rpShare", { id, notify });

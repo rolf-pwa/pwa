@@ -12,7 +12,7 @@ import { investmentStageLabel, type InvestmentStage } from "@/shared/lib/investm
 import { roadmap, type RoadmapItem } from "@/shared/lib/investmentRoadmap";
 
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Vancouver", month: "short", day: "numeric", year: "numeric" });
-const COVERED_BY: Record<string, string> = { advisor_disclosure: "the client's signed disclosure", privacy_consent: "the client's signed disclosure", casl_consent: "the client's signed disclosure", fact_find: "a saved investor profile with the risk profile recorded" };
+const COVERED_BY: Record<string, string> = { advisor_disclosure: "the client's signed disclosure", privacy_consent: "the client's signed disclosure", casl_consent: "the client's signed disclosure", fact_find: "a saved investor profile with the risk profile recorded", reason_why: "the client's confirmed reason why letter" };
 
 function Ring({ percent }: { percent: number }) {
   const r = 42, c = 2 * Math.PI * r;
@@ -69,6 +69,7 @@ export function InvestmentCompliance({ householdId, stage }: { householdId: stri
           <p className="text-muted-foreground">{c.hint}</p>
           {c.kind === "fact_find" && <Link to={`/investments/${householdId}/profile`} className="inline-block font-medium text-primary hover:underline" data-testid="work-page-link">Open the Investor profile</Link>}
           {["advisor_disclosure", "privacy_consent", "casl_consent"].includes(c.kind) && <p className="text-muted-foreground">Send the disclosure for signature above. It covers all three.</p>}
+          {c.kind === "reason_why" && <Link to={`/investments/${householdId}/recommendation`} className="inline-block font-medium text-primary hover:underline" data-testid="work-page-link-recommendation">Open the Recommendation page</Link>}
           {c.kind === "advisor_notes" ? (
             <select className="h-8 rounded-md border bg-background px-2" defaultValue="" aria-label="Attach a meeting record" onChange={(e) => e.target.value && void attach(c.kind, { meetingTaskId: e.target.value }, "Attached")}>
               <option value="">Attach a meeting record…</option>
