@@ -23,7 +23,7 @@ const ROLF = "rolf@prosperwise.ca";
 const RW_TITLE = "Your Life Insurance Recommendation";
 const ADVISORS_FOOTER = () => `\u00A9 ${new Date().getFullYear()} Issler Group Management & Consulting Inc. o/a ProsperWise Advisors \u00B7 www.prosperwise.ca`;
 
-const isKind = (k: unknown): k is DocKind => k === "disclosure_privacy" || k === "reason_why" || k === "fact_find" || k === "replacement_declaration" || k === "replacement_explanation" || k === "delivery_letter" || k === "investment_reason_why";
+const isKind = (k: unknown): k is DocKind => k === "disclosure_privacy" || k === "reason_why" || k === "fact_find" || k === "replacement_declaration" || k === "replacement_explanation" || k === "delivery_letter" || k === "investment_reason_why" || k === "investment_delivery_letter";
 
 async function readMaster(db: any, kind: DocKind) {
   const { data: t } = await db.from("insurance_doc_templates").select("kind, title, drive_file_id, advisor_contact").eq("kind", kind).maybeSingle();
@@ -84,7 +84,7 @@ export async function previewDoc(db: any, householdId: string, kind: unknown, co
   if (!isKind(kind)) return { error: "Unknown document." };
   if (kind === "fact_find") return { error: "The fact find is built on the Fact find card." };
   if (kind === "delivery_letter") return { error: "The closing letter is built on the Application and delivery card." };
-  if (kind === "investment_reason_why") return { error: "The investment reason why letter is built in the Investments workspace." };
+  if (kind === "investment_reason_why" || kind === "investment_delivery_letter") return { error: "The investment letters are built in the Investments workspace." };
   if (kind === "replacement_declaration" || kind === "replacement_explanation") return { error: "The replacement documents are built on the Replacing a policy card." };
   const all = await adults(db, householdId);
   const fields = cleanFields(rawFields);
@@ -158,7 +158,7 @@ export async function createAndSend(db: any, who: string, p: { householdId: stri
 }
 
 export async function listDocs(db: any, householdId: string) {
-  const { data: docs } = await db.from("insurance_documents").select("id, file_id, kind, title, status, sent_at, completed_at, pdf_url, template_version, template_modified, void_reason").eq("household_id", householdId).neq("kind", "investment_reason_why").order("sent_at", { ascending: false });
+  const { data: docs } = await db.from("insurance_documents").select("id, file_id, kind, title, status, sent_at, completed_at, pdf_url, template_version, template_modified, void_reason").eq("household_id", householdId).not("kind", "in", "(investment_reason_why,investment_delivery_letter)").order("sent_at", { ascending: false });
   const ids = (docs ?? []).map((d: any) => d.id);
   const { data: signers } = ids.length ? await db.from("insurance_document_signers").select("document_id, contact_id, name, status, signed_at, casl_choice").in("document_id", ids) : { data: [] as any[] };
   return (docs ?? []).map((d: any) => ({ ...d, signers: ((signers ?? []) as any[]).filter((s) => s.document_id === d.id) }));

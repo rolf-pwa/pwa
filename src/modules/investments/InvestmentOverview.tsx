@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { supabase } from "@/shared/integrations/supabase/client";
-import { getInvestmentFiles, getInvestmentProfiles, type InvFiles, type InvModel, type InvProfileRow } from "@/modules/crm/lib/reviewAgent";
+import { getInvestmentContracts, getInvestmentFiles, getInvestmentProfiles, type InvContractRow, type InvFiles, type InvModel, type InvProfileRow } from "@/modules/crm/lib/reviewAgent";
+import { WindowChip } from "@/modules/investments/InvestmentApplication";
 import { investmentStageLabel, type InvestmentStage } from "@/shared/lib/investmentPipeline";
 import { profileGaps } from "@/shared/lib/investorProfile";
 
@@ -14,10 +15,12 @@ export function InvestmentOverview({ householdId, stage }: { householdId: string
   const [files, setFiles] = useState<InvFiles | null>(null);
   const [prof, setProf] = useState<{ adults: { id: string; name: string }[]; profiles: InvProfileRow[]; models: InvModel[] } | null>(null);
   const [held, setHeld] = useState<Record<string, number>>({});
+  const [contracts, setContracts] = useState<{ people: { id: string; name: string }[]; contracts: InvContractRow[] } | null>(null);
   useEffect(() => {
     void (async () => {
       const [f, p] = await Promise.all([getInvestmentFiles(householdId).catch(() => null), getInvestmentProfiles(householdId).catch(() => null)]);
       setFiles(f); setProf(p);
+      setContracts(await getInvestmentContracts(householdId).catch(() => null));
       const ids = (p?.adults ?? []).map((a) => a.id);
       if (ids.length) {
         const { data } = await supabase.from("vineyard_accounts").select("contact_id, current_value").in("contact_id", ids);
@@ -52,6 +55,12 @@ export function InvestmentOverview({ householdId, stage }: { householdId: string
             );
           })}
         </CardContent></Card>
+      {contracts && contracts.contracts.length > 0 && (
+        <Card className="lg:col-span-2"><CardHeader className="pb-2"><CardTitle className="text-base">Contracts</CardTitle></CardHeader>
+          <CardContent className="space-y-2 text-sm" data-testid="contracts-overview">
+            {contracts.contracts.map((c) => <p key={c.id} className="flex flex-wrap items-center gap-2"><span className="font-medium">{contracts.people.find((p) => p.id === c.contact_id)?.name}</span><span className="text-xs text-muted-foreground">{c.contract_number ? `contract ${c.contract_number}` : "contract"}{c.accounts ? `, ${c.accounts}` : ""}</span><WindowChip w={c.window} /><Link to={`/investments/${householdId}/application`} className="text-xs text-primary hover:underline">Open</Link></p>)}
+          </CardContent></Card>
+      )}
     </div>
   );
 }

@@ -30,6 +30,7 @@ const InvOverview = lazy(() => import("@/modules/investments/InvestmentHousehold
 const InvProfile = lazy(() => import("@/modules/investments/InvestmentHouseholdPages").then((m) => ({ default: m.InvProfilePage })));
 const InvRecommendation = lazy(() => import("@/modules/investments/InvestmentHouseholdPages").then((m) => ({ default: m.InvRecommendationPage })));
 const InvReport = lazy(() => import("@/modules/investments/InvestmentHouseholdPages").then((m) => ({ default: m.InvReportPage })));
+const InvApplication = lazy(() => import("@/modules/investments/InvestmentHouseholdPages").then((m) => ({ default: m.InvApplicationPage })));
 const InvCompliance = lazy(() => import("@/modules/investments/InvestmentHouseholdPages").then((m) => ({ default: m.InvCompliancePage })));
 const InsCompliance = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.CompliancePage })));
 const FormerClients = lazy(() => import("@/modules/crm/pages/FormerClients"));
@@ -184,6 +185,7 @@ const App = () => (
                   <Route path="profile" element={<InvProfile />} />
                   <Route path="recommendation" element={<InvRecommendation />} />
                   <Route path="report" element={<InvReport />} />
+                  <Route path="application" element={<InvApplication />} />
                   <Route path="compliance" element={<InvCompliance />} />
                 </Route>
               </Route>

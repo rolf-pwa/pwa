@@ -261,6 +261,13 @@ export const saveInvestmentRec = (householdId: string, contactId: string, rec: I
 export const draftInvestmentLetter = (id: string) => call<{ ok: true; md: string; blanks: number }>("invRecLetter", { id });
 export const sendInvestmentLetter = (id: string, bodyMd: string) => call<{ ok: true; documentId: string }>("invRecSend", { id, bodyMd });
 
+export interface InvContractRow { id: string; contact_id: string; contract_number: string | null; accounts: string | null; amount: number | null; application_url: string | null; application_name: string | null; contract_url: string | null; contract_name: string | null; issued_on: string | null; confirmation_received_on: string | null; cancel_business_days: number | null; cancel_ends_on: string | null; fund_facts_on: string | null; fund_facts_note: string | null; letter_document_id: string | null; created_at: string; window: { state: "unset" | "open" | "closed"; endsOn: string | null; daysLeft: number | null }; letter: { id: string; status: "sent" | "partly_signed" | "signed" | "void"; sent_at: string; completed_at: string | null; pdf_url: string | null } | null }
+export interface InvContractFields { contractNumber: string; accounts: string; amount: number; applicationUrl: string; contractUrl: string; issuedOn: string; confirmationReceivedOn: string; cancelBusinessDays: number | null; fundFactsOn: string; fundFactsNote: string }
+export const getInvestmentContracts = (householdId: string) => call<{ people: { id: string; name: string }[]; contracts: InvContractRow[]; recommendations: { contact_id: string; profile_key: string; amount: number | null; accounts: string | null }[] }>("invContracts", { householdId });
+export const saveInvestmentContract = (householdId: string, contactId: string, contract: InvContractFields, id?: string) => call<{ ok: true; id: string }>("invContractSave", { householdId, contactId, contract, id });
+export const draftDeliveryLetterApi = (id: string) => call<{ ok: true; md: string; blanks: number }>("invContractLetter", { id });
+export const sendDeliveryLetterApi = (id: string, bodyMd: string) => call<{ ok: true; documentId: string }>("invContractSend", { id, bodyMd });
+
 export interface InvReportFields { householdId: string; contactIds: string[]; includeFunds: boolean; coverNote: string }
 export interface InvFiledReport { id: string; title: string; contact_ids: string[]; include_funds: boolean; pdf_url: string; pdf_name: string; created_by: string | null; created_at: string; shared_at: string | null }
 export const previewInvestmentReport = (r: InvReportFields) => call<{ ok: true; name: string; base64: string }>("invRepPreview", { ...r });

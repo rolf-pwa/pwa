@@ -20,6 +20,7 @@ export const DOC_FILE_NAME: Record<string, string> = {
   investor_profile: "Investor Profile and Needs Analysis",
   investment_reason_why: "Investment Reason Why",
   investment_report: "Investment Recommendation Report",
+  investment_delivery_letter: "Investment Delivery",
 };
 
 const clean = (s: string) => s.replace(/[\\/:*?"<>|]/g, "-").replace(/\s+/g, " ").trim();
