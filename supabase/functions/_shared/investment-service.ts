@@ -10,6 +10,8 @@ import { buildBrandedPdf } from "./simple-pdf.ts";
 import { conventionFile, DOC_FILE_NAME } from "./file-naming.ts";
 import { CHECKLIST, DISCLOSURE_ITEMS, FILE_KINDS, checklistFor, fileStatus, type FileKind } from "./investment-file-rules.ts";
 import { cleanProfile, profileBlocks, type ModelLite } from "./investment-profile-rules.ts";
+import { investmentReportBlocks, type ReportPerson as ReportPersonData } from "./investment-report-rules.ts";
+import { shareReportIn, unshareReportIn } from "./report-sharing.ts";
 import { cleanRecommendation, defaultReason, reasonWhyLetter, recommendationIssues, type ModelFull } from "./investment-recommendation-rules.ts";
 
 const DRIVE = "https://www.googleapis.com/drive/v3";
@@ -229,3 +231,59 @@ export async function sendLetter(db: any, who: string, id: string, bodyMd: unkno
   await db.from("investment_recommendations").update({ letter_document_id: sent.id }).eq("id", id);
   return { ok: true as const, documentId: sent.id as string };
 }
+
+// ---- The client report ----
+
+export interface InvReportRequest { householdId: string; contactIds?: unknown; includeFunds?: unknown; coverNote?: unknown }
+type Built = { error: string } | { ok: true; pdf: Uint8Array; name: string; contactIds: string[]; includeFunds: boolean; coverNote: string | null };
+const longDate = (d = new Date()) => d.toLocaleDateString("en-CA", { timeZone: "America/Vancouver", dateStyle: "long" });
+
+async function buildReport(db: any, input: InvReportRequest): Promise<Built> {
+  const all = await adults(db, input.householdId);
+  const wanted = Array.isArray(input.contactIds) ? new Set(input.contactIds.map(String)) : null;
+  const chosen = all.filter((p) => !wanted || wanted.has(p.id));
+  if (!chosen.length) return { error: "Pick at least one person in this household." };
+  const ids = chosen.map((p) => p.id);
+  const [{ data: profiles }, { data: recs }, mdl] = await Promise.all([
+    db.from("investment_profiles").select("contact_id, inputs, created_at").in("contact_id", ids).order("created_at", { ascending: false }),
+    db.from("investment_recommendations").select("contact_id, profile_key, amount, accounts, guarantee, fees, reason, deviation_reason").in("contact_id", ids).order("created_at", { ascending: false }),
+    modelsFull(db),
+  ]);
+  const people: ReportPersonData[] = chosen.map((c) => {
+    const pr = ((profiles ?? []) as any[]).find((x) => x.contact_id === c.id);
+    const r = ((recs ?? []) as any[]).find((x) => x.contact_id === c.id);
+    return { name: c.name, profile: pr ? cleanProfile(pr.inputs) : null, profileSavedAt: pr?.created_at ?? null, rec: r ? { ...cleanRecommendation({ profileKey: r.profile_key, amount: r.amount, accounts: r.accounts, guarantee: r.guarantee, fees: r.fees, reason: r.reason, deviationReason: r.deviation_reason }) } : null };
+  });
+  const includeFunds = input.includeFunds !== false;
+  const coverNote = String(input.coverNote ?? "").trim().slice(0, 3000) || null;
+  const blocks = investmentReportBlocks({ preparedOn: longDate(), coverNote, includeFunds, models: mdl, people });
+  const pdf = buildBrandedPdf({ title: "Investment Recommendation Report", subtitle: `${people.map((p) => p.name).join(" and ")} \u00B7 ${longDate()}`, footer: footer(), blocks });
+  return { ok: true, pdf, name: conventionFile(ymd(), chosen, DOC_FILE_NAME.investment_report), contactIds: ids, includeFunds, coverNote };
+}
+
+/** The report as a PDF to look at before filing it. Nothing is saved. */
+export async function previewInvReport(db: any, input: InvReportRequest): Promise<{ ok: true; name: string; base64: string } | { error: string }> {
+  const r = await buildReport(db, input);
+  if ("error" in r) return r;
+  let bin = "";
+  for (let i = 0; i < r.pdf.length; i += 0x8000) bin += String.fromCharCode(...r.pdf.subarray(i, i + 0x8000));
+  return { ok: true, name: r.name, base64: btoa(bin) };
+}
+
+/** Files the report in Advisor Files / Reports and records what it covered. */
+export async function fileInvReport(db: any, who: string, input: InvReportRequest): Promise<{ ok: true; url: string; name: string } | { error: string }> {
+  const r = await buildReport(db, input);
+  if ("error" in r) return r;
+  let drive;
+  try { drive = await uploadToAdvisorFiles(db, input.householdId, "Reports", r.name, r.pdf); } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+  const { error } = await db.from("investment_reports").insert({ household_id: input.householdId, title: "Investment Recommendation Report", contact_ids: r.contactIds, include_funds: r.includeFunds, cover_note: r.coverNote, pdf_drive_id: drive.id, pdf_url: drive.url, pdf_name: drive.name, created_by: who });
+  if (error) return { error: "The PDF is filed in Advisor Files, but I could not record it here." };
+  return { ok: true, url: drive.url, name: drive.name };
+}
+
+export async function listInvReports(db: any, householdId: string) {
+  const { data } = await db.from("investment_reports").select("id, title, contact_ids, include_funds, pdf_url, pdf_name, created_by, created_at, shared_at").eq("household_id", householdId).order("created_at", { ascending: false }).limit(20);
+  return { reports: data ?? [] };
+}
+export const shareInvReport = (db: any, who: string, id: string, notify: boolean) => shareReportIn(db, "investment_reports", who, id, notify);
+export const unshareInvReport = (db: any, id: string) => unshareReportIn(db, "investment_reports", id);

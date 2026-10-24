@@ -261,6 +261,14 @@ export const saveInvestmentRec = (householdId: string, contactId: string, rec: I
 export const draftInvestmentLetter = (id: string) => call<{ ok: true; md: string; blanks: number }>("invRecLetter", { id });
 export const sendInvestmentLetter = (id: string, bodyMd: string) => call<{ ok: true; documentId: string }>("invRecSend", { id, bodyMd });
 
+export interface InvReportFields { householdId: string; contactIds: string[]; includeFunds: boolean; coverNote: string }
+export interface InvFiledReport { id: string; title: string; contact_ids: string[]; include_funds: boolean; pdf_url: string; pdf_name: string; created_by: string | null; created_at: string; shared_at: string | null }
+export const previewInvestmentReport = (r: InvReportFields) => call<{ ok: true; name: string; base64: string }>("invRepPreview", { ...r });
+export const fileInvestmentReport = (r: InvReportFields) => call<{ ok: true; url: string; name: string }>("invRepFile", { ...r });
+export const getInvestmentReports = (householdId: string) => call<{ reports: InvFiledReport[] }>("invRepList", { householdId });
+export const shareInvestmentReport = (id: string, notify: boolean, householdId: string) => call<{ ok: true; notified: number }>("invRepShare", { id, notify, householdId });
+export const unshareInvestmentReport = (id: string, householdId: string) => call<{ ok: true }>("invRepUnshare", { id, householdId });
+
 export interface ReportRequestFields { householdId: string; contactIds: string[]; kinds: string[]; includeOptions: boolean; coverNote: string }
 export interface FiledReport { id: string; title: string; kinds: string[]; contact_ids: string[]; include_options: boolean; pdf_url: string; pdf_name: string; created_by: string | null; created_at: string; shared_at: string | null }
 export const sharePlanningReport = (id: string, notify: boolean) => call<{ ok: true; notified: number }>("rpShare", { id, notify });

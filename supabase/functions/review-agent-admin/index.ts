@@ -218,6 +218,13 @@ Deno.serve(async (req) => {
       if (action === "invRemove") return send(await inv.removeItem(db, String(body?.itemId ?? "")));
       if (action === "invProfiles") return send(await inv.listProfiles(db, hh));
       if (action === "invProfileSave") return send(await inv.saveProfile(db, staff.email, { householdId: hh, contactId: String(body?.contactId ?? ""), inputs: body?.inputs, note: body?.note }));
+      if (action === "invRepList") return send(await inv.listInvReports(db, hh));
+      if (action === "invRepPreview" || action === "invRepFile") {
+        const input = { householdId: hh, contactIds: body?.contactIds, includeFunds: body?.includeFunds, coverNote: body?.coverNote };
+        return send(action === "invRepPreview" ? await inv.previewInvReport(db, input) : await inv.fileInvReport(db, staff.email, input));
+      }
+      if (action === "invRepShare") return send(await inv.shareInvReport(db, staff.email, String(body?.id ?? ""), body?.notify !== false));
+      if (action === "invRepUnshare") return send(await inv.unshareInvReport(db, String(body?.id ?? "")));
       if (action === "invRecs") return send(await inv.listRecommendations(db, hh));
       if (action === "invRecSave") return send(await inv.saveRecommendation(db, staff.email, { householdId: hh, contactId: String(body?.contactId ?? ""), rec: body?.rec }));
       if (action === "invRecLetter") return send(await inv.draftLetter(db, String(body?.id ?? "")));

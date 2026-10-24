@@ -7,7 +7,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validatePortalContact } from "../_shared/portal-auth.ts";
 import { clientGet, clientPending, clientSign, clientSigned } from "../_shared/insurance-doc-client.ts";
 import { clientDownload, finalizeDoc } from "../_shared/insurance-doc-service.ts";
-import { clientReportDownload, clientReports } from "../_shared/planning-report-service.ts";
+import { clientReportDownload, clientReports } from "../_shared/report-sharing.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
