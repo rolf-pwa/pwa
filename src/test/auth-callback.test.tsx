@@ -22,7 +22,7 @@ const harness = () => render(
     <Routes>
       <Route path="/" element={<AuthCallback />} />
       <Route path="/portal" element={<p>PORTAL</p>} />
-      <Route path="/dashboard" element={<p>DASHBOARD</p>} />
+      <Route path="/briefing" element={<p>TODAY</p>} />
       <Route path="/access-denied" element={<p>NO ACCOUNT</p>} />
       <Route path="/login" element={<p>LOGIN</p>} />
     </Routes>
@@ -77,11 +77,11 @@ describe("signing in with Google", () => {
     expect(await screen.findByText("PORTAL")).toBeTruthy();
   });
 
-  it("sends staff on to the dashboard without asking the portal", async () => {
+  it("sends staff on to Today without asking the portal", async () => {
     harness();
     await waitFor(() => expect(state.listener).not.toBeNull());
     act(() => state.listener!("SIGNED_IN", { user: { email: "rolf@prosperwise.ca" } }));
-    expect(await screen.findByText("DASHBOARD")).toBeTruthy();
+    expect(await screen.findByText("TODAY")).toBeTruthy();
     expect(state.invoke).not.toHaveBeenCalled();
   });
 });

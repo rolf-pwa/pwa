@@ -4,7 +4,10 @@ import { CommandPalette } from "@/shared/components/CommandPalette";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { signOut } from "@/shared/lib/auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/shared/components/ui/avatar";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
+import { supabase } from "@/shared/integrations/supabase/client";
+import { screenOf } from "@/shared/lib/pageViews";
 import { ChevronDown, LogOut, PenLine } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/shared/components/ui/dropdown-menu";
 import { EmailSignatureDialog } from "@/shared/components/EmailSignatureDialog";
@@ -15,6 +18,15 @@ import prosperwiseWordmark from "@/assets/prosperwise-logo-full.png";
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [signatureOpen, setSignatureOpen] = useState(false);
+  // A light log of which screens are opened, so the navigation can be trimmed by use. Failures are ignored: it must never get in the way.
+  const { pathname } = useLocation();
+  const lastScreen = useRef<string | null>(null);
+  useEffect(() => {
+    const screen = screenOf(pathname);
+    if (!user || screen === lastScreen.current) return;
+    lastScreen.current = screen;
+    void (supabase.from("staff_page_views" as any) as any).insert({ path: screen }).then(() => {}, () => {});
+  }, [pathname, user]);
   const today = format(new Date(), "EEEE, MMMM d, yyyy");
 
   return (
