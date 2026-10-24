@@ -65,8 +65,8 @@ describe("the letter goes through the signing engine as its own kind", () => {
   });
   it("is not listed in the insurance workspace, and cannot be built there", () => {
     const svc = readFileSync("supabase/functions/_shared/insurance-doc-service.ts", "utf8");
-    expect(svc).toContain('.neq("kind", "investment_reason_why")');
-    expect(svc).toContain('if (kind === "investment_reason_why") return { error:');
+    expect(svc).toContain('.not("kind", "in", "(investment_reason_why,investment_delivery_letter)")');
+    expect(svc).toContain('if (kind === "investment_reason_why" || kind === "investment_delivery_letter") return { error:');
   });
   it("has a table with grants, the kind in the constraint, and the delete guard counting it", () => {
     const m = readFileSync("supabase/migrations/20261231120000_investment_recommendations.sql", "utf8");

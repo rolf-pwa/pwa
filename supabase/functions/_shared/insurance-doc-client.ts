@@ -4,9 +4,9 @@
 // deno-lint-ignore-file no-explicit-any
 import { CASL_MARKER, SIGN_STATEMENT_VERSION, checkSignature, statementFor } from "./insurance-doc-rules.ts";
 
-export type DocKind = "disclosure_privacy" | "reason_why" | "fact_find" | "replacement_declaration" | "replacement_explanation" | "delivery_letter" | "investment_reason_why";
+export type DocKind = "disclosure_privacy" | "reason_why" | "fact_find" | "replacement_declaration" | "replacement_explanation" | "delivery_letter" | "investment_reason_why" | "investment_delivery_letter";
 /** Which checklist items a signed document covers. */
-export const DOC_ITEMS: Record<DocKind, string[]> = { disclosure_privacy: ["advisor_disclosure", "privacy_consent"], reason_why: ["recommendation"], fact_find: ["fact_find"], replacement_declaration: ["replacement_disclosure"], replacement_explanation: ["replacement_explanation"], delivery_letter: ["delivery_confirmation"], investment_reason_why: [] };
+export const DOC_ITEMS: Record<DocKind, string[]> = { disclosure_privacy: ["advisor_disclosure", "privacy_consent"], reason_why: ["recommendation"], fact_find: ["fact_find"], replacement_declaration: ["replacement_disclosure"], replacement_explanation: ["replacement_explanation"], delivery_letter: ["delivery_confirmation"], investment_reason_why: [], investment_delivery_letter: [] };
 
 // ── The client's side ──────────────────────────────────────────────────────────────────────────────────────────────
 export async function clientPending(db: any, contactId: string) {

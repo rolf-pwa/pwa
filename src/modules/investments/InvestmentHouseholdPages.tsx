@@ -1,6 +1,7 @@
 import { useOutletContext } from "react-router-dom";
 import { InvestmentCompliance } from "@/modules/investments/InvestmentCompliance";
 import { InvestmentOverview } from "@/modules/investments/InvestmentOverview";
+import { InvestmentApplication } from "@/modules/investments/InvestmentApplication";
 import { InvestmentRecommendation } from "@/modules/investments/InvestmentRecommendation";
 import { InvestmentReport } from "@/modules/investments/InvestmentReport";
 import { InvestorProfile } from "@/modules/investments/InvestorProfile";
@@ -14,4 +15,5 @@ export function InvOverviewPage() { const { householdId, name, stage } = useCtx(
 export function InvProfilePage() { const { householdId } = useCtx(); return <><Title>Investor profile</Title><InvestorProfile householdId={householdId} /></>; }
 export function InvRecommendationPage() { const { householdId } = useCtx(); return <><Title>Recommendation</Title><InvestmentRecommendation householdId={householdId} /></>; }
 export function InvReportPage() { const { householdId } = useCtx(); return <><Title>Client report</Title><InvestmentReport householdId={householdId} /></>; }
+export function InvApplicationPage() { const { householdId } = useCtx(); return <><Title>Application and delivery</Title><InvestmentApplication householdId={householdId} /></>; }
 export function InvCompliancePage() { const { householdId, stage } = useCtx(); return <><Title>Compliance</Title><InvestmentCompliance householdId={householdId} stage={stage} /></>; }
