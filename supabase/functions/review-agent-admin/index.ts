@@ -218,6 +218,10 @@ Deno.serve(async (req) => {
       if (action === "invRemove") return send(await inv.removeItem(db, String(body?.itemId ?? "")));
       if (action === "invProfiles") return send(await inv.listProfiles(db, hh));
       if (action === "invProfileSave") return send(await inv.saveProfile(db, staff.email, { householdId: hh, contactId: String(body?.contactId ?? ""), inputs: body?.inputs, note: body?.note }));
+      if (action === "invRecs") return send(await inv.listRecommendations(db, hh));
+      if (action === "invRecSave") return send(await inv.saveRecommendation(db, staff.email, { householdId: hh, contactId: String(body?.contactId ?? ""), rec: body?.rec }));
+      if (action === "invRecLetter") return send(await inv.draftLetter(db, String(body?.id ?? "")));
+      if (action === "invRecSend") return send(await inv.sendLetter(db, staff.email, String(body?.id ?? ""), body?.bodyMd));
       if (action === "invProfileFile") return send(await inv.fileProfile(db, String(body?.id ?? "")));
     }
     if (action === "rpShare") { const r = await shareReport(db, staff.email, String(body?.id ?? ""), body?.notify !== false); return json(r, "error" in r ? 400 : 200); }

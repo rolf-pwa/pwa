@@ -12,7 +12,7 @@ export const SIGN_STATEMENT_VERSION = "2026-10-a";
 export const SIGN_STATEMENT = "I have read this document and I agree to it. I understand that typing my name below is my electronic signature, and that it has the same effect as signing on paper.";
 export const SIGN_STATEMENT_LETTER = "I confirm that I have received and read this letter, and that what it says about my needs and circumstances is correct. I understand that typing my name below is my electronic signature, and that it has the same effect as signing on paper.";
 /** What the signer agrees to, by kind of document. */
-export const statementFor = (kind: string) => (kind === "reason_why" || kind === "replacement_explanation" ? SIGN_STATEMENT_LETTER : kind === "fact_find" ? FACT_FIND_STATEMENT : kind === "replacement_declaration" ? LIRD_CLIENT_STATEMENT : kind === "delivery_letter" ? DELIVERY_STATEMENT : SIGN_STATEMENT);
+export const statementFor = (kind: string) => (kind === "reason_why" || kind === "replacement_explanation" || kind === "investment_reason_why" ? SIGN_STATEMENT_LETTER : kind === "fact_find" ? FACT_FIND_STATEMENT : kind === "replacement_declaration" ? LIRD_CLIENT_STATEMENT : kind === "delivery_letter" ? DELIVERY_STATEMENT : SIGN_STATEMENT);
 
 /** Drive's Markdown export escapes punctuation with a backslash; take those off. */
 export const unescapeMd = (s: string) => s.replace(/\\([\\`*_{}\[\]()#+\-.!<>|~])/g, "$1");

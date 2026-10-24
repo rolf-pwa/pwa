@@ -82,7 +82,7 @@ describe("kept apart from Insurance", () => {
   it("uses its own tables, and reads only the client's signed disclosure from Insurance", () => {
     for (const t of ["investment_files", "investment_file_items", "investment_profiles"]) expect(svc).toContain(t);
     expect(svc).not.toMatch(/insurance_files|insurance_file_items|insurance_pipeline|insurance_needs_analyses/);
-    expect(svc.match(/"insurance_documents"/g)?.length).toBe(1); // the one lookup of the signed disclosure
+    expect(svc).not.toMatch(/insurance_(policies|quotes|replacements|issuances|fact_finds|reports)/);
   });
   it("has tables with grants, and the 7-year delete guard counts the client records", () => {
     const m = readFileSync("supabase/migrations/20261230120000_investments.sql", "utf8");

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, Outlet, useParams } from "react-router-dom";
-import { ArrowLeft, ClipboardCheck, LayoutGrid, Loader2, UserCheck, Users } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, LayoutGrid, Loader2, PieChart, UserCheck, Users } from "lucide-react";
 import { NavLink } from "@/shared/components/NavLink";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { INVESTMENT_STAGES, type InvestmentStage } from "@/shared/lib/investmentPipeline";
@@ -8,6 +8,7 @@ import { INVESTMENT_STAGES, type InvestmentStage } from "@/shared/lib/investment
 const ITEMS = [
   { to: "", label: "Overview", icon: LayoutGrid, end: true },
   { to: "profile", label: "Investor profile", icon: UserCheck },
+  { to: "recommendation", label: "Recommendation", icon: PieChart },
   { to: "compliance", label: "Compliance", icon: ClipboardCheck },
 ];
 

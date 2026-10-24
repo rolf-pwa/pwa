@@ -4,11 +4,13 @@
 // deno-lint-ignore-file no-explicit-any
 import { getServiceGoogleAccessToken } from "./google-token.ts";
 import { parseDriveId } from "./insurance-file-rules.ts";
-import { uploadToAdvisorFiles } from "./insurance-doc-service.ts";
+import { sha256Hex } from "./insurance-doc-rules.ts";
+import { createAndSend, uploadToAdvisorFiles } from "./insurance-doc-service.ts";
 import { buildBrandedPdf } from "./simple-pdf.ts";
 import { conventionFile, DOC_FILE_NAME } from "./file-naming.ts";
 import { CHECKLIST, DISCLOSURE_ITEMS, FILE_KINDS, checklistFor, fileStatus, type FileKind } from "./investment-file-rules.ts";
 import { cleanProfile, profileBlocks, type ModelLite } from "./investment-profile-rules.ts";
+import { cleanRecommendation, defaultReason, reasonWhyLetter, recommendationIssues, type ModelFull } from "./investment-recommendation-rules.ts";
 
 const DRIVE = "https://www.googleapis.com/drive/v3";
 const sig = () => AbortSignal.timeout(25_000);
@@ -53,6 +55,8 @@ export async function listFiles(db: any, householdId: string) {
   const covered = new Set<string>();
   if (disclosure?.status === "signed") for (const k of DISCLOSURE_ITEMS) covered.add(k);
   if (((profiles ?? []) as any[]).some((p) => p.risk_profile)) covered.add("fact_find");
+  const { data: letters } = await db.from("insurance_documents").select("id").eq("household_id", householdId).eq("kind", "investment_reason_why").eq("status", "signed").limit(1);
+  if ((letters ?? []).length) covered.add("reason_why");
   const out = (files ?? []).map((f: any) => {
     const its = ((items ?? []) as any[]).filter((i) => i.file_id === f.id);
     const st = fileStatus(f.kind, its, covered);
@@ -141,4 +145,87 @@ export async function fileProfile(db: any, id: string): Promise<{ ok: true; url:
   try { drive = await uploadToAdvisorFiles(db, householdId, "Investor Profiles", conventionFile(ymd(new Date(p.created_at)), [c ?? {}], DOC_FILE_NAME.investor_profile), pdf); } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
   await db.from("investment_profiles").update({ pdf_drive_id: drive.id, pdf_url: drive.url, filed_at: new Date().toISOString() }).eq("id", p.id);
   return { ok: true, url: drive.url };
+}
+
+// ---- Recommendation and the reason why letter ----
+
+/** iA's model portfolios (the newest set) with the funds each holds. */
+export async function modelsFull(db: any): Promise<ModelFull[]> {
+  const { data } = await db.from("ia_model_portfolios").select("profile_key, label, income_min, income_max, equity_min, equity_max, income_target, funds, sort_order, as_of").order("as_of", { ascending: false }).order("sort_order");
+  const rows = (data ?? []) as any[];
+  const latest = rows[0]?.as_of;
+  return rows.filter((r) => r.as_of === latest).map(({ sort_order: _s, ...m }) => ({ ...m, funds: Array.isArray(m.funds) ? m.funds : [] }) as ModelFull);
+}
+
+/** Each person's latest profile (with the risk profile and a first draft of the reasons), their current recommendation, and the status of its letter. */
+export async function listRecommendations(db: any, householdId: string) {
+  const people = await adults(db, householdId);
+  const ids = people.map((p) => p.id);
+  const [{ data: profiles }, { data: recs }, mdl] = await Promise.all([
+    ids.length ? db.from("investment_profiles").select("contact_id, inputs, risk_profile, created_at").in("contact_id", ids).order("created_at", { ascending: false }) : Promise.resolve({ data: [] }),
+    ids.length ? db.from("investment_recommendations").select("id, contact_id, profile_key, model_as_of, amount, accounts, guarantee, fees, reason, deviation_reason, letter_document_id, created_at").in("contact_id", ids).order("created_at", { ascending: false }) : Promise.resolve({ data: [] }),
+    modelsFull(db),
+  ]);
+  const letterIds = ((recs ?? []) as any[]).map((r) => r.letter_document_id).filter(Boolean);
+  const { data: docs } = letterIds.length ? await db.from("insurance_documents").select("id, status, sent_at, completed_at, pdf_url").in("id", letterIds) : { data: [] };
+  const out = people.map((p) => {
+    const profile = ((profiles ?? []) as any[]).find((x) => x.contact_id === p.id) ?? null;
+    const inputs = profile ? cleanProfile(profile.inputs) : null;
+    const rec = ((recs ?? []) as any[]).find((r) => r.contact_id === p.id) ?? null;
+    const model = inputs?.riskProfile ? mdl.find((m) => m.profile_key === inputs.riskProfile) ?? null : null;
+    return { id: p.id, name: p.name, riskProfile: inputs?.riskProfile || null, suggestedReason: inputs && model ? defaultReason(inputs, model) : "", rec: rec ? { ...rec, letter: ((docs ?? []) as any[]).find((d) => d.id === rec.letter_document_id) ?? null } : null };
+  });
+  return { people: out, models: mdl };
+}
+
+export async function saveRecommendation(db: any, who: string, input: { householdId: string; contactId: string; rec: unknown }) {
+  const people = await adults(db, input.householdId);
+  if (!people.some((p) => p.id === input.contactId)) return { error: "Pick a person in this household." };
+  const rec = cleanRecommendation(input.rec);
+  const mdl = await modelsFull(db);
+  const { data: prof } = await db.from("investment_profiles").select("risk_profile").eq("contact_id", input.contactId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const issues = recommendationIssues(rec, prof?.risk_profile ?? "", mdl);
+  if (issues.length) return { error: issues.join(" ") };
+  const chosen = mdl.find((m) => m.profile_key === rec.profileKey)!;
+  const { data, error } = await db.from("investment_recommendations").insert({ household_id: input.householdId, contact_id: input.contactId, profile_key: rec.profileKey, model_as_of: chosen.as_of ?? null, amount: rec.amount, accounts: rec.accounts || null, guarantee: rec.guarantee || null, fees: rec.fees || null, reason: rec.reason || null, deviation_reason: rec.deviationReason || null, created_by: who }).select("id").single();
+  if (error) return { error: "Could not save the recommendation." };
+  return { ok: true, id: data.id };
+}
+
+async function letterFor(db: any, id: string) {
+  const { data: r } = await db.from("investment_recommendations").select("*").eq("id", id).maybeSingle();
+  if (!r) return { error: "Recommendation not found." } as const;
+  const people = await adults(db, r.household_id);
+  const person = people.find((p) => p.id === r.contact_id);
+  if (!person) return { error: "The client is no longer in the household." } as const;
+  const [{ data: prof }, mdl] = await Promise.all([db.from("investment_profiles").select("inputs, risk_profile").eq("contact_id", r.contact_id).order("created_at", { ascending: false }).limit(1).maybeSingle(), modelsFull(db)]);
+  if (!prof) return { error: "Save the investor profile first." } as const;
+  const model = mdl.find((m) => m.profile_key === r.profile_key);
+  if (!model) return { error: "That model portfolio is no longer in iA's current set. Choose the recommendation again." } as const;
+  const rec = cleanRecommendation({ profileKey: r.profile_key, amount: r.amount, accounts: r.accounts, guarantee: r.guarantee, fees: r.fees, reason: r.reason, deviationReason: r.deviation_reason });
+  const md = reasonWhyLetter({ person: person.name, date: new Date(), profile: cleanProfile(prof.inputs), model, defaultModel: mdl.find((m) => m.profile_key === prof.risk_profile) ?? null, rec });
+  return { r, person, md } as const;
+}
+
+/** The letter as Markdown to edit. Blanks (____) mark what is still to be filled in. */
+export async function draftLetter(db: any, id: string) {
+  const g = await letterFor(db, id);
+  if ("error" in g) return g;
+  return { ok: true as const, md: g.md, blanks: (g.md.match(/_{3,}/g) ?? []).length };
+}
+
+/** Sends the (edited) letter to the client's portal, where they confirm it. A letter with blanks does not go. */
+export async function sendLetter(db: any, who: string, id: string, bodyMd: unknown) {
+  const g = await letterFor(db, id);
+  if ("error" in g) return g;
+  if (g.r.letter_document_id) {
+    const { data: d } = await db.from("insurance_documents").select("status").eq("id", g.r.letter_document_id).maybeSingle();
+    if (d?.status === "signed") return { error: "The client has already confirmed this letter." };
+  }
+  const md = typeof bodyMd === "string" && bodyMd.trim() ? bodyMd.trim().slice(0, 30_000) : g.md;
+  if (/_{3,}/.test(md)) return { error: "The letter still has blanks to fill in." };
+  const sent: any = await createAndSend(db, who, { householdId: g.r.household_id, kind: "investment_reason_why", title: "Investment Reason Why Letter", md, hash: await sha256Hex(md), driveId: "none", modified: null, version: null, signers: [{ id: g.person.id, name: g.person.name }] });
+  if (sent.error) return sent;
+  await db.from("investment_recommendations").update({ letter_document_id: sent.id }).eq("id", id);
+  return { ok: true as const, documentId: sent.id as string };
 }
