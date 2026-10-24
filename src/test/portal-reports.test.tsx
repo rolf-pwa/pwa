@@ -36,7 +36,7 @@ describe("a report the advisor shared, in the client's portal", () => {
 });
 
 describe("sharing a report", () => {
-  const svc = readFileSync("supabase/functions/_shared/planning-report-service.ts", "utf8");
+  const svc = readFileSync("supabase/functions/_shared/report-sharing.ts", "utf8");
   it("shows it only to the people it was prepared for, and only while it is shared", () => {
     expect(svc).toContain('.not("shared_at", "is", null).contains("contact_ids", [contactId])');
     expect(svc).toContain('!r.shared_at || !((r.contact_ids ?? []) as string[]).includes(contactId)');
