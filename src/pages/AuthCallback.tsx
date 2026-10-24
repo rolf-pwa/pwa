@@ -10,9 +10,9 @@ const NO_EVENT_MS = 20_000;
 
 /**
  * Handles the OAuth callback at the root URL.
- * - @prosperwise.ca users → /dashboard
+ * - @prosperwise.ca users → /briefing (Today)
  * - Other Google users → /portal (with contact lookup)
- * - No auth hash → /dashboard (existing session) or /login
+ * - No auth hash → /briefing (existing session) or /login
  * Opening the portal takes a few seconds (longer on a phone), so this waits for it instead of giving up: a slow load is not "no account".
  */
 const AuthCallback = () => {
@@ -28,7 +28,7 @@ const AuthCallback = () => {
     emailRef.current = email;
     setFailed(false);
     if (!email) { setDestination("/access-denied"); return; }
-    if (isAllowedDomain(email)) { setDestination("/dashboard"); return; }
+    if (isAllowedDomain(email)) { setDestination("/briefing"); return; }
     const result = await signInToPortalWithGoogle(email);
     if (result.ok) {
       sessionStorage.setItem("portal_google_auth", JSON.stringify(result.data));
@@ -49,7 +49,7 @@ const AuthCallback = () => {
       if (!hasAuthHash) {
         // No auth hash: an existing session goes on to the portal (clients) or the dashboard (staff); no session goes to the login page via the dashboard.
         if (session?.user?.email) await finish(session.user.email);
-        else setDestination("/dashboard");
+        else setDestination("/briefing");
         return;
       }
       if (session?.user?.email) { await finish(session.user.email); return; }

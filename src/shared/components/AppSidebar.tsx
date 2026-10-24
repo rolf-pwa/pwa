@@ -34,6 +34,7 @@ import {
   Bot,
   CalendarClock,
   MessageCircle,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { useEffect, useState, createContext, useContext } from "react";
@@ -63,68 +64,57 @@ export function useSidebarCollapse() {
 
 import { SECOND_BRAIN_ENABLED } from "@/shared/lib/featureFlags";
 
-const GROUPS = [
+export const GROUPS = [
   {
-    key: "work",
-    label: "Work",
-    icon: LayoutDashboard,
+    // What is opened every day, always the group the panel starts on. Today (Georgia) is first; what needs attention carries a badge.
+    key: "daily",
+    label: "Daily",
+    icon: Sparkles,
     items: [
-      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { to: "/briefing", label: "Today (Georgia)", icon: Sparkles },
       { to: "/inbox", label: "Inbox", icon: InboxIcon, badgeKey: "inbox" },
-      { to: "/projects", label: "Projects", icon: ListTodo },
-      { to: "/team-capacity", label: "Team Capacity", icon: Gauge },
-      { to: "/invoices", label: "Invoices", icon: Receipt },
-      { to: "/services", label: "Services", icon: ConciergeBell },
-    ],
-  },
-  {
-    key: "people",
-    label: "People",
-    icon: Users,
-    items: [
       { to: "/families", label: "CRM", icon: Users },
+      { to: "/ask-georgia", label: "Ask Georgia", icon: MessageCircle, badgeKey: "requests" },
+      { to: "/review-queue", label: "Review Queue", icon: ClipboardCheck, badgeKey: "review" },
       { to: "/pipeline", label: "Pipeline", icon: TrendingUp },
       { to: "/insurance", label: "Insurance", icon: ShieldCheck },
       { to: "/investments", label: "Investments", icon: LineChart },
+      { to: "/projects", label: "Projects", icon: ListTodo },
+      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    ],
+  },
+  {
+    // The business around the clients: used now and then, not every day.
+    key: "business",
+    label: "Business",
+    icon: Briefcase,
+    items: [
       { to: "/holding-tank", label: "Holding Tank", icon: Anchor },
       { to: "/professionals", label: "Professionals", icon: Briefcase },
-    ],
-  },
-  {
-    key: "agents",
-    label: "Agents",
-    icon: Brain,
-    items: [
-      ...(SECOND_BRAIN_ENABLED ? [{ to: "/brain", label: "Second Brain", icon: Brain }] : []),
-      { to: "/briefing", label: "Today (Georgia)", icon: Sparkles },
-      { to: "/workbench", label: "Workbench", icon: Cpu },
-      { to: "/onboarding-agent", label: "Georgia Onboarding", icon: Bot },
-      { to: "/review-agent", label: "Georgia Reviews", icon: CalendarClock },
-      { to: "/ask-georgia", label: "Ask Georgia", icon: MessageCircle, badgeKey: "requests" },
-      { to: "/review-queue", label: "Review Queue", icon: ClipboardCheck, badgeKey: "review" },
-      { to: "/glass-box-review", label: "Glass-Box Review", icon: ShieldCheck },
-      { to: "/bulk-statement-import", label: "Bulk Statement Import", icon: FileUp },
-      { to: "/vault-audit", label: "Vault Audit Log", icon: ShieldCheck },
-      { to: "/knowledge-base", label: "Bot Knowledge", icon: BookOpen },
-    ],
-  },
-  {
-    key: "strategy",
-    label: "Strategy",
-    icon: BarChart3,
-    items: [
+      { to: "/invoices", label: "Invoices", icon: Receipt },
+      { to: "/services", label: "Services", icon: ConciergeBell },
+      { to: "/team-capacity", label: "Team Capacity", icon: Gauge },
       { to: "/analytics", label: "Analytics", icon: BarChart3 },
       { to: "/admin/vfo", label: "VFO Roster", icon: Crown },
     ],
   },
   {
-    key: "onboarding",
-    label: "Onboarding",
-    icon: PackagePlus,
+    // Setup, imports, audit logs and the agents' own screens: rarely opened, so out of the way.
+    key: "backoffice",
+    label: "Back office",
+    icon: Settings,
     items: [
       { to: "/onboarding", label: "Onboarding", icon: PackagePlus },
+      { to: "/onboarding-agent", label: "Georgia Onboarding", icon: Bot },
+      { to: "/review-agent", label: "Georgia Reviews", icon: CalendarClock },
+      { to: "/workbench", label: "Workbench", icon: Cpu },
+      { to: "/glass-box-review", label: "Glass-Box Review", icon: ShieldCheck },
+      { to: "/vault-audit", label: "Vault Audit Log", icon: ShieldCheck },
+      { to: "/knowledge-base", label: "Bot Knowledge", icon: BookOpen },
+      { to: "/bulk-statement-import", label: "Bulk Statement Import", icon: FileUp },
       { to: "/importers", label: "Bulk Importers", icon: Upload },
       { to: "/webforms", label: "Web Forms", icon: FileSignature },
+      ...(SECOND_BRAIN_ENABLED ? [{ to: "/brain", label: "Second Brain", icon: Brain }] : []),
     ],
   },
 ] as const;
@@ -150,7 +140,9 @@ function groupForPath(pathname: string): string | null {
 export function SidebarCollapseProvider({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const [selectedGroup, setSelectedGroup] = useState<string | null>(() => {
-    return localStorage.getItem("sidebar-selected-group") || groupForPath(location.pathname) || "work";
+    const stored = localStorage.getItem("sidebar-selected-group");
+    // A group remembered from an earlier layout (Work, People, Agents, ...) no longer exists: start from the route's group, or Daily.
+    return stored && (stored === "more" || GROUPS.some((g) => g.key === stored)) ? stored : groupForPath(location.pathname) || "daily";
   });
   const [panelOpen, setPanelOpen] = useState(() => localStorage.getItem("sidebar-panel-open") !== "false");
 
@@ -316,7 +308,7 @@ export function AppSidebar() {
             <div className="flex items-center justify-between px-4 pb-3 pt-6">
               <h2 className="font-serif text-lg">{selectedGroup === "more" ? "More" : activeGroup.label}</h2>
               <button
-                onClick={() => select(selectedGroup || "work")}
+                onClick={() => select(selectedGroup || "daily")}
                 className="rounded-md p-1 text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               >
                 <PanelLeftClose className="h-4 w-4" />
