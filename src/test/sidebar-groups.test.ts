@@ -17,8 +17,10 @@ describe("the sidebar", () => {
   it("starts with a short Daily group with Today (Georgia) first, and what needs attention marked", () => {
     const daily = GROUPS[0];
     expect(daily.key).toBe("daily");
-    expect(daily.items.map((i) => i.label)).toEqual(["Today (Georgia)", "Inbox", "CRM", "Ask Georgia", "Review Queue", "Pipeline", "Insurance", "Investments", "Projects", "Dashboard"]);
-    expect((daily.items as readonly any[]).filter((i) => i.badgeKey).map((i) => i.badgeKey)).toEqual(["inbox", "requests", "review"]);
+    expect(daily.items.map((i) => i.label)).toEqual(["Today (Georgia)", "Inbox", "CRM", "Ask Georgia", "Pipeline", "Insurance", "Investments", "Projects", "Dashboard"]);
+    expect((daily.items as readonly any[]).filter((i) => i.badgeKey).map((i) => i.badgeKey)).toEqual(["inbox", "requests"]);
+    // The Review Queue is in the back office but keeps its count: the back office icon shows a dot when something is waiting.
+    expect((GROUPS.find((g) => g.key === "backoffice")!.items as readonly any[]).find((i) => i.to === "/review-queue")?.badgeKey).toBe("review");
   });
   it("moves setup, imports, logs and the agents' own screens out of the way", () => {
     const back = GROUPS.find((g) => g.key === "backoffice")!.items.map((i) => i.to);
