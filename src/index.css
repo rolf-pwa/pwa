@@ -183,3 +183,7 @@
   /* iOS gives a date field a width of its own that can push past the card; keep it inside. */
   .advisor-app input[type="date"], .advisor-app input[type="time"] { min-width: 0; max-width: 100%; box-sizing: border-box; }
 }
+
+/* The phone shell: the page behind everything is the navy of its top bar, so the iPhone status bar takes the same navy (with white time and battery) instead of a grey fade.
+   MobileShell sets the class while it is showing; the shell paints its own background over this. */
+html.advisor-shell, html.advisor-shell body { background-color: #1e293b; }
