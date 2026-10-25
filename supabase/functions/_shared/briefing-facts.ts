@@ -65,7 +65,7 @@ export interface BriefingSections {
 
 export const emptySections = (): BriefingSections => ({ schedule: [], week: [], replies: [], ia: [], texts: [], firm: [], counts: { spam: 0, promo: 0, automated: 0, adminTotal: 0 } });
 
-export interface BriefingEmail { id: string; from: string; subject: string; snippet: string; labels: string[]; link: string; bulk?: boolean }
+export interface BriefingEmail { id: string; from: string; subject: string; snippet: string; labels: string[]; link: string; bulk?: boolean; /** When it arrived (ms since 1970), from Gmail. */ at?: number }
 /** Sorts mail into the lists the briefing shows: people to reply to, iA and Adobe Sign items, and counts of what was left out. */
 export function sectionsFromEmails(emails: BriefingEmail[], adminCount = 0): Pick<BriefingSections, "replies" | "ia" | "counts"> {
   const out: Pick<BriefingSections, "replies" | "ia" | "counts"> = { replies: [], ia: [], counts: { spam: 0, promo: 0, automated: 0, adminTotal: adminCount } };

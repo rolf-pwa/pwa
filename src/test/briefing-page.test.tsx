@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 vi.mock("@/shared/components/AppLayout", () => ({ AppLayout: ({ children }: any) => <div>{children}</div> }));
@@ -16,7 +16,7 @@ const briefing = {
     texts: [{ label: "Can you call me?", contact: "Sam Smith", link: "/inbox" }], firm: [{ label: "Glanz: rebalancing handed to you", link: "/review-agent" }], counts: { spam: 3, promo: 2, automated: 4, adminTotal: 6 },
   },
 };
-vi.mock("@/shared/integrations/supabase/client", () => ({ supabase: { from: () => ({ select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: (supabaseMock as any).current ?? briefing }) }) }) }) }), functions: { invoke: vi.fn() } } }));
+vi.mock("@/shared/integrations/supabase/client", () => ({ supabase: { from: () => ({ select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: (supabaseMock as any).current ?? briefing }) }) }) }) }), functions: { invoke: vi.fn() }, channel: () => { const c: any = { on: () => c, subscribe: () => c }; return c; }, removeChannel: vi.fn() } }));
 
 import Briefing from "@/modules/crm/pages/Briefing";
 
@@ -29,10 +29,22 @@ describe("the morning briefing page", () => {
     expect(screen.getByText("Monthly file 2026-10-30 is held").closest("a")?.getAttribute("href")).toBe("/importers");
     expect(screen.getByText("Overlaps")).toBeTruthy();
     expect(screen.getByText("Board Meeting")).toBeTruthy();
-    expect(screen.getByText("RRSP question")).toBeTruthy();
-    expect(screen.getByText("Business Tracker update")).toBeTruthy();
-    expect(screen.getByText("Sam Smith")).toBeTruthy();
-    expect(screen.getByText("Glanz: rebalancing handed to you")).toBeTruthy();
+  });
+  it("shows the lists as buttons at the top with counts, each opening its items in a panel", async () => {
+    render(<MemoryRouter><Briefing /></MemoryRouter>);
+    expect(await screen.findByTestId("today-tiles")).toBeTruthy();
+    for (const [id, n] of [["texts", "1"], ["replies", "1"], ["ia", "1"], ["firm", "1"], ["requests", "0"]]) expect(screen.getByTestId(`count-${id}`).textContent, id).toBe(n);
+    // the lists are no longer blocks in the page: they are behind the buttons
+    expect(screen.queryByText("RRSP question")).toBeNull();
+    fireEvent.click(screen.getByTestId("tile-replies"));
+    const panel = await screen.findByTestId("today-panel");
+    expect(within(panel).getByText("RRSP question")).toBeTruthy();
+    fireEvent.keyDown(panel, { key: "Escape" });
+    fireEvent.click(screen.getByTestId("tile-ia"));
+    expect(within(await screen.findByTestId("today-panel")).getByText("Business Tracker update")).toBeTruthy();
+    fireEvent.keyDown(screen.getByTestId("today-panel"), { key: "Escape" });
+    fireEvent.click(screen.getByTestId("tile-texts"));
+    expect(within(await screen.findByTestId("today-panel")).getByText("Sam Smith")).toBeTruthy();
   });
   it("says what was left out, and that nothing was changed", async () => {
     render(<MemoryRouter><Briefing /></MemoryRouter>);
