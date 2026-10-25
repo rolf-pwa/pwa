@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import { withModuleRoot } from "@/shared/lib/moduleHome";
 import {
   Breadcrumb,
   BreadcrumbList,
@@ -13,7 +14,9 @@ export interface BreadcrumbEntry {
   href?: string;
 }
 
-export function PageBreadcrumbs({ items }: { items: BreadcrumbEntry[] }) {
+export function PageBreadcrumbs({ items: given }: { items: BreadcrumbEntry[] }) {
+  // A trail written as "Dashboard > ..." starts at the module the page belongs to instead.
+  const items = withModuleRoot(given, useLocation().pathname);
   return (
     <Breadcrumb className="mb-4">
       <BreadcrumbList>

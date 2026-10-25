@@ -77,7 +77,6 @@ export const GROUPS = [
       { to: "/insurance", label: "Insurance", icon: ShieldCheck },
       { to: "/investments", label: "Investments", icon: LineChart },
       { to: "/projects", label: "Projects", icon: ListTodo },
-      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     ],
   },
   {

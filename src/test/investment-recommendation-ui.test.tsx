@@ -36,7 +36,7 @@ describe("the recommendation page", () => {
     const a = screen.getByTestId("rec-a");
     expect(a.textContent).not.toContain("Why not the Balanced portfolio");
     fireEvent.change(a.querySelector('select[aria-label="Model portfolio"]') as HTMLSelectElement, { target: { value: "growth" } });
-    expect(a.textContent).toContain("Why not the Balanced portfolio");
+    await waitFor(() => expect(a.textContent).toContain("Why not the Balanced portfolio"));
     expect((screen.getByTestId("rec-b").querySelector('textarea[aria-label="Why this suits the client"]') as HTMLTextAreaElement).value).toBe("");
   });
   it("will not send a letter that still has blanks", async () => {
