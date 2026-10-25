@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { CircleAlert, ExternalLink, Inbox, Mail, MessageSquare, UserRound, Users } from "lucide-react";
+import { CalendarClock, CircleAlert, ExternalLink, ListTodo, Mail, UserRound, Users } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/shared/components/ui/sheet";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { cn } from "@/shared/lib/utils";
-import { TILE_LABEL, TILE_ORDER, buildTiles, loadSeen, newKeys, saveSeen, type LiveToday, type TileId, type TodayItem } from "../lib/today";
+import { TILE_LABEL, TILE_ORDER, buildTiles, loadSeen, newKeys, saveSeen, watched, type LiveToday, type TileId, type TodayGroup, type TodayItem } from "../lib/today";
 import type { BriefingSections } from "../../../../supabase/functions/_shared/briefing-facts";
 
-const ICON: Record<TileId, typeof Mail> = { texts: MessageSquare, replies: Mail, ia: Inbox, firm: CircleAlert, requests: Users };
-const EMPTY: Record<TileId, string> = { texts: "Nothing unread on the business line.", replies: "No new mail from people.", ia: "No notices.", firm: "Nothing is waiting on you.", requests: "No client request is waiting on you." };
+const ICON: Record<TileId, typeof Mail> = { messages: Mail, requests: Users, firm: CircleAlert, calendar: CalendarClock, tasks: ListTodo };
+const EMPTY: Record<TileId, string> = { messages: "Nothing is waiting: no texts, no mail from people, no notices.", requests: "No client request is waiting on you.", firm: "Nothing is waiting on you.", calendar: "Nothing on the calendar.", tasks: "Nothing is overdue or due today." };
+const HINT: Record<TileId, string> = { messages: "Texts and calls, mail from people, and iA and Adobe Sign notices.", requests: "Clients waiting on your reply.", firm: "What Georgia has handed to you.", calendar: "Today and the week ahead, as the calendar is now.", tasks: "Your tasks that are overdue or due today, and what is coming this week." };
 const FIVE_MINUTES = 5 * 60 * 1000;
 
 /** The live part of Today: unread texts and open client requests as they change, and new mail every five minutes. */
@@ -42,7 +43,7 @@ function ItemRow({ item, fresh, onDone }: { item: TodayItem; fresh: boolean; onD
     <li className={cn("rounded-md border p-3 text-sm", fresh && "border-accent/60 bg-accent/5")} data-testid="today-item" data-new={fresh ? "true" : "false"}>
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
-          {link}{fresh && <span className="ml-2 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent">New</span>}
+          {link}{item.badge && <span className="ml-2 rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">{item.badge}</span>}{fresh && <span className="ml-2 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent">New</span>}
           {item.sub && <p className="mt-0.5 text-xs text-muted-foreground">{item.sub}</p>}
           {item.contactId && item.href && item.href.startsWith("http") && (
             <Link to={`/contacts/${item.contactId}`} className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline" data-testid="open-contact"><UserRound className="h-3 w-3" />Open {item.contactName ?? "the contact"}</Link>
@@ -66,18 +67,30 @@ export function TodayTiles({ sections, live, onDone }: { sections: BriefingSecti
 
   // First visit in this browser: what is there now counts as seen, so the dots mean something from the next change on.
   useEffect(() => {
-    for (const id of TILE_ORDER) if (loadSeen(id) === null && (id === "texts" || id === "requests" ? live !== null : sections !== null)) saveSeen(id, tiles[id].map((i) => i.key));
+    for (const id of TILE_ORDER) if (loadSeen(id) === null && (id === "messages" || id === "requests" || id === "tasks" ? live !== null : sections !== null)) saveSeen(id, watched(tiles[id]).map((i) => i.key));
   }, [tiles, live, sections]);
 
-  const open = (id: TileId) => { setFresh(new Set(newKeys(tiles[id], loadSeen(id)))); setOpenTile(id); };
-  const close = () => { if (openTile) { saveSeen(openTile, tiles[openTile].map((i) => i.key)); setSeenTick((n) => n + 1); } setOpenTile(null); };
-  const items = openTile ? tiles[openTile] : [];
+  const open = (id: TileId) => { setFresh(new Set(newKeys(watched(tiles[id]), loadSeen(id)))); setOpenTile(id); };
+  const close = () => { if (openTile) { saveSeen(openTile, watched(tiles[openTile]).map((i) => i.key)); setSeenTick((n) => n + 1); } setOpenTile(null); };
+  const groups = openTile ? tiles[openTile].groups : [];
+  const total = groups.reduce((n, g) => n + g.items.length, 0);
+  const section = (g: TodayGroup, titled: boolean) => {
+    const list = <ul className="space-y-2">{g.items.map((it) => <ItemRow key={it.key} item={it} fresh={fresh.has(it.key)} onDone={onDone} />)}</ul>;
+    if (g.items.length === 0 && !g.link) return null;
+    return (
+      <section key={g.id} className="space-y-2" data-testid={`group-${g.id}`}>
+        {titled && <div className="flex items-baseline justify-between gap-3"><h3 className="text-sm font-semibold">{g.label} <span className="font-normal text-muted-foreground">{g.items.length}</span></h3>{g.link && <Link to={g.link.to} className="text-xs text-accent hover:underline" data-testid={g.link.testId}>{g.link.label}</Link>}</div>}
+        {!titled && g.link && <p className="text-xs"><Link to={g.link.to} className="text-accent hover:underline" data-testid={g.link.testId}>{g.link.label}</Link></p>}
+        {g.collapsed ? <details><summary className="cursor-pointer text-xs text-muted-foreground">Show {g.items.length}</summary><div className="mt-2">{list}</div></details> : list}
+      </section>
+    );
+  };
 
   return (
     <>
       <div className="flex flex-wrap gap-2" role="toolbar" aria-label="What needs you" data-testid="today-tiles" data-tick={seenTick}>
         {TILE_ORDER.map((id) => {
-          const Icon = ICON[id], count = tiles[id].length, nw = newKeys(tiles[id], loadSeen(id)).length;
+          const Icon = ICON[id], count = tiles[id].count, nw = newKeys(watched(tiles[id]), loadSeen(id)).length;
           return (
             <button key={id} type="button" onClick={() => open(id)} data-testid={`tile-${id}`} className={cn("relative inline-flex items-center gap-2 rounded-lg border bg-card px-3.5 py-2 text-sm font-medium transition-colors hover:border-accent hover:bg-accent/5", count === 0 && "text-muted-foreground")}>
               <Icon className="h-4 w-4 text-accent" />{TILE_LABEL[id]}
@@ -91,12 +104,12 @@ export function TodayTiles({ sections, live, onDone }: { sections: BriefingSecti
         <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md" data-testid="today-panel">
           <SheetHeader>
             <SheetTitle>{openTile ? TILE_LABEL[openTile] : ""}</SheetTitle>
-            <SheetDescription>{openTile === "texts" ? <>Unread on the business line. <Link to="/inbox" className="text-accent hover:underline" data-testid="open-full-inbox">Open the full inbox</Link></> : openTile === "requests" ? <>Waiting on your reply. <Link to="/ask-georgia" className="text-accent hover:underline">Open Ask Georgia</Link></> : "Click one to open it; the person it is about opens in their own page."}</SheetDescription>
+            <SheetDescription>{openTile ? HINT[openTile] : ""} Click one to open it; the person it is about opens in their own page.</SheetDescription>
           </SheetHeader>
-          <ul className="mt-4 space-y-2">
-            {items.map((it) => <ItemRow key={it.key} item={it} fresh={fresh.has(it.key)} onDone={onDone} />)}
-            {items.length === 0 && openTile && <p className="text-sm text-muted-foreground">{EMPTY[openTile]}</p>}
-          </ul>
+          <div className="mt-4 space-y-5">
+            {groups.map((g) => section(g, groups.length > 1))}
+            {total === 0 && openTile && <p className="text-sm text-muted-foreground">{EMPTY[openTile]}</p>}
+          </div>
         </SheetContent>
       </Sheet>
     </>

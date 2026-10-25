@@ -27,24 +27,24 @@ describe("the morning briefing page", () => {
     expect(screen.getByText("Reply to Jane about her RRSP").closest("a")?.getAttribute("href")).toContain("mail.google.com");
     expect(screen.getByText(/Suggested: Send the transfer form/)).toBeTruthy();
     expect(screen.getByText("Monthly file 2026-10-30 is held").closest("a")?.getAttribute("href")).toBe("/importers");
-    expect(screen.getByText("Overlaps")).toBeTruthy();
-    expect(screen.getByText("Board Meeting")).toBeTruthy();
+    // the calendar is behind its button, not a block on the page
+    expect(screen.queryByText("Board Meeting")).toBeNull();
   });
-  it("shows the lists as buttons at the top with counts, each opening its items in a panel", async () => {
+  it("shows five buttons at the top with counts, each opening its items in a panel", async () => {
     render(<MemoryRouter><Briefing /></MemoryRouter>);
     expect(await screen.findByTestId("today-tiles")).toBeTruthy();
-    for (const [id, n] of [["texts", "1"], ["replies", "1"], ["ia", "1"], ["firm", "1"], ["requests", "0"]]) expect(screen.getByTestId(`count-${id}`).textContent, id).toBe(n);
+    for (const [id, n] of [["messages", "3"], ["requests", "0"], ["firm", "1"], ["calendar", "1"], ["tasks", "0"]]) expect(screen.getByTestId(`count-${id}`).textContent, id).toBe(n);
     // the lists are no longer blocks in the page: they are behind the buttons
     expect(screen.queryByText("RRSP question")).toBeNull();
-    fireEvent.click(screen.getByTestId("tile-replies"));
+    fireEvent.click(screen.getByTestId("tile-messages"));
     const panel = await screen.findByTestId("today-panel");
-    expect(within(panel).getByText("RRSP question")).toBeTruthy();
+    for (const t of ["RRSP question", "Business Tracker update", "Sam Smith"]) expect(within(panel).getByText(t)).toBeTruthy();
     fireEvent.keyDown(panel, { key: "Escape" });
-    fireEvent.click(screen.getByTestId("tile-ia"));
-    expect(within(await screen.findByTestId("today-panel")).getByText("Business Tracker update")).toBeTruthy();
-    fireEvent.keyDown(screen.getByTestId("today-panel"), { key: "Escape" });
-    fireEvent.click(screen.getByTestId("tile-texts"));
-    expect(within(await screen.findByTestId("today-panel")).getByText("Sam Smith")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("tile-calendar"));
+    const cal = await screen.findByTestId("today-panel");
+    expect(within(cal).getByText("Client A")).toBeTruthy();
+    expect(within(cal).getByText("Overlaps")).toBeTruthy();
+    expect(within(cal).getByText("Board Meeting")).toBeTruthy();
   });
   it("says what was left out, and that nothing was changed", async () => {
     render(<MemoryRouter><Briefing /></MemoryRouter>);
