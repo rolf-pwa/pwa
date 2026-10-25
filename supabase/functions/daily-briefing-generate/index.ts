@@ -848,7 +848,13 @@ Deno.serve(async (req) => {
         const { error } = await db.from("push_subscriptions").update({ ...(cats ? { categories: cats } : {}), ...(typeof (body as any).quiet === "boolean" ? { quiet: (body as any).quiet } : {}) }).eq("user_id", userId).eq("endpoint", String((body as any).endpoint ?? ""));
         return json({ ok: !error }, error ? 400 : 200);
       }
-      if (body.action === "ea_push_test") return json({ ok: true, ...(await pushTest(db, userId, String((body as any).endpoint ?? ""))) });
+      if (body.action === "ea_push_test") {
+        const endpoint = String((body as any).endpoint ?? "");
+        // Sent a few seconds later so there is time to leave the app: a phone may not show a notification for the app that is open.
+        // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+        EdgeRuntime.waitUntil(new Promise((r) => setTimeout(r, 10_000)).then(() => pushTest(db, userId, endpoint)).catch((e: unknown) => console.error("[push test]", e)));
+        return json({ ok: true, sent: 1 });
+      }
       if (body.action === "ea_history") return json({ ok: true, ...(await eaHistory(db, userId)) });
       if (body.action === "ea_chat") return json({ ok: true, ...(await eaChat(db, userId, body.message ?? "", body.start === true)) });
       if (body.action === "ea_decide") return json(await eaDecide(db, userId, String(body.actionId ?? ""), body.decision === "done" ? "done" : "dismissed"));

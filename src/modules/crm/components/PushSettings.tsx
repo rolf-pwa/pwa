@@ -26,7 +26,7 @@ export function PushSettings() {
   const turnOff = () => run(async () => { if (sub) await disablePush(sub); setSub(null); });
   const toggle = (id: string, on: boolean) => { const next = on ? [...cats, id] : cats.filter((c) => c !== id); setCats(next); if (sub) void savePushPrefs(sub.endpoint, { categories: next }); };
   const setQuietHours = (on: boolean) => { setQuiet(on); if (sub) void savePushPrefs(sub.endpoint, { quiet: on }); };
-  const test = () => run(async () => { const r = await sendPushTest(sub!.endpoint); toast[r.sent ? "success" : "error"](r.sent ? "Sent. It should arrive in a moment." : "Could not send. Turn notifications off and on again."); });
+  const test = () => run(async () => { const r = await sendPushTest(sub!.endpoint); toast[r.sent ? "success" : "error"](r.sent ? "Sending in 10 seconds. Go to your home screen or lock the phone now." : "Could not send. Turn notifications off and on again."); });
 
   return (
     <section aria-label="Notifications" data-testid="push-settings">
