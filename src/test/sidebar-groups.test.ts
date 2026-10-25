@@ -54,3 +54,15 @@ describe("the page-view log", () => {
     expect(m).not.toMatch(/GRANT SELECT[^;]*TO authenticated/);
   });
 });
+
+describe("where staff land", () => {
+  it("is Today from every way in: the sign-in page, the Google callback, the root address, and the workspaces' back links", () => {
+    expect(readFileSync("src/shared/lib/staffHome.ts", "utf8")).toContain('STAFF_HOME = "/briefing"');
+    for (const f of ["src/pages/Login.tsx", "src/pages/GoogleCallback.tsx", "src/pages/AuthCallback.tsx", "src/modules/insurance/InsuranceLayout.tsx", "src/modules/investments/InvestmentLayout.tsx"]) {
+      const s = readFileSync(f, "utf8");
+      expect(s, f).toContain("STAFF_HOME");
+      expect(s, f).not.toMatch(/(navigate\(|Navigate to=|setDestination\()\s*\{?\s*["`]\/dashboard["`]/);
+      expect(s, f).not.toContain(': "/dashboard"');
+    }
+  });
+});

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { STAFF_HOME } from "@/shared/lib/staffHome";
 import { Link, Outlet, useParams } from "react-router-dom";
 import { ArrowLeft, Calculator, ClipboardCheck, ClipboardList, FileBarChart, FileText, LayoutGrid, Loader2, Shield, Users } from "lucide-react";
 import { NavLink } from "@/shared/components/NavLink";
@@ -46,7 +47,7 @@ export default function InsuranceLayout() {
   return (
     <div className="advisor-app flex min-h-screen bg-background text-foreground">
       <aside className="flex w-60 shrink-0 flex-col border-r bg-card p-3" aria-label="Insurance navigation">
-        <Link to={householdId ? `/households/${householdId}` : "/dashboard"} className="mb-4 flex items-center gap-2 px-2 py-1 text-xs font-medium text-primary hover:underline" data-testid="back-to-advisor">
+        <Link to={householdId ? `/households/${householdId}` : STAFF_HOME} className="mb-4 flex items-center gap-2 px-2 py-1 text-xs font-medium text-primary hover:underline" data-testid="back-to-advisor">
           <ArrowLeft className="h-3.5 w-3.5" /> Advisor site
         </Link>
         <p className="px-2 font-serif text-lg font-semibold">Insurance</p>

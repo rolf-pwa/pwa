@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { STAFF_HOME } from "@/shared/lib/staffHome";
 import { signInWithGoogle } from "@/shared/lib/auth";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { Navigate } from "react-router-dom";
@@ -38,7 +39,7 @@ const Login = () => {
   }
 
   if (user) {
-    if (isAllowedDomain(user.email)) return <Navigate to="/dashboard" replace />;
+    if (isAllowedDomain(user.email)) return <Navigate to={STAFF_HOME} replace />;
     return <Navigate to="/portal" replace />;
   }
 
