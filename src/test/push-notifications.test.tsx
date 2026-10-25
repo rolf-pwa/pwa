@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { PUSH_CATEGORIES, breaksQuietHours, categoryForSource, isQuietHour, safePath, shouldBuzz, staffPayload, textPayload } from "../../supabase/functions/_shared/push-rules";
+import { BADGE_SOURCES as SERVER_BADGE, PUSH_CATEGORIES, breaksQuietHours, categoryForSource, isQuietHour, safePath, shouldBuzz, staffPayload, textPayload } from "../../supabase/functions/_shared/push-rules";
 
 const lib = vi.hoisted(() => ({
   pushSupported: vi.fn(() => true), currentSubscription: vi.fn(async () => null as any), enablePush: vi.fn(), disablePush: vi.fn(async () => undefined),
@@ -68,6 +68,22 @@ describe("the wiring", () => {
     const fn = readFileSync("supabase/functions/daily-briefing-generate/index.ts", "utf8");
     for (const a of ["ea_push_key", "ea_push_subscribe", "ea_push_unsubscribe", "ea_push_prefs", "ea_push_test"]) expect(fn).toContain(`"${a}"`);
     expect(fn).toContain('cronBody.job === "push_notify"');
+  });
+});
+
+describe("the number on the icon", () => {
+  it("counts the same bell items on the phone and on the server, and never counts voicemails twice", () => {
+    const client = readFileSync("src/shared/lib/push.ts", "utf8").match(/BADGE_SOURCES = \[([^\]]*)\]/)![1].match(/"([a-z_]+)"/g)!.map((x) => x.replace(/"/g, ""));
+    expect(client).toEqual([...SERVER_BADGE]);
+    expect(client).not.toContain("voicemail");
+    expect(client).not.toContain("urgent_text");
+  });
+  it("is set by the push itself, and kept right by the app while it is open", () => {
+    expect(readFileSync("public/sw.js", "utf8")).toContain("setAppBadge");
+    expect(readFileSync("src/shared/components/MobileShell.tsx", "utf8")).toContain("setAppBadge(iconBadge)");
+    expect(readFileSync("supabase/functions/_shared/push-service.ts", "utf8")).toContain("badge: await badgeCount(db)");
+    expect(staffPayload({ id: "n", title: "x", source_type: "new_request" }, 4).badge).toBe(4);
+    expect(textPayload({ id: "m" }, null, 2).badge).toBe(2);
   });
 });
 

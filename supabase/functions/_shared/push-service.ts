@@ -1,6 +1,6 @@
 // Sends the push notifications: who is subscribed, what each device wants, and clearing out devices that are gone.
 import * as webpush from "jsr:@negrel/webpush@0.5.0";
-import { categoryForSource, shouldBuzz, staffPayload, textPayload, type PushPayload } from "./push-rules.ts";
+import { BADGE_SOURCES, categoryForSource, shouldBuzz, staffPayload, textPayload, type PushPayload } from "./push-rules.ts";
 
 // deno-lint-ignore no-explicit-any
 type Db = any;
@@ -40,6 +40,16 @@ async function deliver(db: Db, subs: Sub[], payload: PushPayload): Promise<numbe
   return sent;
 }
 
+/** The red number on the icon: unread texts and calls, plus unread bell items that need Rolf. */
+export async function badgeCount(db: Db): Promise<number> {
+  const [m, c, n] = await Promise.all([
+    db.from("quo_messages").select("id", { count: "exact", head: true }).eq("direction", "inbound").is("read_at", null),
+    db.from("quo_calls").select("id", { count: "exact", head: true }).eq("direction", "inbound").is("read_at", null),
+    db.from("staff_notifications").select("id", { count: "exact", head: true }).eq("read", false).in("source_type", [...BADGE_SOURCES]),
+  ]);
+  return (m.count ?? 0) + (c.count ?? 0) + (n.count ?? 0);
+}
+
 /** A notification or an inbound text just landed: buzz the devices that want this kind, respecting quiet hours. */
 export async function pushNotify(db: Db, kind: "staff" | "text", id: string, now = new Date()): Promise<{ sent: number; reason?: string }> {
   let payload: PushPayload, category, source: string;
@@ -48,13 +58,13 @@ export async function pushNotify(db: Db, kind: "staff" | "text", id: string, now
     if (!n) return { sent: 0, reason: "no such notification" };
     category = categoryForSource(n.source_type);
     if (!category) return { sent: 0, reason: "not a buzzing kind" };
-    source = n.source_type; payload = staffPayload(n);
+    source = n.source_type; payload = staffPayload(n, await badgeCount(db));
   } else {
     const { data: m } = await db.from("quo_messages").select("id, contact_id, direction").eq("id", id).maybeSingle();
     if (!m || m.direction !== "inbound") return { sent: 0, reason: "not an inbound text" };
     let name: string | null = null;
     if (m.contact_id) { const { data: c } = await db.from("contacts").select("first_name, last_name").eq("id", m.contact_id).maybeSingle(); name = c ? `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || null : null; }
-    category = "texts" as const; source = "text"; payload = textPayload(m, name);
+    category = "texts" as const; source = "text"; payload = textPayload(m, name, await badgeCount(db));
   }
   const { data: subs } = await db.from("push_subscriptions").select("id, endpoint, p256dh, auth, categories, quiet");
   const wanted = ((subs ?? []) as Sub[]).filter((s) => shouldBuzz(category!, source, s, now));
@@ -64,7 +74,7 @@ export async function pushNotify(db: Db, kind: "staff" | "text", id: string, now
 /** A test from the phone itself, to the device that asked. */
 export async function pushTest(db: Db, userId: string, endpoint: string): Promise<{ sent: number }> {
   const { data: subs } = await db.from("push_subscriptions").select("id, endpoint, p256dh, auth, categories, quiet").eq("user_id", userId).eq("endpoint", endpoint);
-  return { sent: await deliver(db, (subs ?? []) as Sub[], { title: "Notifications are on", body: "This is how ProsperWise will reach you.", url: "/more", tag: "push-test" }) };
+  return { sent: await deliver(db, (subs ?? []) as Sub[], { title: "Notifications are on", body: "This is how ProsperWise will reach you.", url: "/more", tag: "push-test", badge: await badgeCount(db) }) };
 }
 
 export async function pushSubscribe(db: Db, userId: string, sub: { endpoint?: string; keys?: { p256dh?: string; auth?: string } }, userAgent: string): Promise<{ ok: boolean; error?: string }> {
