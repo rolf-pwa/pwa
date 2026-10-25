@@ -17,11 +17,11 @@ export function ContactTotalsStrip({ contactId, assets }: { contactId: string; a
     ["Total Assets", assets, ""], ["Liabilities", liabilities, "text-destructive"], ["Net Worth", liabilities === null ? null : assets - liabilities, ""],
   ];
   return (
-    <div className="grid grid-cols-3 gap-4 rounded-lg border bg-card px-5 py-3">
+    <div className="grid grid-cols-3 gap-2 rounded-lg border bg-card px-3 py-3 md:gap-4 md:px-5">
       {items.map(([label, value, tone]) => (
         <div key={label}>
           <p className="text-xs text-muted-foreground">{label}</p>
-          <p className={`text-lg font-semibold tabular-nums ${tone}`}>{value === null ? "—" : money(value)}</p>
+          <p className={`text-sm font-semibold tabular-nums md:text-lg ${tone}`}>{value === null ? "—" : money(value)}</p>
         </div>
       ))}
     </div>

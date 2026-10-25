@@ -174,7 +174,7 @@ const Households = () => {
             />
           </div>
           <Select value={governanceFilter} onValueChange={setGovernanceFilter}>
-            <SelectTrigger className="w-44">
+            <SelectTrigger className="w-full sm:w-44">
               <SelectValue placeholder="Governance" />
             </SelectTrigger>
             <SelectContent>
@@ -186,7 +186,7 @@ const Households = () => {
             </SelectContent>
           </Select>
           <Select value={fiduciaryFilter} onValueChange={setFiduciaryFilter}>
-            <SelectTrigger className="w-44">
+            <SelectTrigger className="w-full sm:w-44">
               <SelectValue placeholder="Fiduciary" />
             </SelectTrigger>
             <SelectContent>
