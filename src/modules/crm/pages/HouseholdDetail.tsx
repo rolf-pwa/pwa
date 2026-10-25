@@ -56,7 +56,7 @@ import { VineyardDashboard } from "@/modules/crm/components/VineyardDashboard";
 import { RentalPropertiesCard } from "@/modules/crm/components/RentalPropertiesCard";
 import { HouseholdTotalsStrip } from "@/modules/crm/components/HouseholdTotalsStrip";
 import { HouseholdTaxSummary } from "@/modules/crm/components/HouseholdTaxSummary";
-import { CharterRatificationTile, StabilizationMapButton, GovernanceAuditButton, QuarterlySystemReviewButton, HouseholdAuditTrailRollup, StartCharterIntakeButton, CausalAIWorkbenchButton } from "@/modules/audit";
+import { StabilizationMapButton, GovernanceAuditButton, QuarterlySystemReviewButton, HouseholdAuditTrailRollup, StartCharterIntakeButton, CausalAIWorkbenchButton } from "@/modules/audit";
 import { ProsPanel } from "@/modules/crm/components/ProsPanel";
 import { AddCompanyDialog } from "@/modules/crm/components/AddCompanyDialog";
 import {
@@ -924,68 +924,6 @@ const HouseholdDetail = () => {
                   </Card>
                   </SidebarSection>
                 )}
-                <CharterRatificationTile householdId={id} />
-
-                <Card>
-                  <CardContent className="py-4">
-                    <Link
-                      to={`/workbench?household=${id}`}
-                      className="flex items-center gap-3 rounded-lg border border-dashed border-primary/30 bg-primary/5 px-4 py-3 hover:bg-primary/10 transition-colors"
-                    >
-                      <BarChart3 className="h-5 w-5 text-primary" />
-                      <div>
-                        <p className="text-sm font-medium text-foreground">Cashflow Analyst</p>
-                        <p className="text-xs text-muted-foreground">Analyze the True Burn Rate</p>
-                      </div>
-                    </Link>
-                  </CardContent>
-                </Card>
-
-                {/* Professional Team — household roll-up */}
-                {(() => {
-                  const rows: { member: any; role: string; name: string; firm: string | null }[] = [];
-                  members.forEach((m: any) => {
-                    [
-                      { role: "Lawyer", name: m.lawyer_name, firm: m.lawyer_firm },
-                      { role: "Accountant", name: m.accountant_name, firm: m.accountant_firm },
-                      { role: "Executor", name: m.executor_name, firm: m.executor_firm },
-                      { role: "Power of Attorney", name: m.poa_name, firm: m.poa_firm },
-                    ].forEach((p) => {
-                      if (p.name) rows.push({ member: m, role: p.role, name: p.name, firm: p.firm });
-                    });
-                  });
-                  return (
-                    <SidebarSection title="Professional Team" meta={rows.length ? String(rows.length) : undefined}>
-                    <Card>
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-base">Professional Team</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        {rows.length > 0 ? (
-                          <ul className="space-y-1.5 text-sm">
-                            {rows.map((r, i) => (
-                              <li key={i} className="border-b py-1.5 last:border-0">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="font-medium truncate">{r.name}{r.firm ? ` — ${r.firm}` : ""}</span>
-                                  <span className="text-xs text-muted-foreground shrink-0">{r.role}</span>
-                                </div>
-                                <Link
-                                  to={`/contacts/${r.member.id}`}
-                                  className="text-[11px] text-muted-foreground hover:underline"
-                                >
-                                  for {`${r.member.first_name} ${r.member.last_name || ""}`.trim()}
-                                </Link>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="text-sm text-muted-foreground">No professionals linked.</p>
-                        )}
-                      </CardContent>
-                    </Card>
-                    </SidebarSection>
-                  );
-                })()}
               </div>
             </div>
           </TabsContent>
