@@ -57,6 +57,8 @@ const formatCurrency = (value: number) =>
   }).format(value);
 
 interface Props {
+  /** Inside a phone's bottom sheet: no card chrome and no inner scrolling, the sheet scrolls. */
+  embedded?: boolean;
   selection: ResolvedSelection;
   onClose: () => void;
   onSelectHousehold: (id: string) => void;
@@ -77,6 +79,7 @@ interface Props {
 }
 
 export function DetailPanel({
+  embedded,
   selection,
   onClose,
   onSelectHousehold,
@@ -147,7 +150,7 @@ export function DetailPanel({
   }, [selection.type, selection.type === "family" ? selection.family.id : selection.type === "household" ? selection.household.id : selection.individual.id]);
 
   return (
-    <div className="sticky top-6 flex max-h-[calc(100vh-6rem)] w-[400px] shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-[0_1px_2px_hsl(var(--pw-navy)/0.05)]">
+    <div className={embedded ? "flex w-full flex-col rounded-lg bg-card" : "sticky top-6 flex max-h-[calc(100vh-6rem)] w-[400px] shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-[0_1px_2px_hsl(var(--pw-navy)/0.05)]"} data-testid="family-detail-panel">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="min-w-0">
           <p className="truncate text-xs text-muted-foreground">
@@ -215,7 +218,7 @@ export function DetailPanel({
         </div>
       </div>
 
-      <div className="flex-1 space-y-5 overflow-y-auto p-4">
+      <div className={embedded ? "space-y-5 p-4" : "flex-1 space-y-5 overflow-y-auto p-4"}>
         <div className="flex items-center gap-2">
           {selection.type === "family" && <TreesIcon className="h-5 w-5 shrink-0 text-primary" />}
           {selection.type === "household" && <Home className="h-5 w-5 shrink-0 text-accent" />}
