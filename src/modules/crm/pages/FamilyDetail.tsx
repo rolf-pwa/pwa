@@ -355,9 +355,9 @@ const FamilyDetail = () => {
           onRecalculated={fetchData}
         />
 
-        <div className="flex gap-4 items-start">
-          {/* Sidebar */}
-          <div className="w-80 shrink-0 space-y-4">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start" data-testid="family-columns">
+          {/* Sidebar: beside the households on a tablet or desktop, under them on a phone */}
+          <div className="order-2 w-full shrink-0 space-y-4 md:order-1 md:w-80" data-testid="family-sidebar">
             <CollapsibleCard
               icon={Wallet}
               iconBgClassName="bg-sanctuary-bronze/10"
@@ -682,7 +682,7 @@ const FamilyDetail = () => {
           </div>
 
           {/* Main column — Households & Members */}
-          <div className="flex-1 min-w-0 space-y-6">
+          <div className="order-1 w-full min-w-0 flex-1 space-y-6 md:order-2" data-testid="family-main">
             <Card>
               <CardHeader className="pb-4 flex flex-row items-center justify-between">
                 <CardTitle className="text-lg flex items-center gap-2">

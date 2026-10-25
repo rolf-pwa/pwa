@@ -28,6 +28,9 @@ import { toast } from "sonner";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { DecouplerWizard } from "@/modules/crm/components/DecouplerWizard";
 import { FamilyTreeList } from "@/modules/crm/components/families/FamilyTreeList";
+import { useIsMobile } from "@/shared/hooks/use-mobile";
+import { BottomSheetContent } from "@/shared/components/BottomSheet";
+import { Sheet, SheetHeader, SheetTitle } from "@/shared/components/ui/sheet";
 import { DetailPanel } from "@/modules/crm/components/families/DetailPanel";
 import type { Family, Individual, Selected, ResolvedSelection } from "@/modules/crm/components/families/types";
 
@@ -39,6 +42,7 @@ const Families = () => {
   const [loading, setLoading] = useState(true);
   const [openFamilies, setOpenFamilies] = useState<Set<string>>(new Set());
   const [openHouseholds, setOpenHouseholds] = useState<Set<string>>(new Set());
+  const phone = useIsMobile();
   const [showNewFamily, setShowNewFamily] = useState(false);
   const [newFamilyName, setNewFamilyName] = useState("");
   const [showNewHousehold, setShowNewHousehold] = useState<string | null>(null);
@@ -453,9 +457,9 @@ const Families = () => {
         ]} />
         <CrmTabs />
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold">Family Tree</h1>
+            <h1 className="text-2xl font-bold sm:text-3xl">Family Tree</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Family → Household → Individual Hierarchy — {families.length} families
             </p>
@@ -508,7 +512,40 @@ const Families = () => {
                 updateContactName={updateContactName}
               />
             </div>
-            {resolvedSelection && (
+            {resolvedSelection && (phone ? (
+              <Sheet open onOpenChange={(o) => { if (!o) setSelected(null); }}>
+                <BottomSheetContent onClose={() => setSelected(null)} data-testid="family-sheet">
+                  <SheetHeader className="sr-only"><SheetTitle>Details</SheetTitle></SheetHeader>
+                  <DetailPanel
+                    embedded
+                selection={resolvedSelection}
+                onClose={() => setSelected(null)}
+                onSelectHousehold={(id) => setSelected({ type: "household", id })}
+                onSelectContact={(id) => setSelected({ type: "contact", id })}
+                onRefetch={fetchFamilies}
+                updateFamilyName={updateFamilyName}
+                deleteFamily={deleteFamily}
+                updateHouseholdField={updateHouseholdField}
+                updateContactName={updateContactName}
+                deleteHousehold={deleteHousehold}
+                onAddHousehold={(familyId) => setShowNewHousehold(familyId)}
+                onAddIndividual={openAddIndividual}
+                onMoveHousehold={(householdId, householdLabel, currentFamilyId) => {
+                  setMoveHouseholdTarget({ householdId, householdLabel, currentFamilyId });
+                  setMoveDestinationFamilyId("");
+                  setMoveNewFamilyName("");
+                  setMoveCreateNew(false);
+                }}
+                onReassign={openReassign}
+                onDecoupler={(contactId, contactName, familyId, familyName) =>
+                  setDecouplerTarget({ contactId, contactName, familyId, familyName })
+                }
+                markDeceased={markDeceased}
+                unlinkIndividual={unlinkIndividual}
+                  />
+                </BottomSheetContent>
+              </Sheet>
+            ) : (
               <DetailPanel
                 selection={resolvedSelection}
                 onClose={() => setSelected(null)}
@@ -535,7 +572,7 @@ const Families = () => {
                 markDeceased={markDeceased}
                 unlinkIndividual={unlinkIndividual}
               />
-            )}
+            ))}
           </div>
         )}
 
