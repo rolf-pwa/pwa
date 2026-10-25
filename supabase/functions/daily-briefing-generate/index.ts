@@ -22,7 +22,7 @@ import { addRule, decideSuggestion, rulebook, suggestRules, undoAction } from ".
 import { runCalendarInvites } from "../_shared/calendar-service.ts";
 import { runNoticeProcessor } from "../_shared/notice-service.ts";
 import { sweepArchive, sweepFeedback, sweepForgetSender, sweepList, sweepMorning, sweepRun, sweepSetAuto, sweepUndoArchive } from "../_shared/inbox-sweep-handlers.ts";
-import { sweepLine } from "../_shared/inbox-sweep.ts";
+import { quietReplyKeys, sweepLine, type Bucket, type Learned } from "../_shared/inbox-sweep.ts";
 import { scanMeetingNotes } from "../_shared/meeting-followup-service.ts";
 import { runGeorgiaTasks } from "../_shared/georgia-task-service.ts";
 import { classifyEmail, calendarConflicts, groupWeek, sectionsFromEmails, type BriefingEmail, type BriefingSections, type CalEvent } from "../_shared/briefing-facts.ts";
@@ -392,8 +392,24 @@ async function liveToday(db: Db, userId: string) {
     for (const r of [...(stored.replies ?? []), ...newReplies]) { const hit = addressesIn(r.from).map((a) => byAddr.get(a)).find(Boolean); if (hit && r.key) matches[r.key] = hit; }
   }
 
+  // Mail the inbox sweep has put in FYI or Would archive, or from a sender Rolf has sorted that way, does not belong under "To reply to".
+  const replyList = [...(stored.replies ?? []), ...newReplies];
+  const sorted = new Map<string, Bucket>(), learned: Learned = new Map();
+  if (replyList.length) {
+    const ids = [...new Set(replyList.map((r) => r.id).filter((x): x is string => !!x))].slice(0, 100);
+    const [{ data: items }, { data: told }] = await Promise.all([
+      ids.length ? db.from("inbox_sweep_items").select("message_id, bucket").eq("user_id", userId).in("message_id", ids) : Promise.resolve({ data: [] }),
+      db.from("inbox_sweep_senders").select("sender, bucket").eq("user_id", userId),
+    ]);
+    // deno-lint-ignore no-explicit-any
+    for (const i of (items ?? []) as any[]) sorted.set(i.message_id, i.bucket);
+    // deno-lint-ignore no-explicit-any
+    for (const t of (told ?? []) as any[]) learned.set(String(t.sender).toLowerCase(), t.bucket);
+  }
+  const hide = quietReplyKeys(replyList, sorted, learned);
+
   return {
-    ok: true as const, mailOk,
+    ok: true as const, mailOk, hide,
     texts: [...quo.unread, ...quo.voicemails].map((t) => ({ key: t.key ?? "", label: t.label, contact: t.contact, contactId: t.contactId ?? null, link: t.link })),
     requests: reqs.filter((r) => r.awaiting_staff_reply).map((r) => ({ key: `request:${r.id}`, contact: r.contact, contactId: r.contactId ?? null, type: r.type, description: String(r.description ?? "").slice(0, 160), created_at: r.created_at, link: r.link })),
     newReplies, newIa, matches, calendar, tasks,

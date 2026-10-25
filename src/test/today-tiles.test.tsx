@@ -45,6 +45,12 @@ describe("what the buttons show", () => {
     expect(t.requests.groups[0].items[0]).toMatchObject({ title: "Justin Santos", href: "/contacts/c3" });
     expect(t.firm.groups[0].items[0]).toMatchObject({ title: "Glanz: rebalancing handed to you", href: "/review-agent" });
   });
+  it("leaves out of To reply to the mail the sweep sorted into FYI or Would archive, but keeps it out of the other lists' way", () => {
+    const t = buildTiles(sections(), live({ hide: ["email:2", "email:9"] }));
+    expect(t.messages.groups[1].items.map((i) => i.key)).toEqual(["email:1"]); // email:2 (stored) and email:9 (new) are quiet
+    expect(t.messages.groups[2].items.map((i) => i.key)).toEqual(["email:3"]); // iA and Adobe notices are never hidden by this
+    expect(t.messages.count).toBe(5);
+  });
   it("falls back to the briefing's own lists until the live ones load, and drops what was marked done", () => {
     const t = buildTiles(sections({ dismissed: ["email:2"] }), null);
     expect(t.messages.groups[0].items.map((i) => i.title)).toEqual(["Old Name"]);
@@ -168,6 +174,20 @@ describe("the tabs and what they show", () => {
   });
 });
 
+describe("the words on a phone and a desktop", () => {
+  const phoneWidth = (w: number) => Object.defineProperty(window, "innerWidth", { writable: true, configurable: true, value: w });
+  afterEach(() => phoneWidth(1024));
+  it("says Tap on a phone and Click on a desktop", () => {
+    phoneWidth(390);
+    const { unmount } = render(<MemoryRouter initialEntries={["/?tab=requests"]}><TodayTabs sections={sections()} live={lv()} onDone={vi.fn()} briefing={<p>x</p>} /></MemoryRouter>);
+    expect(screen.getByTestId("today-panel").textContent).toContain("Tap one to open it");
+    unmount();
+    phoneWidth(1280);
+    render(<MemoryRouter initialEntries={["/?tab=requests"]}><TodayTabs sections={sections()} live={lv()} onDone={vi.fn()} briefing={<p>x</p>} /></MemoryRouter>);
+    expect(screen.getByTestId("today-panel").textContent).toContain("Click one to open it");
+  });
+});
+
 describe("the live Today action", () => {
   const fn = readFileSync("supabase/functions/daily-briefing-generate/index.ts", "utf8");
   it("reads texts, voicemails and requests live, carrying the contact, and only mail that arrived after the briefing", () => {
@@ -179,6 +199,10 @@ describe("the live Today action", () => {
     expect(fn).toContain("email.ilike.");
     // and the calendar as it is now, and tasks
     expect(fn).toContain("gatherCalendarFacts(token, todayStr)");
+    // and the mail the sweep has sorted away
+    expect(fn).toContain("quietReplyKeys(replyList, sorted, learned)");
+    expect(fn).toContain('db.from("inbox_sweep_senders").select("sender, bucket").eq("user_id", userId)');
+    expect(fn).toContain("ok: true as const, mailOk, hide,");
     expect(fn).toContain('.eq("assigned_agent_key", "georgia")');
     expect(fn).toContain("newReplies, newIa, matches, calendar, tasks,");
   });

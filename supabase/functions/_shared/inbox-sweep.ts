@@ -69,6 +69,20 @@ export function ruleVerdict(m: SweepMessage, clientAddresses: Set<string>, muted
 }
 
 /** Marking a sort wrong and saying where it belonged: the new bucket, and the sender to remember (empty if there is no address). Null if it is not a valid move. */
+/**
+ * The mail Today leaves out of "To reply to": what the inbox sweep sorted into FYI or Would archive (its own call for that message, or Rolf's correction), and mail from a
+ * sender Rolf has told Georgia belongs there. A message's own sort wins over the sender's. Keys are the briefing's own (email:<id>).
+ */
+export function quietReplyKeys(replies: { id?: string; key?: string; from: string }[], sorted: Map<string, Bucket>, learned: Learned): string[] {
+  const out: string[] = [];
+  for (const r of replies) {
+    if (!r.key) continue;
+    const b = (r.id ? sorted.get(r.id) : undefined) ?? learned.get(addressOf(r.from));
+    if (b === "fyi" || b === "archivable") out.push(r.key);
+  }
+  return out;
+}
+
 export function correctionPlan(item: { from_addr: string; bucket: Bucket }, correct: unknown): { correct: Bucket; sender: string } | null {
   if (!CORRECTABLE.includes(correct as Bucket) || correct === item.bucket || item.bucket === "client") return null;
   const sender = addressOf(item.from_addr);
