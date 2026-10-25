@@ -419,17 +419,17 @@ export default function Inbox() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3" data-testid="inbox-header">
           <div className="flex items-center gap-3">
             <InboxIcon className="h-7 w-7 text-amber-500" />
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Inbox</h1>
-              <p className="text-sm text-muted-foreground">
+              <h1 className="text-2xl font-bold text-foreground sm:text-3xl">Inbox</h1>
+              <p className="hidden text-sm text-muted-foreground sm:block">
                 Threaded SMS &amp; voice across all contacts
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <GeorgiaAnswersSwitch />
             <ProviderSwitch />
             <Button variant="outline" size="sm" onClick={load}>
@@ -439,7 +439,8 @@ export default function Inbox() {
         </div>
 
         <Tabs defaultValue="all">
-          <TabsList>
+          {/* Seven tabs do not fit a phone: the strip scrolls sideways instead of running off the page. */}
+          <TabsList className="flex h-auto w-full justify-start overflow-x-auto sm:inline-flex sm:w-auto" data-testid="inbox-tabs">
             <TabsTrigger value="all">All ({activeThreads.length})</TabsTrigger>
             <TabsTrigger value="sms">SMS</TabsTrigger>
             <TabsTrigger value="calls">Calls</TabsTrigger>
