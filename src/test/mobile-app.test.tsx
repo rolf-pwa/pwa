@@ -27,13 +27,15 @@ const at = (path: string, ui: React.ReactNode) => render(<MemoryRouter initialEn
 
 describe("the phone's bottom bar", () => {
   it("has Today, Messages, Clients, Georgia and More, in that order, each going where it should", () => {
-    expect(MOBILE_TABS.map((t) => [t.label, t.to])).toEqual([["Today", "/briefing"], ["Messages", "/inbox"], ["Clients", "/contacts"], ["Georgia", "/georgia"], ["More", "/more"]]);
+    expect(MOBILE_TABS.map((t) => [t.label, t.to])).toEqual([["Today", "/briefing"], ["Messages", "/briefing?tab=messages"], ["Clients", "/contacts"], ["Georgia", "/georgia"], ["More", "/more"]]);
   });
   it("lights the tab a page belongs to, and More for everything else", () => {
     expect(tabFor("/briefing")).toBe("today");
     expect(tabFor("/households/h1")).toBe("clients");
     expect(tabFor("/contacts/c1")).toBe("clients");
     expect(tabFor("/inbox")).toBe("messages");
+    expect(tabFor("/briefing", "?tab=messages")).toBe("messages"); // Messages opens Today's Messages list, so it is lit while that list is open
+    expect(tabFor("/briefing", "?tab=calendar")).toBe("today");
     expect(tabFor("/insurance/h1/needs")).toBe("more");
     expect(tabFor("/projects")).toBe("more");
   });
@@ -42,6 +44,12 @@ describe("the phone's bottom bar", () => {
     expect(isTabRoot("/contacts/c1")).toBe(false);
     at("/contacts/c1", <MobileShell>page</MobileShell>);
     expect(screen.getByLabelText("Back")).toBeTruthy();
+  });
+  it("lights Messages, not Today, while the Messages list is open", () => {
+    at("/briefing?tab=messages", <MobileShell>x</MobileShell>);
+    expect(screen.getByTestId("tab-messages").getAttribute("aria-current")).toBe("page");
+    expect(screen.getByTestId("tab-today").getAttribute("aria-current")).toBeNull();
+    expect(screen.getByTestId("tab-messages").getAttribute("href")).toBe("/briefing?tab=messages");
   });
   it("renders the bar with the active tab marked, counts on Today and Messages, and the page between the bars", () => {
     at("/briefing", <MobileShell><p>THE PAGE</p></MobileShell>);
