@@ -684,7 +684,7 @@ const FamilyDetail = () => {
           {/* Main column — Households & Members */}
           <div className="order-1 w-full min-w-0 flex-1 space-y-6 md:order-2" data-testid="family-main">
             <Card>
-              <CardHeader className="pb-4 flex flex-row items-center justify-between">
+              <CardHeader className="pb-4 flex flex-row flex-wrap items-center justify-between gap-2 px-4 sm:px-6">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Home className="h-4 w-4 text-sanctuary-bronze" />
                   Households & Members
@@ -720,23 +720,23 @@ const FamilyDetail = () => {
                           open={isOpen}
                           onOpenChange={() => toggleHousehold(hh.id)}
                         >
-                          <div className="flex items-center gap-2 px-6 py-3 hover:bg-muted/30">
-                            <CollapsibleTrigger className="flex items-center gap-2 flex-1 text-left min-w-0">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-3 hover:bg-muted/30 sm:px-6" data-testid="household-row">
+                            <CollapsibleTrigger className="flex min-w-0 basis-full flex-wrap items-center gap-2 text-left sm:basis-0 sm:flex-1 sm:flex-nowrap">
                               {isOpen ? (
                                 <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
                               ) : (
                                 <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                               )}
                               <Home className="h-4 w-4 text-sanctuary-bronze shrink-0" />
-                              <span className="font-medium truncate">{hh.label}</span>
-                              <Badge variant="outline" className="text-[10px] uppercase">
+                              <span className="min-w-0 break-words font-medium sm:truncate">{hh.label}</span>
+                              <Badge variant="outline" className="shrink-0 whitespace-nowrap text-[10px] uppercase">
                                 {members.length} {members.length === 1 ? "member" : "members"}
                               </Badge>
                             </CollapsibleTrigger>
-                            <span className="text-sm font-semibold text-sanctuary-bronze shrink-0">
+                            <span className="shrink-0 pl-6 text-sm font-semibold text-sanctuary-bronze sm:pl-0">
                               {formatCurrency(hhTotal)}
                             </span>
-                            <Button asChild variant="ghost" size="sm" className="shrink-0">
+                            <Button asChild variant="ghost" size="sm" className="ml-auto shrink-0 sm:ml-0">
                               <Link to={`/households/${hh.id}`}>
                                 Open <ExternalLink className="ml-1 h-3 w-3" />
                               </Link>
@@ -755,21 +755,22 @@ const FamilyDetail = () => {
                                   return (
                                     <div
                                       key={m.id}
-                                      className="flex items-center gap-2 pl-14 pr-6 py-2 hover:bg-muted/20"
+                                      className="flex flex-wrap items-center gap-x-2 gap-y-1 py-2 pl-8 pr-4 hover:bg-muted/20 sm:flex-nowrap sm:pl-14 sm:pr-6"
+                                      data-testid="member-row"
                                     >
                                       <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                                       <Link
                                         to={`/contacts/${m.id}`}
-                                        className="text-sm font-medium hover:underline truncate flex-1"
+                                        className="min-w-0 basis-[calc(100%-1.5rem)] break-words text-sm font-medium hover:underline sm:flex-1 sm:basis-0 sm:truncate"
                                       >
                                         {m.first_name} {m.last_name || ""}
                                       </Link>
                                       {m.family_role && (
-                                        <Badge variant="outline" className="text-[9px] uppercase">
+                                        <Badge variant="outline" className="ml-6 shrink-0 whitespace-nowrap text-[9px] uppercase sm:ml-0">
                                           {ROLE_LABELS[m.family_role] || m.family_role}
                                         </Badge>
                                       )}
-                                      <span className="text-xs text-muted-foreground shrink-0 w-32 text-right">
+                                      <span className="ml-auto shrink-0 text-right text-xs text-muted-foreground sm:w-32">
                                         {formatCurrency(cTotal)}
                                       </span>
                                     </div>
