@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useResetOnChange } from "@/shared/hooks/useResetOnChange";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/shared/components/ui/badge";
@@ -18,7 +19,7 @@ function PersonRec({ person, models, householdId, onChanged }: { person: InvRecP
   const [letter, setLetter] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
-  useEffect(() => { setF(blank(person)); setDirty(false); }, [person.rec?.id, person.riskProfile]);
+  useResetOnChange(() => { setF(blank(person)); setDirty(false); }, [person.rec?.id, person.riskProfile]);
   const set = <K extends keyof InvRecFields>(k: K, v: InvRecFields[K]) => { setF((p) => ({ ...p, [k]: v })); setDirty(true); };
   const model = models.find((m) => m.profile_key === f.profileKey);
   const fitted = models.find((m) => m.profile_key === person.riskProfile);

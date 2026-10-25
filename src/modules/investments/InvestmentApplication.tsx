@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useResetOnChange } from "@/shared/hooks/useResetOnChange";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/shared/components/ui/badge";
@@ -24,7 +25,7 @@ function ContractCard({ person, householdId, row, onChanged }: { person: { id: s
   const [letter, setLetter] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
-  useEffect(() => { setF(row ? fromRow(row) : EMPTY); setDirty(false); }, [row?.id, row?.window.state]);
+  useResetOnChange(() => { setF(row ? fromRow(row) : EMPTY); setDirty(false); }, [row?.id, row?.window.state]);
   const set = <K extends keyof InvContractFields>(k: K, v: InvContractFields[K]) => { setF((p) => ({ ...p, [k]: v })); setDirty(true); };
   const run = async (key: string, fn: () => Promise<void>) => { setBusy(key); try { await fn(); } catch (e) { toast.error(e instanceof Error ? e.message : "That did not work"); } finally { setBusy(null); } };
   const save = () => run("save", async () => { await saveInvestmentContract(householdId, person.id, f, row?.id); toast.success("Contract saved"); setDirty(false); onChanged(); });

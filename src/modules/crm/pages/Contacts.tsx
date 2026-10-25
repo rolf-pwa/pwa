@@ -23,12 +23,15 @@ import {
   TooltipTrigger,
 } from "@/shared/components/ui/tooltip";
 import { PageBreadcrumbs } from "@/shared/components/PageBreadcrumbs";
+import { useIsMobile } from "@/shared/hooks/use-mobile";
 import {
   Plus,
   Search,
   Mail,
   Phone,
   Lock,
+  ChevronRight,
+  SlidersHorizontal,
 } from "lucide-react";
 
 interface Contact {
@@ -44,10 +47,28 @@ interface Contact {
 }
 
 
+/** One person in the phone's list: a large row (initials, name, household) that opens them, and a Call button that does not need the page. */
+function PhoneRow({ c }: { c: Contact }) {
+  const name = `${c.first_name} ${c.last_name ?? ""}`.trim();
+  const initials = `${(c.first_name?.[0] ?? "")}${(c.last_name?.[0] ?? "")}`.toUpperCase();
+  return (
+    <div className="flex items-center gap-1 border-b border-border/60 last:border-0" data-testid="phone-contact-row">
+      <Link to={`/contacts/${c.id}`} className="flex min-h-14 min-w-0 flex-1 items-center gap-3 active:bg-muted">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sanctuary-green text-sm font-semibold text-sanctuary-bronze">{initials}</span>
+        <span className="min-w-0 flex-1"><span className="block truncate font-medium">{name}</span><span className="block truncate text-xs text-muted-foreground">{c.households?.label || c.email || "No household"}</span></span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+      </Link>
+      {c.phone && <button type="button" onClick={() => dialViaQuo(c.phone!)} aria-label={`Call ${name}`} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-accent active:bg-muted"><Phone className="h-5 w-5" /></button>}
+    </div>
+  );
+}
+
 const Contacts = () => {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const phone = useIsMobile();
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const fetchContacts = useCallback(async () => {
     const { data } = await supabase
@@ -115,6 +136,27 @@ const Contacts = () => {
           { label: "Contacts" },
         ]} />
 
+        {phone && (
+          <div className="space-y-2" data-testid="contacts-phone-header">
+            <CrmTabs />
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input placeholder="Search name or household" value={search} onChange={(e) => setSearch(e.target.value)} className="h-11 rounded-xl pl-9" aria-label="Search contacts" type="search" />
+              </div>
+              <Button type="button" variant="outline" className="h-11 w-11 shrink-0 rounded-xl p-0" onClick={() => setFiltersOpen((o) => !o)} aria-label="Filters" aria-expanded={filtersOpen}><SlidersHorizontal className="h-4 w-4" /></Button>
+            </div>
+            {filtersOpen && (
+              <div className="grid gap-2" data-testid="contacts-filters">
+                <Select value={status} onValueChange={setStatus}><SelectTrigger className="h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem><SelectItem value="sovereign">Sovereign</SelectItem><SelectItem value="core">Core</SelectItem><SelectItem value="none">No household</SelectItem></SelectContent></Select>
+                <Select value={sort} onValueChange={setSort}><SelectTrigger className="h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="name-asc">Name (A → Z)</SelectItem><SelectItem value="name-desc">Name (Z → A)</SelectItem><SelectItem value="recent">Recently updated</SelectItem></SelectContent></Select>
+              </div>
+            )}
+            {!loading && <p className="px-1 text-xs text-muted-foreground" data-testid="contacts-count">{filtered.length} {filtered.length === 1 ? "contact" : "contacts"}</p>}
+          </div>
+        )}
+
+        {!phone && <>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <CrmTabs />
           <div className="flex items-center gap-2">
@@ -156,9 +198,10 @@ const Contacts = () => {
           </Select>
           {!loading && <span className="text-sm text-muted-foreground">{filtered.length} {filtered.length === 1 ? "contact" : "contacts"}</span>}
         </div>
+        </>}
 
-        {/* Alphabet nav */}
-        {!loading && filtered.length > 0 && (
+        {/* Alphabet nav (desktop: a row of buttons; phone: the side index below) */}
+        {!phone && !loading && filtered.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {alphabet.map((letter) => (
               <button
@@ -195,14 +238,14 @@ const Contacts = () => {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-4">
+          <div className={phone ? "space-y-4 pr-5" : "space-y-4"}>
             {[...alphabet, "#"].filter((l) => grouped[l]).map((letter) => (
               <div key={letter} id={`letter-${letter}`} className="scroll-mt-4">
                 <p className="sticky top-0 z-10 bg-background px-1 py-1.5 text-xs font-bold uppercase tracking-widest text-muted-foreground border-b mb-2">
                   {letter}
                 </p>
                 <div>
-                  {grouped[letter].map((c) => (
+                  {grouped[letter].map((c) => phone ? <PhoneRow key={c.id} c={c} /> : (
               <div key={c.id} className="flex items-center gap-4 border-b border-border/60 px-1 py-2.5 last:border-0">
                   <Link to={`/contacts/${c.id}`} className="min-w-0 flex-1">
                     <p className="truncate font-medium">{c.first_name} {c.last_name}</p>
@@ -268,6 +311,19 @@ const Contacts = () => {
           </div>
         )}
       </div>
+      {phone && (
+        <>
+          {/* The index down the edge, as in Contacts on an iPhone: tap a letter to jump to it. */}
+          {!loading && filtered.length > 0 && (
+            <nav aria-label="Jump to letter" data-testid="letter-index" className="fixed right-0.5 top-1/2 z-20 flex -translate-y-1/2 flex-col items-center py-1 text-[10px] font-semibold text-accent">
+              {[...alphabet, "#"].filter((l) => activeLetters.has(l)).map((l) => (
+                <button key={l} type="button" onClick={() => document.getElementById(`letter-${l}`)?.scrollIntoView({ block: "start" })} className="flex h-[1.1rem] w-6 items-center justify-center" aria-label={`Jump to ${l}`}>{l}</button>
+              ))}
+            </nav>
+          )}
+          <Link to="/contacts/new" aria-label="New contact" data-testid="new-contact-fab" className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-lg active:scale-95"><Plus className="h-6 w-6" /></Link>
+        </>
+      )}
     </AppLayout>
   );
 };
