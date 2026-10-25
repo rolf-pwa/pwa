@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarClock, Check, CircleAlert, Loader2, Mail, MessageSquare, RefreshCw, Sparkles, ShieldCheck, Inbox } from "lucide-react";
+import { CalendarClock, Check, Loader2, Mail, RefreshCw, Sparkles, ShieldCheck } from "lucide-react";
 import { AppLayout } from "@/shared/components/AppLayout";
 import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
@@ -10,6 +10,7 @@ import { useAuth } from "@/shared/hooks/useAuth";
 import { toast } from "sonner";
 import { clock, dayLabel, type DailyBriefing } from "../lib/briefing";
 import { EaChat } from "../components/EaChat";
+import { TodayTiles, useTodayLive } from "../components/TodayTiles";
 
 const todayPacific = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Vancouver" }).format(new Date());
 
@@ -20,10 +21,10 @@ export function SourceLink({ href, children }: { href: string | null | undefined
   return <Link to={href} className="font-medium text-accent hover:underline">{children}</Link>;
 }
 
-function Block({ title, icon: Icon, count, action, children }: { title: string; icon: typeof Mail; count?: number; action?: React.ReactNode; children: React.ReactNode }) {
+function Block({ title, icon: Icon, count, children }: { title: string; icon: typeof Mail; count?: number; children: React.ReactNode }) {
   return (
     <Card>
-      <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><Icon className="h-4 w-4 text-accent" />{title}{count !== undefined && <Badge variant="secondary" className="text-[10px]">{count}</Badge>}{action && <span className="ml-auto text-xs font-normal">{action}</span>}</CardTitle></CardHeader>
+      <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><Icon className="h-4 w-4 text-accent" />{title}{count !== undefined && <Badge variant="secondary" className="text-[10px]">{count}</Badge>}</CardTitle></CardHeader>
       <CardContent className="space-y-1.5 text-sm">{children}</CardContent>
     </Card>
   );
@@ -36,6 +37,7 @@ export default function Briefing() {
   const [b, setB] = useState<DailyBriefing | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const { live, reload: reloadLive } = useTodayLive(!!user);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -50,7 +52,7 @@ export default function Briefing() {
   /** Rolf marks one item done by hand: it comes off today's briefing, whatever it was waiting on. */
   const done = async (key: string | undefined) => {
     if (!key) return;
-    try { await supabase.functions.invoke("daily-briefing-generate", { body: { action: "ea_dismiss", key } }); await load(); }
+    try { await supabase.functions.invoke("daily-briefing-generate", { body: { action: "ea_dismiss", key } }); await Promise.all([load(), reloadLive()]); }
     catch { toast.error("Couldn't mark it done"); }
   };
   const Done = ({ k }: { k: string | undefined }) => k ? <button type="button" aria-label="Mark done" title="Mark done" className="ml-2 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-border text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => void done(k)}><Check className="h-3 w-3" /></button> : null;
@@ -72,6 +74,8 @@ export default function Briefing() {
           <div className="flex items-center gap-2"><Sparkles className="h-6 w-6 text-accent" /><h1 className="font-serif text-2xl font-semibold">Today</h1></div>
           <Button variant="outline" size="sm" onClick={regenerate} disabled={busy}>{busy ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-2 h-3.5 w-3.5" />}{b ? "Regenerate" : "Generate now"}</Button>
         </div>
+
+        <TodayTiles sections={s} live={live} onDone={(k) => void done(k)} />
 
         <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_26rem]">
         <div className="min-w-0 space-y-5">
@@ -129,25 +133,9 @@ export default function Briefing() {
                   ))}
                 </Block>
 
-                <Block title="To reply to" icon={Mail} count={s.replies.length}>
-                  {s.replies.length === 0 && <Empty>No new mail from people in the last day.</Empty>}
-                  {s.replies.map((e, i) => <div key={i}><SourceLink href={e.link}>{e.subject}</SourceLink><Done k={e.key} /><p className="text-xs text-muted-foreground">{e.from}</p></div>)}
-                </Block>
 
-                <Block title="iA and Adobe Sign" icon={Inbox} count={s.ia.length}>
-                  {s.ia.length === 0 && <Empty>No notices in the last day.</Empty>}
-                  {s.ia.map((e, i) => <div key={i}><SourceLink href={e.link}>{e.subject}</SourceLink><Done k={e.key} /><p className="text-xs text-muted-foreground">{e.kind === "adobe_sign" ? "Adobe Sign" : "iA Financial"}</p></div>)}
-                </Block>
 
-                <Block title="Texts and voicemails" icon={MessageSquare} count={s.texts.length} action={<Link to="/inbox" className="text-accent hover:underline" data-testid="open-full-inbox">Open the full inbox</Link>}>
-                  {s.texts.length === 0 && <Empty>Nothing unread on the business line.</Empty>}
-                  {s.texts.map((t, i) => <div key={i}><SourceLink href={t.link}>{t.contact ?? "Unknown number"}</SourceLink><Done k={t.key} /><p className="text-xs text-muted-foreground">{t.label}</p></div>)}
-                </Block>
 
-                <Block title="Georgia is waiting on you" icon={CircleAlert} count={s.firm.length}>
-                  {s.firm.length === 0 && <Empty>Nothing is waiting on you.</Empty>}
-                  {s.firm.map((f, i) => <div key={i}><SourceLink href={f.link}>{f.label}</SourceLink><Done k={f.key} /></div>)}
-                </Block>
               </div>
             )}
 

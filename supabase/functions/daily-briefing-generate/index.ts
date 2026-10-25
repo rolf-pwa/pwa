@@ -159,6 +159,44 @@ interface CalendarFacts { connected: boolean; today: CalEvent[]; week: CalEvent[
 
 interface EmailFacts { connected: boolean; emails: BriefingEmail[]; adminCount: number }
 
+/** The last day of mail in the inbox, plus the mail sent to admin@ (iA, Adobe Sign and the rest, spam included so it can be counted and left out). */
+async function gatherEmailFacts(accessToken: string): Promise<EmailFacts> {
+  try {
+    const list = async (q: string) => {
+      const r = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?` + new URLSearchParams({ q, maxResults: "40" }), { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!r.ok) throw new Error(`Gmail list error: ${r.status}`);
+      return ((await r.json()).messages || []) as { id: string }[];
+    };
+    const [inbox, admin] = await Promise.all([list("in:inbox newer_than:1d"), list("to:admin@prosperwise.ca newer_than:1d in:anywhere")]);
+    const ids = [...new Set([...inbox, ...admin].map((m) => m.id))];
+    const details = await Promise.all(
+      ids.map(async (id) => {
+        const params = new URLSearchParams({ format: "metadata" });
+        for (const h of ["Subject", "From", "To", "List-Unsubscribe"]) params.append("metadataHeaders", h);
+        const r = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?${params}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+        return r.ok ? r.json() : null;
+      }),
+    );
+    // deno-lint-ignore no-explicit-any
+    const getHeader = (headers: any[], name: string) => headers?.find((h: any) => h.name?.toLowerCase() === name.toLowerCase())?.value || "";
+    const adminIds = new Set(admin.map((m) => m.id));
+    // deno-lint-ignore no-explicit-any
+    const emails: BriefingEmail[] = details.filter(Boolean).map((msg: any) => ({
+      id: msg.id,
+      subject: getHeader(msg.payload?.headers || [], "Subject") || "(no subject)",
+      from: getHeader(msg.payload?.headers || [], "From"),
+      snippet: String(msg.snippet || "").slice(0, 160),
+      labels: msg.labelIds || [],
+      link: `https://mail.google.com/mail/u/0/#all/${msg.id}`,
+      bulk: !!getHeader(msg.payload?.headers || [], "List-Unsubscribe"),
+      at: Number(msg.internalDate) || 0,
+    }));
+    return { connected: true, emails, adminCount: emails.filter((e) => adminIds.has(e.id)).length };
+  } catch {
+    return { connected: false, emails: [], adminCount: 0 };
+  }
+}
+
 async function gatherGoogleFacts(
   db: Db,
   userId: string,
@@ -200,52 +238,18 @@ async function gatherGoogleFacts(
   })();
 
   // The last day of mail in the inbox, plus the mail sent to admin@ (iA, Adobe Sign and the rest, spam included so it can be counted and left out).
-  const email: EmailFacts = await (async () => {
-    try {
-      const list = async (q: string) => {
-        const r = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?` + new URLSearchParams({ q, maxResults: "40" }), { headers: { Authorization: `Bearer ${accessToken}` } });
-        if (!r.ok) throw new Error(`Gmail list error: ${r.status}`);
-        return ((await r.json()).messages || []) as { id: string }[];
-      };
-      const [inbox, admin] = await Promise.all([list("in:inbox newer_than:1d"), list("to:admin@prosperwise.ca newer_than:1d in:anywhere")]);
-      const ids = [...new Set([...inbox, ...admin].map((m) => m.id))];
-      const details = await Promise.all(
-        ids.map(async (id) => {
-          const params = new URLSearchParams({ format: "metadata" });
-          for (const h of ["Subject", "From", "To", "List-Unsubscribe"]) params.append("metadataHeaders", h);
-          const r = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?${params}`, { headers: { Authorization: `Bearer ${accessToken}` } });
-          return r.ok ? r.json() : null;
-        }),
-      );
-      // deno-lint-ignore no-explicit-any
-      const getHeader = (headers: any[], name: string) => headers?.find((h: any) => h.name?.toLowerCase() === name.toLowerCase())?.value || "";
-      const adminIds = new Set(admin.map((m) => m.id));
-      // deno-lint-ignore no-explicit-any
-      const emails: BriefingEmail[] = details.filter(Boolean).map((msg: any) => ({
-        id: msg.id,
-        subject: getHeader(msg.payload?.headers || [], "Subject") || "(no subject)",
-        from: getHeader(msg.payload?.headers || [], "From"),
-        snippet: String(msg.snippet || "").slice(0, 160),
-        labels: msg.labelIds || [],
-        link: `https://mail.google.com/mail/u/0/#all/${msg.id}`,
-        bulk: !!getHeader(msg.payload?.headers || [], "List-Unsubscribe"),
-      }));
-      return { connected: true, emails, adminCount: emails.filter((e) => adminIds.has(e.id)).length };
-    } catch {
-      return { connected: false, emails: [], adminCount: 0 };
-    }
-  })();
+  const email: EmailFacts = await gatherEmailFacts(accessToken);
 
   return { calendar, email };
 }
 
-interface RequestFact { id?: string; contact: string; type: string; description: string; created_at: string; awaiting_staff_reply: boolean; link: string }
+interface RequestFact { id?: string; contactId?: string | null; contact: string; type: string; description: string; created_at: string; awaiting_staff_reply: boolean; link: string }
 
 async function gatherRequestFacts(db: Db): Promise<RequestFact[]> {
   const { data } = await db
     .from("portal_requests")
     .select(
-      "id, request_type, request_description, status, created_at, contacts(full_name), portal_request_messages(sender_type, created_at)",
+      "id, contact_id, request_type, request_description, status, created_at, contacts(full_name), portal_request_messages(sender_type, created_at)",
     )
     .neq("status", "resolved")
     .order("created_at", { ascending: true })
@@ -263,6 +267,7 @@ async function gatherRequestFacts(db: Db): Promise<RequestFact[]> {
     const awaiting_staff_reply = !latest || latest.sender_type === "client";
     return {
       id: r.id,
+      contactId: r.contact_id ?? null,
       contact: r.contacts?.full_name || "Unknown contact",
       type: r.request_type,
       description: r.request_description,
@@ -274,12 +279,14 @@ async function gatherRequestFacts(db: Db): Promise<RequestFact[]> {
 }
 
 interface QuoFacts {
-  unread: { key?: string; label: string; contact: string | null; link: string }[];
+  unread: { key?: string; label: string; contact: string | null; contactId?: string | null; link: string }[];
   unmatchedCount: number;
   voicemailCount: number;
+  /** Unread voicemails, listed apart from the rest (the live Today panel shows them; the morning briefing counts them). */
+  voicemails: { key: string; label: string; contact: string | null; contactId: string | null; link: string }[];
 }
 
-async function gatherQuoFacts(db: Db): Promise<QuoFacts> {
+async function gatherQuoFacts(db: Db, perKind = 5): Promise<QuoFacts> {
   const [{ data: messages }, { data: calls }] = await Promise.all([
     db.from("quo_messages").select("id, contact_id, direction, body, occurred_at, read_at").order("occurred_at", { ascending: false }).limit(200),
     db.from("quo_calls").select("id, contact_id, direction, occurred_at, read_at, is_voicemail").order("occurred_at", { ascending: false }).limit(200),
@@ -304,17 +311,66 @@ async function gatherQuoFacts(db: Db): Promise<QuoFacts> {
 
   const unreadMsgs = allMsgs.filter((m) => m.direction === "inbound" && !m.read_at);
   const unreadCalls = allCalls.filter((c) => c.direction === "inbound" && !c.read_at && !c.is_voicemail);
-  const unread = [...unreadMsgs.slice(0, 5), ...unreadCalls.slice(0, 5)].map((r) => ({
+  const unread = [...unreadMsgs.slice(0, perKind), ...unreadCalls.slice(0, perKind)].map((r) => ({
     key: r.body !== undefined ? `quo:msg:${r.id}` : `quo:call:${r.id}`,
     label: r.body ? (r.body.length > 80 ? r.body.slice(0, 80) + "…" : r.body) : "Missed call",
     contact: r.contact_id ? contactNames[r.contact_id] ?? null : null,
+    contactId: r.contact_id ?? null,
     link: "/inbox",
   }));
 
   const unmatchedCount = [...allMsgs, ...allCalls].filter((r) => !r.contact_id).length;
   const voicemailCount = allCalls.filter((c) => c.is_voicemail && !c.read_at).length;
 
-  return { unread, unmatchedCount, voicemailCount };
+  const voicemails = allCalls.filter((c) => c.is_voicemail && !c.read_at).slice(0, perKind).map((c) => ({ key: `quo:call:${c.id}`, label: "Voicemail", contact: c.contact_id ? contactNames[c.contact_id] ?? null : null, contactId: (c.contact_id ?? null) as string | null, link: "/inbox" }));
+  return { unread, unmatchedCount, voicemailCount, voicemails };
+}
+
+/** The addresses in a From header ("Name <a@b.c>", possibly several), lower case. */
+const addressesIn = (from: string): string[] => [...String(from ?? "").matchAll(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g)].map((m) => m[0].toLowerCase());
+
+/**
+ * What the Today buttons show right now: unread texts, calls and voicemails and the client requests waiting on Rolf (both read live), and mail that arrived since
+ * the morning briefing was made (new people to reply to, new iA and Adobe Sign notices). Each item carries the contact it concerns when there is one, so it opens
+ * the person. Nothing here is written anywhere: the briefing itself stays as it was.
+ */
+async function liveToday(db: Db, userId: string) {
+  const [quo, reqs, brief] = await Promise.all([
+    gatherQuoFacts(db, 15),
+    gatherRequestFacts(db).catch(() => [] as RequestFact[]),
+    db.from("daily_briefings").select("sections, generated_at").eq("staff_user_id", userId).eq("briefing_date", pacificDateString(new Date())).maybeSingle(),
+  ]);
+  const stored = ((brief.data?.sections ?? {}) as Partial<BriefingSections>);
+  const generatedAt = brief.data?.generated_at ? Date.parse(brief.data.generated_at) : 0;
+  const known = new Set<string>([...(stored.replies ?? []), ...(stored.ia ?? [])].map((x) => x.key ?? "").concat(stored.dismissed ?? []));
+
+  // Mail that arrived after the briefing: still in the Inbox (or sent to admin@), not marked done, not already listed.
+  let newReplies: BriefingSections["replies"] = [], newIa: BriefingSections["ia"] = [], mailOk = false;
+  try {
+    const email = await gatherEmailFacts(await getValidGoogleAccessToken(db, userId));
+    mailOk = email.connected;
+    const fresh = email.emails.filter((e) => (e.at ?? 0) > generatedAt && !known.has(`email:${e.id}`) && (e.labels.includes("INBOX") || !e.labels.includes("SENT")));
+    const sec = sectionsFromEmails(fresh);
+    newReplies = sec.replies; newIa = sec.ia;
+  } catch { /* the mail part is simply left out */ }
+
+  // Which of the people to reply to are clients: matched on the sender's address.
+  const senders = [...(stored.replies ?? []), ...newReplies].flatMap((r) => addressesIn(r.from));
+  const matches: Record<string, { id: string; name: string }> = {};
+  if (senders.length) {
+    const uniq = [...new Set(senders)].slice(0, 60);
+    const { data: cs } = await db.from("contacts").select("id, first_name, last_name, full_name, email").or(uniq.map((a) => `email.ilike.${a}`).join(","));
+    // deno-lint-ignore no-explicit-any
+    const byAddr = new Map<string, { id: string; name: string }>(((cs ?? []) as any[]).filter((c) => c.email).map((c) => [String(c.email).toLowerCase(), { id: c.id, name: (c.full_name || `${c.first_name ?? ""} ${c.last_name ?? ""}`).trim() }]));
+    for (const r of [...(stored.replies ?? []), ...newReplies]) { const hit = addressesIn(r.from).map((a) => byAddr.get(a)).find(Boolean); if (hit && r.key) matches[r.key] = hit; }
+  }
+
+  return {
+    ok: true as const, mailOk,
+    texts: [...quo.unread, ...quo.voicemails].map((t) => ({ key: t.key ?? "", label: t.label, contact: t.contact, contactId: t.contactId ?? null, link: t.link })),
+    requests: reqs.filter((r) => r.awaiting_staff_reply).map((r) => ({ key: `request:${r.id}`, contact: r.contact, contactId: r.contactId ?? null, type: r.type, description: String(r.description ?? "").slice(0, 160), created_at: r.created_at, link: r.link })),
+    newReplies, newIa, matches,
+  };
 }
 
 interface FirmFacts {
@@ -733,6 +789,7 @@ Deno.serve(async (req) => {
     const body = (await req.clone().json().catch(() => ({}))) as { action?: string; message?: string; start?: boolean; actionId?: string; decision?: "done" | "dismissed"; prefId?: string };
     if (typeof body.action === "string" && body.action.startsWith("ea_")) {
       if (body.action === "ea_refresh") return json({ ok: true, ...(await refreshBriefing(db, userId, todayStr)) });
+      if (body.action === "ea_today_live") return json(await liveToday(db, userId));
       if (body.action === "ea_history") return json({ ok: true, ...(await eaHistory(db, userId)) });
       if (body.action === "ea_chat") return json({ ok: true, ...(await eaChat(db, userId, body.message ?? "", body.start === true)) });
       if (body.action === "ea_decide") return json(await eaDecide(db, userId, String(body.actionId ?? ""), body.decision === "done" ? "done" : "dismissed"));
