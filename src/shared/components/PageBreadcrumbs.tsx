@@ -18,7 +18,7 @@ export function PageBreadcrumbs({ items: given }: { items: BreadcrumbEntry[] }) 
   // A trail written as "Dashboard > ..." starts at the module the page belongs to instead.
   const items = withModuleRoot(given, useLocation().pathname);
   return (
-    <Breadcrumb className="mb-4">
+    <Breadcrumb className="mb-4 hidden md:block">
       <BreadcrumbList>
         {items.map((item, i) => {
           const isLast = i === items.length - 1;

@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
+import { useIsMobile } from "@/shared/hooks/use-mobile";
+import { MobileSectionList, type MobileSection } from "@/shared/components/MobileSectionList";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { AppLayout } from "@/shared/components/AppLayout";
 import { Button } from "@/shared/components/ui/button";
@@ -16,7 +18,7 @@ import {
   ArrowLeft, Bell, BellOff, Trash2, 
   ExternalLink, Bot, Grape, FileUp, Loader2, Building2, Users, Plus, X,
   Receipt, Folder, FolderOpen, ShieldCheck, Landmark, ChevronDown, ChevronRight, ListChecks,
-  Mail, Phone, MapPin, Home, Calendar, Pencil, Eye, Merge, Link2, BarChart3,
+  Mail, Phone, MapPin, Home, Calendar, Pencil, Eye, Merge, Link2, BarChart3, MessageSquare, Shield,
   ArrowRight, ChevronLeft
 } from "lucide-react";
 import { ContactAnalytics } from "@/modules/crm/components/ContactAnalytics";
@@ -168,9 +170,25 @@ const parseMoney = (value: string) => {
 
 const getHarvestKey = (kind: "vineyard" | "storehouse", id: string) => `${kind}:${id}`;
 
+/** The contact's sections, as the phone's list. The same ones as the desktop tabs. */
+const CONTACT_SECTIONS: MobileSection[] = [
+  { value: "comms", label: "Communications", icon: MessageSquare, hint: "Texts, calls and voicemails" },
+  { value: "vault", label: "Vault", icon: ShieldCheck },
+  { value: "insurance", label: "Insurance", icon: Shield },
+  { value: "actions", label: "Action Items", icon: ListChecks },
+  { value: "vineyard", label: "The Vineyard", icon: Grape },
+  { value: "tax", label: "Tax", icon: Receipt },
+  { value: "analytics", label: "Analytics", icon: BarChart3 },
+];
+
 const ContactDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  // On a phone the page's sections are a list of rows and each opens as the next screen (the open one is in the address, so Back returns to the list).
+  const phone = useIsMobile();
+  const [sectionParams, setSectionParams] = useSearchParams();
+  const section = sectionParams.get("section");
+  const openSection = (value: string) => setSectionParams({ section: value });
   const [corpHoldingsCollapsed, setCorpHoldingsCollapsed] = useState(true);
   const [contact, setContact] = useState<any>(null);
   const [storehouses, setStorehouses] = useState<Storehouse[]>([]);
@@ -568,11 +586,11 @@ const ContactDetail = () => {
           { label: `${contact.first_name} ${contact.last_name || ""}`.trim() },
         ]} />
         {/* Header Card */}
-        <Card>
+        <Card className={phone && section ? "hidden" : undefined}>
           <CardContent className="p-4">
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-wrap items-start justify-between gap-4 md:flex-nowrap">
               <div className="flex items-start gap-3 min-w-0 flex-1">
-                <Button variant="ghost" size="icon" onClick={() => navigate("/contacts")} className="shrink-0 -ml-2">
+                <Button variant="ghost" size="icon" onClick={() => navigate("/contacts")} className="-ml-2 hidden shrink-0 md:inline-flex">
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
                 <div className="h-12 w-12 shrink-0 rounded-full bg-sanctuary-green text-sanctuary-bronze flex items-center justify-center text-base font-semibold">
@@ -620,9 +638,9 @@ const ContactDetail = () => {
                   />
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex w-full items-center gap-2 md:w-auto md:shrink-0">
                 <Button
-                  className="bg-sanctuary-green text-sanctuary-bronze hover:bg-sanctuary-green/90 gap-1.5"
+                  className="h-11 flex-1 bg-sanctuary-green text-sanctuary-bronze hover:bg-sanctuary-green/90 gap-1.5 md:h-10 md:flex-none"
                   onClick={handleViewPortal}
                   disabled={viewPortalLoading}
                 >
@@ -631,7 +649,7 @@ const ContactDetail = () => {
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline">
+                    <Button variant="outline" className="h-11 flex-1 md:h-10 md:flex-none">
                       More Actions
                       <ChevronDown className="ml-1.5 h-4 w-4" />
                     </Button>
@@ -677,7 +695,7 @@ const ContactDetail = () => {
             </div>
 
             {/* Contact details, one line */}
-            <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+            <div className="mt-3 flex flex-col gap-1.5 text-sm md:flex-row md:flex-wrap md:items-center md:gap-x-5 md:gap-y-1">
               {contact.email ? (
                 <a href={`mailto:${contact.email}`} className="flex items-center gap-1.5 hover:underline break-all"><Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />{contact.email}</a>
               ) : <span className="text-muted-foreground">No email</span>}
@@ -688,6 +706,13 @@ const ContactDetail = () => {
             </div>
           </CardContent>
         </Card>
+        {phone && !section && (
+          <div className="grid grid-cols-3 gap-2" data-testid="contact-quick-actions">
+            <Button type="button" variant="outline" className="h-14 flex-col gap-0.5 rounded-xl text-xs" disabled={!contact.phone} onClick={() => contact.phone && dialViaQuo(contact.phone)}><Phone className="h-5 w-5 text-accent" />Call</Button>
+            <Button type="button" variant="outline" className="h-14 flex-col gap-0.5 rounded-xl text-xs" onClick={() => openSection("comms")}><MessageSquare className="h-5 w-5 text-accent" />Text</Button>
+            <Button type="button" variant="outline" className="h-14 flex-col gap-0.5 rounded-xl text-xs" disabled={!contact.email} onClick={() => { if (contact.email) window.location.href = `mailto:${contact.email}`; }}><Mail className="h-5 w-5 text-accent" />Email</Button>
+          </div>
+        )}
         <ContactMerge
           contactId={id!}
           contactName={`${contact.first_name} ${contact.last_name || ""}`.trim()}
@@ -755,11 +780,13 @@ const ContactDetail = () => {
                   s + (Number(st.pro_rata) || 0) + st.subsidiaries.reduce((ss, sub) => ss + (Number(sub.indirect_pro_rata) || 0), 0)
                 , 0);
                 const total = totalVineyard + totalStorehouses + totalHoldingTank + totalCorpAssets;
-              return <ContactTotalsStrip contactId={id!} assets={total} />;
+              return <div className={phone && section ? "hidden" : undefined}><ContactTotalsStrip contactId={id!} assets={total} /></div>;
             })()}
 
-        <Tabs defaultValue="comms" className="w-full space-y-6">
-            <TabsList className="w-full">
+        <Tabs {...(phone ? { value: section ?? "" } : { defaultValue: "comms" })} className="w-full space-y-6">
+            {phone && !section && <MobileSectionList sections={CONTACT_SECTIONS} onOpen={openSection} label="Contact sections" />}
+            {phone && section && <h2 className="font-serif text-xl font-semibold" data-testid="section-title">{CONTACT_SECTIONS.find((x) => x.value === section)?.label}</h2>}
+            {!phone && <TabsList className="w-full">
               <TabsTrigger value="comms" className="flex-1">Communications</TabsTrigger>
               <TabsTrigger value="vault" className="flex-1">
                 <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
@@ -782,7 +809,7 @@ const ContactDetail = () => {
                 <BarChart3 className="mr-1.5 h-3.5 w-3.5" />
                 Analytics
               </TabsTrigger>
-            </TabsList>
+            </TabsList>}
         <div className="min-w-0">
 
               {/* Communications Tab — Messaging first, above the fold */}

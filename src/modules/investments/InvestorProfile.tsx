@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useResetOnChange } from "@/shared/hooks/useResetOnChange";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/shared/components/ui/badge";
@@ -28,7 +29,7 @@ function PersonProfile({ person, householdId, versions, models, onSaved }: { per
   const [i, setI] = useState<ProfileInputs>({ ...EMPTY_PROFILE, ...(last?.inputs ?? {}) });
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
-  useEffect(() => { setI({ ...EMPTY_PROFILE, ...(last?.inputs ?? {}) }); }, [last?.id]);
+  useResetOnChange(() => { setI({ ...EMPTY_PROFILE, ...(last?.inputs ?? {}) }); }, [last?.id]);
   const set = <K extends keyof ProfileInputs>(k: K, v: ProfileInputs[K]) => setI((p) => ({ ...p, [k]: v }));
   const gaps = useMemo(() => profileGaps(i), [i]);
   const model = models.find((m) => m.profile_key === i.riskProfile);

@@ -63,6 +63,8 @@ function ItemRow({ item, fresh, onDone }: { item: TodayItem; fresh: boolean; onD
  * it concerns, and closing the panel returns to Briefing. The open tab is in the address (?tab=messages) so a link can open Today straight at it.
  */
 type TabId = "briefing" | TileId;
+/** On a phone Messages is on the bottom bar, so the grid has the other four: a clean two by two. */
+const PHONE_TILES: TileId[] = TILE_ORDER.filter((id) => id !== "messages");
 const isTile = (t: string | null): t is TileId => !!t && (TILE_ORDER as string[]).includes(t);
 
 export function TodayTabs({ sections, live, onDone, briefing, aside }: { sections: BriefingSections | null; live: LiveToday | null; onDone: (key: string) => void; briefing: React.ReactNode; aside?: React.ReactNode }) {
@@ -102,12 +104,12 @@ export function TodayTabs({ sections, live, onDone, briefing, aside }: { section
   return (
     <Tabs value={tab} onValueChange={select} className="space-y-4">
       {phone ? (
-        // No tab strip to scroll on a phone: the five lists are tiles in a grid, and a tap slides the list up from the bottom.
+        // No tab strip to scroll on a phone: the lists are tiles in a grid, and a tap slides the list up from the bottom. (Messages is the bottom bar's.)
         <div className="grid grid-cols-2 gap-2" data-testid="today-tiles" data-tick={tick}>
-          {TILE_ORDER.map((id, i) => {
+          {PHONE_TILES.map((id, i) => {
             const Icon = ICON[id], count = tiles[id].count, nw = id === tab ? 0 : newKeys(watched(tiles[id]), loadSeen(id)).length;
             return (
-              <button key={id} type="button" onClick={() => select(id)} data-testid={`tile-${id}`} aria-pressed={id === tab} className={cn("relative flex min-h-[4.25rem] flex-col justify-between gap-2 rounded-xl border bg-card p-3 text-left transition-colors active:bg-muted", i === TILE_ORDER.length - 1 && TILE_ORDER.length % 2 === 1 && "col-span-2", id === tab && "border-accent")}>
+              <button key={id} type="button" onClick={() => select(id)} data-testid={`tile-${id}`} aria-pressed={id === tab} className={cn("relative flex min-h-[4.25rem] flex-col justify-between gap-2 rounded-xl border bg-card p-3 text-left transition-colors active:bg-muted", i === PHONE_TILES.length - 1 && PHONE_TILES.length % 2 === 1 && "col-span-2", id === tab && "border-accent")}>
                 <span className="flex w-full items-center justify-between"><Icon className="h-5 w-5 text-accent" /><span className={cn("min-w-6 rounded-full px-2 text-center font-mono text-xs font-semibold", count > 0 ? "bg-accent/15 text-accent" : "bg-muted text-muted-foreground")} data-testid={`count-${id}`}>{count}</span></span>
                 <span className="text-sm font-medium">{TILE_LABEL[id]}</span>
                 {nw > 0 && <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60" /><span className="relative inline-flex h-3.5 w-3.5 rounded-full bg-accent" data-testid={`new-${id}`} title={`${nw} new`} /></span>}

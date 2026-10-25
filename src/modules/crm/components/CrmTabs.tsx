@@ -1,7 +1,12 @@
-import { NavLink, useLocation } from "react-router-dom";
+import { useState } from "react";
+import { Link, NavLink, useLocation } from "react-router-dom";
+import { Check, ChevronDown } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/shared/components/ui/sheet";
+import { useIsMobile } from "@/shared/hooks/use-mobile";
 import { cn } from "@/shared/lib/utils";
 
-const TABS = [
+const FORMER = "Former clients";
+export const CRM_TABS = [
   { label: "Individuals", to: "/contacts" },
   { label: "Households", to: "/households" },
   { label: "Corporate Holdings", to: "/corporations" },
@@ -25,9 +30,30 @@ export function CrmTabs() {
     return pathname.startsWith(to);
   };
 
+  const phone = useIsMobile();
+  const [open, setOpen] = useState(false);
+  if (phone) {
+    // One button naming where you are; it opens the other sections from the bottom, instead of a strip of tabs to scroll.
+    const here = isActive_(CRM_TABS, isActive)?.label ?? (pathname.startsWith("/former-clients") ? FORMER : "CRM");
+    const items = [...CRM_TABS.map((t) => ({ label: t.label, to: t.to, on: isActive(t.to) })), { label: FORMER, to: "/former-clients", on: pathname.startsWith("/former-clients") }];
+    return (
+      <>
+        <button type="button" onClick={() => setOpen(true)} data-testid="crm-section-button" className="flex min-h-11 items-center gap-2 rounded-xl border bg-card px-4 text-sm font-semibold active:bg-muted">{here}<ChevronDown className="h-4 w-4 text-muted-foreground" /></button>
+        <Sheet open={open} onOpenChange={setOpen}>
+          <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-2xl pb-[calc(1rem+env(safe-area-inset-bottom))]" data-testid="crm-sections">
+            <SheetHeader><SheetTitle>CRM</SheetTitle></SheetHeader>
+            <ul className="mt-3 divide-y overflow-hidden rounded-xl border">
+              {items.map((i) => <li key={i.to}><Link to={i.to} onClick={() => setOpen(false)} className={cn("flex min-h-12 items-center justify-between px-4 text-sm active:bg-muted", i.on && "font-semibold text-accent")}>{i.label}{i.on && <Check className="h-4 w-4" />}</Link></li>)}
+            </ul>
+          </SheetContent>
+        </Sheet>
+      </>
+    );
+  }
+
   return (
     <div className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted/40 p-1">
-      {TABS.map((tab) => {
+      {CRM_TABS.map((tab) => {
         const active = isActive(tab.to);
         return (
           <NavLink
@@ -48,3 +74,5 @@ export function CrmTabs() {
     </div>
   );
 }
+
+function isActive_<T extends { to: string }>(tabs: T[], isActive: (to: string) => boolean): T | undefined { return tabs.find((t) => isActive(t.to)); }

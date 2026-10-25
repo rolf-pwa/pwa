@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, Loader2, XCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/shared/components/ui/badge";
@@ -28,7 +28,15 @@ export function SystemHealth() {
   const [h, setH] = useState<Health | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const load = useCallback(async () => { setBusy(true); try { setErr(null); setH(await fetchHealth()); } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't load"); } finally { setBusy(false); } }, []);
+  // The check can finish after the panel has gone (a page change, a test ending): nothing is set then.
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const load = useCallback(async () => {
+    if (alive.current) setBusy(true);
+    try { if (alive.current) setErr(null); const health = await fetchHealth(); if (alive.current) setH(health); }
+    catch (e) { if (alive.current) setErr(e instanceof Error ? e.message : "Couldn't load"); }
+    finally { if (alive.current) setBusy(false); }
+  }, []);
   useEffect(() => { void load(); }, [load]);
 
   return (
