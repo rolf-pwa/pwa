@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ChevronRight, LogOut, PenLine, Smartphone } from "lucide-react";
 import { AppLayout } from "@/shared/components/AppLayout";
 import { GROUPS } from "@/shared/components/AppSidebar";
+import { PushSettings } from "@/modules/crm/components/PushSettings";
 import { EmailSignatureDialog } from "@/shared/components/EmailSignatureDialog";
 import { Card, CardContent } from "@/shared/components/ui/card";
 import { useAuth } from "@/shared/hooks/useAuth";
@@ -24,6 +25,7 @@ export default function MorePage() {
             <div><p className="font-medium">Put ProsperWise on your home screen</p><p className="text-xs text-muted-foreground">In Safari, tap Share, then Add to Home Screen. It then opens full screen like an app.</p></div>
           </CardContent></Card>
         )}
+        <PushSettings />
         {GROUPS.map((g) => (
           <section key={g.key} aria-label={g.label}>
             <h2 className="mb-1.5 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">{g.label}</h2>
