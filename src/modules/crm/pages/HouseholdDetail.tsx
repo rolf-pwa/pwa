@@ -627,7 +627,9 @@ const HouseholdDetail = () => {
             </AlertDialog>
 
             {/* Info grid */}
-            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {/* On a phone the setup fields (status, entity, quiet period) are left to the desktop; the address stays as a line. */}
+            {household.address && <p className="mt-3 flex items-start gap-2 text-sm md:hidden" data-testid="household-phone-address"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />{household.address}</p>}
+            <div className="mt-4 hidden gap-4 md:grid md:grid-cols-2 lg:grid-cols-4" data-testid="household-setup-fields">
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Address</p>
                 {household.address ? (
@@ -696,7 +698,7 @@ const HouseholdDetail = () => {
             </div>
             {/* Starting a new household: the link Rolf sends. Gone for good once onboarding is complete. */}
             {!household.onboarding_completed_at && (
-              <div className="mt-4"><OnboardingInviteCard householdId={id!} embedded /></div>
+              <div className="mt-4 hidden md:block"><OnboardingInviteCard householdId={id!} embedded /></div>
             )}
           </CardContent>
         </Card>
