@@ -54,12 +54,12 @@ describe("the client's coverage in the portal", () => {
 });
 
 describe("wiring", () => {
-  it("puts the card on both portals' dashboards, and stops the main portal's Insurance row summing different kinds", () => {
+  it("keeps the card off both portals' dashboards until there is insurance data, and stops the main portal's Insurance row summing different kinds", () => {
     const main = readFileSync("src/modules/portal/pages/Portal.tsx", "utf8");
-    expect(main).toContain("<PortalCoverageCard");
+    expect(main).not.toContain("<PortalCoverageCard");
     expect(main).toContain('total: totalsFor(visibleInsurance).coverage.life, suffix: "life coverage"');
     expect(main).not.toContain("n + (p.coverage_amount || 0), 0), suffix");
     const vfo = readFileSync("src/modules/portal/pages/VfoPortal.tsx", "utf8");
-    expect(vfo).toContain("<PortalCoverageCard");
+    expect(vfo).not.toContain("<PortalCoverageCard");
   });
 });

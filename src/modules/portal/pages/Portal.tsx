@@ -9,7 +9,7 @@ import { useIsMobile } from "@/shared/hooks/use-mobile";
 import { PortalDynamicLinks } from "@/modules/portal/components/PortalDynamicLinks";
 import { PortalTerritory } from "@/modules/portal/components/PortalTerritory";
 import { PortalHoldingTank } from "@/modules/portal/components/PortalHoldingTank";
-import { PortalInsurance, PortalCoverageCard } from "@/modules/portal/components/PortalInsurance";
+import { PortalInsurance } from "@/modules/portal/components/PortalInsurance";
 import { PortalRequests } from "@/modules/portal/components/PortalRequests";
 import { PortalMeetings } from "@/modules/portal/components/PortalMeetings";
 import { PortalCharter } from "@/modules/portal/components/PortalCharter";
@@ -1203,7 +1203,6 @@ const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = f
                   highlight={(
                     <>
                       <PortalDocumentsTeaser portalToken={portalToken} onOpen={() => navigate(token ? `/portal/${token}/documents` : "/portal/documents")} />
-                      <PortalCoverageCard policies={ind.insurancePolicies ?? []} onOpen={() => setActiveTab("financials")} />
                       {(rebalancingAwaiting || rebalancingWaiting || (data as any)?.portfolio_review) ? (
                     <>
                       {rebalancingAwaiting && rebalancingState && <PortalRebalancingTeaser rebalancing={rebalancingState} onOpen={() => navigate(token ? `/portal/${token}/rebalancing` : "/portal/rebalancing")} />}
