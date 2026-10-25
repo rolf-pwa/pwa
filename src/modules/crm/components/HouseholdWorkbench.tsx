@@ -14,19 +14,18 @@ const STEPS: Record<StepKey, { title: string; body: string }> = {
   causal_ai: { title: "Causal AI Workbench", body: "Staff assessment of the household's financial, relational, and emotional state, reconciled against real meeting transcripts." },
 };
 
-/** One tool: its name (the explanation is the hover text) and its button. A tool that is not due says why, in small print. */
-const Step = ({ title, body, reason, children }: { title: string; body: string; reason?: string; children: ReactNode }) => (
-  <div className="min-w-0 space-y-1.5" title={body} data-testid="workbench-step">
-    <p className="truncate text-sm font-medium text-foreground">{title}</p>
+/** One tool: its button, full width (the explanation is the hover text). A tool that is not due says why, in small print. */
+const Step = ({ body, reason, children }: { body: string; reason?: string; children: ReactNode }) => (
+  <div className="min-w-0 space-y-1 [&_a]:w-full [&_a]:justify-start [&_button]:w-full [&_button]:justify-start" title={body} data-testid="workbench-step">
     {children}
-    {reason && <p className="text-[11px] italic text-muted-foreground">{reason}</p>}
+    {reason && <p className="px-1 text-[11px] italic text-muted-foreground">{reason}</p>}
   </div>
 );
 
-const GRID = "grid gap-x-6 gap-y-4 sm:grid-cols-2 xl:grid-cols-3";
+const GRID = "grid gap-2";
 
 /**
- * The household's tools, laid out across the page and showing only the steps that apply to this household right now (its journey, tier and review window).
+ * The household's tools, kept compact for the sidebar and showing only the steps that apply to this household right now (its journey, tier and review window).
  * Everything else sits under "More tools" with the reason, so nothing is ever unreachable.
  */
 export function HouseholdWorkbench({ householdId, onboardingComplete, charterStarted, actions, today }: { householdId: string; onboardingComplete: boolean; charterStarted: boolean; actions: Record<StepKey, ReactNode>; today: string }) {
@@ -56,11 +55,11 @@ export function HouseholdWorkbench({ householdId, onboardingComplete, charterSta
           )}
         </div>
         {shown.length === 0 ? <p className="text-xs text-muted-foreground">Nothing is due for this household at the moment.</p> : (
-          <div className={GRID}>{shown.map((k) => <Step key={k} title={STEPS[k].title} body={STEPS[k].body}>{actions[k]}</Step>)}</div>
+          <div className={GRID}>{shown.map((k) => <Step key={k} body={STEPS[k].body}>{actions[k]}</Step>)}</div>
         )}
         {more && (
           <div className={`${GRID} border-t border-border pt-3`}>
-            {hidden.map((k) => <Step key={k} title={STEPS[k].title} body={STEPS[k].body} reason={decisions[k].reason}>{actions[k]}</Step>)}
+            {hidden.map((k) => <Step key={k} body={STEPS[k].body} reason={decisions[k].reason}>{actions[k]}</Step>)}
           </div>
         )}
       </CardContent>

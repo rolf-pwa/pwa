@@ -425,7 +425,7 @@ const HouseholdDetail = () => {
     byType[t].total += Number(a.current_value) || 0;
   });
 
-  // The household's tools: a strip under the header on a desktop; on a phone they stay in the Overview section.
+  // The household's tools: the first card in the sidebar (under the Overview on a phone).
   const workbench = (
                 <HouseholdWorkbench
                   householdId={id!}
@@ -666,8 +666,6 @@ const HouseholdDetail = () => {
           </CardContent>
         </Card>
 
-        {!phone && workbench}
-
         {/* Tabs */}
         {phone && !section && (
           <div className="space-y-4" data-testid="household-phone-home">
@@ -843,7 +841,7 @@ const HouseholdDetail = () => {
               <div className="min-w-0 space-y-3">
 
 
-                {phone && workbench}
+                {workbench}
                 <SidebarSection title="Georgia Diagnostic"><GeorgiaDiagnosticCard householdId={id!} /></SidebarSection>
                 {(household?.vision_notes || household?.values_notes || household?.purpose_notes ||
                   household?.anchor_transfer_amount != null || household?.spousal_alignment_score != null ||
