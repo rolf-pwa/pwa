@@ -144,7 +144,7 @@ export function TodayTabs({ sections, live, onDone, briefing, aside }: { section
             <>
               <SheetHeader>
                 <SheetTitle>{TILE_LABEL[tab]}</SheetTitle>
-                <SheetDescription>{HINT[tab]} Click one to open it; the person it is about opens in their own page.</SheetDescription>
+                <SheetDescription>{HINT[tab]} {phone ? "Tap" : "Click"} one to open it; the person it is about opens in their own page.</SheetDescription>
               </SheetHeader>
               <div className="mt-4 space-y-5">
                 {tiles[tab].groups.map((g) => section(g, tiles[tab].groups.length > 1))}

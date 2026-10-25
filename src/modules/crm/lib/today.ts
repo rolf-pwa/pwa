@@ -33,6 +33,8 @@ export interface LiveToday {
   requests: { key: string; contact: string; contactId: string | null; type: string; description: string; created_at: string; link: string }[];
   newReplies: BriefingSections["replies"]; newIa: BriefingSections["ia"];
   matches: Record<string, { id: string; name: string }>;
+  /** Keys of mail the inbox sweep put in FYI or Would archive (or from a sender sorted that way): not shown under To reply to. */
+  hide?: string[];
   calendar?: { schedule: BriefingSections["schedule"]; week: BriefingSections["week"] } | null;
   tasks?: { overdue: Task[]; dueToday: Task[]; upcoming: Task[]; georgia: Task[] };
 }
@@ -44,6 +46,7 @@ const dueText = (d?: string) => (d ? `due ${dayLabel(d)}` : undefined);
 /** The lists behind the buttons: the morning briefing's, brought up to date with what is live. */
 export function buildTiles(s: BriefingSections | null, live: LiveToday | null): Record<TileId, Tile> {
   const dismissed = new Set(s?.dismissed ?? []);
+  const quiet = new Set(live?.hide ?? []);
   const keep = <T extends { key?: string }>(xs: T[]) => xs.filter((x) => !x.key || !dismissed.has(x.key));
 
   const texts: TodayItem[] = live
@@ -51,7 +54,7 @@ export function buildTiles(s: BriefingSections | null, live: LiveToday | null): 
     : (s?.texts ?? []).map((t) => ({ key: t.key ?? `text:${t.label}`, title: t.contact ?? "Unknown number", sub: t.label, href: t.link, doneKey: t.key }));
   const mail = <T extends { key?: string; from: string; subject: string; link: string }>(xs: T[]): TodayItem[] =>
     keep(xs).map((e) => { const m = e.key ? live?.matches[e.key] : undefined; return { key: e.key ?? e.link, title: e.subject, sub: senderName(e.from), contactId: m?.id ?? null, contactName: m?.name ?? null, href: e.link, doneKey: e.key }; });
-  const replies = mail([...(s?.replies ?? []), ...(live?.newReplies ?? [])]);
+  const replies = mail([...(s?.replies ?? []), ...(live?.newReplies ?? [])].filter((r) => !r.key || !quiet.has(r.key)));
   const ia = mail([...(s?.ia ?? []), ...(live?.newIa ?? [])]);
   const messages: TodayGroup[] = [
     { id: "texts", label: "Calls and texts", items: texts, link: { to: "/inbox", label: "Open the full inbox", testId: "open-full-inbox" } },

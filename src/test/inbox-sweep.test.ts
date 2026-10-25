@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { accuracy, adminCompanionQuery, sweepQuery, addressOf, archiveTargets, correctionPlan, mutedMatch, ruleVerdict, verdictsFromModel, sweepPrompt, type SweepMessage } from "../../supabase/functions/_shared/inbox-sweep";
+import { accuracy, adminCompanionQuery, quietReplyKeys, sweepQuery, addressOf, archiveTargets, correctionPlan, mutedMatch, ruleVerdict, verdictsFromModel, sweepPrompt, type SweepMessage } from "../../supabase/functions/_shared/inbox-sweep";
 
 const msg = (o: Partial<SweepMessage>): SweepMessage => ({ id: "m1", from: "Someone <x@example.com>", subject: "Hello", snippet: "", ...o });
 const clients = new Set(["ed@weiss.ca"]);
@@ -141,5 +141,23 @@ describe("the shared admin inbox", () => {
     expect(adminCompanionQuery("in:inbox newer_than:1d")).toBe("to:admin@prosperwise.ca in:anywhere -in:trash -in:spam -in:sent newer_than:1d");
     expect(adminCompanionQuery("from:derek")).toBeNull();
     expect(adminCompanionQuery("in:inbox to:admin@prosperwise.ca")).toBeNull();
+  });
+});
+
+describe("mail Today leaves out of To reply to", () => {
+  const r = (id: string, from: string) => ({ id, key: `email:${id}`, from });
+  const replies = [r("1", "Capital One <capitalone@notification.capitalone.com>"), r("2", "Jane Client <jane@x.ca>"), r("3", "The Quo Team <team@quo.com>"), r("4", "Kayla <info@wealthlinkfinancial.ca>")];
+  it("is what the sweep put in FYI or Would archive, and mail from a sender Rolf sorted that way", () => {
+    const sorted = new Map<string, "fyi" | "archivable" | "needs_you" | "client">([["3", "fyi"], ["2", "needs_you"]]);
+    const learned = new Map<string, "fyi" | "archivable" | "needs_you" | "client">([["capitalone@notification.capitalone.com", "archivable"], ["info@wealthlinkfinancial.ca", "needs_you"]]);
+    expect(quietReplyKeys(replies, sorted, learned)).toEqual(["email:1", "email:3"]);
+  });
+  it("lets a message's own sort beat its sender's, in both directions", () => {
+    const learned = new Map<string, "fyi" | "archivable" | "needs_you" | "client">([["jane@x.ca", "fyi"], ["capitalone@notification.capitalone.com", "fyi"]]);
+    const sorted = new Map<string, "fyi" | "archivable" | "needs_you" | "client">([["2", "needs_you"], ["1", "needs_you"]]);
+    expect(quietReplyKeys(replies, sorted, learned)).toEqual([]); // Rolf put these two in Needs you himself
+  });
+  it("leaves everything alone when nothing has been sorted", () => {
+    expect(quietReplyKeys(replies, new Map(), new Map())).toEqual([]);
   });
 });
