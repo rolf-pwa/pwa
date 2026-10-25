@@ -5,6 +5,8 @@ import { useAuth } from "@/shared/hooks/useAuth";
 import { signOut } from "@/shared/lib/auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/shared/components/ui/avatar";
 import { useEffect, useRef, useState } from "react";
+import { useIsMobile } from "@/shared/hooks/use-mobile";
+import { MobileShell } from "@/shared/components/MobileShell";
 import { useLocation } from "react-router-dom";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { screenOf } from "@/shared/lib/pageViews";
@@ -28,6 +30,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     void (supabase.from("staff_page_views" as any) as any).insert({ path: screen }).then(() => {}, () => {});
   }, [pathname, user]);
   const today = format(new Date(), "EEEE, MMMM d, yyyy");
+
+  // On a phone the app is a shell with a bottom tab bar, not the desktop sidebar and header.
+  const isMobile = useIsMobile();
+  if (isMobile) return <MobileShell>{children}</MobileShell>;
 
   return (
     <SidebarCollapseProvider>

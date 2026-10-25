@@ -104,7 +104,8 @@ function ActionCard({ a, onDecide, onForget, onApply, calendarWrite = true }: { 
 }
 
 /** The morning meeting: Georgia and Rolf talk the briefing through, and she carries out what he asks inside the firm and prepares what goes outside it. */
-export function EaChat({ onChanged }: { onChanged?: () => void } = {}) {
+/** `fill` lets the chat take the whole screen (the phone's Georgia page) instead of being a card beside Today. */
+export function EaChat({ onChanged, fill }: { onChanged?: () => void; fill?: boolean } = {}) {
   const [messages, setMessages] = useState<EaMessage[] | null>(null);
   // Drafts and proposals from earlier days that are still waiting for his decision.
   const [carried, setCarried] = useState<EaAction[]>([]);
@@ -152,7 +153,7 @@ export function EaChat({ onChanged }: { onChanged?: () => void } = {}) {
   const forget = async (id: string) => { try { await call({ action: "ea_forget", prefId: id }); toast.success("Forgotten"); setPrefs((p) => p.filter((x) => x.id !== id)); } catch (e: any) { toast.error(e.message); } };
 
   return (
-    <Card className="flex max-h-[80vh] flex-col" data-testid="ea-chat">
+    <Card className={fill ? "flex h-[calc(100dvh-8.75rem)] flex-col" : "flex max-h-[80vh] flex-col"} data-testid="ea-chat">
       <CardHeader className="pb-2"><CardTitle className="text-base">Morning meeting with Georgia</CardTitle></CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
         <div className="min-h-[14rem] flex-1 space-y-3 overflow-y-auto pr-1">

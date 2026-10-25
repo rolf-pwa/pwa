@@ -64,8 +64,8 @@ export default function Briefing() {
   const s = b?.sections ?? null;
   return (
     <AppLayout>
-      <div className="mx-auto max-w-7xl space-y-5 py-6">
-        <div className="flex items-center gap-2"><Sparkles className="h-6 w-6 text-accent" /><h1 className="font-serif text-2xl font-semibold">Today</h1></div>
+      <div className="mx-auto max-w-7xl space-y-4 py-0 md:space-y-5 md:py-6">
+        <div className="hidden items-center gap-2 md:flex"><Sparkles className="h-6 w-6 text-accent" /><h1 className="font-serif text-2xl font-semibold">Today</h1></div>
 
         <TodayTabs sections={s} live={live} onDone={(k) => void done(k)} aside={<EaChat onChanged={load} />} briefing={
           <div className="min-w-0 space-y-5">

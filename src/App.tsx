@@ -31,6 +31,8 @@ const InvProfile = lazy(() => import("@/modules/investments/InvestmentHouseholdP
 const InvRecommendation = lazy(() => import("@/modules/investments/InvestmentHouseholdPages").then((m) => ({ default: m.InvRecommendationPage })));
 const InvReport = lazy(() => import("@/modules/investments/InvestmentHouseholdPages").then((m) => ({ default: m.InvReportPage })));
 const InvApplication = lazy(() => import("@/modules/investments/InvestmentHouseholdPages").then((m) => ({ default: m.InvApplicationPage })));
+const MorePage = lazy(() => import("@/modules/crm/pages/MorePage"));
+const GeorgiaPage = lazy(() => import("@/modules/crm/pages/GeorgiaPage"));
 const InvCompliance = lazy(() => import("@/modules/investments/InvestmentHouseholdPages").then((m) => ({ default: m.InvCompliancePage })));
 const InsCompliance = lazy(() => import("@/modules/insurance/InsuranceHouseholdPages").then((m) => ({ default: m.CompliancePage })));
 const FormerClients = lazy(() => import("@/modules/crm/pages/FormerClients"));
@@ -207,6 +209,8 @@ const App = () => (
               <Route path="/review-agent" element={<ProtectedRoute><ReviewAgent /></ProtectedRoute>} />
               <Route path="/ask-georgia" element={<ProtectedRoute><AskGeorgia /></ProtectedRoute>} />
               <Route path="/briefing" element={<ProtectedRoute><Briefing /></ProtectedRoute>} />
+              <Route path="/georgia" element={<ProtectedRoute><GeorgiaPage /></ProtectedRoute>} />
+              <Route path="/more" element={<ProtectedRoute><MorePage /></ProtectedRoute>} />
               <Route path="/welcome/:token" element={<Welcome />} />
               <Route path="/households/:id/portfolio-review" element={<ProtectedRoute><PortfolioReview /></ProtectedRoute>} />
               <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
