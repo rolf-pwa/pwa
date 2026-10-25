@@ -248,6 +248,44 @@ describe("Today on a phone", () => {
     expect(screen.getByTestId("today-panel").textContent).toContain("Sam Smith");
     expect(screen.getByText("THE BRIEFING")).toBeTruthy();
   });
+  describe("the bottom sheet", () => {
+    const open = () => { render(<MemoryRouter><TodayTabs sections={sections()} live={lv()} onDone={vi.fn()} briefing={<p>x</p>} /></MemoryRouter>); fireEvent.click(screen.getByTestId("tile-calendar")); return screen.getByTestId("today-panel"); };
+    const drag = (el: HTMLElement, to: number, wait = 0) => {
+      vi.useFakeTimers();
+      fireEvent.touchStart(el, { touches: [{ clientY: 100 }] });
+      vi.advanceTimersByTime(wait);
+      fireEvent.touchMove(el, { touches: [{ clientY: 100 + to }] });
+      fireEvent.touchEnd(el);
+      vi.useRealTimers();
+    };
+    it("has its own slate background, a grab handle and white cards, so it stands apart from the page", () => {
+      const panel = open();
+      expect(panel.className).toContain("bg-slate-100");
+      expect(within(panel).getByTestId("sheet-handle")).toBeTruthy();
+      expect(within(panel).getByText("Client A").closest("li")?.className).toContain("bg-card");
+    });
+    it("closes on a long swipe down", () => {
+      const panel = open();
+      drag(panel, 150, 600);
+      expect(screen.queryByTestId("today-panel")).toBeNull();
+    });
+    it("closes on a quick flick", () => {
+      const panel = open();
+      drag(panel, 60, 50);
+      expect(screen.queryByTestId("today-panel")).toBeNull();
+    });
+    it("springs back after a short slow drag", () => {
+      const panel = open();
+      drag(panel, 50, 600);
+      expect(screen.getByTestId("today-panel")).toBeTruthy();
+    });
+    it("does not close when the list is scrolled down", () => {
+      const panel = open();
+      Object.defineProperty(panel, "scrollTop", { configurable: true, value: 40 });
+      drag(panel, 200, 50);
+      expect(screen.getByTestId("today-panel")).toBeTruthy();
+    });
+  });
   it("keeps the chat beside the page, and the list at the side, on a desktop", () => {
     phone(1280);
     render(<MemoryRouter><TodayTabs sections={sections()} live={lv()} onDone={vi.fn()} briefing={<p>THE BRIEFING</p>} aside={<p>THE CHAT</p>} /></MemoryRouter>);

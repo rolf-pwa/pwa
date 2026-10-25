@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { CalendarClock, CircleAlert, ExternalLink, ListTodo, Mail, Sparkles, UserRound, Users } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/shared/components/ui/sheet";
+import { BottomSheetContent } from "@/shared/components/BottomSheet";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { cn } from "@/shared/lib/utils";
 import { useIsMobile } from "@/shared/hooks/use-mobile";
@@ -42,7 +43,7 @@ function ItemRow({ item, fresh, onDone }: { item: TodayItem; fresh: boolean; onD
     ? <a href={item.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-accent hover:underline">{item.title}<ExternalLink className="h-3 w-3" /></a>
     : <Link to={item.href} className="font-medium text-accent hover:underline">{item.title}</Link>) : <span className="font-medium">{item.title}</span>;
   return (
-    <li className={cn("rounded-md border p-3 text-sm", fresh && "border-accent/60 bg-accent/5")} data-testid="today-item" data-new={fresh ? "true" : "false"}>
+    <li className={cn("rounded-md border bg-card p-3 text-sm", fresh && "border-accent/60 bg-accent/5")} data-testid="today-item" data-new={fresh ? "true" : "false"}>
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           {link}{item.badge && <span className="ml-2 rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">{item.badge}</span>}{fresh && <span className="ml-2 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent">New</span>}
@@ -101,6 +102,23 @@ export function TodayTabs({ sections, live, onDone, briefing, aside }: { section
     );
   };
 
+  const sheetBody = (
+    <>
+      {isTile(tab) && (
+        <>
+          <SheetHeader>
+            <SheetTitle>{TILE_LABEL[tab]}</SheetTitle>
+            <SheetDescription>{HINT[tab]} {phone ? "Tap" : "Click"} one to open it; the person it is about opens in their own page.</SheetDescription>
+          </SheetHeader>
+          <div className="mt-4 space-y-5">
+            {tiles[tab].groups.map((g) => section(g, tiles[tab].groups.length > 1))}
+            {tiles[tab].groups.reduce((n, g) => n + g.items.length, 0) === 0 && <p className="text-sm text-muted-foreground">{EMPTY[tab]}</p>}
+          </div>
+        </>
+      )}
+    </>
+  );
+
   return (
     <Tabs value={tab} onValueChange={select} className="space-y-4">
       {phone ? (
@@ -139,20 +157,15 @@ export function TodayTabs({ sections, live, onDone, briefing, aside }: { section
       </div>
       {/* Not modal: the tabs stay clickable while it is open, so you can move from one list to the next; a click anywhere else on the page, or Escape, closes it. */}
       <Sheet modal={false} open={isTile(tab)} onOpenChange={(o) => { if (!o) select("briefing"); }}>
-        <SheetContent side={phone ? "bottom" : "right"} className={cn("overflow-y-auto", phone ? "max-h-[85dvh] rounded-t-2xl pb-[calc(1rem+env(safe-area-inset-bottom))]" : "w-full sm:max-w-md")} data-testid="today-panel" onInteractOutside={(e) => { if ((e.target as HTMLElement | null)?.closest?.('[data-testid="today-tiles"]')) e.preventDefault(); }}>
-          {isTile(tab) && (
-            <>
-              <SheetHeader>
-                <SheetTitle>{TILE_LABEL[tab]}</SheetTitle>
-                <SheetDescription>{HINT[tab]} {phone ? "Tap" : "Click"} one to open it; the person it is about opens in their own page.</SheetDescription>
-              </SheetHeader>
-              <div className="mt-4 space-y-5">
-                {tiles[tab].groups.map((g) => section(g, tiles[tab].groups.length > 1))}
-                {tiles[tab].groups.reduce((n, g) => n + g.items.length, 0) === 0 && <p className="text-sm text-muted-foreground">{EMPTY[tab]}</p>}
-              </div>
-            </>
-          )}
-        </SheetContent>
+        {phone ? (
+          <BottomSheetContent onClose={() => select("briefing")} data-testid="today-panel">
+            {sheetBody}
+          </BottomSheetContent>
+        ) : (
+          <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md" data-testid="today-panel" onInteractOutside={(e) => { if ((e.target as HTMLElement | null)?.closest?.('[data-testid="today-tiles"]')) e.preventDefault(); }}>
+            {sheetBody}
+          </SheetContent>
+        )}
       </Sheet>
     </Tabs>
   );
