@@ -21,3 +21,15 @@ describe("the Family pages on a phone", () => {
     expect(panel).toContain("embedded ?");
   });
 });
+
+describe("the households on a phone", () => {
+  it("lets a household and a member name wrap on its own line, with the badge, amount and Open below, instead of cutting names to an initial", () => {
+    expect(detail).toContain('data-testid="household-row"');
+    expect(detail).toContain("basis-full");
+    expect(detail).toContain("break-words font-medium sm:truncate");
+    expect(detail).toContain('data-testid="member-row"');
+    expect(detail).toContain("break-words text-sm font-medium hover:underline sm:flex-1 sm:basis-0 sm:truncate");
+    expect(detail).toContain("whitespace-nowrap");
+    expect(detail).not.toContain("shrink-0 w-32 text-right");
+  });
+});
