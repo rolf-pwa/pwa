@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { PortalTerritory } from "@/modules/portal/components/PortalTerritory";
 import { PortalHoldingTank } from "@/modules/portal/components/PortalHoldingTank";
-import { PortalInsurance, PortalCoverageCard } from "@/modules/portal/components/PortalInsurance";
+import { PortalInsurance } from "@/modules/portal/components/PortalInsurance";
 import { PortalTotalsCard, type TotalsRow } from "@/modules/portal/components/PortalTotalsCard";
 import { useIsMobile } from "@/shared/hooks/use-mobile";
 import { PortalDashboard } from "@/modules/portal/components/PortalDashboard";
@@ -932,7 +932,6 @@ const VfoPortal = () => {
     const dashboardSidebar = (
       <>
         {isSelf && <PortalDocumentsTeaser portalToken={portalToken} onOpen={() => setTab("documents")} />}
-        {isSelf && <PortalCoverageCard policies={ind.insurancePolicies ?? []} onOpen={() => setTab("financials")} />}
         {rebalancingAwaiting && rebalancingState && <PortalRebalancingTeaser rebalancing={rebalancingState} onOpen={() => setTab("rebalancing")} />}
         {rebalancingWaiting && rebalancingState && <PortalRebalancingWaiting rebalancing={rebalancingState} onOpen={() => setTab("rebalancing")} />}
         {reviewPublished && <PortalReviewTeaser id={reviewPublished.id} view={reviewPublished.view} publishedAt={reviewPublished.publishedAt} onOpen={() => setTab("review")} />}
