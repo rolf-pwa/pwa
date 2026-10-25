@@ -19,6 +19,7 @@ const briefing = {
 vi.mock("@/shared/integrations/supabase/client", () => ({ supabase: { from: () => ({ select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: (supabaseMock as any).current ?? briefing }) }) }) }) }), functions: { invoke: vi.fn() }, channel: () => { const c: any = { on: () => c, subscribe: () => c }; return c; }, removeChannel: vi.fn() } }));
 
 import Briefing from "@/modules/crm/pages/Briefing";
+import { supabase } from "@/shared/integrations/supabase/client";
 
 describe("the morning briefing page", () => {
   it("shows the ranked priorities with a suggested next step, and each section behind them", async () => {
@@ -46,6 +47,18 @@ describe("the morning briefing page", () => {
     expect(within(cal).getByText("Client A")).toBeTruthy();
     expect(within(cal).getByText("Overlaps")).toBeTruthy();
     expect(within(cal).getByText("Board Meeting")).toBeTruthy();
+  });
+  it("has Regenerate as a quiet text link inside the Briefing card, not a button in the page header", async () => {
+    render(<MemoryRouter><Briefing /></MemoryRouter>);
+    const link = await screen.findByTestId("regenerate");
+    expect(link.textContent).toBe("Regenerate");
+    expect(link.tagName).toBe("BUTTON");
+    expect(link.className).not.toMatch(/border|bg-primary/); // a link, not a button
+    expect(link.closest("[class*='border-accent']")).toBeTruthy(); // inside the Briefing card
+    expect(link.closest("h1")).toBeNull();
+    expect(screen.getAllByTestId("regenerate")).toHaveLength(1);
+    fireEvent.click(link);
+    expect((supabase.functions.invoke as any).mock.calls.some(([fn, opts]: any[]) => fn === "daily-briefing-generate" && JSON.stringify(opts?.body) === "{}")).toBe(true);
   });
   it("says what was left out, and that nothing was changed", async () => {
     render(<MemoryRouter><Briefing /></MemoryRouter>);

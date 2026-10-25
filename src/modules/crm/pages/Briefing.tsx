@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, Loader2, RefreshCw, Sparkles, ShieldCheck } from "lucide-react";
+import { Check, Loader2, Sparkles, ShieldCheck } from "lucide-react";
 import { AppLayout } from "@/shared/components/AppLayout";
-import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent } from "@/shared/components/ui/card";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { useAuth } from "@/shared/hooks/useAuth";
@@ -55,29 +54,36 @@ export default function Briefing() {
     } catch { toast.error("Couldn't generate the briefing"); } finally { setBusy(false); }
   };
 
+  /** Regenerating is a quiet text link inside the Briefing card (and where there is no briefing to regenerate), not a button in the page header. */
+  const RegenerateLink = ({ children }: { children: React.ReactNode }) => (
+    <button type="button" onClick={regenerate} disabled={busy} data-testid="regenerate" className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-accent hover:underline disabled:opacity-60">
+      {busy && <Loader2 className="h-3 w-3 animate-spin" />}{children}
+    </button>
+  );
+
   const s = b?.sections ?? null;
   return (
     <AppLayout>
       <div className="mx-auto max-w-7xl space-y-5 py-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex items-center gap-2"><Sparkles className="h-6 w-6 text-accent" /><h1 className="font-serif text-2xl font-semibold">Today</h1></div>
-          <Button variant="outline" size="sm" onClick={regenerate} disabled={busy}>{busy ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-2 h-3.5 w-3.5" />}{b ? "Regenerate" : "Generate now"}</Button>
-        </div>
+        <div className="flex items-center gap-2"><Sparkles className="h-6 w-6 text-accent" /><h1 className="font-serif text-2xl font-semibold">Today</h1></div>
 
         <TodayTabs sections={s} live={live} onDone={(k) => void done(k)} aside={<EaChat onChanged={load} />} briefing={
           <div className="min-w-0 space-y-5">
         {loading && <Loader2 className="h-5 w-5 animate-spin" />}
-        {!loading && !b && <Card><CardContent className="p-5 text-sm text-muted-foreground">No briefing yet today. Georgia prepares it at 5:30 a.m. Pacific; you can also generate it now.</CardContent></Card>}
+        {!loading && !b && <Card><CardContent className="p-5 text-sm text-muted-foreground">No briefing yet today. Georgia prepares it at 5:30 a.m. Pacific; you can also <RegenerateLink>generate it now</RegenerateLink>.</CardContent></Card>}
         {b?.generation_status === "generating" && <p className="text-sm text-muted-foreground">Georgia is preparing the briefing…</p>}
-        {b?.generation_status === "error" && <p className="text-sm text-destructive">Couldn't generate today's briefing: {b.generation_error}</p>}
+        {b?.generation_status === "error" && <p className="text-sm text-destructive">Couldn't generate today's briefing: {b.generation_error} <RegenerateLink>Try again</RegenerateLink></p>}
 
         {b?.generation_status === "complete" && (
           <>
             <Card className="border-accent/40" style={{ background: "hsl(var(--pw-sand) / 0.3)" }}>
               <CardContent className="space-y-3 p-5">
-                <div>
-                  <h2 className="font-serif text-lg font-semibold">{b.greeting}</h2>
-                  <p className="text-sm text-muted-foreground">{b.summary_line}</p>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="font-serif text-lg font-semibold">{b.greeting}</h2>
+                    <p className="text-sm text-muted-foreground">{b.summary_line}</p>
+                  </div>
+                  <RegenerateLink>Regenerate</RegenerateLink>
                 </div>
                 {(s?.handled?.length ?? 0) > 0 && <p className="text-xs text-muted-foreground" data-testid="progress">{b.priority_items.length} still open · {s!.handled!.length} handled since this morning</p>}
                 {b.priority_items.length === 0 && (s?.handled?.length ?? 0) > 0 && <p className="text-sm font-medium text-green-700">Everything in this morning's priorities has been handled.</p>}
