@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { STAFF_HOME } from "@/shared/lib/staffHome";
 import { Navigate } from "react-router-dom";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { isAllowedDomain } from "@/shared/lib/auth";
@@ -28,7 +29,7 @@ const AuthCallback = () => {
     emailRef.current = email;
     setFailed(false);
     if (!email) { setDestination("/access-denied"); return; }
-    if (isAllowedDomain(email)) { setDestination("/briefing"); return; }
+    if (isAllowedDomain(email)) { setDestination(STAFF_HOME); return; }
     const result = await signInToPortalWithGoogle(email);
     if (result.ok) {
       sessionStorage.setItem("portal_google_auth", JSON.stringify(result.data));
@@ -49,7 +50,7 @@ const AuthCallback = () => {
       if (!hasAuthHash) {
         // No auth hash: an existing session goes on to the portal (clients) or the dashboard (staff); no session goes to the login page via the dashboard.
         if (session?.user?.email) await finish(session.user.email);
-        else setDestination("/briefing");
+        else setDestination(STAFF_HOME);
         return;
       }
       if (session?.user?.email) { await finish(session.user.email); return; }

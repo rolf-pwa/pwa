@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { STAFF_HOME } from "@/shared/lib/staffHome";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useExchangeGoogleCode } from "@/shared/hooks/useGoogle";
 import { toast } from "sonner";
@@ -14,7 +15,7 @@ const GoogleCallback = () => {
 
     if (error) {
       toast.error("Google authorization was denied.");
-      navigate("/dashboard", { replace: true });
+      navigate(STAFF_HOME, { replace: true });
       return;
     }
 
@@ -22,11 +23,11 @@ const GoogleCallback = () => {
       exchangeCode.mutate(code, {
         onSuccess: () => {
           toast.success("Google Calendar & Gmail connected!");
-          navigate("/dashboard", { replace: true });
+          navigate(STAFF_HOME, { replace: true });
         },
         onError: (err) => {
           toast.error(`Connection failed: ${err.message}`);
-          navigate("/dashboard", { replace: true });
+          navigate(STAFF_HOME, { replace: true });
         },
       });
     }
