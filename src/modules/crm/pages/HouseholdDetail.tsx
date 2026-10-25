@@ -12,13 +12,6 @@ import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
 import { Switch } from "@/shared/components/ui/switch";
 import { Label } from "@/shared/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/shared/components/ui/select";
 import { Input } from "@/shared/components/ui/input";
 import { Textarea } from "@/shared/components/ui/textarea";
 import {
@@ -51,6 +44,8 @@ import { SidebarSection } from "@/shared/components/SidebarSection";
 import { HoldingTank } from "@/modules/crm/components/HoldingTank";
 import { VaultView } from "@/modules/crm/pages/Vault";
 import { OnboardingAgentPanel } from "@/modules/crm/components/OnboardingAgentPanel";
+import { needsOnboardingLink } from "@/modules/crm/lib/onboardingLink";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/shared/components/ui/dialog";
 import { OnboardingInviteCard } from "@/modules/crm/components/OnboardingInviteCard";
 import { HouseholdWorkbench } from "@/modules/crm/components/HouseholdWorkbench";
 import { HouseholdLiabilities } from "@/modules/crm/components/HouseholdLiabilities";
@@ -92,6 +87,7 @@ import {
   Anchor,
   Briefcase,
   CalendarOff,
+  Link2,
   RotateCcw,
   UserCheck,
   TrendingDown,
@@ -171,6 +167,7 @@ const HouseholdDetail = () => {
   const [liabilities, setLiabilities] = useState<any[]>([]);
   const [insurancePolicies, setInsurancePolicies] = useState<any[]>([]);
   const [endRelationshipOpen, setEndRelationshipOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [endReason, setEndReason] = useState("");
   const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [reopenRelationshipOpen, setReopenRelationshipOpen] = useState(false);
@@ -428,6 +425,8 @@ const HouseholdDetail = () => {
     byType[t].total += Number(a.current_value) || 0;
   });
 
+  const showInvite = !phone && needsOnboardingLink(household);
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -511,6 +510,11 @@ const HouseholdDetail = () => {
                         <BarChart3 className="mr-2 h-4 w-4" /> Cashflow Analyst
                       </Link>
                     </DropdownMenuItem>
+                    {showInvite && (
+                      <DropdownMenuItem onClick={() => setInviteOpen(true)}>
+                        <Link2 className="mr-2 h-4 w-4" /> Onboarding link
+                      </DropdownMenuItem>
+                    )}
                     {household.relationship_ended_at ? (
                       <DropdownMenuItem onClick={() => setReopenRelationshipOpen(true)}>
                         <RotateCcw className="mr-2 h-4 w-4" /> Reopen Relationship
@@ -524,6 +528,13 @@ const HouseholdDetail = () => {
                 </DropdownMenu>
               </div>
             </div>
+
+            <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+              <DialogContent className="max-w-xl">
+                <DialogHeader><DialogTitle>Onboarding link</DialogTitle></DialogHeader>
+                <OnboardingInviteCard householdId={id!} embedded />
+              </DialogContent>
+            </Dialog>
 
             <AlertDialog open={endRelationshipOpen} onOpenChange={setEndRelationshipOpen}>
               <AlertDialogContent>
@@ -626,80 +637,8 @@ const HouseholdDetail = () => {
               </AlertDialogContent>
             </AlertDialog>
 
-            {/* Info grid */}
-            {/* On a phone the setup fields (status, entity, quiet period) are left to the desktop; the address stays as a line. */}
-            {household.address && <p className="mt-3 flex items-start gap-2 text-sm md:hidden" data-testid="household-phone-address"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />{household.address}</p>}
-            <div className="mt-4 hidden gap-4 md:grid md:grid-cols-2 lg:grid-cols-4" data-testid="household-setup-fields">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Address</p>
-                {household.address ? (
-                  <div className="flex items-start gap-2 text-sm font-medium">
-                    <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                    <span>{household.address}</span>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">—</p>
-                )}
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Governance Status</p>
-                <Select
-                  value={household.governance_status || "stabilization"}
-                  onValueChange={async (v) => {
-                    await supabase.from("households").update({ governance_status: v as any }).eq("id", household.id);
-                    setHousehold({ ...household, governance_status: v });
-                    toast.success("Governance status updated for household");
-                  }}
-                >
-                  <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— None —</SelectItem>
-                    <SelectItem value="core">Core</SelectItem>
-                    <SelectItem value="stabilization">Stabilization Phase</SelectItem>
-                    <SelectItem value="sovereign">Sovereign Phase</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Fiduciary Entity</p>
-                <Select
-                  value={household.fiduciary_entity || "pws"}
-                  onValueChange={async (v) => {
-                    await supabase.from("households").update({ fiduciary_entity: v as any }).eq("id", household.id);
-                    setHousehold({ ...household, fiduciary_entity: v });
-                    toast.success("Fiduciary entity updated for household");
-                  }}
-                >
-                  <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pws">PWS — Strategy / Architect</SelectItem>
-                    <SelectItem value="pwa">PWA — Advisors / Builder</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Quiet Period Start</p>
-                <Input
-                  type="date"
-                  value={household.quiet_period_start_date || ""}
-                  onChange={async (e) => {
-                    const val = e.target.value || null;
-                    await supabase.from("households").update({ quiet_period_start_date: val }).eq("id", household.id);
-                    const memberIds = members.map((m: any) => m.id);
-                    if (memberIds.length > 0) {
-                      await supabase.from("contacts").update({ quiet_period_start_date: val }).in("id", memberIds);
-                    }
-                    setHousehold({ ...household, quiet_period_start_date: val });
-                    toast.success("Quiet period updated for household");
-                  }}
-                  className="h-8"
-                />
-              </div>
-            </div>
-            {/* Starting a new household: the link Rolf sends. Gone for good once onboarding is complete. */}
-            {!household.onboarding_completed_at && (
-              <div className="mt-4 hidden md:block"><OnboardingInviteCard householdId={id!} embedded /></div>
-            )}
+            {/* The setup fields (governance status, fiduciary entity, quiet period) are no longer on this page; the address stays as a line. */}
+            {household.address && <p className="mt-3 flex items-start gap-2 text-sm" data-testid="household-address"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />{household.address}</p>}
           </CardContent>
         </Card>
 

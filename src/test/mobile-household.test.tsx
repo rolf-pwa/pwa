@@ -31,11 +31,12 @@ describe("the household page on a phone", () => {
     expect(home).toContain("min-h-14");
     expect(src).toContain("{!phone && <Card>"); // the wide members table is desktop only
   });
-  it("leaves the setup fields (address block, governance status, fiduciary entity, quiet period) and the onboarding link to the desktop, keeping the address as a line", () => {
-    expect(src).toContain('className="mt-4 hidden gap-4 md:grid md:grid-cols-2 lg:grid-cols-4" data-testid="household-setup-fields"');
-    expect(src).toContain('<div className="mt-4 hidden md:block"><OnboardingInviteCard');
-    expect(src).toContain('data-testid="household-phone-address"');
-    expect(src).toContain("md:hidden");
+  it("has no setup fields on the household page, and keeps the address as a line", () => {
+    expect(src).not.toContain("household-setup-fields");
+    expect(src).not.toContain("Fiduciary Entity");
+    expect(src).not.toContain("Quiet Period Start");
+    expect(src).not.toContain("<OnboardingInviteCard householdId={id!} embedded /></div>");
+    expect(src).toContain('data-testid="household-address"');
   });
   it("has no back arrow in the header on a phone, hides the header while a section is open, and gives the actions their own full-width row", () => {
     expect(src).toContain('className="-ml-2 hidden shrink-0 md:inline-flex"');
