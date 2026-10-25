@@ -15,11 +15,11 @@ export function HouseholdTotalsStrip({ householdId }: { householdId: string }) {
   }, [householdId]);
   const items: [string, number | null][] = [["Total Assets", b?.totalAssets ?? null], ["Liabilities", b?.liabilities ?? null], ["Net Worth", b?.netWorth ?? null]];
   return (
-    <div className="grid grid-cols-3 gap-4 rounded-lg border bg-card px-5 py-3">
+    <div className="grid grid-cols-3 gap-2 rounded-lg border bg-card px-3 py-3 md:gap-4 md:px-5">
       {items.map(([label, value]) => (
         <div key={label}>
           <p className="text-xs text-muted-foreground">{label}</p>
-          <p className={`text-lg font-semibold tabular-nums ${label === "Liabilities" ? "text-destructive" : ""}`}>{value === null ? "—" : money(value)}</p>
+          <p className={`text-sm font-semibold tabular-nums md:text-lg ${label === "Liabilities" ? "text-destructive" : ""}`}>{value === null ? "—" : money(value)}</p>
         </div>
       ))}
     </div>

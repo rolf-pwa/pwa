@@ -1,6 +1,9 @@
 import { keepUntilLabel } from "@/shared/lib/retention";
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useIsMobile } from "@/shared/hooks/use-mobile";
+import { dialViaQuo } from "@/shared/lib/quo-dial";
+import { MobileSectionList, type MobileSection } from "@/shared/components/MobileSectionList";
 import { format } from "date-fns";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { AppLayout } from "@/shared/components/AppLayout";
@@ -69,6 +72,8 @@ import {
   Baby,
   Loader2,
   Grape,
+  Phone,
+  Mail,
   Landmark,
   Receipt,
   Castle,
@@ -134,9 +139,27 @@ const formatCurrency = (value: number) =>
     maximumFractionDigits: 0,
   }).format(value);
 
+/** The household's sections, as the phone's list. The same ones as the desktop tabs. */
+const HOUSEHOLD_SECTIONS: MobileSection[] = [
+  { value: "overview", label: "Overview", icon: Home, hint: "Corporations, properties and the rest of the family picture" },
+  { value: "vault", label: "Vault", icon: ShieldCheck },
+  { value: "insurance", label: "Insurance", icon: Shield },
+  { value: "actions", label: "Action Items", icon: ListChecks },
+  { value: "vineyard", label: "The Vineyard", icon: Grape },
+  { value: "liabilities", label: "Liabilities", icon: Landmark },
+  { value: "tax", label: "Tax", icon: Receipt },
+  { value: "pros", label: "Pros", icon: Briefcase },
+  { value: "analytics", label: "Analytics", icon: BarChart3 },
+];
+
 const HouseholdDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  // On a phone the sections are a list of rows and each opens as the next screen (the open one is in the address, so Back returns to the list).
+  const phone = useIsMobile();
+  const [sectionParams, setSectionParams] = useSearchParams();
+  const section = sectionParams.get("section");
+  const openSection = (value: string) => setSectionParams({ section: value });
   const [loading, setLoading] = useState(true);
   const [household, setHousehold] = useState<any>(null);
   const [familyName, setFamilyName] = useState("");
@@ -417,15 +440,15 @@ const HouseholdDetail = () => {
         />
 
         {/* Header Card */}
-        <Card>
+        <Card className={phone && section ? "hidden" : undefined}>
           <CardContent className="p-4">
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-wrap items-start justify-between gap-4 md:flex-nowrap">
               <div className="flex items-start gap-3 min-w-0 flex-1">
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={() => navigate("/households")}
-                  className="shrink-0 -ml-2"
+                  className="-ml-2 hidden shrink-0 md:inline-flex"
                 >
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
@@ -456,8 +479,8 @@ const HouseholdDetail = () => {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <div className="flex items-center gap-2 mr-2">
+              <div className="flex w-full items-center gap-2 md:w-auto md:shrink-0">
+                <div className="flex flex-1 items-center gap-2 md:mr-2 md:flex-none">
                   <Label htmlFor="hof-visible" className="text-xs text-muted-foreground cursor-pointer">
                     HoF Visible
                   </Label>
@@ -472,7 +495,7 @@ const HouseholdDetail = () => {
                 </div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline">
+                    <Button variant="outline" className="h-11 md:h-10">
                       More Actions
                       <ChevronDown className="ml-1.5 h-4 w-4" />
                     </Button>
@@ -679,8 +702,37 @@ const HouseholdDetail = () => {
         </Card>
 
         {/* Tabs */}
-        <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="w-full">
+        {phone && !section && (
+          <div className="space-y-4" data-testid="household-phone-home">
+            <HouseholdTotalsStrip householdId={id!} />
+            <section aria-label="Members" data-testid="household-phone-members">
+              <h2 className="mb-1.5 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">Members</h2>
+              {members.length === 0 ? <p className="px-1 text-sm text-muted-foreground">No members in this household.</p> : (
+                <ul className="divide-y overflow-hidden rounded-xl border bg-card">
+                  {members.map((m) => {
+                    const name = `${m.first_name} ${m.last_name || ""}`.trim();
+                    const initials = `${(m.first_name?.[0] || "").toUpperCase()}${(m.last_name?.[0] || "").toUpperCase()}` || "—";
+                    return (
+                      <li key={m.id} className="flex items-center gap-1 pr-1" data-testid="household-phone-member">
+                        <Link to={`/contacts/${m.id}`} className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-3 active:bg-muted">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sanctuary-green text-sm font-semibold text-sanctuary-bronze">{initials}</span>
+                          <span className="min-w-0 flex-1"><span className="block truncate font-medium">{name}</span><span className="block truncate text-xs text-muted-foreground">{m.phone || m.email || "No contact info"}</span></span>
+                        </Link>
+                        {m.phone && <button type="button" onClick={() => dialViaQuo(m.phone)} aria-label={`Call ${name}`} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-accent active:bg-muted"><Phone className="h-5 w-5" /></button>}
+                        {m.email && <a href={`mailto:${m.email}`} aria-label={`Email ${name}`} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-accent active:bg-muted"><Mail className="h-5 w-5" /></a>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+            <MobileSectionList sections={HOUSEHOLD_SECTIONS} onOpen={openSection} label="Household sections" />
+          </div>
+        )}
+        {phone && section && <h2 className="mb-3 font-serif text-xl font-semibold" data-testid="section-title">{HOUSEHOLD_SECTIONS.find((x) => x.value === section)?.label}</h2>}
+
+        <Tabs {...(phone ? { value: section ?? "" } : { defaultValue: "overview" })} className="w-full">
+          {!phone && <TabsList className="w-full">
             <TabsTrigger value="overview" className="flex-1">Overview</TabsTrigger>
             <TabsTrigger value="vault" className="flex-1">
               <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
@@ -711,15 +763,15 @@ const HouseholdDetail = () => {
               <BarChart3 className="mr-1.5 h-3.5 w-3.5" />
               Analytics
             </TabsTrigger>
-          </TabsList>
+          </TabsList>}
 
           {/* Overview */}
           <TabsContent value="overview" className="mt-4">
             <HouseholdTotalsStrip householdId={id!} />
             <div className="mt-4 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
               <div className="min-w-0 space-y-6">
-                {/* Household Registered Members Directory */}
-                <Card>
+                {/* Household Registered Members Directory (on a phone the members are rows on the household's first screen) */}
+                {!phone && <Card>
                   <CardHeader className="pb-4">
                     <CardTitle className="text-lg">Members Directory</CardTitle>
                   </CardHeader>
@@ -769,7 +821,7 @@ const HouseholdDetail = () => {
                       </div>
                     )}
                   </CardContent>
-                </Card>
+                </Card>}
 
                 {/* Corporations Directory */}
                 <Card>
