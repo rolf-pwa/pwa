@@ -23,6 +23,7 @@ import { runCalendarInvites } from "../_shared/calendar-service.ts";
 import { runNoticeProcessor } from "../_shared/notice-service.ts";
 import { sweepArchive, sweepFeedback, sweepForgetSender, sweepList, sweepMorning, sweepRun, sweepSetAuto, sweepUndoArchive } from "../_shared/inbox-sweep-handlers.ts";
 import { quietReplyKeys, sweepLine, type Bucket, type Learned } from "../_shared/inbox-sweep.ts";
+import { pushNotify, pushSubscribe, pushTest, vapidPublicKey } from "../_shared/push-service.ts";
 import { scanMeetingNotes } from "../_shared/meeting-followup-service.ts";
 import { runGeorgiaTasks } from "../_shared/georgia-task-service.ts";
 import { classifyEmail, calendarConflicts, groupWeek, sectionsFromEmails, type BriefingEmail, type BriefingSections, type CalEvent } from "../_shared/briefing-facts.ts";
@@ -805,6 +806,12 @@ Deno.serve(async (req) => {
       EdgeRuntime.waitUntil(runWatchdog(db).then((r) => r.length && console.log("[health-watchdog]", r.join("; "))).catch((e: unknown) => console.error("[health-watchdog]", e)));
       return json({ started: true });
     }
+    // A new notification or inbound text (from a database trigger): buzz the phone.
+    if (cronBody.job === "push_notify") {
+      // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+      EdgeRuntime.waitUntil(pushNotify(db, cronBody.kind === "text" ? "text" : "staff", String(cronBody.id ?? "")).catch((e: unknown) => console.error("[push]", e)));
+      return json({ started: true });
+    }
     if (cronBody.nudge === true) return json(await eaNudge(db));
     const { data: staff } = await db.from("profiles").select("user_id, email").ilike("email", "%@prosperwise.ca");
     let generated = 0;
@@ -833,6 +840,15 @@ Deno.serve(async (req) => {
     if (typeof body.action === "string" && body.action.startsWith("ea_")) {
       if (body.action === "ea_refresh") return json({ ok: true, ...(await refreshBriefing(db, userId, todayStr)) });
       if (body.action === "ea_today_live") return json(await liveToday(db, userId));
+      if (body.action === "ea_push_key") return json({ ok: true, key: await vapidPublicKey() });
+      if (body.action === "ea_push_subscribe") { const r = await pushSubscribe(db, userId, (body as any).subscription ?? {}, req.headers.get("user-agent") ?? ""); return json(r, r.ok ? 200 : 400); }
+      if (body.action === "ea_push_unsubscribe") { await db.from("push_subscriptions").delete().eq("user_id", userId).eq("endpoint", String((body as any).endpoint ?? "")); return json({ ok: true }); }
+      if (body.action === "ea_push_prefs") {
+        const cats = Array.isArray((body as any).categories) ? (body as any).categories.filter((c: unknown) => typeof c === "string") : undefined;
+        const { error } = await db.from("push_subscriptions").update({ ...(cats ? { categories: cats } : {}), ...(typeof (body as any).quiet === "boolean" ? { quiet: (body as any).quiet } : {}) }).eq("user_id", userId).eq("endpoint", String((body as any).endpoint ?? ""));
+        return json({ ok: !error }, error ? 400 : 200);
+      }
+      if (body.action === "ea_push_test") return json({ ok: true, ...(await pushTest(db, userId, String((body as any).endpoint ?? ""))) });
       if (body.action === "ea_history") return json({ ok: true, ...(await eaHistory(db, userId)) });
       if (body.action === "ea_chat") return json({ ok: true, ...(await eaChat(db, userId, body.message ?? "", body.start === true)) });
       if (body.action === "ea_decide") return json(await eaDecide(db, userId, String(body.actionId ?? ""), body.decision === "done" ? "done" : "dismissed"));
