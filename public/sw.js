@@ -5,14 +5,16 @@ self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 self.addEventListener("push", (event) => {
   let d = {};
   try { d = event.data ? event.data.json() : {}; } catch { /* a plain-text push */ }
-  event.waitUntil(self.registration.showNotification(d.title || "ProsperWise", {
+  // The red number on the home-screen icon; the app keeps it right while it is open.
+  const badge = typeof d.badge === "number" && self.navigator && "setAppBadge" in self.navigator ? (d.badge > 0 ? self.navigator.setAppBadge(d.badge) : self.navigator.clearAppBadge()).catch(() => {}) : null;
+  event.waitUntil(Promise.all([badge, self.registration.showNotification(d.title || "ProsperWise", {
     body: d.body || "",
     icon: "/icon-192.png",
     badge: "/icon-192.png",
     tag: d.tag || undefined,
     renotify: !!d.tag,
     data: { url: typeof d.url === "string" && d.url.startsWith("/") && !d.url.startsWith("//") ? d.url : "/" },
-  }));
+  })]));
 });
 
 self.addEventListener("notificationclick", (event) => {

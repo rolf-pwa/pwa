@@ -58,3 +58,14 @@ export async function loadPushPrefs(endpoint: string): Promise<{ categories: str
   const { data } = await (supabase.from("push_subscriptions" as never) as any).select("categories, quiet").eq("endpoint", endpoint).maybeSingle();
   return data ?? null;
 }
+
+/** Unread bell items that count toward the number on the icon; texts and voicemails count through the inbox. Matches the server's list. */
+export const BADGE_SOURCES = ["new_request", "request_message", "ask_georgia_flag", "task_client_reply", "insurance_document", "system_error"] as const;
+
+/** The red number on the home-screen icon (a phone's installed app only; elsewhere this does nothing). */
+export function setAppBadge(n: number) {
+  try {
+    const nav = navigator as Navigator & { setAppBadge?: (n: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+    void (n > 0 ? nav.setAppBadge?.(n) : nav.clearAppBadge?.())?.catch(() => undefined);
+  } catch { /* not supported */ }
+}

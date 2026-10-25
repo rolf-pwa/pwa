@@ -43,15 +43,18 @@ export function shouldBuzz(category: PushCategory, source: string, prefs: PushPr
   return true;
 }
 
-export interface PushPayload { title: string; body: string; url: string; tag: string }
+/** Unread bell items that count toward the red number on the icon. Texts and voicemails count through the inbox, so they are not listed twice. */
+export const BADGE_SOURCES = ["new_request", "request_message", "ask_georgia_flag", "task_client_reply", "insurance_document", "system_error"] as const;
+
+export interface PushPayload { title: string; body: string; url: string; tag: string; badge?: number }
 
 /** The lock screen shows who and what kind, never the words: a client's message or a transcript should not sit on a locked phone. */
-export function staffPayload(n: { id: string; title: string; link?: string | null; contact_id?: string | null; source_type: string }): PushPayload {
-  return { title: n.title.slice(0, 120), body: "Tap to open", url: safePath(n.link) ?? "/briefing", tag: `${n.source_type}-${n.contact_id ?? n.id}` };
+export function staffPayload(n: { id: string; title: string; link?: string | null; contact_id?: string | null; source_type: string }, badge?: number): PushPayload {
+  return { title: n.title.slice(0, 120), body: "Tap to open", url: safePath(n.link) ?? "/briefing", tag: `${n.source_type}-${n.contact_id ?? n.id}`, badge };
 }
 
-export function textPayload(m: { id: string; contact_id?: string | null }, name: string | null): PushPayload {
-  return { title: name ? `Text from ${name}` : "New text message", body: "Tap to open", url: m.contact_id ? `/contacts/${m.contact_id}` : "/briefing?tab=messages", tag: `text-${m.contact_id ?? m.id}` };
+export function textPayload(m: { id: string; contact_id?: string | null }, name: string | null, badge?: number): PushPayload {
+  return { title: name ? `Text from ${name}` : "New text message", body: "Tap to open", url: m.contact_id ? `/contacts/${m.contact_id}` : "/briefing?tab=messages", tag: `text-${m.contact_id ?? m.id}`, badge };
 }
 
 /** Only paths inside the app: a notification must never open somewhere else. */

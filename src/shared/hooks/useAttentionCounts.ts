@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { supabase } from "@/shared/integrations/supabase/client";
+import { BADGE_SOURCES } from "@/shared/lib/push";
 import { withAuthRaceRetry } from "@/shared/lib/authRaceRetry";
 
-export interface AttentionCounts { inbox: number | null; requests: number | null; review: number | null }
+export interface AttentionCounts { inbox: number | null; requests: number | null; review: number | null; alerts: number | null }
 
 /** What is waiting on staff, for the badges: unread texts and calls, open client requests, and reviews pending. Texts and calls update as they arrive. */
 export function useAttentionCounts(): AttentionCounts {
@@ -11,6 +12,7 @@ export function useAttentionCounts(): AttentionCounts {
   const [review, setReview] = useState<number | null>(null);
   const [requests, setRequests] = useState<number | null>(null);
   const [inbox, setInbox] = useState<number | null>(null);
+  const [alerts, setAlerts] = useState<number | null>(null);
 
   useEffect(() => {
     // ProtectedRoute already waits for auth to resolve before this ever mounts, but there's still a brief window right after an OAuth redirect where the Supabase
@@ -39,13 +41,22 @@ export function useAttentionCounts(): AttentionCounts {
     };
     loadInboxUnread();
 
+    const loadAlerts = async () => {
+      try {
+        const { count } = await withAuthRaceRetry<any>(() => (supabase.from("staff_notifications") as any).select("id", { count: "exact", head: true }).eq("read", false).in("source_type", [...BADGE_SOURCES]));
+        setAlerts(count ?? 0);
+      } catch {}
+    };
+    loadAlerts();
+
     const channel = supabase
       .channel("attention-quo-unread")
       .on("postgres_changes", { event: "*", schema: "public", table: "quo_messages" }, loadInboxUnread)
       .on("postgres_changes", { event: "*", schema: "public", table: "quo_calls" }, loadInboxUnread)
+      .on("postgres_changes", { event: "*", schema: "public", table: "staff_notifications" }, loadAlerts)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [user]);
 
-  return { inbox, requests, review };
+  return { inbox, requests, review, alerts };
 }

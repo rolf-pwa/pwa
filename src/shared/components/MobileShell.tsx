@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Bot, ChevronLeft, Menu, MessageSquare, Sparkles, Users } from "lucide-react";
 import { NotificationBell } from "@/shared/components/NotificationBell";
+import { setAppBadge } from "@/shared/lib/push";
 import { useAttentionCounts } from "@/shared/hooks/useAttentionCounts";
 import { useKeyboardViewport } from "@/shared/hooks/useKeyboardViewport";
 import { cn } from "@/shared/lib/utils";
@@ -33,7 +34,9 @@ const TITLE: Record<string, string> = { "/briefing": "Today", "/inbox": "Message
 export function MobileShell({ children }: { children: React.ReactNode }) {
   const { pathname, search } = useLocation();
   const navigate = useNavigate();
-  const { inbox, requests } = useAttentionCounts();
+  const { inbox, requests, alerts } = useAttentionCounts();
+  const iconBadge = (inbox ?? 0) + (alerts ?? 0);
+  useEffect(() => { if (inbox !== null && alerts !== null) setAppBadge(iconBadge); }, [inbox, alerts, iconBadge]);
   const active = tabFor(pathname, search);
   const root = isTabRoot(pathname);
   // The chat is the one page that fills the screen: no padding, and it scrolls inside itself. With the keyboard up the shell is as tall as what shows, and the bottom bar steps aside.
