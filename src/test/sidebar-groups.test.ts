@@ -4,7 +4,8 @@ import { GROUPS } from "@/shared/components/AppSidebar";
 import { screenOf } from "@/shared/lib/pageViews";
 
 // Every screen that was in the sidebar before it was reorganised: none may be lost, only moved.
-const BEFORE = ["/dashboard", "/inbox", "/projects", "/team-capacity", "/invoices", "/services", "/families", "/pipeline", "/insurance", "/investments", "/holding-tank", "/professionals",
+const BEFORE = [ // "/inbox" left the sidebar on purpose: it is opened from Today (see below)
+  "/dashboard", "/projects", "/team-capacity", "/invoices", "/services", "/families", "/pipeline", "/insurance", "/investments", "/holding-tank", "/professionals",
   "/briefing", "/workbench", "/onboarding-agent", "/review-agent", "/ask-georgia", "/review-queue", "/glass-box-review", "/bulk-statement-import", "/vault-audit", "/knowledge-base",
   "/analytics", "/admin/vfo", "/onboarding", "/importers", "/webforms"];
 const all = GROUPS.flatMap((g) => g.items.map((i) => i.to as string));
@@ -17,8 +18,8 @@ describe("the sidebar", () => {
   it("starts with a short Daily group with Today (Georgia) first, and what needs attention marked", () => {
     const daily = GROUPS[0];
     expect(daily.key).toBe("daily");
-    expect(daily.items.map((i) => i.label)).toEqual(["Today (Georgia)", "Inbox", "CRM", "Pipeline", "Insurance", "Investments", "Projects", "Dashboard"]);
-    expect((daily.items as readonly any[]).filter((i) => i.badgeKey).map((i) => i.badgeKey)).toEqual(["inbox"]);
+    expect(daily.items.map((i) => i.label)).toEqual(["Today (Georgia)", "CRM", "Pipeline", "Insurance", "Investments", "Projects", "Dashboard"]);
+    expect((daily.items as readonly any[]).filter((i) => i.badgeKey).map((i) => i.badgeKey)).toEqual(["today"]);
     // Ask Georgia and the Review Queue are in the back office but keep their counts: the back office icon shows a dot when something is waiting.
     const back = GROUPS.find((g) => g.key === "backoffice")!.items as readonly any[];
     expect(back.find((i) => i.to === "/review-queue")?.badgeKey).toBe("review");
@@ -68,5 +69,18 @@ describe("where staff land", () => {
       expect(s, f).not.toMatch(/(navigate\(|Navigate to=|setDestination\()\s*\{?\s*["`]\/dashboard["`]/);
       expect(s, f).not.toContain(': "/dashboard"');
     }
+  });
+});
+
+describe("the Inbox is opened from Today", () => {
+  it("is no longer in the sidebar, but the Today item carries the unread and request counts and the texts block links to the full inbox", () => {
+    expect(all).not.toContain("/inbox");
+    const src = readFileSync("src/shared/components/AppSidebar.tsx", "utf8");
+    expect(src).toContain('badgeKey === "today"');
+    expect(src).toContain("(inboxUnreadCount ?? 0) + (openRequestsCount ?? 0)");
+    const today = readFileSync("src/modules/crm/pages/Briefing.tsx", "utf8");
+    expect(today).toContain('data-testid="open-full-inbox"');
+    expect(readFileSync("src/App.tsx", "utf8")).toContain('<Route path="/inbox"'); // the page and its address stay
+    expect(readFileSync("src/shared/components/CommandPalette.tsx", "utf8")).toMatch(/\/inbox/);
   });
 });

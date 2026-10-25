@@ -71,8 +71,7 @@ export const GROUPS = [
     label: "Daily",
     icon: Sparkles,
     items: [
-      { to: "/briefing", label: "Today (Georgia)", icon: Sparkles },
-      { to: "/inbox", label: "Inbox", icon: InboxIcon, badgeKey: "inbox" },
+      { to: "/briefing", label: "Today (Georgia)", icon: Sparkles, badgeKey: "today" },
       { to: "/families", label: "CRM", icon: Users },
       { to: "/pipeline", label: "Pipeline", icon: TrendingUp },
       { to: "/insurance", label: "Insurance", icon: ShieldCheck },
@@ -234,7 +233,8 @@ export function AppSidebar() {
 
   const badgeFor = (badgeKey: string | undefined): number | null => {
     if (badgeKey === "requests" && openRequestsCount) return openRequestsCount;
-    if (badgeKey === "inbox" && inboxUnreadCount) return inboxUnreadCount;
+    // Today carries what is waiting on you: unread texts, calls and voicemails, and open client requests. The Inbox itself is opened from Today.
+    if (badgeKey === "today" && (inboxUnreadCount || openRequestsCount)) return (inboxUnreadCount ?? 0) + (openRequestsCount ?? 0);
     if (badgeKey === "review" && pendingReviewCount) return pendingReviewCount;
     return null;
   };

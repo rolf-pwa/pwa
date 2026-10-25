@@ -20,10 +20,10 @@ export function SourceLink({ href, children }: { href: string | null | undefined
   return <Link to={href} className="font-medium text-accent hover:underline">{children}</Link>;
 }
 
-function Block({ title, icon: Icon, count, children }: { title: string; icon: typeof Mail; count?: number; children: React.ReactNode }) {
+function Block({ title, icon: Icon, count, action, children }: { title: string; icon: typeof Mail; count?: number; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <Card>
-      <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><Icon className="h-4 w-4 text-accent" />{title}{count !== undefined && <Badge variant="secondary" className="text-[10px]">{count}</Badge>}</CardTitle></CardHeader>
+      <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><Icon className="h-4 w-4 text-accent" />{title}{count !== undefined && <Badge variant="secondary" className="text-[10px]">{count}</Badge>}{action && <span className="ml-auto text-xs font-normal">{action}</span>}</CardTitle></CardHeader>
       <CardContent className="space-y-1.5 text-sm">{children}</CardContent>
     </Card>
   );
@@ -139,7 +139,7 @@ export default function Briefing() {
                   {s.ia.map((e, i) => <div key={i}><SourceLink href={e.link}>{e.subject}</SourceLink><Done k={e.key} /><p className="text-xs text-muted-foreground">{e.kind === "adobe_sign" ? "Adobe Sign" : "iA Financial"}</p></div>)}
                 </Block>
 
-                <Block title="Texts and voicemails" icon={MessageSquare} count={s.texts.length}>
+                <Block title="Texts and voicemails" icon={MessageSquare} count={s.texts.length} action={<Link to="/inbox" className="text-accent hover:underline" data-testid="open-full-inbox">Open the full inbox</Link>}>
                   {s.texts.length === 0 && <Empty>Nothing unread on the business line.</Empty>}
                   {s.texts.map((t, i) => <div key={i}><SourceLink href={t.link}>{t.contact ?? "Unknown number"}</SourceLink><Done k={t.key} /><p className="text-xs text-muted-foreground">{t.label}</p></div>)}
                 </Block>
