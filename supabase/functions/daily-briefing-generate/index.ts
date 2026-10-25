@@ -197,6 +197,34 @@ async function gatherEmailFacts(accessToken: string): Promise<EmailFacts> {
   }
 }
 
+/** Today and the next seven days, with the end of each event so overlaps can be found. */
+async function gatherCalendarFacts(accessToken: string, todayStr: string): Promise<CalendarFacts> {
+  try {
+    const timeMin = pacificMidnightUtcIso(todayStr);
+    const timeMax = pacificMidnightUtcIso(addDaysToDateString(todayStr, 8));
+    const res = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events?` +
+        new URLSearchParams({ timeMin, timeMax, maxResults: "80", singleEvents: "true", orderBy: "startTime" }),
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (!res.ok) throw new Error(`Calendar API error: ${res.status}`);
+    const data = await res.json();
+    // deno-lint-ignore no-explicit-any
+    const all: CalEvent[] = (data.items || []).filter((e: any) => e.status !== "cancelled").map((e: any) => ({
+      summary: e.summary || "(no title)",
+      start: e.start?.dateTime || e.start?.date,
+      end: e.end?.dateTime || null,
+      allDay: !e.start?.dateTime,
+      link: e.htmlLink || null,
+    }));
+    const dateOf = (iso: string) => pacificDateString(new Date(iso));
+    const today = all.filter((e) => (e.allDay ? e.start.slice(0, 10) === todayStr : dateOf(e.start) === todayStr));
+    return { connected: true, today, week: all.filter((e) => !today.includes(e)), conflicts: calendarConflicts(today) };
+  } catch {
+    return { connected: false, today: [], week: [], conflicts: [] };
+  }
+}
+
 async function gatherGoogleFacts(
   db: Db,
   userId: string,
@@ -209,33 +237,7 @@ async function gatherGoogleFacts(
     return { calendar: { connected: false, today: [], week: [], conflicts: [] }, email: { connected: false, emails: [], adminCount: 0 } };
   }
 
-  // Today and the next seven days, with the end of each event so overlaps can be found.
-  const calendar: CalendarFacts = await (async () => {
-    try {
-      const timeMin = pacificMidnightUtcIso(todayStr);
-      const timeMax = pacificMidnightUtcIso(addDaysToDateString(todayStr, 8));
-      const res = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/primary/events?` +
-          new URLSearchParams({ timeMin, timeMax, maxResults: "80", singleEvents: "true", orderBy: "startTime" }),
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      if (!res.ok) throw new Error(`Calendar API error: ${res.status}`);
-      const data = await res.json();
-      // deno-lint-ignore no-explicit-any
-      const all: CalEvent[] = (data.items || []).filter((e: any) => e.status !== "cancelled").map((e: any) => ({
-        summary: e.summary || "(no title)",
-        start: e.start?.dateTime || e.start?.date,
-        end: e.end?.dateTime || null,
-        allDay: !e.start?.dateTime,
-        link: e.htmlLink || null,
-      }));
-      const dateOf = (iso: string) => pacificDateString(new Date(iso));
-      const today = all.filter((e) => (e.allDay ? e.start.slice(0, 10) === todayStr : dateOf(e.start) === todayStr));
-      return { connected: true, today, week: all.filter((e) => !today.includes(e)), conflicts: calendarConflicts(today) };
-    } catch {
-      return { connected: false, today: [], week: [], conflicts: [] };
-    }
-  })();
+  const calendar: CalendarFacts = await gatherCalendarFacts(accessToken, todayStr);
 
   // The last day of mail in the inbox, plus the mail sent to admin@ (iA, Adobe Sign and the rest, spam included so it can be counted and left out).
   const email: EmailFacts = await gatherEmailFacts(accessToken);
@@ -344,10 +346,35 @@ async function liveToday(db: Db, userId: string) {
   const generatedAt = brief.data?.generated_at ? Date.parse(brief.data.generated_at) : 0;
   const known = new Set<string>([...(stored.replies ?? []), ...(stored.ia ?? [])].map((x) => x.key ?? "").concat(stored.dismissed ?? []));
 
+  const todayStr = pacificDateString(new Date());
+  let token: string | null = null;
+  try { token = await getValidGoogleAccessToken(db, userId); } catch { /* Google is not connected: the mail and calendar parts are left out */ }
+
+  // The calendar as it is now (an event added or moved since the morning shows up), in the shape the briefing keeps it.
+  let calendar: { schedule: BriefingSections["schedule"]; week: BriefingSections["week"] } | null = null;
+  if (token) {
+    const cal = await gatherCalendarFacts(token, todayStr);
+    if (cal.connected) {
+      const conflicted = new Set(cal.conflicts.flatMap((c) => [c.a, c.b]));
+      calendar = {
+        schedule: cal.today.map((x) => ({ start: x.start, end: x.end, allDay: x.allDay, summary: x.summary, link: x.link ?? null, conflict: conflicted.has(x.summary) })),
+        week: groupWeek(cal.week, todayStr, (iso) => pacificDateString(new Date(iso))).map((d) => ({ date: d.date, items: d.items.map((i) => ({ start: i.start, allDay: i.allDay, summary: i.summary, link: i.link ?? null })) })),
+      };
+    }
+  }
+
+  // Rolf's tasks (overdue, due today, the next seven days) and the ones Georgia is working on.
+  const tf = await gatherTaskFacts(db, userId, todayStr).catch(() => ({ overdue: [], due_today: [], upcoming: [] } as TaskFacts));
+  const { data: gt } = await db.from("pm_tasks").select("id, project_id, contact_id, household_id, family_id, title, due_date").eq("assigned_agent_key", "georgia").neq("status", "done").order("due_date", { ascending: true, nullsFirst: false }).limit(10);
+  // deno-lint-ignore no-explicit-any
+  const georgiaTasks: TaskFact[] = ((gt ?? []) as any[]).map((t) => ({ id: t.id, title: t.title, project: null, due_date: t.due_date ?? undefined, link: taskLink(t) }));
+  const tasks = { overdue: tf.overdue, dueToday: tf.due_today, upcoming: tf.upcoming, georgia: georgiaTasks };
+
   // Mail that arrived after the briefing: still in the Inbox (or sent to admin@), not marked done, not already listed.
   let newReplies: BriefingSections["replies"] = [], newIa: BriefingSections["ia"] = [], mailOk = false;
   try {
-    const email = await gatherEmailFacts(await getValidGoogleAccessToken(db, userId));
+    if (!token) throw new Error("no Google");
+    const email = await gatherEmailFacts(token);
     mailOk = email.connected;
     const fresh = email.emails.filter((e) => (e.at ?? 0) > generatedAt && !known.has(`email:${e.id}`) && (e.labels.includes("INBOX") || !e.labels.includes("SENT")));
     const sec = sectionsFromEmails(fresh);
@@ -369,7 +396,7 @@ async function liveToday(db: Db, userId: string) {
     ok: true as const, mailOk,
     texts: [...quo.unread, ...quo.voicemails].map((t) => ({ key: t.key ?? "", label: t.label, contact: t.contact, contactId: t.contactId ?? null, link: t.link })),
     requests: reqs.filter((r) => r.awaiting_staff_reply).map((r) => ({ key: `request:${r.id}`, contact: r.contact, contactId: r.contactId ?? null, type: r.type, description: String(r.description ?? "").slice(0, 160), created_at: r.created_at, link: r.link })),
-    newReplies, newIa, matches,
+    newReplies, newIa, matches, calendar, tasks,
   };
 }
 

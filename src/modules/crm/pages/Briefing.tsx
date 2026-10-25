@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarClock, Check, Loader2, Mail, RefreshCw, Sparkles, ShieldCheck } from "lucide-react";
+import { Check, Loader2, RefreshCw, Sparkles, ShieldCheck } from "lucide-react";
 import { AppLayout } from "@/shared/components/AppLayout";
-import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
+import { Card, CardContent } from "@/shared/components/ui/card";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { toast } from "sonner";
-import { clock, dayLabel, type DailyBriefing } from "../lib/briefing";
+import { type DailyBriefing } from "../lib/briefing";
 import { EaChat } from "../components/EaChat";
 import { TodayTiles, useTodayLive } from "../components/TodayTiles";
 
@@ -20,16 +19,6 @@ export function SourceLink({ href, children }: { href: string | null | undefined
   if (href.startsWith("http")) return <a href={href} target="_blank" rel="noopener noreferrer" className="font-medium text-accent hover:underline">{children}</a>;
   return <Link to={href} className="font-medium text-accent hover:underline">{children}</Link>;
 }
-
-function Block({ title, icon: Icon, count, children }: { title: string; icon: typeof Mail; count?: number; children: React.ReactNode }) {
-  return (
-    <Card>
-      <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><Icon className="h-4 w-4 text-accent" />{title}{count !== undefined && <Badge variant="secondary" className="text-[10px]">{count}</Badge>}</CardTitle></CardHeader>
-      <CardContent className="space-y-1.5 text-sm">{children}</CardContent>
-    </Card>
-  );
-}
-const Empty = ({ children }: { children: React.ReactNode }) => <p className="text-xs text-muted-foreground">{children}</p>;
 
 /** Georgia's morning briefing: the day's priorities, and everything behind them. */
 export default function Briefing() {
@@ -110,34 +99,6 @@ export default function Briefing() {
                 )}
               </CardContent>
             </Card>
-
-            {s && (
-              <div className="grid gap-4 md:grid-cols-2">
-                <Block title="Today's schedule" icon={CalendarClock} count={s.schedule.length}>
-                  {s.schedule.length === 0 && <Empty>Nothing on the calendar today.</Empty>}
-                  {s.schedule.map((e, i) => (
-                    <div key={i} className="flex items-baseline justify-between gap-3">
-                      <span className="min-w-0"><SourceLink href={e.link}>{e.summary}</SourceLink>{e.conflict && <Badge variant="destructive" className="ml-2 text-[10px]">Overlaps</Badge>}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground">{clock(e.start, e.allDay)}</span>
-                    </div>
-                  ))}
-                </Block>
-
-                <Block title="The week ahead" icon={CalendarClock}>
-                  {s.week.length === 0 && <Empty>Nothing else this week.</Empty>}
-                  {s.week.map((d) => (
-                    <div key={d.date}>
-                      <p className="text-xs font-medium text-muted-foreground">{dayLabel(d.date)}</p>
-                      {d.items.map((e, i) => <div key={i} className="flex justify-between gap-3 pl-2"><SourceLink href={e.link}>{e.summary}</SourceLink><span className="shrink-0 text-xs text-muted-foreground">{clock(e.start, e.allDay)}</span></div>)}
-                    </div>
-                  ))}
-                </Block>
-
-
-
-
-              </div>
-            )}
 
             {s && (s.handled?.length ?? 0) > 0 && (
               <details className="text-sm"><summary className="cursor-pointer text-muted-foreground">Handled since this morning ({s.handled!.length})</summary>
