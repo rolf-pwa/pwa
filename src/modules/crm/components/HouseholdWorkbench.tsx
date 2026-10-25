@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
+import { Card, CardContent } from "@/shared/components/ui/card";
 import { getWorkbenchFacts } from "@/modules/crm/lib/reviewAgent";
 import { STEP_ORDER, decideWorkbench, type StepKey, type WorkbenchFacts } from "@/modules/crm/lib/workbenchSteps";
 
@@ -14,20 +14,19 @@ const STEPS: Record<StepKey, { title: string; body: string }> = {
   causal_ai: { title: "Causal AI Workbench", body: "Staff assessment of the household's financial, relational, and emotional state, reconciled against real meeting transcripts." },
 };
 
-const Step = ({ badge, title, body, reason, children }: { badge: string; title: string; body: string; reason?: string; children: ReactNode }) => (
-  <div className="flex items-start gap-3">
-    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-semibold text-muted-foreground">{badge}</div>
-    <div className="flex-1 space-y-1.5">
-      <p className="text-sm font-medium text-foreground">{title}</p>
-      {reason && <p className="text-[11px] italic text-muted-foreground">{reason}</p>}
-      <p className="text-xs text-muted-foreground">{body}</p>
-      {children}
-    </div>
+/** One tool: its name (the explanation is the hover text) and its button. A tool that is not due says why, in small print. */
+const Step = ({ title, body, reason, children }: { title: string; body: string; reason?: string; children: ReactNode }) => (
+  <div className="min-w-0 space-y-1.5" title={body} data-testid="workbench-step">
+    <p className="truncate text-sm font-medium text-foreground">{title}</p>
+    {children}
+    {reason && <p className="text-[11px] italic text-muted-foreground">{reason}</p>}
   </div>
 );
 
+const GRID = "grid gap-x-6 gap-y-4 sm:grid-cols-2 xl:grid-cols-3";
+
 /**
- * The household's AI Workbench, showing only the steps that apply to this household right now (its journey, tier and review window).
+ * The household's tools, laid out across the page and showing only the steps that apply to this household right now (its journey, tier and review window).
  * Everything else sits under "More tools" with the reason, so nothing is ever unreachable.
  */
 export function HouseholdWorkbench({ householdId, onboardingComplete, charterStarted, actions, today }: { householdId: string; onboardingComplete: boolean; charterStarted: boolean; actions: Record<StepKey, ReactNode>; today: string }) {
@@ -46,24 +45,22 @@ export function HouseholdWorkbench({ householdId, onboardingComplete, charterSta
   const hidden = STEP_ORDER.filter((k) => !decisions[k].show);
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">AI Workbench</CardTitle>
-        <p className="text-xs text-muted-foreground">What applies to this household right now.</p>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {shown.length === 0 && <p className="text-xs text-muted-foreground">Nothing is due for this household at the moment.</p>}
-        {shown.map((k, i) => <Step key={k} badge={String(i + 1)} title={STEPS[k].title} body={STEPS[k].body}>{actions[k]}</Step>)}
-        {hidden.length > 0 && (
-          <div className="border-t border-border pt-3">
+    <Card data-testid="household-tools">
+      <CardContent className="space-y-3 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold text-foreground">Household tools</p>
+          {hidden.length > 0 && (
             <button type="button" onClick={() => setMore((m) => !m)} aria-expanded={more} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
               {more ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />} More tools ({hidden.length})
             </button>
-            {more && (
-              <div className="mt-3 space-y-4">
-                {hidden.map((k) => <Step key={k} badge="·" title={STEPS[k].title} body={STEPS[k].body} reason={decisions[k].reason}>{actions[k]}</Step>)}
-              </div>
-            )}
+          )}
+        </div>
+        {shown.length === 0 ? <p className="text-xs text-muted-foreground">Nothing is due for this household at the moment.</p> : (
+          <div className={GRID}>{shown.map((k) => <Step key={k} title={STEPS[k].title} body={STEPS[k].body}>{actions[k]}</Step>)}</div>
+        )}
+        {more && (
+          <div className={`${GRID} border-t border-border pt-3`}>
+            {hidden.map((k) => <Step key={k} title={STEPS[k].title} body={STEPS[k].body} reason={decisions[k].reason}>{actions[k]}</Step>)}
           </div>
         )}
       </CardContent>

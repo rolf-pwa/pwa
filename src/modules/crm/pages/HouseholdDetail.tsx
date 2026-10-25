@@ -425,6 +425,30 @@ const HouseholdDetail = () => {
     byType[t].total += Number(a.current_value) || 0;
   });
 
+  // The household's tools: a strip under the header on a desktop; on a phone they stay in the Overview section.
+  const workbench = (
+                <HouseholdWorkbench
+                  householdId={id!}
+                  onboardingComplete={Boolean(household.onboarding_completed_at)}
+                  charterStarted={charterV2Status !== null}
+                  today={new Date().toLocaleDateString("en-CA", { timeZone: "America/Vancouver" })}
+                  actions={{
+                    guided_intake: (
+                      <Button size="sm" variant="outline" onClick={enrollExistingClientInIntake} disabled={enrollingIntake || members.length === 0}>
+                        {enrollingIntake ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <UserCheck className="h-3.5 w-3.5 mr-1.5" />}
+                        Enroll in Guided Intake
+                      </Button>
+                    ),
+                    stabilization_map: <StabilizationMapButton householdId={id} />,
+                    portfolio_review: <Button asChild size="sm" variant="outline"><Link to={`/households/${id}/portfolio-review`}>Open the review pack</Link></Button>,
+                    sovereignty_review: <QuarterlySystemReviewButton householdId={id} />,
+                    governance_audit: <GovernanceAuditButton householdId={id} />,
+                    charter: <StartCharterIntakeButton householdId={id} status={charterV2Status} />,
+                    causal_ai: <CausalAIWorkbenchButton householdId={id} />,
+                  }}
+                />
+  );
+
   const showInvite = !phone && needsOnboardingLink(household);
 
   return (
@@ -642,6 +666,8 @@ const HouseholdDetail = () => {
           </CardContent>
         </Card>
 
+        {!phone && workbench}
+
         {/* Tabs */}
         {phone && !section && (
           <div className="space-y-4" data-testid="household-phone-home">
@@ -817,26 +843,7 @@ const HouseholdDetail = () => {
               <div className="min-w-0 space-y-3">
 
 
-                <HouseholdWorkbench
-                  householdId={id!}
-                  onboardingComplete={Boolean(household.onboarding_completed_at)}
-                  charterStarted={charterV2Status !== null}
-                  today={new Date().toLocaleDateString("en-CA", { timeZone: "America/Vancouver" })}
-                  actions={{
-                    guided_intake: (
-                      <Button size="sm" variant="outline" onClick={enrollExistingClientInIntake} disabled={enrollingIntake || members.length === 0}>
-                        {enrollingIntake ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <UserCheck className="h-3.5 w-3.5 mr-1.5" />}
-                        Enroll in Guided Intake
-                      </Button>
-                    ),
-                    stabilization_map: <StabilizationMapButton householdId={id} />,
-                    portfolio_review: <Button asChild size="sm" variant="outline"><Link to={`/households/${id}/portfolio-review`}>Open the review pack</Link></Button>,
-                    sovereignty_review: <QuarterlySystemReviewButton householdId={id} />,
-                    governance_audit: <GovernanceAuditButton householdId={id} />,
-                    charter: <StartCharterIntakeButton householdId={id} status={charterV2Status} />,
-                    causal_ai: <CausalAIWorkbenchButton householdId={id} />,
-                  }}
-                />
+                {phone && workbench}
                 <SidebarSection title="Georgia Diagnostic"><GeorgiaDiagnosticCard householdId={id!} /></SidebarSection>
                 {(household?.vision_notes || household?.values_notes || household?.purpose_notes ||
                   household?.anchor_transfer_amount != null || household?.spousal_alignment_score != null ||
