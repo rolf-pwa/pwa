@@ -128,3 +128,16 @@ describe("the installable app", () => {
     expect(app).toContain('path="/georgia"'); expect(app).toContain('path="/more"');
   });
 });
+
+describe("the status bar on a phone", () => {
+  it("is navy: the page behind the shell is navy while the shell shows, and the top bar is a sticky navy bar", () => {
+    const css = readFileSync("src/index.css", "utf8");
+    expect(css).toContain("html.advisor-shell, html.advisor-shell body { background-color: #1e293b; }");
+    const { unmount } = at("/briefing", <MobileShell>x</MobileShell>);
+    expect(document.documentElement.classList.contains("advisor-shell")).toBe(true);
+    expect(screen.getByTestId("mobile-top-bar").className).toContain("sticky");
+    expect(screen.getByTestId("mobile-top-bar").className).toContain("bg-[#1e293b]");
+    unmount();
+    expect(document.documentElement.classList.contains("advisor-shell")).toBe(false); // other pages, and the client portals, keep their own background
+  });
+});

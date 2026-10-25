@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Bot, ChevronLeft, Menu, MessageSquare, Sparkles, Users } from "lucide-react";
 import { NotificationBell } from "@/shared/components/NotificationBell";
@@ -38,11 +39,14 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
   // The chat is the one page that fills the screen: no padding, and it scrolls inside itself. With the keyboard up the shell is as tall as what shows, and the bottom bar steps aside.
   const chat = pathname === "/georgia";
   const { height, keyboardOpen } = useKeyboardViewport();
+  // iOS colours the status bar from the page's own background, not from our top bar, so while the phone shell is showing the page behind everything is navy (the shell
+  // paints its own light background over it). Only while it is showing: other pages, and the client portals, keep theirs.
+  useEffect(() => { document.documentElement.classList.add("advisor-shell"); return () => document.documentElement.classList.remove("advisor-shell"); }, []);
   const badge = (key: string): number => (key === "messages" ? inbox ?? 0 : key === "today" ? requests ?? 0 : 0);
 
   return (
     <div className="advisor-app flex h-[100dvh] flex-col overflow-hidden bg-background" style={keyboardOpen && height ? { height } : undefined} data-testid="mobile-shell">
-      <header className="shrink-0 bg-[#1e293b] pt-[env(safe-area-inset-top)] text-white" data-testid="mobile-top-bar">
+      <header className="sticky top-0 z-30 shrink-0 bg-[#1e293b] pt-[env(safe-area-inset-top)] text-white" data-testid="mobile-top-bar">
         <div className="flex h-12 items-center gap-1 px-2">
           {root ? <span className="px-2 font-serif text-lg font-semibold tracking-tight">{TITLE[pathname]}</span> : (
             <button type="button" onClick={() => navigate(-1)} aria-label="Back" className="flex h-11 items-center gap-0.5 rounded-md pl-1 pr-3 text-sm font-medium active:bg-white/10"><ChevronLeft className="h-6 w-6" />Back</button>
