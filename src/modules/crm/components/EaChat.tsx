@@ -40,8 +40,8 @@ function ActionCard({ a, onDecide, onForget, onApply, calendarWrite = true }: { 
       {(p.guests ?? []).length > 0 && <p className="text-muted-foreground">Guests: {(p.guests as string[]).join(", ")}</p>}
       {decided ? <Badge variant="outline" className="mt-1.5 text-[10px]">{decided}</Badge> : (
         <div className="mt-1.5 flex gap-1.5">
-          <Button asChild size="sm" className="h-7 text-xs"><a href={p.url} target="_blank" rel="noopener noreferrer" onClick={() => onDecide(a.id, "done")}>Add to my calendar <ExternalLink className="ml-1 h-3 w-3" /></a></Button>
-          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => onDecide(a.id, "dismissed")}>Dismiss</Button>
+          <Button asChild size="sm" className="h-10 text-sm md:h-7 md:text-xs"><a href={p.url} target="_blank" rel="noopener noreferrer" onClick={() => onDecide(a.id, "done")}>Add to my calendar <ExternalLink className="ml-1 h-3 w-3" /></a></Button>
+          <Button size="sm" variant="ghost" className="h-10 text-sm md:h-7 md:text-xs" onClick={() => onDecide(a.id, "dismissed")}>Dismiss</Button>
         </div>
       )}
     </div>
@@ -57,8 +57,8 @@ function ActionCard({ a, onDecide, onForget, onApply, calendarWrite = true }: { 
         {!calendarWrite && a.status === "proposed" && <p className="mt-1.5 text-amber-800" data-testid="needs-reconnect">Google has not yet allowed changes to your calendar. On the <Link to="/dashboard" className="underline">Dashboard</Link>, disconnect Google and connect it again, approve the calendar permission, then come back and Apply.</p>}
         {a.status === "done" ? <Badge variant="outline" className="mt-1.5 text-[10px]">Applied</Badge> : a.status === "dismissed" ? <Badge variant="outline" className="mt-1.5 text-[10px]">Dismissed</Badge> : (
           <div className="mt-1.5 flex gap-1.5">
-            <Button size="sm" className="h-7 text-xs" disabled={applying} onClick={async () => { setApplying(true); try { await onApply(a.id); } finally { setApplying(false); } }}>{applying ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}Apply to my calendar</Button>
-            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => onDecide(a.id, "dismissed")}>Dismiss</Button>
+            <Button size="sm" className="h-10 text-sm md:h-7 md:text-xs" disabled={applying} onClick={async () => { setApplying(true); try { await onApply(a.id); } finally { setApplying(false); } }}>{applying ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}Apply to my calendar</Button>
+            <Button size="sm" variant="ghost" className="h-10 text-sm md:h-7 md:text-xs" onClick={() => onDecide(a.id, "dismissed")}>Dismiss</Button>
           </div>
         )}
       </div>
@@ -71,9 +71,9 @@ function ActionCard({ a, onDecide, onForget, onApply, calendarWrite = true }: { 
       <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap font-sans text-foreground/90">{p.body}</pre>
       {decided ? <Badge variant="outline" className="mt-1.5 text-[10px]">{decided}</Badge> : (
         <div className="mt-1.5 flex gap-1.5">
-          <Button asChild size="sm" className="h-7 text-xs"><a href={p.url} target="_blank" rel="noopener noreferrer" onClick={() => onDecide(a.id, "done")}>Open in Gmail <ExternalLink className="ml-1 h-3 w-3" /></a></Button>
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => copy(`${p.subject}\n\n${p.body}`)}>Copy</Button>
-          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => onDecide(a.id, "dismissed")}>Dismiss</Button>
+          <Button asChild size="sm" className="h-10 text-sm md:h-7 md:text-xs"><a href={p.url} target="_blank" rel="noopener noreferrer" onClick={() => onDecide(a.id, "done")}>Open in Gmail <ExternalLink className="ml-1 h-3 w-3" /></a></Button>
+          <Button size="sm" variant="outline" className="h-10 text-sm md:h-7 md:text-xs" onClick={() => copy(`${p.subject}\n\n${p.body}`)}>Copy</Button>
+          <Button size="sm" variant="ghost" className="h-10 text-sm md:h-7 md:text-xs" onClick={() => onDecide(a.id, "dismissed")}>Dismiss</Button>
         </div>
       )}
     </div>
@@ -84,8 +84,8 @@ function ActionCard({ a, onDecide, onForget, onApply, calendarWrite = true }: { 
       <p className="mt-0.5 whitespace-pre-wrap text-foreground/90">{p.body}</p>
       {decided ? <Badge variant="outline" className="mt-1.5 text-[10px]">{decided}</Badge> : (
         <div className="mt-1.5 flex gap-1.5">
-          <Button size="sm" className="h-7 text-xs" onClick={() => { void copy(p.body); onDecide(a.id, "done"); }}>Copy</Button>
-          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => onDecide(a.id, "dismissed")}>Dismiss</Button>
+          <Button size="sm" className="h-10 text-sm md:h-7 md:text-xs" onClick={() => { void copy(p.body); onDecide(a.id, "done"); }}>Copy</Button>
+          <Button size="sm" variant="ghost" className="h-10 text-sm md:h-7 md:text-xs" onClick={() => onDecide(a.id, "dismissed")}>Dismiss</Button>
         </div>
       )}
     </div>
@@ -152,11 +152,15 @@ export function EaChat({ onChanged, fill }: { onChanged?: () => void; fill?: boo
   };
   const forget = async (id: string) => { try { await call({ action: "ea_forget", prefId: id }); toast.success("Forgotten"); setPrefs((p) => p.filter((x) => x.id !== id)); } catch (e: any) { toast.error(e.message); } };
 
+  // On the phone the chat is the whole screen (no card, no title: the top bar says Georgia); beside Today it is a card.
+  const Wrap: any = fill ? "div" : Card;
+  const Content: any = fill ? "div" : CardContent;
+
   return (
-    <Card className={fill ? "flex h-[calc(100dvh-8.75rem)] flex-col" : "flex max-h-[80vh] flex-col"} data-testid="ea-chat">
-      <CardHeader className="pb-2"><CardTitle className="text-base">Morning meeting with Georgia</CardTitle></CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
-        <div className="min-h-[14rem] flex-1 space-y-3 overflow-y-auto pr-1">
+    <Wrap className={fill ? "flex min-h-0 flex-1 flex-col bg-background" : "flex max-h-[80vh] flex-col"} data-testid="ea-chat">
+      {!fill && <CardHeader className="pb-2"><CardTitle className="text-base">Morning meeting with Georgia</CardTitle></CardHeader>}
+      <Content className={fill ? "flex min-h-0 flex-1 flex-col" : "flex min-h-0 flex-1 flex-col gap-3"}>
+        <div className={fill ? "min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-3" : "min-h-[14rem] flex-1 space-y-3 overflow-y-auto pr-1"}>
           {messages === null && <Loader2 className="h-4 w-4 animate-spin" />}
           {carried.length > 0 && (
             <div className="space-y-1.5 rounded-md border border-dashed p-2" data-testid="carried">
@@ -184,17 +188,17 @@ export function EaChat({ onChanged, fill }: { onChanged?: () => void; fill?: boo
           <div ref={endRef} />
         </div>
         {prefs.length > 0 && (
-          <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">What Georgia remembers ({prefs.length})</summary>
+          <details className={fill ? "px-4 py-1 text-xs text-muted-foreground" : "text-xs text-muted-foreground"}><summary className="cursor-pointer">What Georgia remembers ({prefs.length})</summary>
             <ul className="mt-1 space-y-0.5">{prefs.map((p) => <li key={p.id} className="flex justify-between gap-2"><span>{p.kind === "mute_sender" ? `Not showing mail from ${p.value}` : p.value}</span><button type="button" className="underline" onClick={() => forget(p.id)}>Forget</button></li>)}</ul>
           </details>
         )}
         {(messages?.length ?? 0) > 0 && (
-          <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); void send(); }}>
-            <input value={text} onChange={(e) => setText(e.target.value)} disabled={busy} placeholder="Tell Georgia what you need" aria-label="Message to Georgia" className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm" />
-            <Button type="submit" size="icon" disabled={busy || !text.trim()} aria-label="Send"><Send className="h-4 w-4" /></Button>
+          <form className={fill ? "flex gap-2 border-t bg-card px-3 py-2" : "flex gap-2"} onSubmit={(e) => { e.preventDefault(); void send(); }}>
+            <input value={text} onChange={(e) => setText(e.target.value)} disabled={busy} placeholder="Tell Georgia what you need" aria-label="Message to Georgia" enterKeyHint="send" autoComplete="off" onFocus={() => setTimeout(() => endRef.current?.scrollIntoView?.({ block: "end" }), 300)} className="h-11 min-w-0 flex-1 rounded-full border bg-background px-4 text-sm md:h-9 md:rounded-md md:px-3" />
+            <Button type="submit" size="icon" disabled={busy || !text.trim()} aria-label="Send" className="h-11 w-11 shrink-0 rounded-full md:h-10 md:w-10 md:rounded-md"><Send className="h-4 w-4" /></Button>
           </form>
         )}
-      </CardContent>
-    </Card>
+      </Content>
+    </Wrap>
   );
 }

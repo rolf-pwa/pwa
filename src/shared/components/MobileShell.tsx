@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Bot, ChevronLeft, Menu, MessageSquare, Sparkles, Users } from "lucide-react";
 import { NotificationBell } from "@/shared/components/NotificationBell";
 import { useAttentionCounts } from "@/shared/hooks/useAttentionCounts";
+import { useKeyboardViewport } from "@/shared/hooks/useKeyboardViewport";
 import { cn } from "@/shared/lib/utils";
 
 /** The five places on the phone's bottom bar. A page under one of them lights its tab; any other page lights More. */
@@ -34,10 +35,13 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
   const { inbox, requests } = useAttentionCounts();
   const active = tabFor(pathname, search);
   const root = isTabRoot(pathname);
+  // The chat is the one page that fills the screen: no padding, and it scrolls inside itself. With the keyboard up the shell is as tall as what shows, and the bottom bar steps aside.
+  const chat = pathname === "/georgia";
+  const { height, keyboardOpen } = useKeyboardViewport();
   const badge = (key: string): number => (key === "messages" ? inbox ?? 0 : key === "today" ? requests ?? 0 : 0);
 
   return (
-    <div className="advisor-app flex h-[100dvh] flex-col overflow-hidden bg-background" data-testid="mobile-shell">
+    <div className="advisor-app flex h-[100dvh] flex-col overflow-hidden bg-background" style={keyboardOpen && height ? { height } : undefined} data-testid="mobile-shell">
       <header className="shrink-0 bg-[#1e293b] pt-[env(safe-area-inset-top)] text-white" data-testid="mobile-top-bar">
         <div className="flex h-12 items-center gap-1 px-2">
           {root ? <span className="px-2 font-serif text-lg font-semibold tracking-tight">{TITLE[pathname]}</span> : (
@@ -48,9 +52,9 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4" data-testid="mobile-main">{children}</main>
+      <main className={chat ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4"} data-testid="mobile-main">{children}</main>
 
-      <nav className="shrink-0 border-t bg-card pb-[env(safe-area-inset-bottom)]" aria-label="Main" data-testid="mobile-tabs">
+      {!keyboardOpen && <nav className="shrink-0 border-t bg-card pb-[env(safe-area-inset-bottom)]" aria-label="Main" data-testid="mobile-tabs">
         <ul className="grid grid-cols-5">
           {MOBILE_TABS.map(({ key, label, to, icon: Icon }) => {
             const on = active === key, n = badge(key);
@@ -64,7 +68,7 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
             );
           })}
         </ul>
-      </nav>
+      </nav>}
     </div>
   );
 }
