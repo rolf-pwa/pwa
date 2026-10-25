@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildTiles, newKeys, saveSeen, watched, type LiveToday } from "@/modules/crm/lib/today";
+import { buildTiles, loadSeen, newKeys, saveSeen, watched, type LiveToday } from "@/modules/crm/lib/today";
 import type { BriefingSections } from "../../supabase/functions/_shared/briefing-facts";
 
 vi.mock("@/shared/integrations/supabase/client", () => ({ supabase: { functions: { invoke: vi.fn() }, channel: () => { const c: any = { on: () => c, subscribe: () => c }; return c; }, removeChannel: vi.fn() } }));
-import { TodayTiles } from "@/modules/crm/components/TodayTiles";
+import { TodayTabs } from "@/modules/crm/components/TodayTabs";
 
 const sections = (o: Partial<BriefingSections> = {}): BriefingSections => ({
   schedule: [], week: [], counts: { spam: 0, promo: 0, automated: 0, adminTotal: 0 },
@@ -76,32 +76,54 @@ describe("what the buttons show", () => {
   });
 });
 
-describe("the buttons and the panel", () => {
-  beforeEach(() => localStorage.clear());
-  const show = (s = sections(), l: LiveToday | null = lv(), onDone = vi.fn()) => { render(<MemoryRouter><TodayTiles sections={s} live={l} onDone={onDone} /></MemoryRouter>); return onDone; };
+// Radix tabs open on mouse down.
+const pick = (id: string) => act(() => { fireEvent.mouseDown(screen.getByTestId(`tile-${id}`), { button: 0 }); });
 
-  it("shows the five buttons with how many are open, and no dots on the first visit", () => {
+describe("the tabs and what they show", () => {
+  beforeEach(() => localStorage.clear());
+  const show = (s = sections(), l: LiveToday | null = lv(), onDone = vi.fn(), at = "/") => { render(<MemoryRouter initialEntries={[at]}><TodayTabs sections={s} live={l} onDone={onDone} briefing={<p>THE BRIEFING</p>} aside={<p>THE CHAT</p>} /></MemoryRouter>); return onDone; };
+
+  it("opens on the Briefing, with the chat beside it, and the five tabs with how many are open and no dots on the first visit", () => {
     show();
+    expect(screen.getByText("THE BRIEFING")).toBeTruthy();
+    expect(screen.getByText("THE CHAT")).toBeTruthy();
+    expect(screen.getByTestId("tile-briefing").getAttribute("data-state")).toBe("active");
     for (const [id, n] of [["messages", "7"], ["requests", "1"], ["firm", "1"], ["calendar", "2"], ["tasks", "2"]]) expect(screen.getByTestId(`count-${id}`).textContent, id).toBe(n);
     for (const id of ["messages", "requests", "firm", "calendar", "tasks"]) expect(screen.queryByTestId(`new-${id}`), id).toBeNull();
   });
-  it("puts a dot on a button when something new has arrived since it was last opened, and the panel marks which items are new", () => {
+  it("opens at the tab named in the address", () => {
+    show(sections(), lv(), vi.fn(), "/?tab=calendar");
+    expect(screen.getByTestId("tile-calendar").getAttribute("data-state")).toBe("active");
+    expect(screen.queryByText("THE BRIEFING")).toBeNull();
+    expect(screen.getByTestId("group-today").textContent).toContain("Client A");
+  });
+  it("shows a tab's list in the page, not in a panel over it, and goes back to the Briefing", () => {
+    show();
+    pick("messages");
+    expect(screen.queryByText("THE BRIEFING")).toBeNull();
+    expect(screen.getByTestId("today-panel").textContent).toContain("Sam Smith");
+    expect(screen.getByText("THE CHAT")).toBeTruthy(); // the chat stays beside every tab
+    pick("briefing");
+    expect(screen.getByText("THE BRIEFING")).toBeTruthy();
+  });
+  it("puts a dot on a tab when something new has arrived since it was last looked at, marks the new items while it is open, and clears the dot", () => {
     saveSeen("messages", ["quo:msg:1", "email:1", "email:2", "email:9", "email:3"]);
     saveSeen("requests", ["request:r1"]); saveSeen("firm", ["esc:9"]); saveSeen("calendar", []); saveSeen("tasks", ["task:t1", "task:t2"]);
     show();
     expect(screen.getByTestId("new-messages").getAttribute("title")).toBe("2 new"); // the other text and the voicemail
     expect(screen.getByTestId("new-calendar").getAttribute("title")).toBe("3 new"); // two today and one this week, none seen
     expect(screen.queryByTestId("new-tasks")).toBeNull();
-    fireEvent.click(screen.getByTestId("tile-messages"));
-    const panel = screen.getByTestId("today-panel");
-    const rows = within(within(panel).getByTestId("group-texts")).getAllByTestId("today-item");
-    expect(rows.map((r) => r.getAttribute("data-new"))).toEqual(["false", "true", "true"]);
-    fireEvent.keyDown(panel, { key: "Escape" }); // closing it remembers everything shown: the dot goes
-    expect(screen.queryByTestId("new-messages")).toBeNull();
+    pick("messages");
+    const rows = within(screen.getByTestId("group-texts")).getAllByTestId("today-item");
+    expect(rows.map((r) => r.getAttribute("data-new"))).toEqual(["false", "true", "true"]); // marked while it is open
+    expect(screen.queryByTestId("new-messages")).toBeNull(); // and the dot is gone
+    expect(loadSeen("messages")).toContain("quo:call:3");
+    pick("briefing"); pick("messages");
+    expect(within(screen.getByTestId("group-texts")).getAllByTestId("today-item").map((r) => r.getAttribute("data-new"))).toEqual(["false", "false", "false"]); // seen
   });
-  it("shows the three kinds of message in sections of one panel, with a link to the full inbox", () => {
+  it("shows the three kinds of message in sections of one tab, with a link to the full inbox", () => {
     show();
-    fireEvent.click(screen.getByTestId("tile-messages"));
+    pick("messages");
     const panel = screen.getByTestId("today-panel");
     for (const g of ["texts", "replies", "ia"]) expect(within(panel).getByTestId(`group-${g}`)).toBeTruthy();
     expect(within(panel).getByText("Sam Smith").closest("a")?.getAttribute("href")).toBe("/contacts/c1");
@@ -114,7 +136,7 @@ describe("the buttons and the panel", () => {
   });
   it("opens the calendar with today first, overlaps flagged, then the week", () => {
     show();
-    fireEvent.click(screen.getByTestId("tile-calendar"));
+    pick("calendar");
     const panel = screen.getByTestId("today-panel");
     expect(within(panel).getByTestId("group-today").textContent).toContain("Client A");
     expect(within(panel).getByText("Overlaps")).toBeTruthy();
@@ -122,7 +144,7 @@ describe("the buttons and the panel", () => {
   });
   it("opens tasks with overdue first, and folds the week and Georgia's tasks away", () => {
     show();
-    fireEvent.click(screen.getByTestId("tile-tasks"));
+    pick("tasks");
     const panel = screen.getByTestId("today-panel");
     expect(within(panel).getByText("Send the transfer form").closest("a")?.getAttribute("href")).toBe("/contacts/c1");
     expect(within(panel).getByText("Overdue", { selector: "span" })).toBeTruthy();
@@ -131,11 +153,10 @@ describe("the buttons and the panel", () => {
   });
   it("marks an item done, and says so when a list is empty", () => {
     const onDone = show(sections({ ia: [], replies: [] }), lv({ requests: [], newReplies: [], texts: [{ key: "quo:msg:1", label: "Can you call me?", contact: "Sam Smith", contactId: "c1", link: "/inbox" }] }));
-    fireEvent.click(screen.getByTestId("tile-messages"));
+    pick("messages");
     fireEvent.click(within(screen.getByTestId("today-panel")).getAllByLabelText("Mark done")[0]);
     expect(onDone).toHaveBeenCalledWith("quo:msg:1");
-    fireEvent.keyDown(screen.getByTestId("today-panel"), { key: "Escape" });
-    fireEvent.click(screen.getByTestId("tile-requests"));
+    pick("requests");
     expect(within(screen.getByTestId("today-panel")).getByText("No client request is waiting on you.")).toBeTruthy();
   });
 });
@@ -155,7 +176,7 @@ describe("the live Today action", () => {
     expect(fn).toContain("newReplies, newIa, matches, calendar, tasks,");
   });
   it("is polled every five minutes and refreshed when texts, calls or requests change", () => {
-    const src = readFileSync("src/modules/crm/components/TodayTiles.tsx", "utf8");
+    const src = readFileSync("src/modules/crm/components/TodayTabs.tsx", "utf8");
     expect(src).toContain("5 * 60 * 1000");
     for (const t of ["quo_messages", "quo_calls", "portal_requests", "portal_request_messages"]) expect(src).toContain(`table: "${t}"`);
   });

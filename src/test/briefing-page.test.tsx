@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 vi.mock("@/shared/components/AppLayout", () => ({ AppLayout: ({ children }: any) => <div>{children}</div> }));
@@ -30,17 +30,18 @@ describe("the morning briefing page", () => {
     // the calendar is behind its button, not a block on the page
     expect(screen.queryByText("Board Meeting")).toBeNull();
   });
-  it("shows five buttons at the top with counts, each opening its items in a panel", async () => {
+  it("shows tabs across the top, the Briefing first, and each list in its tab", async () => {
     render(<MemoryRouter><Briefing /></MemoryRouter>);
     expect(await screen.findByTestId("today-tiles")).toBeTruthy();
+    expect(screen.getByTestId("tile-briefing").getAttribute("data-state")).toBe("active");
     for (const [id, n] of [["messages", "3"], ["requests", "0"], ["firm", "1"], ["calendar", "1"], ["tasks", "0"]]) expect(screen.getByTestId(`count-${id}`).textContent, id).toBe(n);
-    // the lists are no longer blocks in the page: they are behind the buttons
+    // the lists are not on the Briefing: they are in their tabs
     expect(screen.queryByText("RRSP question")).toBeNull();
-    fireEvent.click(screen.getByTestId("tile-messages"));
+    const pick = (id: string) => act(() => { fireEvent.mouseDown(screen.getByTestId(`tile-${id}`), { button: 0 }); });
+    pick("messages");
     const panel = await screen.findByTestId("today-panel");
     for (const t of ["RRSP question", "Business Tracker update", "Sam Smith"]) expect(within(panel).getByText(t)).toBeTruthy();
-    fireEvent.keyDown(panel, { key: "Escape" });
-    fireEvent.click(screen.getByTestId("tile-calendar"));
+    pick("calendar");
     const cal = await screen.findByTestId("today-panel");
     expect(within(cal).getByText("Client A")).toBeTruthy();
     expect(within(cal).getByText("Overlaps")).toBeTruthy();

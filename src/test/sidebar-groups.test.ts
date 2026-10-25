@@ -79,7 +79,7 @@ describe("the Inbox is opened from Today", () => {
     expect(src).toContain('badgeKey === "today"');
     expect(src).toContain("(inboxUnreadCount ?? 0) + (openRequestsCount ?? 0)");
     expect(readFileSync("src/modules/crm/lib/today.ts", "utf8")).toContain('testId: "open-full-inbox"');
-    expect(readFileSync("src/modules/crm/components/TodayTiles.tsx", "utf8")).toContain("data-testid={g.link.testId}");
+    expect(readFileSync("src/modules/crm/components/TodayTabs.tsx", "utf8")).toContain("data-testid={g.link.testId}");
     expect(readFileSync("src/App.tsx", "utf8")).toContain('<Route path="/inbox"'); // the page and its address stay
     expect(readFileSync("src/shared/components/CommandPalette.tsx", "utf8")).toMatch(/\/inbox/);
   });

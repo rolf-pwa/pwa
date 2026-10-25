@@ -9,7 +9,7 @@ import { useAuth } from "@/shared/hooks/useAuth";
 import { toast } from "sonner";
 import { type DailyBriefing } from "../lib/briefing";
 import { EaChat } from "../components/EaChat";
-import { TodayTiles, useTodayLive } from "../components/TodayTiles";
+import { TodayTabs, useTodayLive } from "../components/TodayTabs";
 
 const todayPacific = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Vancouver" }).format(new Date());
 
@@ -64,10 +64,8 @@ export default function Briefing() {
           <Button variant="outline" size="sm" onClick={regenerate} disabled={busy}>{busy ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-2 h-3.5 w-3.5" />}{b ? "Regenerate" : "Generate now"}</Button>
         </div>
 
-        <TodayTiles sections={s} live={live} onDone={(k) => void done(k)} />
-
-        <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_26rem]">
-        <div className="min-w-0 space-y-5">
+        <TodayTabs sections={s} live={live} onDone={(k) => void done(k)} aside={<EaChat onChanged={load} />} briefing={
+          <div className="min-w-0 space-y-5">
         {loading && <Loader2 className="h-5 w-5 animate-spin" />}
         {!loading && !b && <Card><CardContent className="p-5 text-sm text-muted-foreground">No briefing yet today. Georgia prepares it at 5:30 a.m. Pacific; you can also generate it now.</CardContent></Card>}
         {b?.generation_status === "generating" && <p className="text-sm text-muted-foreground">Georgia is preparing the briefing…</p>}
@@ -112,9 +110,8 @@ export default function Briefing() {
             {b.generated_at && <p className="text-[11px] text-muted-foreground">Prepared {new Date(b.generated_at).toLocaleString("en-CA", { timeZone: "America/Vancouver", weekday: "short", hour: "numeric", minute: "2-digit" })} Pacific. Georgia only reads; she has not sent or changed anything.</p>}
           </>
         )}
-        </div>
-        <div className="xl:sticky xl:top-4"><EaChat onChanged={load} /></div>
-        </div>
+          </div>
+        } />
       </div>
     </AppLayout>
   );
