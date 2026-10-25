@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { CalendarClock, CircleAlert, ExternalLink, ListTodo, Mail, Sparkles, UserRound, Users } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/shared/components/ui/sheet";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { cn } from "@/shared/lib/utils";
 import { TILE_LABEL, TILE_ORDER, buildTiles, loadSeen, newKeys, saveSeen, watched, type LiveToday, type TileId, type TodayGroup, type TodayItem } from "../lib/today";
@@ -56,9 +57,9 @@ function ItemRow({ item, fresh, onDone }: { item: TodayItem; fresh: boolean; onD
 }
 
 /**
- * The tabs across the top of Today, like the CRM's: the morning Briefing first, then Messages, Client requests, Georgia is waiting, Calendar and Tasks. Each tab shows how many are
- * open and a dot when something is new since it was last looked at; opening one shows its list in the page, each item opening the person it concerns. The tab is in the address
- * (?tab=messages) so a link can open Today straight at it. The chat stays beside whichever tab is open.
+ * The tabs across the top of Today, in the CRM's style: Briefing first (the page itself), then Messages, Client requests, Georgia is waiting, Calendar and Tasks. Each shows how
+ * many are open and a dot when something is new since it was last looked at; a tab other than Briefing opens its list in a side panel over the page, each item opening the person
+ * it concerns, and closing the panel returns to Briefing. The open tab is in the address (?tab=messages) so a link can open Today straight at it.
  */
 type TabId = "briefing" | TileId;
 const isTile = (t: string | null): t is TileId => !!t && (TILE_ORDER as string[]).includes(t);
@@ -111,23 +112,28 @@ export function TodayTabs({ sections, live, onDone, briefing, aside }: { section
           );
         })}
       </TabsList>
+      {/* The page is always the Briefing and the chat; a tab other than Briefing opens its list in a panel beside them. */}
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_26rem]">
-        <div className="min-w-0">
-          {/* Only the open tab is built: the lists are cheap, but a hidden copy of each would still be in the page. */}
-          {tab === "briefing" && <TabsContent value="briefing" className="mt-0" data-testid="today-briefing">{briefing}</TabsContent>}
-          {TILE_ORDER.filter((id) => id === tab).map((id) => {
-            const groups = tiles[id].groups, total = groups.reduce((n, g) => n + g.items.length, 0);
-            return (
-              <TabsContent key={id} value={id} className="mt-0 space-y-4" data-testid="today-panel">
-                <p className="text-sm text-muted-foreground">{HINT[id]} Click one to open it; the person it is about opens in their own page.</p>
-                {groups.map((g) => section(g, groups.length > 1))}
-                {total === 0 && <p className="text-sm text-muted-foreground">{EMPTY[id]}</p>}
-              </TabsContent>
-            );
-          })}
-        </div>
+        <div className="min-w-0" data-testid="today-briefing">{briefing}</div>
         {aside && <div className="xl:sticky xl:top-4">{aside}</div>}
       </div>
+      {/* Not modal: the tabs stay clickable while it is open, so you can move from one list to the next; a click anywhere else on the page, or Escape, closes it. */}
+      <Sheet modal={false} open={isTile(tab)} onOpenChange={(o) => { if (!o) select("briefing"); }}>
+        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md" data-testid="today-panel" onInteractOutside={(e) => { if ((e.target as HTMLElement | null)?.closest?.('[data-testid="today-tiles"]')) e.preventDefault(); }}>
+          {isTile(tab) && (
+            <>
+              <SheetHeader>
+                <SheetTitle>{TILE_LABEL[tab]}</SheetTitle>
+                <SheetDescription>{HINT[tab]} Click one to open it; the person it is about opens in their own page.</SheetDescription>
+              </SheetHeader>
+              <div className="mt-4 space-y-5">
+                {tiles[tab].groups.map((g) => section(g, tiles[tab].groups.length > 1))}
+                {tiles[tab].groups.reduce((n, g) => n + g.items.length, 0) === 0 && <p className="text-sm text-muted-foreground">{EMPTY[tab]}</p>}
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </Tabs>
   );
 }

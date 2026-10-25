@@ -91,20 +91,27 @@ describe("the tabs and what they show", () => {
     for (const [id, n] of [["messages", "7"], ["requests", "1"], ["firm", "1"], ["calendar", "2"], ["tasks", "2"]]) expect(screen.getByTestId(`count-${id}`).textContent, id).toBe(n);
     for (const id of ["messages", "requests", "firm", "calendar", "tasks"]) expect(screen.queryByTestId(`new-${id}`), id).toBeNull();
   });
-  it("opens at the tab named in the address", () => {
+  it("opens the panel at the tab named in the address", () => {
     show(sections(), lv(), vi.fn(), "/?tab=calendar");
     expect(screen.getByTestId("tile-calendar").getAttribute("data-state")).toBe("active");
-    expect(screen.queryByText("THE BRIEFING")).toBeNull();
     expect(screen.getByTestId("group-today").textContent).toContain("Client A");
+    expect(screen.getByText("THE BRIEFING")).toBeTruthy(); // the page is still there behind it
   });
-  it("shows a tab's list in the page, not in a panel over it, and goes back to the Briefing", () => {
+  it("opens a tab's list in a side panel over the page, leaving the Briefing and the chat, and closing it goes back to the Briefing tab", () => {
     show();
+    expect(screen.queryByTestId("today-panel")).toBeNull();
     pick("messages");
-    expect(screen.queryByText("THE BRIEFING")).toBeNull();
     expect(screen.getByTestId("today-panel").textContent).toContain("Sam Smith");
-    expect(screen.getByText("THE CHAT")).toBeTruthy(); // the chat stays beside every tab
-    pick("briefing");
     expect(screen.getByText("THE BRIEFING")).toBeTruthy();
+    expect(screen.getByText("THE CHAT")).toBeTruthy();
+    fireEvent.keyDown(screen.getByTestId("today-panel"), { key: "Escape" });
+    expect(screen.queryByTestId("today-panel")).toBeNull();
+    expect(screen.getByTestId("tile-briefing").getAttribute("data-state")).toBe("active");
+    pick("tasks"); pick("calendar"); // the tabs stay clickable while it is open: the list changes in place
+    expect(screen.getByTestId("tile-calendar").getAttribute("data-state")).toBe("active");
+    expect(screen.getByTestId("group-today")).toBeTruthy();
+    pick("briefing"); // the Briefing tab closes the panel too
+    expect(screen.queryByTestId("today-panel")).toBeNull();
   });
   it("puts a dot on a tab when something new has arrived since it was last looked at, marks the new items while it is open, and clears the dot", () => {
     saveSeen("messages", ["quo:msg:1", "email:1", "email:2", "email:9", "email:3"]);
