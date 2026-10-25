@@ -30,3 +30,9 @@ describe("the household's sidebar", () => {
     expect(page).toContain("Cashflow Analyst");
   });
 });
+
+describe("the Georgia diagnostic on the household page", () => {
+  it("shows only for a new or onboarding household, by the same rule as the onboarding link", () => {
+    expect(page).toContain('{needsOnboardingLink(household) && <SidebarSection title="Georgia Diagnostic">');
+  });
+});

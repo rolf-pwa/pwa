@@ -842,7 +842,8 @@ const HouseholdDetail = () => {
 
 
                 {workbench}
-                <SidebarSection title="Georgia Diagnostic"><GeorgiaDiagnosticCard householdId={id!} /></SidebarSection>
+                {/* Only while the household is new or being onboarded; for an active household it is just clutter. */}
+                {needsOnboardingLink(household) && <SidebarSection title="Georgia Diagnostic"><GeorgiaDiagnosticCard householdId={id!} /></SidebarSection>}
                 {(household?.vision_notes || household?.values_notes || household?.purpose_notes ||
                   household?.anchor_transfer_amount != null || household?.spousal_alignment_score != null ||
                   household?.pressure_types?.length > 0 || household?.pending_capex_amount != null ||
