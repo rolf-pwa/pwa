@@ -4,8 +4,8 @@ import { GROUPS } from "@/shared/components/AppSidebar";
 import { screenOf } from "@/shared/lib/pageViews";
 
 // Every screen that was in the sidebar before it was reorganised: none may be lost, only moved.
-const BEFORE = [ // "/inbox" left the sidebar on purpose: it is opened from Today (see below)
-  "/dashboard", "/projects", "/team-capacity", "/invoices", "/services", "/families", "/pipeline", "/insurance", "/investments", "/holding-tank", "/professionals",
+const BEFORE = [ // "/inbox" and "/dashboard" left the sidebar on purpose: Today replaces them (see below)
+  "/projects", "/team-capacity", "/invoices", "/services", "/families", "/pipeline", "/insurance", "/investments", "/holding-tank", "/professionals",
   "/briefing", "/workbench", "/onboarding-agent", "/review-agent", "/ask-georgia", "/review-queue", "/glass-box-review", "/bulk-statement-import", "/vault-audit", "/knowledge-base",
   "/analytics", "/admin/vfo", "/onboarding", "/importers", "/webforms"];
 const all = GROUPS.flatMap((g) => g.items.map((i) => i.to as string));
@@ -18,7 +18,7 @@ describe("the sidebar", () => {
   it("starts with a short Daily group with Today (Georgia) first, and what needs attention marked", () => {
     const daily = GROUPS[0];
     expect(daily.key).toBe("daily");
-    expect(daily.items.map((i) => i.label)).toEqual(["Today (Georgia)", "CRM", "Pipeline", "Insurance", "Investments", "Projects", "Dashboard"]);
+    expect(daily.items.map((i) => i.label)).toEqual(["Today (Georgia)", "CRM", "Pipeline", "Insurance", "Investments", "Projects"]);
     expect((daily.items as readonly any[]).filter((i) => i.badgeKey).map((i) => i.badgeKey)).toEqual(["today"]);
     // Ask Georgia and the Review Queue are in the back office but keep their counts: the back office icon shows a dot when something is waiting.
     const back = GROUPS.find((g) => g.key === "backoffice")!.items as readonly any[];
@@ -82,5 +82,12 @@ describe("the Inbox is opened from Today", () => {
     expect(readFileSync("src/modules/crm/components/TodayTiles.tsx", "utf8")).toContain("data-testid={g.link.testId}");
     expect(readFileSync("src/App.tsx", "utf8")).toContain('<Route path="/inbox"'); // the page and its address stay
     expect(readFileSync("src/shared/components/CommandPalette.tsx", "utf8")).toMatch(/\/inbox/);
+  });
+});
+
+describe("the Dashboard", () => {
+  it("is out of the sidebar, but the page and its address stay", () => {
+    expect(all).not.toContain("/dashboard");
+    expect(readFileSync("src/App.tsx", "utf8")).toContain('path="/dashboard"');
   });
 });
