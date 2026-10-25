@@ -194,16 +194,34 @@ describe("Today on a phone", () => {
   beforeEach(() => { localStorage.clear(); phone(390); });
   afterEach(() => phone(1024));
 
-  it("scrolls the tabs sideways, drops the chat column (Georgia has its own tab) and opens a list from the bottom", () => {
+  it("has no tab strip to scroll: the five lists are tiles in a grid, the chat column is dropped, and a tap opens the list from the bottom", () => {
     render(<MemoryRouter><TodayTabs sections={sections()} live={lv()} onDone={vi.fn()} briefing={<p>THE BRIEFING</p>} aside={<p>THE CHAT</p>} /></MemoryRouter>);
-    expect(screen.getByTestId("today-tiles").className).toContain("overflow-x-auto");
-    expect(screen.getByTestId("today-tiles").className).toContain("flex-nowrap");
+    const bar = screen.getByTestId("today-tiles");
+    expect(bar.className).toContain("grid-cols-2");
+    expect(bar.className).not.toContain("overflow-x-auto");
+    expect(within(bar).queryByRole("tab")).toBeNull();
+    expect(screen.getByTestId("tile-tasks").className).toContain("col-span-2"); // the odd one out fills its row
+    for (const [id, n] of [["messages", "7"], ["requests", "1"], ["firm", "1"], ["calendar", "2"], ["tasks", "2"]]) expect(screen.getByTestId(`count-${id}`).textContent, id).toBe(n);
     expect(screen.queryByText("THE CHAT")).toBeNull();
-    pick("messages");
+    expect(screen.getByText("THE BRIEFING")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("tile-messages"));
     const panel = screen.getByTestId("today-panel");
     expect(panel.className).toContain("bottom-0");
     expect(panel.className).toContain("rounded-t-2xl");
     expect(within(panel).getByText("Sam Smith")).toBeTruthy();
+    expect(screen.getByTestId("tile-messages").getAttribute("aria-pressed")).toBe("true");
+  });
+  it("marks a tile new on a phone and clears it once the list has been opened", () => {
+    saveSeen("messages", ["quo:msg:1"]);
+    render(<MemoryRouter><TodayTabs sections={sections()} live={lv()} onDone={vi.fn()} briefing={<p>x</p>} /></MemoryRouter>);
+    expect(screen.getByTestId("new-messages")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("tile-messages"));
+    expect(screen.queryByTestId("new-messages")).toBeNull();
+  });
+  it("opens at the list named in the address, as the bottom bar's Messages does", () => {
+    render(<MemoryRouter initialEntries={["/?tab=messages"]}><TodayTabs sections={sections()} live={lv()} onDone={vi.fn()} briefing={<p>THE BRIEFING</p>} /></MemoryRouter>);
+    expect(screen.getByTestId("today-panel").textContent).toContain("Sam Smith");
+    expect(screen.getByText("THE BRIEFING")).toBeTruthy();
   });
   it("keeps the chat beside the page, and the list at the side, on a desktop", () => {
     phone(1280);

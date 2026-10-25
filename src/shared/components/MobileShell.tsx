@@ -7,7 +7,8 @@ import { cn } from "@/shared/lib/utils";
 /** The five places on the phone's bottom bar. A page under one of them lights its tab; any other page lights More. */
 export const MOBILE_TABS = [
   { key: "today", label: "Today", to: "/briefing", icon: Sparkles, under: ["/briefing"] },
-  { key: "messages", label: "Messages", to: "/inbox", icon: MessageSquare, under: ["/inbox"] },
+  // Messages opens the same list as Today's Messages tile, sliding up from the bottom; the full inbox is one tap inside it.
+  { key: "messages", label: "Messages", to: "/briefing?tab=messages", icon: MessageSquare, under: ["/inbox"] },
   { key: "clients", label: "Clients", to: "/contacts", icon: Users, under: ["/contacts", "/households", "/families", "/corporations", "/properties", "/former-clients"] },
   { key: "georgia", label: "Georgia", to: "/georgia", icon: Bot, under: ["/georgia"] },
   { key: "more", label: "More", to: "/more", icon: Menu, under: ["/more"] },
@@ -15,9 +16,12 @@ export const MOBILE_TABS = [
 
 const underPath = (path: string, prefix: string) => path === prefix || path.startsWith(prefix + "/");
 /** Which tab a page belongs to: its own, or More. */
-export const tabFor = (pathname: string): (typeof MOBILE_TABS)[number]["key"] => MOBILE_TABS.find((t) => t.under.some((p) => underPath(pathname, p)))?.key ?? "more";
+export const tabFor = (pathname: string, search = ""): (typeof MOBILE_TABS)[number]["key"] => {
+  if (pathname === "/briefing") return new URLSearchParams(search).get("tab") === "messages" ? "messages" : "today";
+  return MOBILE_TABS.find((t) => t.under.some((p) => underPath(pathname, p)))?.key ?? "more";
+};
 /** A tab's own front page has no Back arrow; anything deeper does. */
-export const isTabRoot = (pathname: string) => MOBILE_TABS.some((t) => t.to === pathname);
+export const isTabRoot = (pathname: string) => MOBILE_TABS.some((t) => t.to.split("?")[0] === pathname);
 const TITLE: Record<string, string> = { "/briefing": "Today", "/inbox": "Messages", "/contacts": "Clients", "/georgia": "Georgia", "/more": "More" };
 
 /**
@@ -25,10 +29,10 @@ const TITLE: Record<string, string> = { "/briefing": "Today", "/inbox": "Message
  * It replaces the desktop sidebar and header below the tablet breakpoint.
  */
 export function MobileShell({ children }: { children: React.ReactNode }) {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const navigate = useNavigate();
   const { inbox, requests } = useAttentionCounts();
-  const active = tabFor(pathname);
+  const active = tabFor(pathname, search);
   const root = isTabRoot(pathname);
   const badge = (key: string): number => (key === "messages" ? inbox ?? 0 : key === "today" ? requests ?? 0 : 0);
 
