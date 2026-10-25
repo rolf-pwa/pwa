@@ -74,7 +74,6 @@ export const GROUPS = [
       { to: "/briefing", label: "Today (Georgia)", icon: Sparkles },
       { to: "/inbox", label: "Inbox", icon: InboxIcon, badgeKey: "inbox" },
       { to: "/families", label: "CRM", icon: Users },
-      { to: "/ask-georgia", label: "Ask Georgia", icon: MessageCircle, badgeKey: "requests" },
       { to: "/pipeline", label: "Pipeline", icon: TrendingUp },
       { to: "/insurance", label: "Insurance", icon: ShieldCheck },
       { to: "/investments", label: "Investments", icon: LineChart },
@@ -103,6 +102,7 @@ export const GROUPS = [
     label: "Back office",
     icon: Settings,
     items: [
+      { to: "/ask-georgia", label: "Ask Georgia", icon: MessageCircle, badgeKey: "requests" },
       { to: "/review-queue", label: "Review Queue", icon: ClipboardCheck, badgeKey: "review" },
       { to: "/onboarding", label: "Onboarding", icon: PackagePlus },
       { to: "/onboarding-agent", label: "Georgia Onboarding", icon: Bot },
