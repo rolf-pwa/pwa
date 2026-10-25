@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { Check, ChevronDown } from "lucide-react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/shared/components/ui/sheet";
+import { Sheet, SheetHeader, SheetTitle } from "@/shared/components/ui/sheet";
+import { BottomSheetContent } from "@/shared/components/BottomSheet";
 import { useIsMobile } from "@/shared/hooks/use-mobile";
 import { cn } from "@/shared/lib/utils";
 
@@ -40,12 +41,12 @@ export function CrmTabs() {
       <>
         <button type="button" onClick={() => setOpen(true)} data-testid="crm-section-button" className="flex min-h-11 items-center gap-2 rounded-xl border bg-card px-4 text-sm font-semibold active:bg-muted">{here}<ChevronDown className="h-4 w-4 text-muted-foreground" /></button>
         <Sheet open={open} onOpenChange={setOpen}>
-          <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-2xl pb-[calc(1rem+env(safe-area-inset-bottom))]" data-testid="crm-sections">
+          <BottomSheetContent onClose={() => setOpen(false)} data-testid="crm-sections">
             <SheetHeader><SheetTitle>CRM</SheetTitle></SheetHeader>
             <ul className="mt-3 divide-y overflow-hidden rounded-xl border">
               {items.map((i) => <li key={i.to}><Link to={i.to} onClick={() => setOpen(false)} className={cn("flex min-h-12 items-center justify-between px-4 text-sm active:bg-muted", i.on && "font-semibold text-accent")}>{i.label}{i.on && <Check className="h-4 w-4" />}</Link></li>)}
             </ul>
-          </SheetContent>
+          </BottomSheetContent>
         </Sheet>
       </>
     );
