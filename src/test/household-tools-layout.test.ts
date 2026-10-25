@@ -20,3 +20,13 @@ describe("the household's tools", () => {
     expect(tools).not.toMatch(/<p className="[^"]*">\{title\}<\/p>/);
   });
 });
+
+describe("the household's sidebar", () => {
+  it("no longer carries the Charter Ratification, Cashflow Analyst or Professional Team cards", () => {
+    expect(page).not.toContain("<CharterRatificationTile");
+    expect(page).not.toContain("Analyze the True Burn Rate");
+    expect(page).not.toContain('title="Professional Team"');
+    // The Cashflow Analyst stays one click away in More Actions.
+    expect(page).toContain("Cashflow Analyst");
+  });
+});
