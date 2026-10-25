@@ -20,13 +20,24 @@ import {
   LayoutDashboard,
   Sparkles,
   FileText,
+  Inbox as InboxIcon,
+  ShieldCheck,
+  LineChart,
+  ListTodo,
+  ClipboardCheck,
 } from "lucide-react";
 import { searchBrain } from "@/shared/lib/brain";
 import { QuickCapture } from "@/shared/components/QuickCapture";
 import { SECOND_BRAIN_ENABLED } from "@/shared/lib/featureFlags";
 
 const NAV_ITEMS = [
+  { to: "/briefing", label: "Today (Georgia)", icon: Sparkles },
+  { to: "/inbox", label: "Inbox (texts and voicemails)", icon: InboxIcon },
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/insurance", label: "Insurance", icon: ShieldCheck },
+  { to: "/investments", label: "Investments", icon: LineChart },
+  { to: "/projects", label: "Projects", icon: ListTodo },
+  { to: "/review-queue", label: "Review Queue", icon: ClipboardCheck },
   { to: "/contacts", label: "CRM", icon: Users },
   { to: "/vault", label: "Vault", icon: FolderOpen },
   { to: "/invoices", label: "Invoices", icon: Receipt },
