@@ -5,6 +5,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/shared/components/ui/sheet";
 import { supabase } from "@/shared/integrations/supabase/client";
 import { cn } from "@/shared/lib/utils";
+import { useIsMobile } from "@/shared/hooks/use-mobile";
 import { TILE_LABEL, TILE_ORDER, buildTiles, loadSeen, newKeys, saveSeen, watched, type LiveToday, type TileId, type TodayGroup, type TodayItem } from "../lib/today";
 import type { BriefingSections } from "../../../../supabase/functions/_shared/briefing-facts";
 
@@ -66,6 +67,7 @@ const isTile = (t: string | null): t is TileId => !!t && (TILE_ORDER as string[]
 
 export function TodayTabs({ sections, live, onDone, briefing, aside }: { sections: BriefingSections | null; live: LiveToday | null; onDone: (key: string) => void; briefing: React.ReactNode; aside?: React.ReactNode }) {
   const tiles = useMemo(() => buildTiles(sections, live), [sections, live]);
+  const phone = useIsMobile();
   const [params, setParams] = useSearchParams();
   const asked = params.get("tab");
   const tab: TabId = isTile(asked) ? asked : "briefing";
@@ -99,7 +101,7 @@ export function TodayTabs({ sections, live, onDone, briefing, aside }: { section
 
   return (
     <Tabs value={tab} onValueChange={select} className="space-y-4">
-      <TabsList className="h-auto flex-wrap justify-start gap-1" data-testid="today-tiles" data-tick={tick}>
+      <TabsList className={cn("h-auto justify-start gap-1", phone ? "w-full flex-nowrap overflow-x-auto" : "flex-wrap")} data-testid="today-tiles" data-tick={tick}>
         <TabsTrigger value="briefing" data-testid="tile-briefing" className="gap-2"><Sparkles className="h-4 w-4 text-accent" />Briefing</TabsTrigger>
         {TILE_ORDER.map((id) => {
           const Icon = ICON[id], count = tiles[id].count, nw = id === tab ? 0 : newKeys(watched(tiles[id]), loadSeen(id)).length;
@@ -115,11 +117,11 @@ export function TodayTabs({ sections, live, onDone, briefing, aside }: { section
       {/* The page is always the Briefing and the chat; a tab other than Briefing opens its list in a panel beside them. */}
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_26rem]">
         <div className="min-w-0" data-testid="today-briefing">{briefing}</div>
-        {aside && <div className="xl:sticky xl:top-4">{aside}</div>}
+        {aside && !phone && <div className="xl:sticky xl:top-4">{aside}</div>}
       </div>
       {/* Not modal: the tabs stay clickable while it is open, so you can move from one list to the next; a click anywhere else on the page, or Escape, closes it. */}
       <Sheet modal={false} open={isTile(tab)} onOpenChange={(o) => { if (!o) select("briefing"); }}>
-        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md" data-testid="today-panel" onInteractOutside={(e) => { if ((e.target as HTMLElement | null)?.closest?.('[data-testid="today-tiles"]')) e.preventDefault(); }}>
+        <SheetContent side={phone ? "bottom" : "right"} className={cn("overflow-y-auto", phone ? "max-h-[85dvh] rounded-t-2xl pb-[calc(1rem+env(safe-area-inset-bottom))]" : "w-full sm:max-w-md")} data-testid="today-panel" onInteractOutside={(e) => { if ((e.target as HTMLElement | null)?.closest?.('[data-testid="today-tiles"]')) e.preventDefault(); }}>
           {isTile(tab) && (
             <>
               <SheetHeader>

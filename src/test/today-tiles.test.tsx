@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildTiles, loadSeen, newKeys, saveSeen, watched, type LiveToday } from "@/modules/crm/lib/today";
 import type { BriefingSections } from "../../supabase/functions/_shared/briefing-facts";
 
@@ -186,5 +186,31 @@ describe("the live Today action", () => {
     const src = readFileSync("src/modules/crm/components/TodayTabs.tsx", "utf8");
     expect(src).toContain("5 * 60 * 1000");
     for (const t of ["quo_messages", "quo_calls", "portal_requests", "portal_request_messages"]) expect(src).toContain(`table: "${t}"`);
+  });
+});
+
+describe("Today on a phone", () => {
+  const phone = (w: number) => Object.defineProperty(window, "innerWidth", { writable: true, configurable: true, value: w });
+  beforeEach(() => { localStorage.clear(); phone(390); });
+  afterEach(() => phone(1024));
+
+  it("scrolls the tabs sideways, drops the chat column (Georgia has its own tab) and opens a list from the bottom", () => {
+    render(<MemoryRouter><TodayTabs sections={sections()} live={lv()} onDone={vi.fn()} briefing={<p>THE BRIEFING</p>} aside={<p>THE CHAT</p>} /></MemoryRouter>);
+    expect(screen.getByTestId("today-tiles").className).toContain("overflow-x-auto");
+    expect(screen.getByTestId("today-tiles").className).toContain("flex-nowrap");
+    expect(screen.queryByText("THE CHAT")).toBeNull();
+    pick("messages");
+    const panel = screen.getByTestId("today-panel");
+    expect(panel.className).toContain("bottom-0");
+    expect(panel.className).toContain("rounded-t-2xl");
+    expect(within(panel).getByText("Sam Smith")).toBeTruthy();
+  });
+  it("keeps the chat beside the page, and the list at the side, on a desktop", () => {
+    phone(1280);
+    render(<MemoryRouter><TodayTabs sections={sections()} live={lv()} onDone={vi.fn()} briefing={<p>THE BRIEFING</p>} aside={<p>THE CHAT</p>} /></MemoryRouter>);
+    expect(screen.getByText("THE CHAT")).toBeTruthy();
+    expect(screen.getByTestId("today-tiles").className).not.toContain("overflow-x-auto");
+    pick("messages");
+    expect(screen.getByTestId("today-panel").className).toContain("right-0");
   });
 });

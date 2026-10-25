@@ -172,3 +172,12 @@
 .advisor-app .card-title {
   font-family: theme('fontFamily.sans');
 }
+
+/* The advisor app on a phone: no tap flash, no double-tap zoom delay, no text-size jumps, and form fields at 16px so iOS does not zoom in when one is focused.
+   The rest of the phone layout is in MobileShell; these are the base rules for any narrow screen. */
+@media (max-width: 767px) {
+  html { -webkit-text-size-adjust: 100%; }
+  body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+  .advisor-app a, .advisor-app button, .advisor-app [role="tab"], .advisor-app [role="button"] { touch-action: manipulation; }
+  .advisor-app input, .advisor-app select, .advisor-app textarea { font-size: 16px; }
+}
