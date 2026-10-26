@@ -32,8 +32,9 @@ describe("a turn of the meeting", () => {
     expect(r.stoppedEarly).toBe(true);
     expect(callModel).toHaveBeenCalledTimes(MAX_STEPS);
   });
-  it("gives her no tool that sends, deletes, pays or books", () => {
-    const names = TOOL_DECLARATIONS.map((t) => t.name);
+  it("gives her no tool that sends, deletes (but a task, at Rolf's word), pays or books", () => {
+    const names = TOOL_DECLARATIONS.map((t) => t.name).filter((n) => n !== "delete_task");
+    expect(TOOL_DECLARATIONS.map((t) => t.name).filter((n) => /delete/.test(n))).toEqual(["delete_task"]);
     expect(names).toEqual(expect.arrayContaining(["draft_email", "draft_text", "propose_calendar_event"]));
     for (const n of names) expect(n).not.toMatch(/send|delete|pay|book|trash|transfer/);
   });
@@ -106,7 +107,7 @@ describe("finding someone's address in his mail", () => {
     expect(extractAddresses(["Sam <sam@x.ca>"], "derek")).toEqual([]);
   });
   it("has tools to read mail and propose event changes, and still none that send, delete or apply by herself", () => {
-    const names = TOOL_DECLARATIONS.map((t) => t.name);
+    const names = TOOL_DECLARATIONS.map((t) => t.name).filter((n) => n !== "delete_task");
     expect(names).toEqual(expect.arrayContaining(["search_email", "find_email_address", "propose_event_update"]));
     for (const n of names) expect(n).not.toMatch(/send|delete|apply|patch|trash/);
   });

@@ -16,8 +16,7 @@ describe("when a task can be deleted", () => {
 });
 
 describe("how deleting is done", () => {
-  const src = readFileSync("supabase/functions/pm-service/index.ts", "utf8");
-  const block = src.slice(src.indexOf('action === "deleteTask"'), src.indexOf("// Edit a staff or Georgia comment"));
+  const block = readFileSync("supabase/functions/_shared/task-admin.ts", "utf8");
   it("keeps a copy first, and deletes nothing if the copy could not be kept", () => {
     const audit = block.indexOf('from("pm_task_deletions").insert');
     const del = block.indexOf('.delete().eq("id", id)');
@@ -31,8 +30,10 @@ describe("how deleting is done", () => {
     expect(block).toContain("author_contact_id");
     expect(block).toContain("author_professional_id");
   });
-  it("is not something Georgia can do: she has no delete tool", () => {
+  it("is the one delete: the Tasks page and Georgia's delete_task both go through it, and she has no other delete", () => {
+    expect(readFileSync("supabase/functions/pm-service/index.ts", "utf8")).toContain("deleteTaskSafely(db, id, userId)");
+    expect(readFileSync("supabase/functions/_shared/ea-handlers.ts", "utf8")).toContain('deleteTaskSafely(db, id, userId, "georgia")');
     const tools = readFileSync("supabase/functions/_shared/ea-agent.ts", "utf8");
-    expect(tools).not.toMatch(/name: "(delete|remove)[a-z_]*"/);
+    expect([...tools.matchAll(/name: "((?:delete|remove)[a-z_]*)"/g)].map((m) => m[1])).toEqual(["delete_task"]);
   });
 });
