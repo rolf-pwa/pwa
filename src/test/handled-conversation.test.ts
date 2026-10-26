@@ -30,3 +30,28 @@ describe("filing a handled email", () => {
     for (const f of ["briefing-refresh", "ea-handlers", "notice-service"]) expect(readFileSync(`supabase/functions/_shared/${f}.ts`, "utf8"), f).toContain("withConversationSiblings(gm");
   });
 });
+
+import { staleHandledMessages } from "../../supabase/functions/_shared/gmail-handled";
+
+describe("tidying handled conversations left in the Inbox", () => {
+  const H = "Label_1";
+  it("takes the older Inbox leftovers out, but never a starred one", () => {
+    const r = staleHandledMessages([
+      { id: "a", labelIds: ["INBOX"], internalDate: "100" },
+      { id: "b", labelIds: ["INBOX", "STARRED"], internalDate: "110" },
+      { id: "c", labelIds: [H], internalDate: "200" },
+    ], H);
+    expect(r).toEqual({ archive: ["a"], newReply: false });
+  });
+  it("leaves a conversation alone when a reply came after it was filed, and says so", () => {
+    expect(staleHandledMessages([{ id: "c", labelIds: [H], internalDate: "200" }, { id: "n", labelIds: ["INBOX"], internalDate: "300" }], H)).toEqual({ archive: [], newReply: true });
+  });
+  it("does nothing for a conversation that is not handled, or is already out of the Inbox", () => {
+    expect(staleHandledMessages([{ id: "a", labelIds: ["INBOX"], internalDate: "1" }], H).archive).toEqual([]);
+    expect(staleHandledMessages([{ id: "a", labelIds: [H], internalDate: "1" }], H).archive).toEqual([]);
+  });
+  it("is a tool Georgia can use when asked", () => {
+    expect(readFileSync("supabase/functions/_shared/ea-agent.ts", "utf8")).toContain('name: "tidy_handled"');
+    expect(readFileSync("supabase/functions/_shared/ea-handlers.ts", "utf8")).toContain('case "tidy_handled"');
+  });
+});

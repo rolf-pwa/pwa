@@ -20,7 +20,7 @@ import { appendNote, noteLine, validRecurrence } from "./georgia-tasks.ts";
 import { respondToEvent } from "./calendar-service.ts";
 import { clashes, type Slot } from "./calendar-rules.ts";
 import { refreshBriefing } from "./briefing-refresh.ts";
-import { GMAIL_MODIFY_SCOPE, handledLabelId, withConversationSiblings } from "./gmail-handled.ts";
+import { GMAIL_MODIFY_SCOPE, findHandledLabelId, handledLabelId, staleHandledMessages, withConversationSiblings } from "./gmail-handled.ts";
 import { provisionClientFolderTree } from "./vault-provisioning.ts";
 
 const DAILY_MESSAGE_CAP = 200;
@@ -455,6 +455,32 @@ export function buildEaTools(db: any, userId: string, date: string, sa: ServiceA
         if (!r.ok) return { ok: false, message: `I could not file them (${r.status}).` };
         await record("emails_filed", "done", `Filed ${move.length} email${move.length === 1 ? "" : "s"} after going through them`, { ids: whole, label_id: labelId });
         return { ok: true, message: `Filed ${move.length} under Georgia/Handled: read, out of the Inbox, still in All Mail.${starred ? ` I left ${starred} starred.` : ""}` };
+      }
+      case "tidy_handled": {
+        const { data: tok } = await db.from("google_tokens").select("scopes").eq("user_id", userId).maybeSingle();
+        if (!((tok?.scopes ?? []) as string[]).includes(GMAIL_MODIFY_SCOPE)) return { ok: false, message: "I need your permission to change Gmail first. On the Ask Georgia page, press Allow archiving and approve it once." };
+        const auth = { Authorization: `Bearer ${await google()}` };
+        const gm = (path: string, init?: RequestInit) => fetch(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`, { ...init, headers: { ...auth, "Content-Type": "application/json" } });
+        const labelId = await findHandledLabelId(gm);
+        if (!labelId) return { ok: true, message: "There is no Georgia/Handled label yet, so nothing to tidy." };
+        const list = await gm("threads?labelIds=INBOX&maxResults=100");
+        if (!list.ok) return { ok: false, message: `I could not read the Inbox (${list.status}).` };
+        const threads = ((await list.json()).threads ?? []) as { id: string }[];
+        const archive: string[] = []; const kept: string[] = []; let tidied = 0;
+        await Promise.all(threads.map(async (t) => {
+          const r = await gm(`threads/${t.id}?format=metadata&metadataHeaders=Subject`);
+          if (!r.ok) return;
+          const th = await r.json();
+          const res = staleHandledMessages(th.messages ?? [], labelId);
+          if (res.newReply) kept.push(String(((th.messages?.[0]?.payload?.headers ?? []) as { name: string; value: string }[]).find((h) => h.name === "Subject")?.value ?? "(no subject)").slice(0, 80));
+          else if (res.archive.length) { archive.push(...res.archive); tidied++; }
+        }));
+        if (archive.length) {
+          const m = await gm("messages/batchModify", { method: "POST", body: JSON.stringify({ ids: archive, removeLabelIds: ["INBOX", "UNREAD"] }) });
+          if (!m.ok) return { ok: false, message: `I could not tidy them (${m.status}).` };
+          await record("emails_filed", "done", `Tidied ${tidied} handled conversation${tidied === 1 ? "" : "s"} out of the Inbox`, { ids: archive, label_id: labelId });
+        }
+        return { ok: true, message: `${tidied ? `Took ${tidied} handled conversation${tidied === 1 ? "" : "s"} (${archive.length} message${archive.length === 1 ? "" : "s"}) out of the Inbox.` : "No handled conversations were left in the Inbox."}${kept.length ? ` Left ${kept.length} with a reply that came after I filed them: ${kept.join("; ")}.` : ""}` };
       }
       case "unfile_emails": {
         const { data: last } = await db.from("ea_actions").select("id, payload").eq("staff_user_id", userId).eq("kind", "emails_filed").order("created_at", { ascending: false }).limit(5);
