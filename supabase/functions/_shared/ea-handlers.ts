@@ -2,6 +2,7 @@
 // Every tool she uses is recorded in ea_actions (what she did, or what she is proposing and Rolf has not yet acted on).
 
 // deno-lint-ignore-file no-explicit-any
+import "./bc-time.ts";
 import {
   buildContextBlock, buildEarlierBlock, calendarTemplateUrl, emailText, defaultHouseholdLabel, extractAddresses, gmailComposeUrl, isIsoDate, normalizeMembers, runAgentTurn, SYSTEM_PROMPT, TOOL_DECLARATIONS,
   type Content, type Part, type ToolOutcome,

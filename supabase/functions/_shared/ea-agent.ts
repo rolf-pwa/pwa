@@ -6,6 +6,7 @@
 //   * Inside the firm she acts: tasks, reminders, remembering a preference. Outside it she only prepares: an email, a text or a calendar
 //     event is a draft or a proposal that waits for Rolf. She has no tool that sends, deletes or spends.
 
+import "./bc-time.ts";
 export const MAX_STEPS = 10;
 export const MAX_TOOL_RESULT = 4000;
 

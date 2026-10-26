@@ -2,6 +2,7 @@
 // morning check for what is missing. Additive in Drive: copies and new documents only; nothing is moved, renamed or deleted.
 
 // deno-lint-ignore-file no-explicit-any
+import "./bc-time.ts";
 import { ADMIN_INBOX_EMAIL, getServiceGoogleAccessToken, resolveUserIdByEmail } from "./google-token.ts";
 import { driveCreateDoc, driveEnsureFolder, driveFindFolder } from "./meeting-record-service.ts";
 import { CHECKLIST, KIND_LABEL, checklistFor, fileStatus, indexHtml, parseDriveId, type FileKind, type IndexInput } from "./insurance-file-rules.ts";

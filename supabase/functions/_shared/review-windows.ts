@@ -4,6 +4,7 @@
 // half-year for Tier 2B). On the first day of the window Georgia invites both adults to book it in the portal, reminds them every
 // three weeks, and hands the family to a person if nothing is booked with three weeks to go. She never writes back to a reply.
 
+import "./bc-time.ts";
 export type ReviewKind = "annual_review" | "sovereignty_review" | "governance_review";
 /** What Georgia tracks per window: a meeting, or the portfolio rebalancing a client acknowledges in the portal. */
 export type ObligationKind = ReviewKind | "rebalancing";

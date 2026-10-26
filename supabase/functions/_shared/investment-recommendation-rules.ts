@@ -1,5 +1,6 @@
 // investment-recommendation-rules.ts: the recommendation for a segregated funds client (the iA model portfolio) and the reason why letter that explains it. Pure.
 // The portfolio follows the risk profile recorded from the iA investor profile; recommending a different one needs a reason, and the letter says so.
+import "./bc-time.ts";
 import { GUARANTEE, KNOWLEDGE, OBJECTIVES, type ModelLite, type ProfileInputs } from "./investment-profile-rules.ts";
 
 export interface ModelFull extends ModelLite { funds: { name: string; weight: number }[]; income_target?: number }

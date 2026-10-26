@@ -1,5 +1,6 @@
 // investment-report-rules.ts: the Investment Recommendation Report given to the client: where they stand, how the portfolio was chosen, what is recommended (the iA model
 // portfolio and its funds, the amount, guarantee and fees) and what happens next. Pure: it reads saved profiles and recommendations only.
+import "./bc-time.ts";
 import type { Block } from "./simple-pdf.ts";
 import { GUARANTEE, KNOWLEDGE, OBJECTIVES, STABILITY, type ProfileInputs } from "./investment-profile-rules.ts";
 import type { ModelFull } from "./investment-recommendation-rules.ts";

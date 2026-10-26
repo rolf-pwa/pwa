@@ -3,6 +3,7 @@
 // acknowledgement, the CASL choice with initials, and the signature block. Blank signature lines and the paper Yes/No boxes are dropped, and a marker
 // stands where the CASL choice goes. Explicit markers in the master win if they are used: {{client_names}}, {{advisor_contact}}, {{casl_choice}}, {{date}}.
 
+import "./bc-time.ts";
 import type { Block } from "./simple-pdf.ts";
 import { FACT_FIND_STATEMENT } from "./fact-find-rules.ts";
 import { LIRD_CLIENT_STATEMENT } from "./replacement-rules.ts";

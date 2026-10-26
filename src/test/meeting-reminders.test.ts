@@ -9,7 +9,7 @@ const types = [
   { label: "Sovereignty Survey", client_label: null, reminders: false },
 ];
 const DAY = 86_400_000;
-const START = Date.parse("2026-11-10T18:00:00Z"); // 10:00 Pacific
+const START = Date.parse("2026-11-10T17:00:00Z"); // 10:00 Pacific (B.C. stays on UTC-7 from 2026-11-01)
 
 describe("which meetings get reminders", () => {
   it("matches an event title to a type, ignoring the client's name", () => {
@@ -51,7 +51,7 @@ describe("when reminders are due", () => {
     expect(remindersDue(START, null, START + 1)).toEqual([]);
   });
   it("sends only in daytime Pacific hours", () => {
-    expect(inReminderHours(Date.parse("2026-11-03T18:00:00Z"))).toBe(true); // 10:00
+    expect(inReminderHours(Date.parse("2026-11-03T17:00:00Z"))).toBe(true); // 10:00
     expect(inReminderHours(Date.parse("2026-11-03T09:00:00Z"))).toBe(false); // 01:00
   });
 });
@@ -61,7 +61,7 @@ describe("the reminder email", () => {
     expect(relativeDay(START, START - DAY + 3_600_000)).toBe("tomorrow");
     expect(relativeDay(START, START - 7 * DAY + 3_600_000)).toBe("in a week");
     expect(relativeDay(START, START - 3_600_000)).toBe("today");
-    expect(whenLabel(START)).toMatch(/Tuesday, November 10 at 10:00 a\.m\. PST|Tuesday, November 10 at 10:00 AM PST/i);
+    expect(whenLabel(START)).toMatch(/Tuesday, November 10 at 10:00 (a\.m\.|AM) PT/i);
     const e = reminderEmail({ firstName: "Sam", meetingName: "Governance Review", startMs: START, now: START - DAY + 3_600_000, joinUrl: "https://meet.google.com/abc", portalUrl: "https://app.prosperwise.ca/portal", fromLine: "Georgia, Rolf's AI Assistant" });
     expect(e.subject).toBe("Reminder: your Governance Review is tomorrow");
     expect(e.html).toContain("https://meet.google.com/abc");

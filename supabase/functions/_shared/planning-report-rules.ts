@@ -1,5 +1,6 @@
 // planning-report-rules.ts: the Insurance Planning Report given to the client: where they stand (life, critical illness, disability and business overhead
 // expense), how it was worked out, what is recommended and what it costs, and optionally the options compared. Pure: it reads saved analyses and quotes only.
+import "./bc-time.ts";
 import type { Block } from "./simple-pdf.ts";
 import { annualCost, costPerUnit, type QuoteRow } from "./quote-rules.ts";
 

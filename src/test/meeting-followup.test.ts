@@ -148,10 +148,10 @@ describe("the next session, the title and the due date", () => {
   it("names the next event that has the household on it, after the meeting", () => {
     const ev = [
       { summary: "Dentist", start: "2026-10-20T20:00:00Z", attendees: ["x@y.com"] },
-      { summary: "Review", start: "2026-11-03T18:00:00Z", attendees: ["Colleen@example.com"] },
+      { summary: "Review", start: "2026-11-03T17:00:00Z", attendees: ["Colleen@example.com"] },
       { summary: "Earlier", start: "2026-10-01T18:00:00Z", attendees: ["colleen@example.com"] },
     ];
-    expect(nextSyncText(ev, "2026-10-15T21:00:00Z", new Set(["colleen@example.com"]))).toBe("Our next strategic sync is Tuesday, November 3, 2026 at 10:00 am PST.");
+    expect(nextSyncText(ev, "2026-10-15T21:00:00Z", new Set(["colleen@example.com"]))).toBe("Our next strategic sync is Tuesday, November 3, 2026 at 10:00 am PT.");
     expect(nextSyncText([], "2026-10-15T21:00:00Z", new Set(["a@b.c"]))).toBe("No next session is booked yet.");
   });
   it("names the task after the meeting without the person in brackets", () => {

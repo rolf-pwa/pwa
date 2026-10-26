@@ -2,6 +2,7 @@
 // else is left for him and flagged in the morning meeting. Rules are in calendar-rules.ts. She never declines on her own.
 
 // deno-lint-ignore-file no-explicit-any
+import "./bc-time.ts";
 import { ADMIN_INBOX_EMAIL, getServiceGoogleAccessToken, resolveUserIdByEmail } from "./google-token.ts";
 import { GEMINI_EXTRACT_MODEL, generateVertexContent, parseServiceAccountKey, withThinking } from "./vertex-ai.ts";
 import { isOn } from "./georgia-switches.ts";

@@ -3,6 +3,7 @@
 // reminder is sent only if the meeting was booked early enough for it to make sense (no "one week" reminder for a meeting
 // booked three days ahead; the booking confirmation covers that).
 
+import "./bc-time.ts";
 export type ReminderKind = "7d" | "1d";
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;

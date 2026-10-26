@@ -1,5 +1,6 @@
 // What buzzes Rolf's phone, and when. Pure rules; the sending itself is in push-service.ts.
 
+import "./bc-time.ts";
 export const PUSH_CATEGORIES = ["texts", "calls", "requests", "documents", "alerts"] as const;
 export type PushCategory = (typeof PUSH_CATEGORIES)[number];
 

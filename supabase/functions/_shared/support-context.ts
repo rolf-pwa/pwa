@@ -1,5 +1,6 @@
 // support-context.ts: what Ask Georgia is told about the person she is talking to and about Rolf's availability. Pure.
 
+import "./bc-time.ts";
 export interface Away { away_from: string | null; away_until: string | null; note: string | null }
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];

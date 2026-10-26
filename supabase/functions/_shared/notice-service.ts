@@ -3,6 +3,7 @@
 // and files the email. Anything uncertain, or about a problem, is left alone and flagged for the morning meeting. The rules are in notice-rules.ts.
 
 // deno-lint-ignore-file no-explicit-any
+import "./bc-time.ts";
 import { ADMIN_INBOX_EMAIL, getValidGoogleAccessToken, resolveUserIdByEmail } from "./google-token.ts";
 import { classifyEmail } from "./briefing-facts.ts";
 import { emailText } from "./ea-agent.ts";

@@ -5,10 +5,11 @@ export interface NotesName { eventTitle: string | null; startIso: string; ymd: s
 
 /** "Interim Strategy Consultation (Shiven Khera) - 2026/10/13 12:00 PDT - Notes by Gemini", or "Meeting started 2026/08/21 13:33 PDT - Notes by Gemini". */
 export function parseNotesName(name: string): NotesName | null {
-  const m = /^(.*?)\s*-?\s*(\d{4})\/(\d{2})\/(\d{2})\s+(\d{1,2}):(\d{2})\s+(PDT|PST)\s*-\s*Notes by Gemini\s*$/i.exec(name.trim());
+  const m = /^(.*?)\s*-?\s*(\d{4})\/(\d{2})\/(\d{2})\s+(\d{1,2}):(\d{2})\s+(PDT|PST|PT)\s*-\s*Notes by Gemini\s*$/i.exec(name.trim());
   if (!m) return null;
   const [, rawTitle, y, mo, d, h, mi, zone] = m;
-  const offset = zone.toUpperCase() === "PDT" ? 7 : 8;
+  // PT is the permanent B.C. time (UTC-7) from 2026-11-01.
+  const offset = zone.toUpperCase() === "PST" ? 8 : 7;
   const startIso = new Date(Date.UTC(+y, +mo - 1, +d, +h + offset, +mi)).toISOString();
   const title = rawTitle.replace(/^Meeting started\s*$/i, "").trim();
   return { eventTitle: title || null, startIso, ymd: `${y}-${mo}-${d}` };
