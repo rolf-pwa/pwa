@@ -421,6 +421,18 @@ async function liveToday(db: Db, userId: string) {
   };
 }
 
+/** What arrived after the briefing was made, as lines for Georgia's context: new mail, texts and client requests. Never fails the chat. */
+async function newSinceBriefing(db: Db, userId: string): Promise<string[]> {
+  try {
+    const t = await liveToday(db, userId);
+    const lines: string[] = [];
+    for (const r of [...t.newReplies, ...t.newIa].slice(0, 15)) lines.push(`- Email from ${r.from.replace(/<[^>]*>/g, "").trim().slice(0, 60)}: "${String(r.subject ?? "").slice(0, 100)}" [message_id ${r.id}]`);
+    if (t.texts.length) lines.push(`- ${t.texts.length} unread text${t.texts.length === 1 ? "" : "s"} or voicemail${t.texts.length === 1 ? "" : "s"} (use texts_inbox to read them)`);
+    for (const q of t.requests.slice(0, 8)) lines.push(`- Client request from ${q.contact}: ${q.description.slice(0, 100)}`);
+    return lines;
+  } catch { return []; }
+}
+
 interface FirmFacts {
   notifications: { id: string; title: string; link: string | null }[];
   escalated: { id: string; family: string; kind: string }[];
@@ -860,7 +872,7 @@ Deno.serve(async (req) => {
         return json({ ok: true, sent: 1 });
       }
       if (body.action === "ea_history") return json({ ok: true, ...(await eaHistory(db, userId)) });
-      if (body.action === "ea_chat") return json({ ok: true, ...(await eaChat(db, userId, body.message ?? "", body.start === true)) });
+      if (body.action === "ea_chat") return json({ ok: true, ...(await eaChat(db, userId, body.message ?? "", body.start === true, await newSinceBriefing(db, userId))) });
       if (body.action === "ea_decide") return json(await eaDecide(db, userId, String(body.actionId ?? ""), body.decision === "done" ? "done" : "dismissed"));
       if (body.action === "ea_apply") return json(await eaApply(db, userId, String(body.actionId ?? "")));
       if (body.action === "ea_forget") return json(await eaForget(db, userId, String(body.prefId ?? "")));
