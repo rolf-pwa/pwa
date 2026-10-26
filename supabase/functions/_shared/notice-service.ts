@@ -12,7 +12,7 @@ import { appendNote, noteLine } from "./georgia-tasks.ts";
 import { postTaskEvent } from "./task-events.ts";
 import { maybeCreateMeetingRecord } from "./meeting-record-service.ts";
 import { notifyClientsOfComment, notifyProsOfComment } from "./task-notify.ts";
-import { GMAIL_MODIFY_SCOPE, gmailFor, handledLabelId } from "./gmail-handled.ts";
+import { GMAIL_MODIFY_SCOPE, gmailFor, handledLabelId, withConversationSiblings } from "./gmail-handled.ts";
 import { isOn } from "./georgia-switches.ts";
 
 const MAX_PER_RUN = 8;
@@ -122,7 +122,7 @@ export async function runNoticeProcessor(db: any): Promise<string[]> {
   if (filed.length && canFile) {
     try {
       const label = await handledLabelId(gm);
-      if (label && (await gm("messages/batchModify", { method: "POST", body: JSON.stringify({ ids: filed, addLabelIds: [label], removeLabelIds: ["INBOX", "UNREAD"] }) })).ok) {
+      if (label && (await gm("messages/batchModify", { method: "POST", body: JSON.stringify({ ids: await withConversationSiblings(gm, filed), addLabelIds: [label], removeLabelIds: ["INBOX", "UNREAD"] }) })).ok) {
         await record("emails_filed", "done", `Filed ${filed.length} notice${filed.length === 1 ? "" : "s"} after handling them`, { ids: filed, label_id: label });
       }
     } catch (e) { console.error("[notice-processor] filing", e); }

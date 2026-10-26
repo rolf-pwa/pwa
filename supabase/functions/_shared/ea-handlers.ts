@@ -20,7 +20,7 @@ import { appendNote, noteLine, validRecurrence } from "./georgia-tasks.ts";
 import { respondToEvent } from "./calendar-service.ts";
 import { clashes, type Slot } from "./calendar-rules.ts";
 import { refreshBriefing } from "./briefing-refresh.ts";
-import { GMAIL_MODIFY_SCOPE, handledLabelId } from "./gmail-handled.ts";
+import { GMAIL_MODIFY_SCOPE, handledLabelId, withConversationSiblings } from "./gmail-handled.ts";
 import { provisionClientFolderTree } from "./vault-provisioning.ts";
 
 const DAILY_MESSAGE_CAP = 200;
@@ -450,9 +450,10 @@ export function buildEaTools(db: any, userId: string, date: string, sa: ServiceA
         const starred = meta.filter((m) => m?.labels.includes("STARRED")).length;
         const move = meta.filter((m): m is { id: string; labels: string[] } => !!m && !m.labels.includes("STARRED")).map((m) => m.id);
         if (!move.length) return { ok: true, message: starred ? `They are all starred, so I left them where they are.` : "I could not find those emails." };
-        const r = await gm("messages/batchModify", { method: "POST", body: JSON.stringify({ ids: move, addLabelIds: [labelId], removeLabelIds: ["INBOX", "UNREAD"] }) });
+        const whole = await withConversationSiblings(gm, move);
+        const r = await gm("messages/batchModify", { method: "POST", body: JSON.stringify({ ids: whole, addLabelIds: [labelId], removeLabelIds: ["INBOX", "UNREAD"] }) });
         if (!r.ok) return { ok: false, message: `I could not file them (${r.status}).` };
-        await record("emails_filed", "done", `Filed ${move.length} email${move.length === 1 ? "" : "s"} after going through them`, { ids: move, label_id: labelId });
+        await record("emails_filed", "done", `Filed ${move.length} email${move.length === 1 ? "" : "s"} after going through them`, { ids: whole, label_id: labelId });
         return { ok: true, message: `Filed ${move.length} under Georgia/Handled: read, out of the Inbox, still in All Mail.${starred ? ` I left ${starred} starred.` : ""}` };
       }
       case "unfile_emails": {
