@@ -24,6 +24,8 @@ import { GMAIL_MODIFY_SCOPE, findHandledLabelId, handledLabelId, staleHandledMes
 import { provisionClientFolderTree } from "./vault-provisioning.ts";
 
 const DAILY_MESSAGE_CAP = 200;
+/** How many of the day's latest messages she is given back each turn. */
+export const HISTORY_TURNS = 40;
 const zone = "America/Vancouver";
 const nowLabel = () => new Date().toLocaleString("en-CA", { timeZone: zone, weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" }) + " Pacific";
 const pacificDate = (d = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: zone }).format(d);
@@ -670,14 +672,16 @@ export function buildEaTools(db: any, userId: string, date: string, sa: ServiceA
 }
 
 /** One turn: Rolf says something (or the meeting starts); Georgia answers, using tools. */
-export async function eaChat(db: any, userId: string, text: string, start: boolean) {
+export async function eaChat(db: any, userId: string, text: string, start: boolean, newSince: string[] = []) {
   const date = pacificDate();
   const { count } = await db.from("ea_messages").select("id", { count: "exact", head: true }).eq("staff_user_id", userId).eq("conversation_date", date);
   if ((count ?? 0) >= DAILY_MESSAGE_CAP) throw new Error("That is a lot of messages for one day. Start again tomorrow.");
   const userText = start ? "(The morning meeting is starting. Run it by exception. Open with good morning and one line on the shape of the day. Then say first what needs MY decision, at most three items, most important first: notices or texts you left for me, anything urgent, open proposals and the inbox sorts if there are any waiting. Ask about those. Then, in one short closing line, say how many things you handled on your own (iA and Adobe Sign notices, client texts, filed mail) and that I can ask for the details. Do not list routine things you handled unless I ask. Do not ask permission for work that is clearly yours.)" : String(text ?? "").trim().slice(0, 4000);
   if (!userText) throw new Error("Say something first.");
 
-  const { data: prior } = await db.from("ea_messages").select("role, content").eq("staff_user_id", userId).eq("conversation_date", date).order("created_at", { ascending: true }).limit(40);
+  // The most recent exchanges, oldest first: taking the first 40 of the day instead left her blind to the last of a long meeting, so she kept returning to the morning's topics.
+  const { data: recent } = await db.from("ea_messages").select("role, content").eq("staff_user_id", userId).eq("conversation_date", date).order("created_at", { ascending: false }).limit(HISTORY_TURNS);
+  const prior = [...((recent ?? []) as any[])].reverse();
   if (!start) await db.from("ea_messages").insert({ staff_user_id: userId, conversation_date: date, role: "user", content: userText });
 
   // What he has already dealt with since the briefing was made comes off it first, so she works from the day as it is now.
@@ -696,7 +700,7 @@ export async function eaChat(db: any, userId: string, text: string, start: boole
     db.from("ea_preferences").select("kind, value").eq("staff_user_id", userId).eq("active", true),
   ]);
   const voice = await loadVoice(db, getServiceGoogleAccessToken);
-  const system = `${SYSTEM_PROMPT}${voice ? `\n\n${voice}` : ""}\n\n${buildContextBlock({ nowLabel: nowLabel(), briefing, tasks: ((tasks ?? []) as any[]).map((t) => ({ id: t.id, title: t.title, due: t.due_date })), georgiaTasks: ((georgiaOwn ?? []) as any[]).map((t) => ({ id: t.id, title: t.title, due: t.due_date })), ruleSuggestions: ((ruleRows ?? []) as any[]).map((r) => r.rule), notices: { handled: ((noticeRows ?? []) as any[]).filter((r) => r.kind === "notice_handled" || r.kind === "text_replied" || r.kind === "calendar_accepted").map((r) => r.summary), flagged: ((noticeRows ?? []) as any[]).filter((r) => r.kind === "notice_flagged" || r.kind === "text_flagged" || r.kind === "calendar_flagged").map((r) => r.summary) }, sweep: (() => { const counts: Record<string, number> = {}; let unrated = 0; for (const r of (sweptRows ?? []) as any[]) { counts[r.bucket] = (counts[r.bucket] ?? 0) + 1; if (!r.feedback) unrated++; } const line = sweepLine(counts); return line ? `${line}. ${unrated} not yet rated.` : null; })(), doneToday: [...new Set(((doneRows ?? []) as any[]).map((r) => `${r.summary}${r.status === "proposed" ? " (draft waiting for Rolf)" : ""}`))], preferences: ((prefs ?? []) as any[]).map((p) => (p.kind === "mute_sender" ? `Do not show mail from: ${p.value}` : p.value)), earlier })}`;
+  const system = `${SYSTEM_PROMPT}${voice ? `\n\n${voice}` : ""}\n\n${buildContextBlock({ nowLabel: nowLabel(), newSince, briefing, tasks: ((tasks ?? []) as any[]).map((t) => ({ id: t.id, title: t.title, due: t.due_date })), georgiaTasks: ((georgiaOwn ?? []) as any[]).map((t) => ({ id: t.id, title: t.title, due: t.due_date })), ruleSuggestions: ((ruleRows ?? []) as any[]).map((r) => r.rule), notices: { handled: ((noticeRows ?? []) as any[]).filter((r) => r.kind === "notice_handled" || r.kind === "text_replied" || r.kind === "calendar_accepted").map((r) => r.summary), flagged: ((noticeRows ?? []) as any[]).filter((r) => r.kind === "notice_flagged" || r.kind === "text_flagged" || r.kind === "calendar_flagged").map((r) => r.summary) }, sweep: (() => { const counts: Record<string, number> = {}; let unrated = 0; for (const r of (sweptRows ?? []) as any[]) { counts[r.bucket] = (counts[r.bucket] ?? 0) + 1; if (!r.feedback) unrated++; } const line = sweepLine(counts); return line ? `${line}. ${unrated} not yet rated.` : null; })(), doneToday: [...new Set(((doneRows ?? []) as any[]).map((r) => `${r.summary}${r.status === "proposed" ? " (draft waiting for Rolf)" : ""}`))], preferences: ((prefs ?? []) as any[]).map((p) => (p.kind === "mute_sender" ? `Do not show mail from: ${p.value}` : p.value)), earlier })}`;
   const history: Content[] = ((prior ?? []) as any[]).map((m) => ({ role: m.role === "user" ? "user" : "model", parts: [{ text: m.content }] }));
   // The model's first turn must be the user's: the opening of the meeting is Georgia's own, so give it a stand-in.
   if (history.length && history[0].role === "model") history.unshift({ role: "user", parts: [{ text: "(The morning meeting has started.)" }] });
