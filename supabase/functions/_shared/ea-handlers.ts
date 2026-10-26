@@ -14,6 +14,7 @@ import { maybeCreateMeetingRecord } from "./meeting-record-service.ts";
 import { postTaskEvent } from "./task-events.ts";
 import { draftFromRequest } from "./meeting-followup-service.ts";
 import { notifyClientsOfComment, notifyProsOfComment } from "./task-notify.ts";
+import { deleteTaskSafely, setTaskClientVisible } from "./task-admin.ts";
 import { maybeCreateNextRecurrence } from "./task-recurrence.ts";
 import { sweepArchive, sweepFeedback, sweepUndoArchive } from "./inbox-sweep-handlers.ts";
 import { adminCompanionQuery, BUCKET_LABEL, CORRECTABLE, sweepLine, type Bucket } from "./inbox-sweep.ts";
@@ -231,6 +232,26 @@ export function buildEaTools(db: any, userId: string, date: string, sa: ServiceA
         await db.from("pm_tasks").update(patch).eq("id", id);
         await record("task_assigned", "done", `${t.title}: now ${to === "georgia" ? "Georgia's" : "Rolf's"}${rec ? `, repeats every ${rec.every}` : ""}`, { task_id: id });
         return { ok: true, message: `"${t.title}" is now ${to === "georgia" ? "mine" : "yours"}${rec ? ` and repeats every ${rec.every}` : ""}.` };
+      }
+      case "delete_task": {
+        const id = str(a.task_id, 60);
+        if (!id) return { ok: false, message: "Which task?" };
+        const r = await deleteTaskSafely(db, id, userId, "georgia");
+        if (!r.ok) return { ok: false, message: r.error };
+        await record("task_deleted", "done", `Deleted: ${r.title}`, { task_id: id, subtasks: r.subtasks });
+        return { ok: true, message: `Deleted "${r.title}"${r.subtasks ? ` and its ${r.subtasks} action item${r.subtasks === 1 ? "" : "s"}` : ""}. A copy is kept for the record.` };
+      }
+      case "set_task_client_visible": {
+        const id = str(a.task_id, 60);
+        if (!id || typeof a.visible !== "boolean") return { ok: false, message: "I need the task and whether it should be visible." };
+        const { data: t } = await db.from("pm_tasks").select("id, title, parent_task_id, client_visible, contact_id, household_id").eq("id", id).maybeSingle();
+        if (!t) return { ok: false, message: "I could not find that task." };
+        if (a.visible && t.parent_task_id) return { ok: false, message: "That is an action item of another task. Share the task it belongs to instead." };
+        if (a.visible && !t.contact_id && !t.household_id) return { ok: false, message: "This task is not linked to a client or household, so there is no one to share it with." };
+        const r = await setTaskClientVisible(db, t, a.visible, { label: "Georgia", agentKey: "georgia" });
+        if (!r.changed) return { ok: true, message: `"${t.title}" is already ${a.visible ? "shared with the client" : "hidden from the client"}.` };
+        await record("task_visibility", "done", `${a.visible ? "Shared with the client" : "Hidden from the client"}: ${t.title}`, { task_id: id, visible: a.visible });
+        return { ok: true, message: a.visible ? `Shared "${t.title}" with the client; they have been told in their portal.` : `Hid "${t.title}" from the client.` };
       }
       case "complete_task": case "reschedule_task": {
         const id = str(a.task_id, 60);
