@@ -23,6 +23,7 @@ import { runCalendarInvites } from "../_shared/calendar-service.ts";
 import { runNoticeProcessor } from "../_shared/notice-service.ts";
 import { sweepArchive, sweepFeedback, sweepForgetSender, sweepList, sweepMorning, sweepRun, sweepSetAuto, sweepUndoArchive } from "../_shared/inbox-sweep-handlers.ts";
 import { quietReplyKeys, sweepLine, type Bucket, type Learned } from "../_shared/inbox-sweep.ts";
+import { withoutListedSubtasks } from "../_shared/task-filter.ts";
 import { pushNotify, pushSubscribe, pushTest, vapidPublicKey } from "../_shared/push-service.ts";
 import { scanMeetingNotes } from "../_shared/meeting-followup-service.ts";
 import { runGeorgiaTasks } from "../_shared/georgia-task-service.ts";
@@ -124,12 +125,15 @@ function taskLink(t: { contact_id: string | null; household_id: string | null; f
 }
 
 async function gatherTaskFacts(db: Db, userId: string, todayStr: string): Promise<TaskFacts> {
-  const { data: tasks } = await db
+  const { data: allTasks } = await db
     .from("pm_tasks")
-    .select("id, project_id, contact_id, household_id, family_id, title, due_date")
+    .select("id, project_id, contact_id, household_id, family_id, title, due_date, parent_task_id")
     .eq("assignee_id", userId)
     .neq("status", "done")
     .order("due_date", { ascending: true });
+  // A task with subtasks shows once, as the parent.
+  // deno-lint-ignore no-explicit-any
+  const tasks = withoutListedSubtasks((allTasks || []) as any[]);
 
   // deno-lint-ignore no-explicit-any
   const projectIds = [...new Set((tasks || []).map((t: any) => t.project_id).filter(Boolean))];
@@ -366,9 +370,9 @@ async function liveToday(db: Db, userId: string) {
 
   // Rolf's tasks (overdue, due today, the next seven days) and the ones Georgia is working on.
   const tf = await gatherTaskFacts(db, userId, todayStr).catch(() => ({ overdue: [], due_today: [], upcoming: [] } as TaskFacts));
-  const { data: gt } = await db.from("pm_tasks").select("id, project_id, contact_id, household_id, family_id, title, due_date").eq("assigned_agent_key", "georgia").neq("status", "done").order("due_date", { ascending: true, nullsFirst: false }).limit(10);
+  const { data: gt } = await db.from("pm_tasks").select("id, project_id, contact_id, household_id, family_id, title, due_date, parent_task_id").eq("assigned_agent_key", "georgia").neq("status", "done").order("due_date", { ascending: true, nullsFirst: false }).limit(10);
   // deno-lint-ignore no-explicit-any
-  const georgiaTasks: TaskFact[] = ((gt ?? []) as any[]).map((t) => ({ id: t.id, title: t.title, project: null, due_date: t.due_date ?? undefined, link: taskLink(t) }));
+  const georgiaTasks: TaskFact[] = withoutListedSubtasks((gt ?? []) as any[]).map((t) => ({ id: t.id, title: t.title, project: null, due_date: t.due_date ?? undefined, link: taskLink(t) }));
   const tasks = { overdue: tf.overdue, dueToday: tf.due_today, upcoming: tf.upcoming, georgia: georgiaTasks };
 
   // Mail that arrived after the briefing: still in the Inbox (or sent to admin@), not marked done, not already listed.
