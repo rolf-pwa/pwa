@@ -54,3 +54,20 @@ export async function withConversationSiblings(gm: Gm, ids: string[]): Promise<s
   } catch { /* the messages themselves are still filed */ }
   return [...out];
 }
+
+export interface ThreadMessage { id: string; labelIds?: string[]; internalDate?: string }
+
+/**
+ * A conversation that is filed as handled but still sits in the Inbox. If every Inbox message in it is older than the newest handled one, the
+ * leftovers are what an earlier filing missed: `archive` lists them (never a starred one). If an Inbox message is newer than the newest handled
+ * one, someone replied after it was filed, so it is `newReply` and left alone for Rolf.
+ */
+export function staleHandledMessages(messages: ThreadMessage[], handledId: string): { archive: string[]; newReply: boolean } {
+  const at = (m: ThreadMessage) => Number(m.internalDate ?? 0);
+  const handled = messages.filter((m) => (m.labelIds ?? []).includes(handledId));
+  const inbox = messages.filter((m) => (m.labelIds ?? []).includes("INBOX"));
+  if (!handled.length || !inbox.length) return { archive: [], newReply: false };
+  const newest = Math.max(...handled.map(at));
+  if (inbox.some((m) => at(m) > newest)) return { archive: [], newReply: true };
+  return { archive: inbox.filter((m) => !(m.labelIds ?? []).includes("STARRED")).map((m) => m.id), newReply: false };
+}
