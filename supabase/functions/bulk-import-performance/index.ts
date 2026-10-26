@@ -11,6 +11,7 @@
 //   runs / loadRun / undo   the history of imports, a prepared file's rows for the importer page, and putting a bad import back.
 // Every commit records what it replaced (monthly_import_undo). The rules live in _shared/monthly-import.ts (unit-tested).
 
+import "../_shared/bc-time.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { driveDownloadFile, driveListChildren } from "../_shared/vault-provisioning.ts";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";

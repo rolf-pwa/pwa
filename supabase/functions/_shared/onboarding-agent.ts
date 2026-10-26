@@ -5,6 +5,7 @@
 // nudge by email, retry a failed Vault build, or escalate to a person. It never sends details of what is missing and never
 // gives advice.
 
+import "./bc-time.ts";
 export type CaseStatus = "active" | "complete" | "escalated" | "paused";
 export type NudgeStep = "survey" | "documents";
 

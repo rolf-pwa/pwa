@@ -2,6 +2,7 @@
 // recipient, send ONE digest email, and mark the rows as sent.
 // Triggered by pg_cron every 10 minutes.
 
+import "../_shared/bc-time.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { mintMagicLink, plainPortalUrl } from "../_shared/portal-magic-link.ts";

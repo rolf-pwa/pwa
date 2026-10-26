@@ -2,6 +2,7 @@
 // Quotes, attached to the file, plus the recommended quote's illustration when it has one. Additive in Drive.
 
 // deno-lint-ignore-file no-explicit-any
+import "./bc-time.ts";
 import { buildBrandedPdf } from "./simple-pdf.ts";
 import { needLineFor, quoteBlocks, type QuoteRow } from "./quote-rules.ts";
 import { uploadToAdvisorFiles } from "./insurance-doc-service.ts";

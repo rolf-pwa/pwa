@@ -1,5 +1,6 @@
 // call-archive-rules.ts: copying call recordings to the client's Advisor Files and transcribing them with our own AI. Pure.
 // Nothing is moved or deleted anywhere: Callizy keeps its copy, and the copy in Drive is added beside the client's other files.
+import "./bc-time.ts";
 import type { Block } from "./simple-pdf.ts";
 import { conventionName, type Person } from "./file-naming.ts";
 

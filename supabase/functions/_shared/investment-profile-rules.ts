@@ -1,5 +1,6 @@
 // investment-profile-rules.ts: the investor profile and needs analysis for one person (segregated funds): what is saved, cleaned, and the report built from it. Pure.
 // The risk profile is not scored here: it is the one recorded in the investor profile completed online with the iA application, chosen from iA's model portfolios.
+import "./bc-time.ts";
 import type { Block } from "./simple-pdf.ts";
 
 export const OBJECTIVES: Record<string, string> = { growth: "Grow capital", income: "Generate income", preservation: "Preserve capital", estate: "Pass wealth to the family (estate)", tax: "Reduce tax" };

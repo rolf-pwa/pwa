@@ -1,6 +1,7 @@
 // meeting-record.ts: the standard record of a meeting that is filed when its follow-up task is completed. Pure: no network, no Deno.
 // Sections (as set with the compliance review): meeting event, date, time, attendees, meeting recap, tasks, comment thread to completion.
 
+import "./bc-time.ts";
 export interface RecordPerson { name: string; role: string }
 export interface RecordEvent { title: string; start: string | null; end: string | null; attendees: RecordPerson[]; source: "linked" | "matched" }
 export interface RecordTask { title: string; owner: string | null; due: string | null; status: string; completedAt: string | null }

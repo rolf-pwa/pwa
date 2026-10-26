@@ -2,6 +2,7 @@
 // client to confirm. Read-only against Drive. The model only proposes facts, each with a quote that must appear in its source (see fact-find-rules.ts).
 
 // deno-lint-ignore-file no-explicit-any
+import "./bc-time.ts";
 import { getServiceGoogleAccessToken } from "./google-token.ts";
 import { GEMINI_EXTRACT_MODEL, generateVertexContent, parseServiceAccountKey, withThinking } from "./vertex-ai.ts";
 import { FIELDS, assemble, askList, buildFileFacts, evidencePrompt, factFindMarkdown, validateModelFacts, type Evidence, type Fact } from "./fact-find-rules.ts";

@@ -1,4 +1,5 @@
 // needs-analysis-pdf.ts: the content of the Life Insurance Needs Analysis report, from a saved DIME analysis. Pure.
+import "./bc-time.ts";
 import type { Block } from "./simple-pdf.ts";
 
 const money = (n: unknown) => `$${Math.round(Number(n) || 0).toLocaleString("en-CA")}`;

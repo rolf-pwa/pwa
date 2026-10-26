@@ -2,6 +2,7 @@
 // identifying herself; gives no account details; alerts Rolf in the app for urgent matters; never talks over him. Rules are in text-reply-rules.ts.
 
 // deno-lint-ignore-file no-explicit-any
+import "./bc-time.ts";
 import { ADMIN_INBOX_EMAIL, getServiceGoogleAccessToken, resolveUserIdByEmail } from "./google-token.ts";
 import { GEMINI_DRAFTING_MODEL, generateVertexContent, parseServiceAccountKey, withThinking } from "./vertex-ai.ts";
 import { checkOutboundPii } from "./pii-shield.ts";

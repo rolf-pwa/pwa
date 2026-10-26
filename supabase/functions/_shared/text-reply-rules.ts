@@ -2,6 +2,7 @@
 // She answers only clients matched in the CRM, only when Rolf cannot (in a meeting, away, after hours or on a weekend), once, and never
 // talks over him. Texts are not a secure channel: she gives no account details and sends sensitive matters to the portal.
 
+import "./bc-time.ts";
 import { availability, pacificParts, type Away } from "./support-context.ts";
 
 export const OPT_OUT = /^\s*(stop|stopall|unsubscribe|cancel|end|quit)\s*[.!]?\s*$/i;

@@ -6,6 +6,7 @@
 //   mode live    emails the reminder from Georgia
 // A meeting booked too late for a reminder to make sense (a week-ahead reminder for a meeting booked three days ahead) is skipped.
 
+import "../_shared/bc-time.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendServiceEmailDetailed } from "../_shared/service-email.ts";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";

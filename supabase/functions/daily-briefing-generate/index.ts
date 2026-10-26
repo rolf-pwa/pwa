@@ -10,6 +10,7 @@
 // codebase's flat-access model), so those sections are identical across
 // every staff member's briefing.
 
+import { pacificOffsetHours } from "../_shared/bc-time.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getValidGoogleAccessToken } from "../_shared/google-token.ts";
 import { dismissBriefingItem, refreshBriefing } from "../_shared/briefing-refresh.ts";
@@ -94,15 +95,8 @@ function addDaysToDateString(dateStr: string, days: number): string {
 // Converts a Pacific-calendar-date's local midnight into a UTC ISO instant,
 // detecting PST vs PDT for that date rather than assuming a fixed offset.
 function pacificMidnightUtcIso(dateStr: string): string {
-  const guess = new Date(`${dateStr}T12:00:00-08:00`);
-  const tzName = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Vancouver",
-    timeZoneName: "short",
-  })
-    .formatToParts(guess)
-    .find((p) => p.type === "timeZoneName")?.value;
-  const offset = tzName === "PDT" ? "-07:00" : "-08:00";
-  return new Date(`${dateStr}T00:00:00${offset}`).toISOString();
+  const offset = pacificOffsetHours(new Date(`${dateStr}T12:00:00-08:00`).getTime());
+  return new Date(`${dateStr}T00:00:00${offset === -7 ? "-07:00" : "-08:00"}`).toISOString();
 }
 
 // deno-lint-ignore no-explicit-any

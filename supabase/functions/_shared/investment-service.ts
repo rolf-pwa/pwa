@@ -2,6 +2,7 @@
 // analysis, filed as a PDF. Kept apart from Insurance: its own tables. The one shared record is the client's signed disclosure, which covers three checklist items.
 
 // deno-lint-ignore-file no-explicit-any
+import "./bc-time.ts";
 import { getServiceGoogleAccessToken } from "./google-token.ts";
 import { parseDriveId } from "./insurance-file-rules.ts";
 import { sha256Hex } from "./insurance-doc-rules.ts";

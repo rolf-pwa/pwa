@@ -1,6 +1,7 @@
 // investment-contract-rules.ts: the segregated fund contract after the iA application: the right-to-cancel window and the delivery letter. Pure.
 // The number of business days to cancel is entered from the contract and information folder; it is never assumed here. Weekends are skipped; public holidays are not.
 
+import "./bc-time.ts";
 export interface ContractInput {
   contractNumber: string; accounts: string; amount: number; applicationUrl: string; applicationName: string; contractUrl: string; contractName: string;
   issuedOn: string; confirmationReceivedOn: string; cancelBusinessDays: number | null; fundFactsOn: string; fundFactsNote: string;

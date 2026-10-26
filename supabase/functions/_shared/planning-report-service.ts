@@ -2,6 +2,7 @@
 // Advisor Files / Reports (additive: nothing is moved or deleted). The wording is in planning-report-rules.ts.
 
 // deno-lint-ignore-file no-explicit-any
+import "./bc-time.ts";
 import { buildBrandedPdf } from "./simple-pdf.ts";
 import { planningReportBlocks, REPORT_KINDS, type ReportKind, type ReportPerson, type SavedAnalysis } from "./planning-report-rules.ts";
 import type { QuoteRow } from "./quote-rules.ts";

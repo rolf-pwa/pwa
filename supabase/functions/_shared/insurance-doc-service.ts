@@ -4,6 +4,7 @@
 // checklist items it covers are ticked in the insurance file.
 
 // deno-lint-ignore-file no-explicit-any
+import "./bc-time.ts";
 import { getServiceGoogleAccessToken } from "./google-token.ts";
 import { driveEnsureFolder, driveFindFolder } from "./meeting-record-service.ts";
 import { alternativesParagraph, cleanTemplate, costParagraph, fillReasonWhy, fillTemplate, footerVersion, needsParagraph, replacementParagraph, sha256Hex, signedPdfBlocks, statementFor, type AnalysisLite } from "./insurance-doc-rules.ts";
