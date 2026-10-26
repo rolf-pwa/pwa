@@ -5,7 +5,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { applyOpen, pendingSorts, type OpenState } from "./briefing-open.ts";
 import { getValidGoogleAccessToken } from "./google-token.ts";
-import { GMAIL_MODIFY_SCOPE, findHandledLabelId, gmailFor, handledLabelId, stillInInbox } from "./gmail-handled.ts";
+import { GMAIL_MODIFY_SCOPE, findHandledLabelId, gmailFor, handledLabelId, stillInInbox, withConversationSiblings } from "./gmail-handled.ts";
 
 const keysOf = (items: { key?: string }[], prefix: string) => items.map((i) => i.key).filter((k): k is string => !!k && k.startsWith(prefix)).map((k) => k.split(":").slice(-1)[0]);
 
@@ -65,7 +65,7 @@ export async function dismissBriefingItem(db: any, userId: string, todayStr: str
       if (((tok?.scopes ?? []) as string[]).includes(GMAIL_MODIFY_SCOPE)) {
         const gm = gmailFor(await getValidGoogleAccessToken(db, userId));
         const labelId = await handledLabelId(gm);
-        if (labelId) filed = (await gm("messages/batchModify", { method: "POST", body: JSON.stringify({ ids: [emailId], addLabelIds: [labelId], removeLabelIds: ["INBOX", "UNREAD"] }) })).ok;
+        if (labelId) filed = (await gm("messages/batchModify", { method: "POST", body: JSON.stringify({ ids: await withConversationSiblings(gm, [emailId]), addLabelIds: [labelId], removeLabelIds: ["INBOX", "UNREAD"] }) })).ok;
       }
     } catch { /* it still comes off the briefing */ }
   }
