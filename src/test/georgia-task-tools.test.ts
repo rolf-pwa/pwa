@@ -69,6 +69,14 @@ describe("Georgia sharing a task with the client", () => {
   });
 });
 
+describe("when Georgia completes a task", () => {
+  it("is told to close one only on Rolf's word, not because he updated or shared it", () => {
+    const prompt = readFileSync("supabase/functions/_shared/ea-agent.ts", "utf8");
+    expect(prompt).toContain("use complete_task only when Rolf says it is done, finished or closed");
+    expect(prompt).toContain("is a status report, not an instruction to close the task");
+  });
+});
+
 describe("the tools", () => {
   it("are offered to Georgia and handled, and the Tasks page uses the same delete", () => {
     const agent = readFileSync("supabase/functions/_shared/ea-agent.ts", "utf8");
