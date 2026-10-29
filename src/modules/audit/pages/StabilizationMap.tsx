@@ -122,7 +122,7 @@ const STATUS_KIND: Record<string, StatusKind> = {
 };
 
 const STATUS_COLOR: Record<StatusKind, string> = {
-  red: "#c0392b",
+  red: "#9B2C2C",
   amber: "#e67e22",
   green: "#27ae60",
 };
@@ -428,9 +428,9 @@ export default function StabilizationMap() {
     : [];
 
   return (
-    <div className="min-h-screen bg-[#fafafa]">
+    <div className="min-h-screen bg-[#FBFBF8]">
       {/* Toolbar — hidden in print */}
-      <div className="print:hidden sticky top-0 z-20 border-b border-[#e2e8f0] bg-[#fafafa]/95 backdrop-blur">
+      <div className="print:hidden sticky top-0 z-20 border-b border-[#D9D2C5] bg-[#FBFBF8]/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1100px] items-center justify-between px-6 py-3">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
@@ -438,7 +438,7 @@ export default function StabilizationMap() {
             </Button>
             <div className="text-sm text-[#334155]">
               <span className="font-semibold">Transition Map</span>
-              <span className="ml-2 text-xs uppercase tracking-wider text-[#a37c58]">
+              <span className="ml-2 text-xs uppercase tracking-wider text-[#7E684C]">
                 {map.generation_status.replace(/_/g, " ")}
               </span>
             </div>
@@ -514,7 +514,7 @@ export default function StabilizationMap() {
             width: isHouseholdMap ? "210mm" : "297mm",
             minHeight: isHouseholdMap ? "297mm" : "210mm",
             display: "flex",
-            fontFamily: "'DM Sans', sans-serif",
+            fontFamily: "Inter, sans-serif",
             color: "#334155",
           }}
         >
@@ -522,7 +522,7 @@ export default function StabilizationMap() {
           <aside
             style={{
               width: isHouseholdMap ? "60mm" : "72mm",
-              backgroundColor: "#1e293b",
+              backgroundColor: "#0A192F",
               color: "#fff",
               padding: isHouseholdMap ? "10mm 6mm" : "10mm 7mm",
               display: "flex",
@@ -542,7 +542,7 @@ export default function StabilizationMap() {
               </div>
             </div>
             <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,.18)" }} />
-            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "16pt", fontWeight: 300, lineHeight: 1.3 }}>
+            <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "16pt", fontWeight: 700, lineHeight: 1.3 }}>
               Don't Invest. <em style={{ fontStyle: "italic", color: "rgba(255,255,255,.7)" }}>Integrate.</em>
             </div>
             <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,.18)" }} />
@@ -586,11 +586,11 @@ export default function StabilizationMap() {
           {/* Main */}
           <main style={{ flex: 1, padding: "10mm 10mm 0 10mm", display: "flex", flexDirection: "column", gap: "5mm" }}>
             <div style={{ marginBottom: isHouseholdMap ? "3mm" : 0 }}>
-              <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: isHouseholdMap ? "3mm" : "1.5mm" }}>
+              <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#5A6A80", marginBottom: isHouseholdMap ? "3mm" : "1.5mm" }}>
                 Transition Map &nbsp;·&nbsp; Prepared for <strong>{fullName}</strong>
                 {sessionDateLabel && <> &nbsp;·&nbsp; {sessionDateLabel}</>}
               </div>
-              <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: isHouseholdMap ? "25pt" : "26pt", fontWeight: 300, color: "#334155", lineHeight: isHouseholdMap ? 1.3 : 1.1, letterSpacing: "-0.005em" }}>
+              <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: isHouseholdMap ? "25pt" : "26pt", fontWeight: 700, color: "#334155", lineHeight: isHouseholdMap ? 1.3 : 1.1, letterSpacing: "-0.005em" }}>
                 {isHouseholdMap ? (
                   "Transition Survey™"
                 ) : (
@@ -600,12 +600,12 @@ export default function StabilizationMap() {
                   </>
                 )}
               </div>
-              <hr style={{ width: "18mm", height: "3px", background: "#a37c58", border: "none", marginTop: isHouseholdMap ? "4mm" : "2.5mm" }} />
+              <hr style={{ width: "18mm", height: "3px", background: "#7E684C", border: "none", marginTop: isHouseholdMap ? "4mm" : "2.5mm" }} />
             </div>
 
             {/* Insight */}
-            <div style={{ background: "#fafafa", borderLeft: "3px solid #a37c58", padding: "3mm 5mm", display: "flex", flexDirection: "column", gap: "1mm" }}>
-              <div style={{ fontFamily: "'DM Sans', sans-serif", fontStyle: "italic", fontSize: "7.5pt", fontWeight: 400, color: "#334155", lineHeight: 1.55 }}>
+            <div style={{ background: "#FBFBF8", borderLeft: "3px solid #7E684C", padding: "3mm 5mm", display: "flex", flexDirection: "column", gap: "1mm" }}>
+              <div style={{ fontFamily: "Inter, sans-serif", fontStyle: "italic", fontSize: "7.5pt", fontWeight: 400, color: "#334155", lineHeight: 1.55 }}>
                 {map.situation_summary || "—"}
               </div>
               <div style={{ fontSize: "7.5pt", color: "#334155" }}>{map.urgency_flag || "—"}</div>
@@ -635,8 +635,8 @@ export default function StabilizationMap() {
                     </div>
                     <div style={{ display: "flex", flexDirection: "column" }}>
                       <div style={bsHead}>Liabilities &amp; Net Worth</div>
-                      <BsRow label="Liabilities" value={fmtCurrency((diag.personal_liabilities_total ?? 0) + (diag.corp_liabilities_total ?? 0))} tone="#c0392b" />
-                      {(diag.allocation?.credit_capacity ?? 0) > 0 && <BsRow label="Undrawn credit (offsets the Strategic Reserve)" value={fmtCurrency(diag.allocation!.credit_capacity)} tone="#c0392b" />}
+                      <BsRow label="Liabilities" value={fmtCurrency((diag.personal_liabilities_total ?? 0) + (diag.corp_liabilities_total ?? 0))} tone="#9B2C2C" />
+                      {(diag.allocation?.credit_capacity ?? 0) > 0 && <BsRow label="Undrawn credit (offsets the Strategic Reserve)" value={fmtCurrency(diag.allocation!.credit_capacity)} tone="#9B2C2C" />}
                       <BsRow label="Net Worth" value={fmtCurrency(diag.net_worth ?? diag.aum)} strong />
                       <div style={{ marginTop: "auto", paddingTop: "1.5mm" }}>
                         <hr style={{ border: "none", borderTop: "1.5px solid #334155", margin: "0 0 1.5mm" }} />
@@ -647,7 +647,7 @@ export default function StabilizationMap() {
                   {(diag.allocation?.notes ?? []).length > 0 && (
                     <div style={{ marginBottom: "3mm" }}>
                       {diag.allocation!.notes.map((n, i) => (
-                        <div key={i} style={{ fontSize: "6.5pt", color: "#94a3b8", fontStyle: "italic", lineHeight: 1.4 }}>{n}</div>
+                        <div key={i} style={{ fontSize: "6.5pt", color: "#5A6A80", fontStyle: "italic", lineHeight: 1.4 }}>{n}</div>
                       ))}
                     </div>
                   )}
@@ -672,15 +672,15 @@ export default function StabilizationMap() {
                   <div>
                     <div style={colLabel}>Corporate Balance Sheet</div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "1mm 4mm", fontSize: "7.5pt" }}>
-                      <span style={{ color: "#94a3b8", fontWeight: 600 }}>Entity</span>
-                      <span style={{ color: "#94a3b8", fontWeight: 600, textAlign: "right" }}>Assets</span>
-                      <span style={{ color: "#94a3b8", fontWeight: 600, textAlign: "right" }}>Liabilities</span>
-                      <span style={{ color: "#94a3b8", fontWeight: 600, textAlign: "right" }}>Net</span>
+                      <span style={{ color: "#5A6A80", fontWeight: 600 }}>Entity</span>
+                      <span style={{ color: "#5A6A80", fontWeight: 600, textAlign: "right" }}>Assets</span>
+                      <span style={{ color: "#5A6A80", fontWeight: 600, textAlign: "right" }}>Liabilities</span>
+                      <span style={{ color: "#5A6A80", fontWeight: 600, textAlign: "right" }}>Net</span>
                       {diag.corporations.map((c) => (
                         <Fragment key={c.id}>
                           <span style={{ color: "#334155" }}>{c.name}</span>
-                          <span style={{ color: "#64748b", textAlign: "right" }}>{fmtCurrency(c.total_assets)}</span>
-                          <span style={{ color: "#c0392b", textAlign: "right" }}>-{fmtCurrency(c.total_liabilities)}</span>
+                          <span style={{ color: "#5A6A80", textAlign: "right" }}>{fmtCurrency(c.total_assets)}</span>
+                          <span style={{ color: "#9B2C2C", textAlign: "right" }}>-{fmtCurrency(c.total_liabilities)}</span>
                           <span style={{ color: "#334155", fontWeight: 600, textAlign: "right" }}>{fmtCurrency(c.net_assets)}</span>
                         </Fragment>
                       ))}
@@ -736,7 +736,7 @@ export default function StabilizationMap() {
 
             {/* Footer — household maps carry the footer to page 2, after the action plan */}
             {!isHouseholdMap && (
-              <div style={{ background: "#a37c58", color: "#fff", margin: "auto -10mm 0 -10mm", padding: "3mm 10mm", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ background: "#7E684C", color: "#fff", margin: "auto -10mm 0 -10mm", padding: "3mm 10mm", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ fontSize: "8.5pt", fontWeight: 500, maxWidth: "60%" }}>{map.footer_note}</div>
               </div>
             )}
@@ -757,20 +757,20 @@ export default function StabilizationMap() {
               display: "flex",
               flexDirection: "column",
               gap: "5mm",
-              fontFamily: "'DM Sans', sans-serif",
+              fontFamily: "Inter, sans-serif",
               color: "#334155",
               pageBreakBefore: "always",
               breakBefore: "page",
             }}
           >
             <div>
-              <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "1.5mm" }}>
+              <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "1.5mm" }}>
                 Transition Map &nbsp;·&nbsp; Prepared for <strong>{fullName}</strong>
               </div>
-              <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "18pt", fontWeight: 300, color: "#334155", lineHeight: 1.1 }}>
+              <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "18pt", fontWeight: 700, color: "#334155", lineHeight: 1.1 }}>
                 Governance &amp; Deceleration Risk Vectors
               </div>
-              <hr style={{ width: "18mm", height: "3px", background: "#a37c58", border: "none", marginTop: "2.5mm" }} />
+              <hr style={{ width: "18mm", height: "3px", background: "#7E684C", border: "none", marginTop: "2.5mm" }} />
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(60mm, 1fr))", gap: "4mm" }}>
@@ -800,35 +800,35 @@ export default function StabilizationMap() {
               display: "flex",
               flexDirection: "column",
               gap: "5mm",
-              fontFamily: "'DM Sans', sans-serif",
+              fontFamily: "Inter, sans-serif",
               color: "#334155",
               pageBreakBefore: "always",
               breakBefore: "page",
             }}
           >
             <div>
-              <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "1.5mm" }}>
+              <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "1.5mm" }}>
                 Transition Map &nbsp;·&nbsp; Prepared for <strong>{fullName}</strong>
               </div>
-              <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "18pt", fontWeight: 300, color: "#334155", lineHeight: 1.1 }}>
+              <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "18pt", fontWeight: 700, color: "#334155", lineHeight: 1.1 }}>
                 Transition Plan
               </div>
-              <hr style={{ width: "18mm", height: "3px", background: "#a37c58", border: "none", marginTop: "2.5mm" }} />
+              <hr style={{ width: "18mm", height: "3px", background: "#7E684C", border: "none", marginTop: "2.5mm" }} />
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8mm", flex: 1 }}>
               {ACTION_PHASES.map((phase) => (
                 <div key={phase.key}>
                   <div style={{ fontSize: "8pt", fontWeight: 600, color: "#334155", marginBottom: "2mm" }}>
-                    {phase.label} <span style={{ color: "#94a3b8", fontWeight: 400 }}>· {phase.window}</span>
+                    {phase.label} <span style={{ color: "#5A6A80", fontWeight: 400 }}>· {phase.window}</span>
                   </div>
                   {(map.action_plan?.[phase.key] ?? []).length === 0 ? (
-                    <p style={{ ...colText, color: "#94a3b8" }}>—</p>
+                    <p style={{ ...colText, color: "#5A6A80" }}>—</p>
                   ) : (
                     map.action_plan[phase.key].map((item, i) => (
                       <div key={i} style={{ marginBottom: "3mm" }}>
                         <p style={{ ...colText, fontWeight: 600 }}>{item.title || "—"}</p>
-                        {item.detail && <p style={{ ...colText, color: "#64748b" }}>{item.detail}</p>}
+                        {item.detail && <p style={{ ...colText, color: "#5A6A80" }}>{item.detail}</p>}
                       </div>
                     ))
                   )}
@@ -837,15 +837,15 @@ export default function StabilizationMap() {
             </div>
 
             {/* Footer */}
-            <div style={{ background: "#a37c58", color: "#fff", margin: "auto -12mm 0 -12mm", padding: "3mm 12mm", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ background: "#7E684C", color: "#fff", margin: "auto -12mm 0 -12mm", padding: "3mm 12mm", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: "8.5pt", fontWeight: 500 }}>{map.footer_note}</div>
             </div>
           </div>
         )}
 
         {map.logic_trace && !editing && (
-          <div className="mt-6 rounded-lg border border-[#e2e8f0] bg-white p-4 text-xs text-[#64748b] print:hidden">
-            <div className="mb-1 font-semibold uppercase tracking-wider text-[#a37c58]">AI Logic Trace (staff only)</div>
+          <div className="mt-6 rounded-lg border border-[#D9D2C5] bg-white p-4 text-xs text-[#5A6A80] print:hidden">
+            <div className="mb-1 font-semibold uppercase tracking-wider text-[#7E684C]">AI Logic Trace (staff only)</div>
             <p className="whitespace-pre-wrap">{map.logic_trace}</p>
           </div>
         )}
@@ -858,23 +858,23 @@ export default function StabilizationMap() {
           body { background: white !important; }
           .stab-doc, .stab-doc-page2 { box-shadow: none !important; }
         }
-        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500;1,600&family=DM+Sans:wght@300;400;500;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@400;500;600&display=swap');
       `}</style>
     </div>
   );
 }
 
-const colLabel: React.CSSProperties = { fontSize: "6.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "2mm", paddingBottom: "1.5mm", borderBottom: "1px solid #e2e8f0" };
+const colLabel: React.CSSProperties = { fontSize: "6.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "2mm", paddingBottom: "1.5mm", borderBottom: "1px solid #D9D2C5" };
 const colItem: React.CSSProperties = { display: "flex", alignItems: "flex-start", gap: "3mm", marginBottom: "2.5mm" };
 const colText: React.CSSProperties = { fontSize: "8.5pt", color: "#334155", lineHeight: 1.4 };
-const dot: React.CSSProperties = { width: "6px", height: "6px", borderRadius: "50%", background: "#a37c58", flexShrink: 0, marginTop: "2pt" };
-const sq: React.CSSProperties = { width: "6px", height: "6px", background: "#a37c58", flexShrink: 0, marginTop: "2pt" };
+const dot: React.CSSProperties = { width: "6px", height: "6px", borderRadius: "50%", background: "#7E684C", flexShrink: 0, marginTop: "2pt" };
+const sq: React.CSSProperties = { width: "6px", height: "6px", background: "#7E684C", flexShrink: 0, marginTop: "2pt" };
 
-const bsHead: React.CSSProperties = { fontSize: "6.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "1.5mm" };
+const bsHead: React.CSSProperties = { fontSize: "6.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "1.5mm" };
 
 function BsRow({ label, value, strong, tone }: { label: string; value: string; strong?: boolean; tone?: string }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "0.8mm 0", fontSize: strong ? "8.5pt" : "8pt", fontWeight: strong ? 700 : 400, color: tone ?? (strong ? "#334155" : "#64748b") }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "0.8mm 0", fontSize: strong ? "8.5pt" : "8pt", fontWeight: strong ? 700 : 400, color: tone ?? (strong ? "#334155" : "#5A6A80") }}>
       <span>{label}</span>
       <span>{value}</span>
     </div>
@@ -884,7 +884,7 @@ function BsRow({ label, value, strong, tone }: { label: string; value: string; s
 function StatusCard({ label, status, detail }: { label: string; status: string; detail: string }) {
   const kind = STATUS_KIND[status] || "amber";
   return (
-    <div style={{ background: "#fafafa", borderLeft: "3px solid #a37c58", padding: "3mm 4mm" }}>
+    <div style={{ background: "#FBFBF8", borderLeft: "3px solid #7E684C", padding: "3mm 4mm" }}>
       <strong style={{ display: "block", fontSize: "8.5pt", fontWeight: 600, color: "#334155", marginBottom: "1mm" }}>
         {label}&nbsp;
         <span style={{ color: STATUS_COLOR[kind], fontSize: "7pt", letterSpacing: ".08em", textTransform: "uppercase" }}>
@@ -978,7 +978,7 @@ function EditorForm({
   );
 
   return (
-    <div className="space-y-4 rounded-lg border border-[#e2e8f0] bg-white p-5">
+    <div className="space-y-4 rounded-lg border border-[#D9D2C5] bg-white p-5">
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         {F("client_first_name", "First Name")}
         {F("client_last_name", "Last Name")}
@@ -1004,8 +1004,8 @@ function EditorForm({
           {F("situation_summary", "Situation Summary", true)}
           {F("urgency_flag", "Urgency Flag", true)}
 
-          <div className="space-y-2 rounded-md border border-[#e2e8f0] p-3">
-            <div className="text-xs font-semibold uppercase tracking-wider text-[#a37c58]">Diagnostic Inputs</div>
+          <div className="space-y-2 rounded-md border border-[#D9D2C5] p-3">
+            <div className="text-xs font-semibold uppercase tracking-wider text-[#7E684C]">Diagnostic Inputs</div>
             <p className="text-[11px] text-muted-foreground">
               These come from documents on file (T2 financials, the USA), type in what the advisor reads, the
               system computes the figures. Fee drag is paused until CRM3's fee-disclosure data is live.
@@ -1032,8 +1032,8 @@ function EditorForm({
             )}
           </div>
 
-          <div className="space-y-2 rounded-md border border-[#e2e8f0] p-3">
-            <div className="text-xs font-semibold uppercase tracking-wider text-[#a37c58]">Transition Plan</div>
+          <div className="space-y-2 rounded-md border border-[#D9D2C5] p-3">
+            <div className="text-xs font-semibold uppercase tracking-wider text-[#7E684C]">Transition Plan</div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               {ACTION_PHASES.map((phase) => (
                 <div key={phase.key} className="space-y-2">
@@ -1041,7 +1041,7 @@ function EditorForm({
                     {phase.label} <span className="text-muted-foreground">· {phase.window}</span>
                   </div>
                   {(map.action_plan?.[phase.key] ?? []).map((item, i) => (
-                    <div key={i} className="space-y-1 rounded border border-[#e2e8f0] p-2">
+                    <div key={i} className="space-y-1 rounded border border-[#D9D2C5] p-2">
                       <div className="flex items-center gap-1">
                         <Input
                           className="text-xs"
@@ -1104,11 +1104,11 @@ function EditorForm({
           {F("urgency_flag", "Urgency Flag", true)}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div className="space-y-2">
-              <div className="text-xs font-semibold uppercase tracking-wider text-[#a37c58]">Risks</div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-[#7E684C]">Risks</div>
               {[1, 2, 3, 4, 5].map((n) => F(`risk_${n}` as keyof SMap, `Risk ${n}`))}
             </div>
             <div className="space-y-2">
-              <div className="text-xs font-semibold uppercase tracking-wider text-[#a37c58]">Next Steps</div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-[#7E684C]">Next Steps</div>
               {[1, 2, 3, 4, 5].map((n) => F(`next_step_${n}` as keyof SMap, `Next Step ${n}`))}
             </div>
           </div>

@@ -202,13 +202,13 @@ export function portfolioReviewReadyEmail(firstName: string, portalUrl: string, 
   return {
     subject: "Your Portfolio Review is ready",
     html: `
-    <div style="font-family:'DM Sans',sans-serif;color:#334155;max-width:520px;margin:0 auto;">
-      <p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;">Sovereignty Operating System™</p>
+    <div style="font-family:Inter,sans-serif;color:#334155;max-width:520px;margin:0 auto;">
+      <p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#5A6A80;">Sovereignty Operating System™</p>
       <p style="font-size:14px;line-height:1.6;">Hi ${esc(firstName || "there")},</p>
       <p style="font-size:14px;line-height:1.6;">Rolf has prepared your Portfolio Review. You can read it in your portal whenever suits you, ahead of your meeting.</p>
-      <p style="margin:20px 0;"><a href="${portalUrl}" style="background:#1e293b;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:6px;font-size:14px;">Open your portal</a></p>
-      <p style="font-size:13px;line-height:1.6;color:#64748b;">${fromLine}</p>
-      <p style="font-size:14px;line-height:1.6;margin-top:24px;">Georgia<br/><span style="font-size:12px;color:#94a3b8;">AI Assistant, ProsperWise</span></p>
+      <p style="margin:20px 0;"><a href="${portalUrl}" style="background:#0A192F;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:6px;font-size:14px;">Open your portal</a></p>
+      <p style="font-size:13px;line-height:1.6;color:#5A6A80;">${fromLine}</p>
+      <p style="font-size:14px;line-height:1.6;margin-top:24px;">Georgia<br/><span style="font-size:12px;color:#5A6A80;">AI Assistant, ProsperWise</span></p>
     </div>`.trim(),
   };
 }

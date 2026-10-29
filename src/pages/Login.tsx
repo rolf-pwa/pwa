@@ -91,7 +91,7 @@ const Login = () => {
             ProsperWise Portal
           </h1>
           <p className="text-sm text-muted-foreground">
-            ProsperWise Advisors — Secure Access
+            ProsperWise Advisors, Secure Access
           </p>
         </div>
 

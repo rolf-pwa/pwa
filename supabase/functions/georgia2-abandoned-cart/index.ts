@@ -60,17 +60,17 @@ export function abandonedCartEmailHtml(firstName: string, spoke: string | null, 
   const spokeLine = (spoke && SPOKE_LINE[spoke]) || DEFAULT_SPOKE_LINE;
   const frictionLine = friction ? FRICTION_LINE[friction] : null;
   return `
-    <div style="font-family:'DM Sans',sans-serif;color:#334155;max-width:520px;margin:0 auto;">
-      <p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;">Sovereignty Operating System™</p>
-      <h2 style="font-family:'Cormorant Garamond',serif;font-weight:300;font-size:24px;color:#1e293b;margin:4px 0 16px;">Still here when you're ready</h2>
+    <div style="font-family:Inter,sans-serif;color:#334155;max-width:520px;margin:0 auto;">
+      <p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#5A6A80;">Sovereignty Operating System™</p>
+      <h2 style="font-family:'Playfair Display',serif;font-weight:300;font-size:24px;color:#0A192F;margin:4px 0 16px;">Still here when you're ready</h2>
       <p style="font-size:14px;line-height:1.6;">Hi ${escapeHtml(firstName)},</p>
       <p style="font-size:14px;line-height:1.6;">You started your Transition Survey after completing the diagnostic, and I didn't want it to slip away. ${escapeHtml(spokeLine)}</p>
       ${frictionLine ? `<p style="font-size:14px;line-height:1.6;">${escapeHtml(frictionLine)}</p>` : ""}
       <p style="font-size:14px;line-height:1.6;">The Survey is a working session built around exactly what you told Georgia. You can pick it up whenever you're ready:</p>
-      <p style="margin:24px 0;"><a href="${SURVEY_URL}" style="background:#1e293b;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:6px;font-size:14px;">Continue to the Transition Survey</a></p>
-      <p style="font-size:14px;line-height:1.6;">Prefer to talk it through first? <a href="${CLARITY_URL}" style="color:#a37c58;">Book a short Talk It Through</a>, no commitment.</p>
+      <p style="margin:24px 0;"><a href="${SURVEY_URL}" style="background:#0A192F;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:6px;font-size:14px;">Continue to the Transition Survey</a></p>
+      <p style="font-size:14px;line-height:1.6;">Prefer to talk it through first? <a href="${CLARITY_URL}" style="color:#7E684C;">Book a short Talk It Through</a>, no commitment.</p>
       <p style="font-size:14px;line-height:1.6;margin-top:24px;">— Rolf &amp; the ProsperWise team</p>
-      <p style="font-size:11px;line-height:1.5;color:#94a3b8;margin-top:28px;border-top:1px solid #e2e8f0;padding-top:12px;">You're receiving this one follow-up because you completed the Sovereignty Diagnostic on prosperwise.ca. If you'd rather not hear from us, just reply to this email and we'll remove you.</p>
+      <p style="font-size:11px;line-height:1.5;color:#5A6A80;margin-top:28px;border-top:1px solid #D9D2C5;padding-top:12px;">You're receiving this one follow-up because you completed the Sovereignty Diagnostic on prosperwise.ca. If you'd rather not hear from us, just reply to this email and we'll remove you.</p>
     </div>
   `.trim();
 }

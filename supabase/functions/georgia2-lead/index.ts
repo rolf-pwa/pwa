@@ -243,10 +243,10 @@ function roadmapEmailHtml(opts: {
   const { firstName, catalyst, risk, insights, bcNotes, validation } = opts;
   const gaugeRows = risk
     ? `
-      <tr><td style="padding:6px 0;color:#334155;font-family:'DM Sans',sans-serif;font-size:14px;">Tax Drag Risk</td><td style="padding:6px 0;text-align:right;font-weight:600;color:#1e293b;font-family:'DM Sans',sans-serif;font-size:14px;">${risk.tax_drag_risk}/100</td></tr>
-      <tr><td style="padding:6px 0;color:#334155;font-family:'DM Sans',sans-serif;font-size:14px;">Structure Safety</td><td style="padding:6px 0;text-align:right;font-weight:600;color:#1e293b;font-family:'DM Sans',sans-serif;font-size:14px;">${risk.structure_safety}/100</td></tr>
-      <tr><td style="padding:6px 0;color:#334155;font-family:'DM Sans',sans-serif;font-size:14px;">Noise Strain</td><td style="padding:6px 0;text-align:right;font-weight:600;color:#1e293b;font-family:'DM Sans',sans-serif;font-size:14px;">${risk.noise_strain}/100</td></tr>
-      <tr><td style="padding:6px 0;color:#334155;font-family:'DM Sans',sans-serif;font-size:14px;">Readiness</td><td style="padding:6px 0;text-align:right;font-weight:600;color:#1e293b;font-family:'DM Sans',sans-serif;font-size:14px;">${risk.readiness_score}/100</td></tr>
+      <tr><td style="padding:6px 0;color:#334155;font-family:Inter,sans-serif;font-size:14px;">Tax Drag Risk</td><td style="padding:6px 0;text-align:right;font-weight:600;color:#0A192F;font-family:Inter,sans-serif;font-size:14px;">${risk.tax_drag_risk}/100</td></tr>
+      <tr><td style="padding:6px 0;color:#334155;font-family:Inter,sans-serif;font-size:14px;">Structure Safety</td><td style="padding:6px 0;text-align:right;font-weight:600;color:#0A192F;font-family:Inter,sans-serif;font-size:14px;">${risk.structure_safety}/100</td></tr>
+      <tr><td style="padding:6px 0;color:#334155;font-family:Inter,sans-serif;font-size:14px;">Noise Strain</td><td style="padding:6px 0;text-align:right;font-weight:600;color:#0A192F;font-family:Inter,sans-serif;font-size:14px;">${risk.noise_strain}/100</td></tr>
+      <tr><td style="padding:6px 0;color:#334155;font-family:Inter,sans-serif;font-size:14px;">Readiness</td><td style="padding:6px 0;text-align:right;font-weight:600;color:#0A192F;font-family:Inter,sans-serif;font-size:14px;">${risk.readiness_score}/100</td></tr>
     `
     : "";
 
@@ -254,49 +254,49 @@ function roadmapEmailHtml(opts: {
     ? insights
         .map(
           (ins) => `
-      <div style="border-left:3px solid #a37c58;background:#faf9f7;padding:10px 14px;margin-bottom:10px;">
-        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#a37c58;margin:0 0 4px;font-family:'DM Sans',sans-serif;">${escapeHtml(ins.tag)}</p>
-        <p style="font-size:13px;line-height:1.55;color:#334155;margin:0;font-family:'DM Sans',sans-serif;">${escapeHtml(ins.body)}</p>
+      <div style="border-left:3px solid #7E684C;background:#faf9f7;padding:10px 14px;margin-bottom:10px;">
+        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#7E684C;margin:0 0 4px;font-family:Inter,sans-serif;">${escapeHtml(ins.tag)}</p>
+        <p style="font-size:13px;line-height:1.55;color:#334155;margin:0;font-family:Inter,sans-serif;">${escapeHtml(ins.body)}</p>
         ${(ins.details ?? [])
           .map(
-            (d) => `<p style="font-size:12px;line-height:1.5;color:#334155;margin:10px 0 0;font-family:'DM Sans',sans-serif;"><strong style="color:#1e293b;">${escapeHtml(d.label)}: ${escapeHtml(d.value)}</strong> <span style="color:${d.status === "gap" ? "#b45309" : d.status === "partial" ? "#a37c58" : "#166534"};">(${d.status === "gap" ? "gap" : d.status === "partial" ? "partial" : "in place"})</span><br/>${escapeHtml(d.note)}</p>`
+            (d) => `<p style="font-size:12px;line-height:1.5;color:#334155;margin:10px 0 0;font-family:Inter,sans-serif;"><strong style="color:#0A192F;">${escapeHtml(d.label)}: ${escapeHtml(d.value)}</strong> <span style="color:${d.status === "gap" ? "#b45309" : d.status === "partial" ? "#7E684C" : "#166534"};">(${d.status === "gap" ? "gap" : d.status === "partial" ? "partial" : "in place"})</span><br/>${escapeHtml(d.note)}</p>`
           )
           .join("")}
-        ${ins.nextMove ? `<p style="font-size:12px;line-height:1.5;color:#1e293b;margin:10px 0 0;font-family:'DM Sans',sans-serif;"><strong>Next move:</strong> ${escapeHtml(ins.nextMove)}</p>` : ""}
+        ${ins.nextMove ? `<p style="font-size:12px;line-height:1.5;color:#0A192F;margin:10px 0 0;font-family:Inter,sans-serif;"><strong>Next move:</strong> ${escapeHtml(ins.nextMove)}</p>` : ""}
       </div>`
         )
         .join("")
     : "";
 
   const actionPlanHtml = `
-      <p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;margin:20px 0 8px;">Your Action Plan</p>
+      <p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#5A6A80;margin:20px 0 8px;">Your Action Plan</p>
       <ol style="margin:0;padding-left:18px;">
         ${actionPlanFor(catalyst).map(
-          (a) => `<li style="font-size:13px;line-height:1.6;color:#334155;margin-bottom:8px;"><strong style="color:#1e293b;">${escapeHtml(a.title)}</strong><br/>${escapeHtml(a.detail)}</li>`
+          (a) => `<li style="font-size:13px;line-height:1.6;color:#334155;margin-bottom:8px;"><strong style="color:#0A192F;">${escapeHtml(a.title)}</strong><br/>${escapeHtml(a.detail)}</li>`
         ).join("")}
       </ol>`;
 
   const bcNotesHtml = bcNotes.length
     ? `
-      <p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;margin:20px 0 8px;">British Columbia Context</p>
+      <p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#5A6A80;margin:20px 0 8px;">British Columbia Context</p>
       <ul style="margin:0;padding-left:18px;">
         ${bcNotes.map((n) => `<li style="font-size:13px;line-height:1.6;color:#334155;margin-bottom:4px;">${escapeHtml(n)}</li>`).join("")}
       </ul>`
     : "";
 
   return `
-    <div style="font-family:'DM Sans',sans-serif;color:#334155;max-width:520px;margin:0 auto;">
-      <p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;">Sovereignty Operating System™</p>
-      <h2 style="font-family:'Cormorant Garamond',serif;font-weight:300;font-size:24px;color:#1e293b;margin:4px 0 16px;">Your Confidential Roadmap</h2>
+    <div style="font-family:Inter,sans-serif;color:#334155;max-width:520px;margin:0 auto;">
+      <p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#5A6A80;">Sovereignty Operating System™</p>
+      <h2 style="font-family:'Playfair Display',serif;font-weight:300;font-size:24px;color:#0A192F;margin:4px 0 16px;">Your Confidential Roadmap</h2>
       <p style="font-size:14px;line-height:1.6;">Hi ${escapeHtml(firstName)},</p>
       ${validation ? `<p style="font-size:14px;line-height:1.6;font-style:italic;">${escapeHtml(validation)}</p>` : ""}
       <p style="font-size:14px;line-height:1.6;">Thanks for walking through Georgia's diagnostic. Based on what you shared about ${vocabFor(catalyst).eventPhrase}, here's your private risk snapshot:</p>
-      ${gaugeRows ? `<table style="width:100%;border-collapse:collapse;margin:16px 0;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;">${gaugeRows}</table>` : ""}
+      ${gaugeRows ? `<table style="width:100%;border-collapse:collapse;margin:16px 0;border-top:1px solid #D9D2C5;border-bottom:1px solid #D9D2C5;">${gaugeRows}</table>` : ""}
       ${insightsHtml ? `<div style="margin:16px 0;">${insightsHtml}</div>` : ""}
       ${bcNotesHtml}
       ${actionPlanHtml}
       <p style="font-size:14px;line-height:1.6;margin-top:20px;">No pitch, no commitment. When you're ready, the Transition Survey is the next step.</p>
-      <p style="font-size:14px;line-height:1.6;"><a href="https://www.prosperwise.ca/sovereignty-audit#pricing" style="color:#a37c58;">Learn more about the Transition Survey →</a></p>
+      <p style="font-size:14px;line-height:1.6;"><a href="https://www.prosperwise.ca/sovereignty-audit#pricing" style="color:#7E684C;">Learn more about the Transition Survey →</a></p>
       <p style="font-size:14px;line-height:1.6;margin-top:24px;">— Rolf &amp; the ${APP_NAME} team</p>
     </div>
   `.trim();

@@ -87,7 +87,7 @@ async function getAccessToken(sa: ServiceAccountKey): Promise<string> {
 const EXTRACTION_PROMPT = `You are an expert ProsperWise stabilization analyst. You are drafting a one-page **Transition Map** that Rolf Issler will review with the client in their Transition Survey.
 
 You will receive:
-1. A PDF of the client's completed **Sovereignty Audit** (a structured intake covering Family, Inventory, Nucleus/Why, Protocols, and Governance Audit sections).
+1. A PDF of the client's completed **Transition Survey** (a structured intake covering Family, Inventory, Nucleus/Why, Protocols, and Governance Audit sections).
 2. The client's first name.
 
 Your job: read the entire PDF carefully and fill every field of the Transition Map with concrete, client-specific content derived STRICTLY from the audit.
@@ -128,7 +128,7 @@ const TOOL_SCHEMA = {
   functionDeclarations: [
     {
       name: "populate_stabilization_map",
-      description: "Populate every field of the Transition Map from the Sovereignty Audit PDF.",
+      description: "Populate every field of the Transition Map from the Transition Survey PDF.",
       parameters: {
         type: "OBJECT",
         properties: {
@@ -400,7 +400,7 @@ serve(async (req) => {
         contact_id: contactId,
         user_id: userId,
         action_type: "stabilization_map_from_audit",
-        action_description: `Transition Map generated from Sovereignty Audit${pdfName ? `: ${pdfName}` : ""}`,
+        action_description: `Transition Map generated from Transition Survey${pdfName ? `: ${pdfName}` : ""}`,
         proposed_data: { mapId, fileName: pdfName || null },
       });
     } catch (e) {

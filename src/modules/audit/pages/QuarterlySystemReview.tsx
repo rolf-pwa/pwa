@@ -85,20 +85,20 @@ const STATUS_OPTIONS = ["Aligned", "Partial", "Needs Attention", "Not Assessed"]
 const STATUS_COLOR: Record<string, string> = {
   Aligned: "#27ae60",
   Partial: "#e67e22",
-  "Needs Attention": "#c0392b",
-  "Not Assessed": "#c0392b",
+  "Needs Attention": "#9B2C2C",
+  "Not Assessed": "#9B2C2C",
 };
 
 const money = (n: number | undefined | null) => `$${Math.round(n ?? 0).toLocaleString()}`;
 const signed = (n: number) => `${n >= 0 ? "+" : "-"}${money(Math.abs(n))}`;
 
-const colLabel: React.CSSProperties = { fontSize: "6.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "2mm", paddingBottom: "1.5mm", borderBottom: "1px solid #e2e8f0" };
+const colLabel: React.CSSProperties = { fontSize: "6.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "2mm", paddingBottom: "1.5mm", borderBottom: "1px solid #D9D2C5" };
 const colText: React.CSSProperties = { fontSize: "8.5pt", color: "#334155", lineHeight: 1.4 };
 
-const TARGET_COLOR: Record<TargetCheck["status"], string> = { met: "#27ae60", below: "#c0392b", above: "#c0392b", info: "#64748b", not_computable: "#94a3b8" };
+const TARGET_COLOR: Record<TargetCheck["status"], string> = { met: "#27ae60", below: "#9B2C2C", above: "#9B2C2C", info: "#5A6A80", not_computable: "#5A6A80" };
 const targetMark = (s: TargetCheck["status"]) => (s === "met" ? "✓ " : s === "below" || s === "above" ? "✗ " : "• ");
 
-const PART_LABEL: React.CSSProperties = { fontSize: "5.8pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginTop: "1.6mm", marginBottom: "0.4mm" };
+const PART_LABEL: React.CSSProperties = { fontSize: "5.8pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#5A6A80", marginTop: "1.6mm", marginBottom: "0.4mm" };
 const PART_LINE: React.CSSProperties = { fontSize: "7.2pt", color: "#334155", lineHeight: 1.45, margin: 0 };
 
 function Part({ title, lines, strong }: { title: string; lines: string[]; strong?: boolean }) {
@@ -114,7 +114,7 @@ function Part({ title, lines, strong }: { title: string; lines: string[]; strong
 function StatusCard({ card }: { card: Card }) {
   const threePart = !!(card.desired && card.current && card.actions);
   return (
-    <div style={{ background: "#fafafa", borderLeft: "3px solid #a37c58", padding: "3mm 4mm", breakInside: "avoid" }}>
+    <div style={{ background: "#FBFBF8", borderLeft: "3px solid #7E684C", padding: "3mm 4mm", breakInside: "avoid" }}>
       <strong style={{ display: "block", fontSize: "8.5pt", fontWeight: 600, color: "#334155" }}>
         {card.label}&nbsp;
         <span style={{ color: STATUS_COLOR[card.status] ?? "#e67e22", fontSize: "7pt", letterSpacing: ".08em", textTransform: "uppercase" }}>{card.status}</span>
@@ -134,18 +134,18 @@ function StatusCard({ card }: { card: Card }) {
 
 function StatRow({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "7.5pt", color: tone ?? "#64748b" }}>
+    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "7.5pt", color: tone ?? "#5A6A80" }}>
       <span>{label}</span>
       <span>{value}</span>
     </div>
   );
 }
 
-const bsHead: React.CSSProperties = { fontSize: "6.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "1.5mm" };
+const bsHead: React.CSSProperties = { fontSize: "6.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "1.5mm" };
 
 function BsRow({ label, value, strong, tone }: { label: string; value: string; strong?: boolean; tone?: string }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "0.8mm 0", fontSize: strong ? "8.5pt" : "8pt", fontWeight: strong ? 700 : 400, color: tone ?? (strong ? "#334155" : "#64748b") }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "0.8mm 0", fontSize: strong ? "8.5pt" : "8pt", fontWeight: strong ? 700 : 400, color: tone ?? (strong ? "#334155" : "#5A6A80") }}>
       <span>{label}</span>
       <span>{value}</span>
     </div>
@@ -155,11 +155,11 @@ function BsRow({ label, value, strong, tone }: { label: string; value: string; s
 function PageHeader({ kicker, name, period, title }: { kicker: string; name: string; period: string; title: string }) {
   return (
     <div>
-      <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "1.5mm" }}>
+      <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "1.5mm" }}>
         {kicker} &nbsp;·&nbsp; Prepared for <strong>{name}</strong>{period && <> &nbsp;·&nbsp; {period}</>}
       </div>
-      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "18pt", fontWeight: 300, color: "#334155", lineHeight: 1.1 }}>{title}</div>
-      <hr style={{ width: "18mm", height: "3px", background: "#a37c58", border: "none", marginTop: "2.5mm" }} />
+      <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "18pt", fontWeight: 700, color: "#334155", lineHeight: 1.1 }}>{title}</div>
+      <hr style={{ width: "18mm", height: "3px", background: "#7E684C", border: "none", marginTop: "2.5mm" }} />
     </div>
   );
 }
@@ -284,15 +284,15 @@ export default function QuarterlySystemReview() {
   const liabilities = (diag.personal_liabilities_total ?? 0) + (diag.corp_liabilities_total ?? 0);
 
   return (
-    <div className="min-h-screen bg-[#fafafa]">
-      <div className="print:hidden sticky top-0 z-20 border-b border-[#e2e8f0] bg-[#fafafa]/95 backdrop-blur">
+    <div className="min-h-screen bg-[#FBFBF8]">
+      <div className="print:hidden sticky top-0 z-20 border-b border-[#D9D2C5] bg-[#FBFBF8]/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1100px] items-center justify-between px-6 py-3">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => navigate(-1)}><ArrowLeft className="mr-1 h-4 w-4" /> Back</Button>
             <div className="text-sm text-[#334155]">
               <span className="font-semibold">{docName}</span>
-              {period && <span className="ml-2 text-[#64748b]">{period}</span>}
-              <span className="ml-2 text-xs uppercase tracking-wider text-[#a37c58]">{review.generation_status.replace(/_/g, " ")}</span>
+              {period && <span className="ml-2 text-[#5A6A80]">{period}</span>}
+              <span className="ml-2 text-xs uppercase tracking-wider text-[#7E684C]">{review.generation_status.replace(/_/g, " ")}</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -351,23 +351,23 @@ export default function QuarterlySystemReview() {
 
       {isLegacy && !generating && (
         <div className="mx-auto max-w-[1100px] px-6 py-10 print:hidden">
-          <div className="rounded-lg border border-[#e2e8f0] bg-white p-6 text-sm text-[#334155]">
+          <div className="rounded-lg border border-[#D9D2C5] bg-white p-6 text-sm text-[#334155]">
             <p className="font-semibold">This review was created in the earlier format.</p>
-            <p className="mt-2 text-[#64748b]">Use <strong>Upgrade to new format</strong> to rebuild it from the household's current records as a Quarterly Review in the new layout.</p>
-            {review.review_summary && <p className="mt-4 border-l-2 border-[#a37c58] pl-3 italic text-[#64748b]">{review.review_summary}</p>}
+            <p className="mt-2 text-[#5A6A80]">Use <strong>Upgrade to new format</strong> to rebuild it from the household's current records as a Quarterly Review in the new layout.</p>
+            {review.review_summary && <p className="mt-4 border-l-2 border-[#7E684C] pl-3 italic text-[#5A6A80]">{review.review_summary}</p>}
           </div>
         </div>
       )}
 
       {editing && !isLegacy && (
         <div className="mx-auto max-w-[1100px] space-y-5 px-6 py-6 print:hidden">
-          <div className="rounded-lg border border-[#e2e8f0] bg-white p-4 space-y-3">
+          <div className="rounded-lg border border-[#D9D2C5] bg-white p-4 space-y-3">
             <div><Label>Summary</Label><Textarea rows={3} value={review.review_summary ?? ""} onChange={(e) => patch({ review_summary: e.target.value })} /></div>
             <div><Label>Focus this quarter</Label><Textarea rows={2} value={review.urgency_flag ?? ""} onChange={(e) => patch({ urgency_flag: e.target.value })} /></div>
             <div><Label>{isSurvey ? "What a Charter would govern" : "Alignment with the Charter"}</Label><Textarea rows={4} value={review.charter_alignment ?? ""} onChange={(e) => patch({ charter_alignment: e.target.value })} /></div>
             <div><Label>Footer</Label><Input value={review.footer_note ?? ""} onChange={(e) => patch({ footer_note: e.target.value })} /></div>
           </div>
-          <div className="rounded-lg border border-[#e2e8f0] bg-white p-4 space-y-3">
+          <div className="rounded-lg border border-[#D9D2C5] bg-white p-4 space-y-3">
             <p className="text-sm font-semibold">Alignment cards</p>
             {cards.map((c, i) => (
               <div key={c.key} className="grid gap-2 sm:grid-cols-[180px_180px_1fr] items-start">
@@ -390,7 +390,7 @@ export default function QuarterlySystemReview() {
               </div>
             ))}
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#e2e8f0] bg-white p-3 text-xs text-[#64748b]">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#D9D2C5] bg-white p-3 text-xs text-[#5A6A80]">
             <span>
               {review.action_plan?.auto !== true
                 ? "This plan isn't following the card actions (it was edited by hand or built before this feature)."
@@ -399,8 +399,8 @@ export default function QuarterlySystemReview() {
             {review.action_plan?.auto !== true && <Button size="sm" variant="outline" onClick={rebuildPlan}>Rebuild the plan from the actions</Button>}
           </div>
           {PHASES.map((ph) => (
-            <div key={ph.key} className="rounded-lg border border-[#e2e8f0] bg-white p-4 space-y-3">
-              <p className="text-sm font-semibold">{ph.label} <span className="font-normal text-[#94a3b8]">· {ph.window}</span></p>
+            <div key={ph.key} className="rounded-lg border border-[#D9D2C5] bg-white p-4 space-y-3">
+              <p className="text-sm font-semibold">{ph.label} <span className="font-normal text-[#5A6A80]">· {ph.window}</span></p>
               {(review.action_plan?.[ph.key] ?? []).map((it, i) => (
                 <div key={i} className="grid gap-2 sm:grid-cols-[1fr_2fr_auto] items-start">
                   <Input value={it.title} placeholder="Title" onChange={(e) => patchItem(ph.key, i, { title: e.target.value })} />
@@ -417,21 +417,21 @@ export default function QuarterlySystemReview() {
       {!isLegacy && (
         <div className="mx-auto max-w-[210mm] px-6 py-6 print:p-0 print:max-w-none">
           {/* Page 1 */}
-          <div className="stab-doc bg-white shadow-lg print:shadow-none" style={{ width: "210mm", minHeight: "297mm", display: "flex", fontFamily: "'DM Sans', sans-serif", color: "#334155" }}>
+          <div className="stab-doc bg-white shadow-lg print:shadow-none" style={{ width: "210mm", minHeight: "297mm", display: "flex", fontFamily: "Inter, sans-serif", color: "#334155" }}>
             <DocSidebar />
 
             <main style={{ flex: 1, padding: "10mm 10mm 0 10mm", display: "flex", flexDirection: "column", gap: "5mm" }}>
               <div style={{ marginBottom: "3mm" }}>
-                <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "3mm" }}>
+                <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "3mm" }}>
                   {docName} &nbsp;·&nbsp; Prepared for <strong>{name}</strong>{dateLabel && <> &nbsp;·&nbsp; {dateLabel}</>}
                 </div>
-                <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "25pt", fontWeight: 300, color: "#334155", lineHeight: 1.3, letterSpacing: "-0.005em" }}>
+                <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "25pt", fontWeight: 700, color: "#334155", lineHeight: 1.3, letterSpacing: "-0.005em" }}>
                   {isSurvey ? "Transition Survey™" : "Sovereignty Quarterly Review™"}
                 </div>
-                <hr style={{ width: "18mm", height: "3px", background: "#a37c58", border: "none", marginTop: "4mm" }} />
+                <hr style={{ width: "18mm", height: "3px", background: "#7E684C", border: "none", marginTop: "4mm" }} />
               </div>
 
-              <div style={{ background: "#fafafa", borderLeft: "3px solid #a37c58", padding: "3mm 5mm", display: "flex", flexDirection: "column", gap: "1mm" }}>
+              <div style={{ background: "#FBFBF8", borderLeft: "3px solid #7E684C", padding: "3mm 5mm", display: "flex", flexDirection: "column", gap: "1mm" }}>
                 <div style={{ fontStyle: "italic", fontSize: "7.5pt", color: "#334155", lineHeight: 1.55 }}>{review.review_summary || "—"}</div>
                 <div style={{ fontSize: "7.5pt", color: "#334155" }}>{review.urgency_flag || "—"}</div>
               </div>
@@ -439,7 +439,7 @@ export default function QuarterlySystemReview() {
               <div>
                 <div style={colLabel}>{isSurvey ? "What a Charter Would Govern" : "Alignment with Your Charter"}</div>
                 {!isSurvey && review.purpose_statement && (
-                  <p style={{ ...colText, fontStyle: "italic", color: "#64748b", marginBottom: "2mm" }}>“{review.purpose_statement}”</p>
+                  <p style={{ ...colText, fontStyle: "italic", color: "#5A6A80", marginBottom: "2mm" }}>“{review.purpose_statement}”</p>
                 )}
                 <p style={colText}>{review.charter_alignment || "—"}</p>
               </div>
@@ -461,17 +461,17 @@ export default function QuarterlySystemReview() {
                       <hr style={{ border: "none", borderTop: "1.5px solid #334155", margin: "0 0 1.5mm" }} />
                       <BsRow label="Total Assets" value={money(diag.aum)} strong />
                       {deltas && deltas.aum !== null && (
-                        <div style={{ fontSize: "7pt", color: "#94a3b8", textAlign: "right" }}>{signed(deltas.aum)} since {deltas.previousLabel ?? "last review"}</div>
+                        <div style={{ fontSize: "7pt", color: "#5A6A80", textAlign: "right" }}>{signed(deltas.aum)} since {deltas.previousLabel ?? "last review"}</div>
                       )}
                     </div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column" }}>
                     <div style={bsHead}>Liabilities &amp; Net Worth</div>
-                    <BsRow label="Liabilities" value={money(liabilities)} tone="#c0392b" />
-                    {(diag.allocation?.credit_capacity ?? 0) > 0 && <BsRow label="Undrawn credit (offsets the Strategic Reserve)" value={money(diag.allocation!.credit_capacity)} tone="#c0392b" />}
+                    <BsRow label="Liabilities" value={money(liabilities)} tone="#9B2C2C" />
+                    {(diag.allocation?.credit_capacity ?? 0) > 0 && <BsRow label="Undrawn credit (offsets the Strategic Reserve)" value={money(diag.allocation!.credit_capacity)} tone="#9B2C2C" />}
                     <BsRow label="Net Worth" value={money(diag.net_worth ?? diag.aum)} strong />
                     {deltas && deltas.netWorth !== null && (
-                      <div style={{ fontSize: "7pt", color: "#94a3b8", textAlign: "right" }}>{signed(deltas.netWorth)} since {deltas.previousLabel ?? "last review"}</div>
+                      <div style={{ fontSize: "7pt", color: "#5A6A80", textAlign: "right" }}>{signed(deltas.netWorth)} since {deltas.previousLabel ?? "last review"}</div>
                     )}
                     <div style={{ marginTop: "auto", paddingTop: "1.5mm" }}>
                       <hr style={{ border: "none", borderTop: "1.5px solid #334155", margin: "0 0 1.5mm" }} />
@@ -482,7 +482,7 @@ export default function QuarterlySystemReview() {
                 {(diag.allocation?.notes ?? []).length > 0 && (
                   <div style={{ marginBottom: "3mm" }}>
                     {diag.allocation!.notes.map((n, i) => (
-                      <div key={i} style={{ fontSize: "6.5pt", color: "#94a3b8", fontStyle: "italic", lineHeight: 1.4 }}>{n}</div>
+                      <div key={i} style={{ fontSize: "6.5pt", color: "#5A6A80", fontStyle: "italic", lineHeight: 1.4 }}>{n}</div>
                     ))}
                   </div>
                 )}
@@ -498,7 +498,7 @@ export default function QuarterlySystemReview() {
           </div>
 
           {/* Page 2 — Desired state, current state and action required, by area */}
-          <div className="stab-doc-page2 bg-white shadow-lg print:shadow-none mt-6 print:mt-0" style={{ width: "210mm", minHeight: "297mm", padding: "12mm", display: "flex", flexDirection: "column", gap: "5mm", fontFamily: "'DM Sans', sans-serif", color: "#334155", pageBreakBefore: "always", breakBefore: "page" }}>
+          <div className="stab-doc-page2 bg-white shadow-lg print:shadow-none mt-6 print:mt-0" style={{ width: "210mm", minHeight: "297mm", padding: "12mm", display: "flex", flexDirection: "column", gap: "5mm", fontFamily: "Inter, sans-serif", color: "#334155", pageBreakBefore: "always", breakBefore: "page" }}>
             <PageHeader kicker={docName} name={name} period={period} title={isSurvey ? "What a Charter Would Govern" : "Where You Stand Against Your Charter"} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3mm", alignItems: "start" }}>
               {cards.map((c) => <StatusCard key={c.key} card={c} />)}
@@ -506,42 +506,42 @@ export default function QuarterlySystemReview() {
           </div>
 
           {/* Page 3 — 90-Day Plan */}
-          <div className="stab-doc-page2 bg-white shadow-lg print:shadow-none mt-6 print:mt-0" style={{ width: "210mm", minHeight: "297mm", padding: "12mm", display: "flex", flexDirection: "column", gap: "5mm", fontFamily: "'DM Sans', sans-serif", color: "#334155", pageBreakBefore: "always", breakBefore: "page" }}>
+          <div className="stab-doc-page2 bg-white shadow-lg print:shadow-none mt-6 print:mt-0" style={{ width: "210mm", minHeight: "297mm", padding: "12mm", display: "flex", flexDirection: "column", gap: "5mm", fontFamily: "Inter, sans-serif", color: "#334155", pageBreakBefore: "always", breakBefore: "page" }}>
             <PageHeader kicker={docName} name={name} period={period} title={isSurvey ? "90-Day Sovereignty Plan" : "90-Day Alignment Plan"} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8mm", flex: 1 }}>
               {PHASES.map((ph) => (
                 <div key={ph.key}>
                   <div style={{ fontSize: "8pt", fontWeight: 600, color: "#334155", marginBottom: "2mm" }}>
-                    {ph.label} <span style={{ color: "#94a3b8", fontWeight: 400 }}>· {ph.window}</span>
+                    {ph.label} <span style={{ color: "#5A6A80", fontWeight: 400 }}>· {ph.window}</span>
                   </div>
                   {(review.action_plan?.[ph.key] ?? []).length === 0 ? (
-                    <p style={{ ...colText, color: "#94a3b8" }}>—</p>
+                    <p style={{ ...colText, color: "#5A6A80" }}>—</p>
                   ) : (
                     review.action_plan![ph.key].map((it, i) => (
                       <div key={i} style={{ marginBottom: "3mm" }}>
                         <p style={{ ...colText, fontWeight: 600 }}>{it.title || "—"}</p>
-                        {it.detail && <p style={{ ...colText, color: "#64748b" }}>{it.detail}</p>}
+                        {it.detail && <p style={{ ...colText, color: "#5A6A80" }}>{it.detail}</p>}
                       </div>
                     ))
                   )}
                 </div>
               ))}
             </div>
-            <div style={{ background: "#a37c58", color: "#fff", margin: "auto -12mm 0 -12mm", padding: "3mm 12mm" }}>
+            <div style={{ background: "#7E684C", color: "#fff", margin: "auto -12mm 0 -12mm", padding: "3mm 12mm" }}>
               <div style={{ fontSize: "8.5pt", fontWeight: 500 }}>{review.footer_note}</div>
             </div>
           </div>
 
           {review.diagnostics?.charter_file && !editing && (
-            <div className="mt-6 rounded-lg border border-[#e2e8f0] bg-white p-4 text-xs text-[#64748b] print:hidden">
-              <div className="mb-1 font-semibold uppercase tracking-wider text-[#a37c58]">Charter used (staff only)</div>
+            <div className="mt-6 rounded-lg border border-[#D9D2C5] bg-white p-4 text-xs text-[#5A6A80] print:hidden">
+              <div className="mb-1 font-semibold uppercase tracking-wider text-[#7E684C]">Charter used (staff only)</div>
               <p>{review.diagnostics.charter_file.name}{review.diagnostics.charter_file.modifiedTime ? ` · updated ${format(new Date(review.diagnostics.charter_file.modifiedTime), "MMM d, yyyy")}` : ""} · {review.diagnostics.charter_file.viaSubfolder ? "Charter subfolder" : "Correspondence folder"} · {review.diagnostics.charter_file.ratified ? "treated as ratified" : "looks like a draft"} · {review.diagnostics.charter_file.textRead ? "text read for the commentary" : "text could not be read"}</p>
             </div>
           )}
 
           {review.diagnostics?.charter_extract && !editing && (
-            <div className="mt-6 rounded-lg border border-[#e2e8f0] bg-white p-4 text-xs text-[#64748b] print:hidden">
-              <div className="mb-1 font-semibold uppercase tracking-wider text-[#a37c58]">Read from the Charter (staff only)</div>
+            <div className="mt-6 rounded-lg border border-[#D9D2C5] bg-white p-4 text-xs text-[#5A6A80] print:hidden">
+              <div className="mb-1 font-semibold uppercase tracking-wider text-[#7E684C]">Read from the Charter (staff only)</div>
               <ul className="space-y-1">
                 {review.diagnostics.charter_extract.purpose && <li><strong>Purpose:</strong> {review.diagnostics.charter_extract.purpose}</li>}
                 {review.diagnostics.charter_extract.mission && <li><strong>Mission of capital:</strong> {review.diagnostics.charter_extract.mission}</li>}
@@ -565,15 +565,15 @@ export default function QuarterlySystemReview() {
           )}
 
           {completeness && !editing && (
-            <div className="mt-6 rounded-lg border border-[#e2e8f0] bg-white p-4 text-xs text-[#64748b] print:hidden">
-              <div className="mb-1 font-semibold uppercase tracking-wider text-[#a37c58]">Data on file (staff only)</div>
+            <div className="mt-6 rounded-lg border border-[#D9D2C5] bg-white p-4 text-xs text-[#5A6A80] print:hidden">
+              <div className="mb-1 font-semibold uppercase tracking-wider text-[#7E684C]">Data on file (staff only)</div>
               <p>Records exist for {completeness.onFile} of {completeness.total} areas.{completeness.missing.length > 0 && <> Not yet on file: {completeness.missing.join(", ")}. These show as "Not Assessed" and are not findings; add the records and regenerate for a fuller picture.</>}</p>
             </div>
           )}
 
           {review.logic_trace && !editing && (
-            <div className="mt-6 rounded-lg border border-[#e2e8f0] bg-white p-4 text-xs text-[#64748b] print:hidden">
-              <div className="mb-1 font-semibold uppercase tracking-wider text-[#a37c58]">How this review was built (staff only)</div>
+            <div className="mt-6 rounded-lg border border-[#D9D2C5] bg-white p-4 text-xs text-[#5A6A80] print:hidden">
+              <div className="mb-1 font-semibold uppercase tracking-wider text-[#7E684C]">How this review was built (staff only)</div>
               <p className="whitespace-pre-wrap">{review.logic_trace}</p>
             </div>
           )}

@@ -5,11 +5,11 @@ import pwLogoWhite from "@/assets/prosperwise-logo-white.png";
 // sidebar on the first page, the same type, the tan rule and the tan footer bar. Print is A4 with no margin so the
 // sidebar and footer bleed to the edge, the same as the Transition Map.
 
-export const DOC_FONT = "'DM Sans', sans-serif";
-export const DOC_SERIF = "'Cormorant Garamond', serif";
-export const DOC_TAN = "#a37c58";
+export const DOC_FONT = "Inter, sans-serif";
+export const DOC_SERIF = "'Playfair Display', Georgia, serif";
+export const DOC_TAN = "#7E684C";
 
-export const colLabel: CSSProperties = { fontSize: "6.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "2mm", paddingBottom: "1.5mm", borderBottom: "1px solid #e2e8f0" };
+export const colLabel: CSSProperties = { fontSize: "6.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "2mm", paddingBottom: "1.5mm", borderBottom: "1px solid #D9D2C5" };
 export const colText: CSSProperties = { fontSize: "8.5pt", color: "#334155", lineHeight: 1.4 };
 
 export function DocPrintStyles() {
@@ -27,13 +27,13 @@ export function DocPrintStyles() {
 /** The dark brand column down the left of a document's first page. */
 export function DocSidebar({ references }: { references?: { label: string; value: string }[] }) {
   return (
-    <aside style={{ width: "60mm", backgroundColor: "#1e293b", color: "#fff", padding: "10mm 6mm", display: "flex", flexDirection: "column", gap: "6mm", flexShrink: 0 }}>
+    <aside style={{ width: "60mm", backgroundColor: "#0A192F", color: "#fff", padding: "10mm 6mm", display: "flex", flexDirection: "column", gap: "6mm", flexShrink: 0 }}>
       <div>
         <img src={pwLogoWhite} alt="ProsperWise" style={{ width: "42mm", height: "auto", display: "block", marginBottom: "3mm" }} />
         <div style={{ fontSize: "9pt", fontWeight: 300, color: "rgba(255,255,255,.5)", letterSpacing: ".08em", textTransform: "uppercase" }}>Sovereignty Operating System™</div>
       </div>
       <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,.18)" }} />
-      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "16pt", fontWeight: 300, lineHeight: 1.3 }}>
+      <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "16pt", fontWeight: 700, lineHeight: 1.3 }}>
         Don't Invest. <em style={{ fontStyle: "italic", color: "rgba(255,255,255,.7)" }}>Integrate.</em>
       </div>
       <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,.18)" }} />
@@ -91,7 +91,7 @@ export function DocPage({ children, footer }: { children: ReactNode; footer?: Re
 export function DocPageHeader({ kicker, name, period, title }: { kicker: string; name: string; period?: string; title: string }) {
   return (
     <div>
-      <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "1.5mm" }}>
+      <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "1.5mm" }}>
         {kicker} &nbsp;·&nbsp; Prepared for <strong>{name}</strong>{period && <> &nbsp;·&nbsp; {period}</>}
       </div>
       <div style={{ fontFamily: DOC_SERIF, fontSize: "18pt", fontWeight: 300, color: "#334155", lineHeight: 1.1 }}>{title}</div>

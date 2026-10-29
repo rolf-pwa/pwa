@@ -355,7 +355,7 @@ async function tell(admin: any, title: string, body: string, subject: string) {
   const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const sent = await sendServiceEmailDetailed(admin, {
     to: NOTIFY_EMAIL, subject, from: AGENT_SENDER,
-    html: `<div style="font-family:'DM Sans',sans-serif;color:#334155;max-width:560px;"><p style="font-size:14px;line-height:1.6;">Hi Rolf,</p><p style="font-size:14px;line-height:1.6;white-space:pre-line;">${esc(body)}</p><p style="font-size:14px;line-height:1.6;">Georgia<br/><span style="font-size:12px;color:#94a3b8;">AI Assistant, ProsperWise</span></p></div>`,
+    html: `<div style="font-family:Inter,sans-serif;color:#334155;max-width:560px;"><p style="font-size:14px;line-height:1.6;">Hi Rolf,</p><p style="font-size:14px;line-height:1.6;white-space:pre-line;">${esc(body)}</p><p style="font-size:14px;line-height:1.6;">Georgia<br/><span style="font-size:12px;color:#5A6A80;">AI Assistant, ProsperWise</span></p></div>`,
   });
   // The notification above is the record; if the email fails say so in the log rather than silently.
   if (!sent.ok) console.error("[bulk-import-performance] email to Rolf failed");

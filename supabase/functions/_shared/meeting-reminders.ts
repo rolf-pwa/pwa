@@ -68,19 +68,19 @@ export function reminderEmail(i: { firstName: string; meetingName: string; start
   const tz = i.tz || "America/Vancouver";
   const rel = relativeDay(i.startMs, i.now, tz);
   const where = i.joinUrl
-    ? `<p style="margin:16px 0;"><a href="${i.joinUrl}" style="background:#1e293b;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:6px;font-size:14px;">Join the meeting</a></p>`
+    ? `<p style="margin:16px 0;"><a href="${i.joinUrl}" style="background:#0A192F;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:6px;font-size:14px;">Join the meeting</a></p>`
     : i.location ? `<p style="font-size:14px;line-height:1.6;">Where: ${escape(i.location)}</p>` : "";
   return {
     subject: `Reminder: your ${i.meetingName} is ${rel}`,
     html: `
-    <div style="font-family:'DM Sans',sans-serif;color:#334155;max-width:520px;margin:0 auto;">
-      <p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;">Sovereignty Operating System™</p>
+    <div style="font-family:Inter,sans-serif;color:#334155;max-width:520px;margin:0 auto;">
+      <p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#5A6A80;">Sovereignty Operating System™</p>
       <p style="font-size:14px;line-height:1.6;">Hi ${escape(i.firstName || "there")},</p>
       <p style="font-size:14px;line-height:1.6;">A reminder that your <strong>${escape(i.meetingName)}</strong> with Rolf is ${rel}: <strong>${escape(whenLabel(i.startMs, tz))}</strong>.</p>
       ${where}
-      <p style="font-size:14px;line-height:1.6;">If you need to change the time, reply to this email or open <a href="${i.portalUrl}" style="color:#a37c58;">your portal</a>.</p>
-      <p style="font-size:13px;line-height:1.6;color:#64748b;">This is an automated email from ${i.fromLine}. If you need to get in touch with Rolf, just reply to this email, and I'll make sure he gets it.</p>
-      <p style="font-size:14px;line-height:1.6;margin-top:24px;">Georgia<br/><span style="font-size:12px;color:#94a3b8;">AI Assistant, ProsperWise</span></p>
+      <p style="font-size:14px;line-height:1.6;">If you need to change the time, reply to this email or open <a href="${i.portalUrl}" style="color:#7E684C;">your portal</a>.</p>
+      <p style="font-size:13px;line-height:1.6;color:#5A6A80;">This is an automated email from ${i.fromLine}. If you need to get in touch with Rolf, just reply to this email, and I'll make sure he gets it.</p>
+      <p style="font-size:14px;line-height:1.6;margin-top:24px;">Georgia<br/><span style="font-size:12px;color:#5A6A80;">AI Assistant, ProsperWise</span></p>
     </div>`.trim(),
   };
 }

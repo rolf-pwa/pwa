@@ -14,6 +14,11 @@ const badgeVariants = cva(
         muted: "border-transparent bg-muted text-muted-foreground",
         destructive: "border-transparent bg-destructive text-destructive-foreground",
         outline: "border-border text-muted-foreground",
+        // Status pairs from the Brand & Interface Guide: a tint of the colour, the colour as text, and always a word.
+        success: "border-transparent bg-spruce/10 text-spruce dark:bg-bronze-light/15 dark:text-slate-300",
+        warning: "border-transparent bg-bronze-ink/10 text-bronze-ink dark:bg-bronze-light/15 dark:text-bronze-light",
+        error: "border-transparent bg-brick/10 text-brick dark:bg-brick/25 dark:text-slate-300",
+        info: "border-transparent bg-midnight/10 text-midnight dark:bg-slate-300/15 dark:text-slate-300",
       },
     },
     defaultVariants: {

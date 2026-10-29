@@ -119,7 +119,7 @@ function ScoreBadge({ row }: { row: { currentScore?: number; current_score?: num
   const score = row.currentScore ?? row.current_score ?? 0;
   const max = row.maxScore ?? row.max_score ?? 5;
   const pending = row.status.includes("PENDING");
-  const color = pending ? "#e67e22" : score >= 4 ? "#27ae60" : score >= 3 ? "#e67e22" : "#c0392b";
+  const color = pending ? "#e67e22" : score >= 4 ? "#27ae60" : score >= 3 ? "#e67e22" : "#9B2C2C";
   return <span style={{ color, fontWeight: 600 }}>{pending ? "Pending" : `${score} / ${max}`}</span>;
 }
 
@@ -137,7 +137,7 @@ const PILLAR_LABEL: Record<string, string> = {
 
 function BsRow({ label, value, strong, tone }: { label: string; value: string; strong?: boolean; tone?: string }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "0.8mm 0", fontSize: strong ? "8.5pt" : "8pt", fontWeight: strong ? 700 : 400, color: tone ?? (strong ? "#334155" : "#64748b") }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "0.8mm 0", fontSize: strong ? "8.5pt" : "8pt", fontWeight: strong ? 700 : 400, color: tone ?? (strong ? "#334155" : "#5A6A80") }}>
       <span>{label}</span>
       <span>{value}</span>
     </div>
@@ -247,9 +247,9 @@ export default function GovernanceAudit() {
   const doc = (audit.generation_status === "complete" ? (audit.computed as GovernanceAuditDoc) : null);
 
   return (
-    <div className="min-h-screen bg-[#fafafa]">
+    <div className="min-h-screen bg-[#FBFBF8]">
       {/* Toolbar — hidden in print */}
-      <div className="print:hidden sticky top-0 z-20 border-b border-border bg-[#fafafa]/95 backdrop-blur">
+      <div className="print:hidden sticky top-0 z-20 border-b border-border bg-[#FBFBF8]/95 backdrop-blur">
         <div className="mx-auto flex max-w-[900px] items-center justify-between px-6 py-3">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
@@ -346,14 +346,14 @@ export default function GovernanceAudit() {
             ]} />
             <main style={{ flex: 1, padding: "10mm 10mm 0 10mm", display: "flex", flexDirection: "column", gap: "5mm" }}>
               <div style={{ marginBottom: "3mm" }}>
-                <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "3mm" }}>
+                <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "3mm" }}>
                   Governance Audit &nbsp;·&nbsp; Prepared for <strong>{doc.client_name}</strong> &nbsp;·&nbsp; {doc.review_date}
                 </div>
                 <div style={{ fontFamily: DOC_SERIF, fontSize: "25pt", fontWeight: 300, color: "#334155", lineHeight: 1.3, letterSpacing: "-0.005em" }}>
                   Sovereignty Governance Audit™
                 </div>
                 <hr style={{ width: "18mm", height: "3px", background: DOC_TAN, border: "none", marginTop: "4mm" }} />
-                <div style={{ fontSize: "7.5pt", color: "#64748b", marginTop: "3mm" }}>
+                <div style={{ fontSize: "7.5pt", color: "#5A6A80", marginTop: "3mm" }}>
                   Reviewing Family CFO: {doc.reviewing_family_cfo} &nbsp;·&nbsp; Track: {doc.track_type === "corporate" ? "Corporate" : "Personal"}
                 </div>
               </div>
@@ -366,15 +366,15 @@ export default function GovernanceAudit() {
                       ? "No Charter is on file for this household."
                       : `Sovereignty Charter™ ${doc.charter_summary.ratified ? "ratified" : "not yet ratified"}.`}
                   </p>
-                  {doc.charter_summary.purpose && <p style={{ ...colText, fontStyle: "italic", color: "#64748b", marginTop: "1.5mm" }}>“{doc.charter_summary.purpose}”</p>}
+                  {doc.charter_summary.purpose && <p style={{ ...colText, fontStyle: "italic", color: "#5A6A80", marginTop: "1.5mm" }}>“{doc.charter_summary.purpose}”</p>}
                 </div>
               )}
 
               <div>
                 <div style={colLabel}>I. Executive Governance Summary</div>
-                <div style={{ background: "#fafafa", borderLeft: `3px solid ${DOC_TAN}`, padding: "3mm 5mm", display: "flex", flexDirection: "column", gap: "1.5mm" }}>
+                <div style={{ background: "#FBFBF8", borderLeft: `3px solid ${DOC_TAN}`, padding: "3mm 5mm", display: "flex", flexDirection: "column", gap: "1.5mm" }}>
                   {doc.executive_summary_bullets.length === 0 ? (
-                    <div style={{ fontSize: "7.5pt", color: "#94a3b8" }}>No summary generated.</div>
+                    <div style={{ fontSize: "7.5pt", color: "#5A6A80" }}>No summary generated.</div>
                   ) : (
                     doc.executive_summary_bullets.map((b, i) => <div key={i} style={{ fontSize: "7.8pt", color: "#334155", lineHeight: 1.55 }}>{b}</div>)
                   )}
@@ -384,13 +384,13 @@ export default function GovernanceAudit() {
               <div>
                 <div style={colLabel}>Systemic Health Scorecard</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: "1.5mm 5mm", fontSize: "8pt" }}>
-                  <span style={{ color: "#94a3b8", fontWeight: 600 }}>Structural Charter Element</span>
-                  <span style={{ color: "#94a3b8", fontWeight: 600 }}>Target</span>
-                  <span style={{ color: "#94a3b8", fontWeight: 600, textAlign: "right" }}>Score</span>
+                  <span style={{ color: "#5A6A80", fontWeight: 600 }}>Structural Charter Element</span>
+                  <span style={{ color: "#5A6A80", fontWeight: 600 }}>Target</span>
+                  <span style={{ color: "#5A6A80", fontWeight: 600, textAlign: "right" }}>Score</span>
                   {doc.scorecard.map((row) => (
                     <div key={row.elementName} style={{ display: "contents" }}>
-                      <span style={{ color: "#334155" }}>{row.elementName}<br /><span style={{ fontSize: "6.8pt", color: "#94a3b8" }}>{row.status}</span></span>
-                      <span style={{ color: "#64748b" }}>{row.target}</span>
+                      <span style={{ color: "#334155" }}>{row.elementName}<br /><span style={{ fontSize: "6.8pt", color: "#5A6A80" }}>{row.status}</span></span>
+                      <span style={{ color: "#5A6A80" }}>{row.target}</span>
                       <span style={{ textAlign: "right" }}><ScoreBadge row={row} /></span>
                     </div>
                   ))}
@@ -433,15 +433,15 @@ export default function GovernanceAudit() {
                   {bs && (
                     <div style={{ display: "flex", flexDirection: "column" }}>
                       <div style={colLabel}>Liabilities &amp; Net Worth</div>
-                      <BsRow label="Liabilities" value={fmtCurrency(bs.liabilities)} tone="#c0392b" />
-                      {(bs.undrawn_credit ?? 0) > 0 && <BsRow label="Undrawn credit (offsets the Strategic Reserve)" value={fmtCurrency(bs.undrawn_credit!)} tone="#c0392b" />}
+                      <BsRow label="Liabilities" value={fmtCurrency(bs.liabilities)} tone="#9B2C2C" />
+                      {(bs.undrawn_credit ?? 0) > 0 && <BsRow label="Undrawn credit (offsets the Strategic Reserve)" value={fmtCurrency(bs.undrawn_credit!)} tone="#9B2C2C" />}
                       <BsRow label="Net Worth" value={fmtCurrency(bs.net_worth)} strong />
                     </div>
                   )}
                 </div>
               );
             })()}
-            <p style={{ fontSize: "6.5pt", color: "#94a3b8", fontStyle: "italic", margin: 0 }}>
+            <p style={{ fontSize: "6.5pt", color: "#5A6A80", fontStyle: "italic", margin: 0 }}>
               Pillar totals come from the household's own Vineyard, Storehouse and Holding Tank records, with income funds from the investment statements counted in the Liquidity Reserve and insurance cash value in the Strategic Reserve, exactly as in the Sovereignty Review.
             </p>
 
@@ -456,13 +456,13 @@ export default function GovernanceAudit() {
               const cell: CSSProperties = { textAlign: "right", fontVariantNumeric: "tabular-nums" };
               const Row = ({ label, charter, ytd, proj, strong, tone }: { label: string; charter?: string; ytd?: string; proj?: string; strong?: boolean; tone?: string }) => (
                 <>
-                  <span style={{ fontWeight: strong ? 700 : 400, color: tone ?? (strong ? "#334155" : "#64748b") }}>{label}</span>
-                  <span style={{ ...cell, fontWeight: strong ? 700 : 400, color: strong ? "#334155" : "#64748b" }}>{charter ?? ""}</span>
-                  <span style={{ ...cell, fontWeight: strong ? 700 : 400, color: strong ? "#334155" : "#64748b" }}>{ytd ?? ""}</span>
-                  <span style={{ ...cell, fontWeight: strong ? 700 : 400, color: tone ?? (strong ? "#334155" : "#64748b") }}>{proj ?? ""}</span>
+                  <span style={{ fontWeight: strong ? 700 : 400, color: tone ?? (strong ? "#334155" : "#5A6A80") }}>{label}</span>
+                  <span style={{ ...cell, fontWeight: strong ? 700 : 400, color: strong ? "#334155" : "#5A6A80" }}>{charter ?? ""}</span>
+                  <span style={{ ...cell, fontWeight: strong ? 700 : 400, color: strong ? "#334155" : "#5A6A80" }}>{ytd ?? ""}</span>
+                  <span style={{ ...cell, fontWeight: strong ? 700 : 400, color: tone ?? (strong ? "#334155" : "#5A6A80") }}>{proj ?? ""}</span>
                 </>
               );
-              const head: CSSProperties = { ...cell, color: "#94a3b8", fontWeight: 600, borderBottom: "1px solid #e2e8f0", paddingBottom: "1mm" };
+              const head: CSSProperties = { ...cell, color: "#5A6A80", fontWeight: 600, borderBottom: "1px solid #D9D2C5", paddingBottom: "1mm" };
               const sh = tx?.basis === "tax_slips" && tx.mix ? tx.mix.shares : null;
               const pctText = (n: number) => `${Math.round(n * 100)}%`;
               return (
@@ -488,9 +488,9 @@ export default function GovernanceAudit() {
                     {rent && rent.toPaydown > 0 && <Row label="Rental income to debt paydown" proj={fmtCurrency(rent.toPaydown)} />}
                     <Row label="Total income" strong charter={st ? fmtCurrency(st.totalIncome) : "—"} ytd={ytdTotal !== null ? fmtCurrency(ytdTotal) : "—"} proj={tx ? fmtCurrency(tx.grossIncome) : "—"} />
                     {tx && tx.taxpayers.length > 1 && tx.taxpayers.map((t) => (
-                      <Row key={t.name} label={`Estimated tax, ${t.name} (marginal rate ${(t.marginalRate * 100).toFixed(1)}%)`} proj={fmtCurrency(t.totalTax)} tone="#c0392b" />
+                      <Row key={t.name} label={`Estimated tax, ${t.name} (marginal rate ${(t.marginalRate * 100).toFixed(1)}%)`} proj={fmtCurrency(t.totalTax)} tone="#9B2C2C" />
                     ))}
-                    {tx && <Row label={`Estimated income tax (${(tx.effectiveRate * 100).toFixed(1)}% of income${tx.taxpayers.length === 1 ? `; marginal rate ${(tx.taxpayers[0].marginalRate * 100).toFixed(1)}%` : ""})`} proj={fmtCurrency(tx.totalTax)} strong tone="#c0392b" />}
+                    {tx && <Row label={`Estimated income tax (${(tx.effectiveRate * 100).toFixed(1)}% of income${tx.taxpayers.length === 1 ? `; marginal rate ${(tx.taxpayers[0].marginalRate * 100).toFixed(1)}%` : ""})`} proj={fmtCurrency(tx.totalTax)} strong tone="#9B2C2C" />}
                     {tx && <Row label="Income after tax" strong proj={fmtCurrency(tx.afterTaxIncome)} />}
                   </div>
                   {sh && (
@@ -498,7 +498,7 @@ export default function GovernanceAudit() {
                       Withdrawals from non-registered accounts are split as the {tx!.mix!.taxYear} tax slips split their income: {pctText(sh.interest)} interest and other income, {pctText(sh.eligibleDividends)} eligible dividends, {pctText(sh.otherDividends)} other dividends, {pctText(sh.capitalGains)} capital gains and {pctText(sh.returnOfCapital)} return of capital.
                     </p>
                   )}
-                  <p style={{ fontSize: "6.5pt", color: "#94a3b8", fontStyle: "italic", margin: "1.5mm 0 0" }}>
+                  <p style={{ fontSize: "6.5pt", color: "#5A6A80", fontStyle: "italic", margin: "1.5mm 0 0" }}>
                     Year to date is what the statements show has been withdrawn{frac !== null ? `; government benefits and rental income are the projected year pro-rated to ${Math.round(frac * 100)}% of the year` : ""}. The projected year{doc.income_structure ? " uses the Charter's yearly draw" : ""} and is taxed
                     {tx ? ` with the ${tx.taxYearTables} federal and ${tx.province} tables and the basic personal amount only` : ""}
                     {tx?.basis === "household_tax_page" ? ", using the income lines saved on the household Tax page" : tx?.basis === "tax_slips" ? "; dividends are grossed up and the dividend tax credit applied" : tx ? ". No prior-year T3 or T5 slips were on file, so non-registered withdrawals are taxed only on the share that is unrealised gain" : ""}.
@@ -519,8 +519,8 @@ export default function GovernanceAudit() {
             )}
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6mm" }}>
-              <div style={{ background: "#fafafa", borderLeft: `3px solid ${DOC_TAN}`, padding: "3mm 4mm" }}>
-                <div style={{ fontSize: "6.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "1.5mm" }}>Estate Liquidity</div>
+              <div style={{ background: "#FBFBF8", borderLeft: `3px solid ${DOC_TAN}`, padding: "3mm 4mm" }}>
+                <div style={{ fontSize: "6.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "1.5mm" }}>Estate Liquidity</div>
                 <p style={{ ...colText, fontSize: "8pt" }}>
                   Liquid assets: {fmtCurrency(doc.computed.estate_liquidity_analysis.total_estate_liquid_assets)}<br />
                   Bypassing probate: {fmtCurrency(doc.computed.estate_liquidity_analysis.total_beneficiary_bypass_assets)}<br />
@@ -528,8 +528,8 @@ export default function GovernanceAudit() {
                   <b>{doc.computed.estate_liquidity_analysis.surplus_or_deficit < 0 ? "Deficit" : "Surplus"}: {fmtCurrency(Math.abs(doc.computed.estate_liquidity_analysis.surplus_or_deficit))}</b>
                 </p>
               </div>
-              <div style={{ background: "#fafafa", borderLeft: `3px solid ${DOC_TAN}`, padding: "3mm 4mm" }}>
-                <div style={{ fontSize: "6.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "1.5mm" }}>Terminal Tax Estimate</div>
+              <div style={{ background: "#FBFBF8", borderLeft: `3px solid ${DOC_TAN}`, padding: "3mm 4mm" }}>
+                <div style={{ fontSize: "6.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "1.5mm" }}>Terminal Tax Estimate</div>
                 <p style={{ ...colText, fontSize: "8pt" }}>
                   Registered (RRSP/RRIF/LIRA): {fmtCurrency(doc.computed.terminal_tax_estimate.registered_terminal_tax)}<br />
                   Capital gains: {fmtCurrency(doc.computed.terminal_tax_estimate.capital_gains_tax)}
@@ -551,18 +551,18 @@ export default function GovernanceAudit() {
             <DocPageHeader kicker="Governance Audit" name={doc.client_name} period={doc.review_date} title="III. Element Deep-Dive & Scoring" />
             <div style={{ display: "flex", flexDirection: "column", gap: "4mm" }}>
               {doc.element_deep_dives.map((dd, i) => (
-                <div key={dd.element_name} style={{ background: "#fafafa", borderLeft: `3px solid ${DOC_TAN}`, padding: "3mm 4mm", breakInside: "avoid" }}>
+                <div key={dd.element_name} style={{ background: "#FBFBF8", borderLeft: `3px solid ${DOC_TAN}`, padding: "3mm 4mm", breakInside: "avoid" }}>
                   <strong style={{ display: "block", fontSize: "8.5pt", color: "#334155" }}>{i + 1}. {dd.element_name} &nbsp;<ScoreBadge row={{ current_score: dd.current_score, max_score: dd.max_score, status: dd.current_score === 0 ? "PENDING" : "" }} /></strong>
-                  <p style={{ ...colText, fontSize: "7.5pt", color: "#64748b", margin: "1mm 0" }}><b>Charter baseline:</b> {dd.charter_baseline}</p>
+                  <p style={{ ...colText, fontSize: "7.5pt", color: "#5A6A80", margin: "1mm 0" }}><b>Charter baseline:</b> {dd.charter_baseline}</p>
                   {dd.audit_findings.length > 0 && (
                     <>
-                      <div style={{ fontSize: "5.8pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", margin: "1.6mm 0 0.4mm" }}>Audit findings</div>
+                      <div style={{ fontSize: "5.8pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#5A6A80", margin: "1.6mm 0 0.4mm" }}>Audit findings</div>
                       {dd.audit_findings.map((f, j) => <p key={j} style={{ ...colText, fontSize: "7.5pt", margin: 0 }}>{f}</p>)}
                     </>
                   )}
                   {dd.required_corrective_actions.length > 0 && (
                     <>
-                      <div style={{ fontSize: "5.8pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", margin: "1.6mm 0 0.4mm" }}>Required corrective action</div>
+                      <div style={{ fontSize: "5.8pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#5A6A80", margin: "1.6mm 0 0.4mm" }}>Required corrective action</div>
                       {dd.required_corrective_actions.map((a, j) => <p key={j} style={{ ...colText, fontSize: "7.5pt", fontWeight: 600, margin: 0 }}>{a}</p>)}
                     </>
                   )}
@@ -583,16 +583,16 @@ export default function GovernanceAudit() {
             )}
 
             {doc.compliance_notes.length > 0 && (
-              <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "2mm" }}>
-                <div style={{ fontSize: "6pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "1mm" }}>Compliance status</div>
-                {doc.compliance_notes.map((note, i) => <p key={i} style={{ fontSize: "6.6pt", color: "#64748b", lineHeight: 1.45, margin: 0 }}>{note}</p>)}
+              <div style={{ borderTop: "1px solid #D9D2C5", paddingTop: "2mm" }}>
+                <div style={{ fontSize: "6pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "1mm" }}>Compliance status</div>
+                {doc.compliance_notes.map((note, i) => <p key={i} style={{ fontSize: "6.6pt", color: "#5A6A80", lineHeight: 1.45, margin: 0 }}>{note}</p>)}
               </div>
             )}
           </DocPage>
 
           {(doc.computed.assumptions.length > 0 || doc.extraction_errors.length > 0 || doc.narrative_ungrounded_dollar_figures.length > 0) && (
-            <div className="mt-6 rounded-lg border border-[#e2e8f0] bg-white p-4 text-xs text-[#64748b] print:hidden">
-              <div className="mb-2 font-semibold uppercase tracking-wider text-[#a37c58]">Advisor Notes (staff only, not printed)</div>
+            <div className="mt-6 rounded-lg border border-[#D9D2C5] bg-white p-4 text-xs text-[#5A6A80] print:hidden">
+              <div className="mb-2 font-semibold uppercase tracking-wider text-[#7E684C]">Advisor Notes (staff only, not printed)</div>
               {doc.computed.assumptions.length > 0 && (
                 <div className="mb-2">
                   <p className="mb-1 font-medium">Assumptions</p>
