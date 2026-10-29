@@ -157,7 +157,7 @@ const RULES: DagRule[] = [
           rule_id: "business_exit_angel_depletion",
           risk_name: "Reckless Private Equity Capital Depletion",
           severity: "Critical",
-          action: "Enforce 5% Liquid Capital Cap on Angel Investments during Stabilization Period.",
+          action: "Enforce 5% Liquid Capital Cap on Angel Investments during Transition Period.",
         };
       }
       return null;

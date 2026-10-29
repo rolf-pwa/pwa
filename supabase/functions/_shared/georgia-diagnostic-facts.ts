@@ -1,5 +1,5 @@
 // Turns a client's Georgia diagnostic into advisor-facing context lines for
-// the Sovereignty Survey's AI narrative (stabilization-map-generate).
+// the Transition Survey's AI narrative (stabilization-map-generate).
 //
 // Guardrails, matching how the Causal AI risk flags are handled: the lines
 // describe the client's situation in plain words -- they never contain raw

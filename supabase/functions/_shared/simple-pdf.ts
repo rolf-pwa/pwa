@@ -1,5 +1,5 @@
 // simple-pdf.ts: a small PDF writer for ProsperWise documents built on the server (the signed copy of a document, and the reports that follow). It has the
-// house look of the Sovereignty Charter and Stabilization Map: a slate header band with the white logo, a small uppercase line, a serif title, a bronze
+// house look of the Sovereignty Charter and Transition Map: a slate header band with the white logo, a small uppercase line, a serif title, a bronze
 // rule, slate body text and a bronze footer bar. Standard fonts only (Helvetica and Times, Latin-1 plus the usual curly quotes and dashes); anything else
 // prints as "?". US Letter, wrapped text, paginated. Pure: no Deno APIs.
 import { LOGO_ALPHA_FLATE_B64, LOGO_H, LOGO_W } from "./brand-logo.ts";

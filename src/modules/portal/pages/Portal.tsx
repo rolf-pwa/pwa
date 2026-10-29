@@ -389,7 +389,7 @@ const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = f
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Email Address</label>
                   <p className="text-xs text-muted-foreground">
-                    Enter the email on file with your Personal CFO.
+                    Enter the email on file with your Family CFO.
                   </p>
                   <Input
                     type="email"
@@ -485,7 +485,7 @@ const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = f
           <img src={prosperwiseLogo} alt="ProsperWise" className="h-12 w-12 mx-auto opacity-50" />
           <h1 className="text-xl font-semibold text-foreground">Access Denied</h1>
           <p className="text-muted-foreground text-sm max-w-sm">
-            {error || "This portal link is invalid or has expired. Please contact your Personal CFO for a new link."}
+            {error || "This portal link is invalid or has expired. Please contact your Family CFO for a new link."}
           </p>
           <a href="/portal" className="inline-block text-sm text-primary underline underline-offset-2">Sign in with your email</a>
         </div>
@@ -1139,7 +1139,7 @@ const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = f
 
     return (
       <div className="space-y-4">
-          {/* Sovereignty Survey — auto-hides once the survey is complete */}
+          {/* Transition Survey — auto-hides once the survey is complete */}
           {isSelf && (
             <PortalIntakeBanner
               portalToken={portalToken}
@@ -1397,7 +1397,7 @@ const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = f
                 <h3 className="font-serif text-sm font-semibold text-foreground">Send a document</h3>
               </div>
               <p className="text-xs text-muted-foreground">
-                Statements, tax slips, anything your Personal CFO should have. Files go to your Shoebox and are filed for you.
+                Statements, tax slips, anything your Family CFO should have. Files go to your Shoebox and are filed for you.
               </p>
               <PortalShoeboxUpload portalToken={portalToken} householdId={contact.household_id ?? null} />
             </CardContent>
@@ -1555,7 +1555,7 @@ const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = f
       <footer className="border-t border-border mt-12">
         <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 text-center space-y-1.5">
           <p className="text-xs text-muted-foreground">
-            ProsperWise Advisors — Your Personal CFO
+            ProsperWise Advisors — Your Family CFO
           </p>
           <Link
             to="/portal/privacy"

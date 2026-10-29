@@ -140,7 +140,7 @@ export function RequestDetailDialog({
         body: {
           request_id: selected.id,
           sender_type: "advisor",
-          sender_name: profile?.full_name || "Your Personal CFO",
+          sender_name: profile?.full_name || "Your Family CFO",
           content: replyText.trim(),
         },
       });

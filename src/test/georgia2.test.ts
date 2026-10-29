@@ -20,8 +20,8 @@ describe("georgia2 derive", () => {
     expect(deriveResult("corporate").surveyPrice).toBe(1_500);
   });
   it("headline always points at the Survey regardless of scale", () => {
-    expect(deriveResult("personal").headline).toContain("Sovereignty Survey");
-    expect(deriveResult("personal").headline).toContain("Sovereignty Survey");
+    expect(deriveResult("personal").headline).toContain("Transition Survey");
+    expect(deriveResult("personal").headline).toContain("Transition Survey");
   });
 
   it("spikes tax drag when LCGE unsure", () => {

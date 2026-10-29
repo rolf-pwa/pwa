@@ -215,7 +215,7 @@ export default function StabilizationMap() {
         const json = await res.json();
         if (res.ok && !json?.error) setCausalFlags(json.flags ?? []);
       } catch {
-        // Non-fatal — the Stabilization Map's own diagnostics render fine without this.
+        // Non-fatal — the Transition Map's own diagnostics render fine without this.
       }
     })();
   }, [map?.household_id]);
@@ -280,7 +280,7 @@ export default function StabilizationMap() {
   const save = async () => {
     const ok = await autoSave.flush();
     if (ok) {
-      toast.success("Stabilization Map saved");
+      toast.success("Transition Map saved");
       setEditing(false);
       load();
     }
@@ -323,7 +323,7 @@ export default function StabilizationMap() {
   if (!map) {
     return (
       <div className="p-8">
-        <p className="text-muted-foreground">Stabilization Map not found.</p>
+        <p className="text-muted-foreground">Transition Map not found.</p>
         <Button variant="outline" className="mt-4" onClick={() => navigate("/leads")}>
           <ArrowLeft className="mr-2 h-4 w-4" /> Back to Leads
         </Button>
@@ -437,7 +437,7 @@ export default function StabilizationMap() {
               <ArrowLeft className="mr-1 h-4 w-4" /> Back
             </Button>
             <div className="text-sm text-[#334155]">
-              <span className="font-semibold">Stabilization Map</span>
+              <span className="font-semibold">Transition Map</span>
               <span className="ml-2 text-xs uppercase tracking-wider text-[#a37c58]">
                 {map.generation_status.replace(/_/g, " ")}
               </span>
@@ -587,12 +587,12 @@ export default function StabilizationMap() {
           <main style={{ flex: 1, padding: "10mm 10mm 0 10mm", display: "flex", flexDirection: "column", gap: "5mm" }}>
             <div style={{ marginBottom: isHouseholdMap ? "3mm" : 0 }}>
               <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: isHouseholdMap ? "3mm" : "1.5mm" }}>
-                Stabilization Map &nbsp;·&nbsp; Prepared for <strong>{fullName}</strong>
+                Transition Map &nbsp;·&nbsp; Prepared for <strong>{fullName}</strong>
                 {sessionDateLabel && <> &nbsp;·&nbsp; {sessionDateLabel}</>}
               </div>
               <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: isHouseholdMap ? "25pt" : "26pt", fontWeight: 300, color: "#334155", lineHeight: isHouseholdMap ? 1.3 : 1.1, letterSpacing: "-0.005em" }}>
                 {isHouseholdMap ? (
-                  "Sovereignty Survey™"
+                  "Transition Survey™"
                 ) : (
                   <>
                     {map.event_type} &nbsp;·&nbsp; {map.event_context || "Post-Close Governance"}<br />
@@ -765,7 +765,7 @@ export default function StabilizationMap() {
           >
             <div>
               <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "1.5mm" }}>
-                Stabilization Map &nbsp;·&nbsp; Prepared for <strong>{fullName}</strong>
+                Transition Map &nbsp;·&nbsp; Prepared for <strong>{fullName}</strong>
               </div>
               <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "18pt", fontWeight: 300, color: "#334155", lineHeight: 1.1 }}>
                 Governance &amp; Deceleration Risk Vectors
@@ -808,10 +808,10 @@ export default function StabilizationMap() {
           >
             <div>
               <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "1.5mm" }}>
-                Stabilization Map &nbsp;·&nbsp; Prepared for <strong>{fullName}</strong>
+                Transition Map &nbsp;·&nbsp; Prepared for <strong>{fullName}</strong>
               </div>
               <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "18pt", fontWeight: 300, color: "#334155", lineHeight: 1.1 }}>
-                90-Day Stabilization Plan
+                90-Day Transition Plan
               </div>
               <hr style={{ width: "18mm", height: "3px", background: "#a37c58", border: "none", marginTop: "2.5mm" }} />
             </div>

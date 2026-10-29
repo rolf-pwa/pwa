@@ -12,7 +12,7 @@ export const SPLASH_STEPS: SplashStep[] = [
   { id: 2, title: "Your wealth event", time: "2 minutes", body: "Tell me a little about what brought you here. It helps Rolf prepare for your session." },
   { id: 3, title: "A bit more context", time: "2 minutes", skippable: true, body: "A few gentle questions about your situation, so Rolf comes to your session already understanding it." },
   { id: 4, title: "Your documents", time: "As much as you have", body: "Add the documents you have to hand. I've made a list based on your situation. I read and file each one into your private vault, so you don't have to organise anything. The more you share now, the more precise your Survey will be." },
-  { id: 5, title: "Book your Survey Session", time: "1 minute", body: "Choose a time to sit down with Rolf. It is the conversation that completes your Sovereignty Survey, and he will have everything you've shared in front of him." },
+  { id: 5, title: "Book your Survey Session", time: "1 minute", body: "Choose a time to sit down with Rolf. It is the conversation that completes your Transition Survey, and he will have everything you've shared in front of him." },
 ];
 
 /** Existing clients enrolled by Rolf follow a different path. */

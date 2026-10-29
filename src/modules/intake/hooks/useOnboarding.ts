@@ -85,7 +85,7 @@ async function call(portalToken: string, body: Record<string, unknown>) {
 }
 
 /**
- * Drives the guided Sovereignty Survey onboarding (steps 1-3). Step 4 — the
+ * Drives the guided Transition Survey onboarding (steps 1-3). Step 4 — the
  * document checklist — is owned by the intake manifest hook.
  */
 export function useOnboarding(portalToken?: string) {

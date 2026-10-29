@@ -1,4 +1,4 @@
-// Georgia diagnostic -> Sovereignty Survey handoff (strategy update, Phase D).
+// Georgia diagnostic -> Transition Survey handoff (strategy update, Phase D).
 //
 // When a paying client's email matches a Georgia lead, carry what the
 // diagnostic already learned into their new household so onboarding doesn't

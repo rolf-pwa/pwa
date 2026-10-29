@@ -51,8 +51,8 @@ export const StepWealthEvent = ({ state, saving, onSave }: Props) => {
           <h2 className="font-serif text-lg font-semibold text-foreground">Your wealth event</h2>
           <p className="text-sm text-muted-foreground">
             {showSelect
-              ? "Every Survey starts with context. Tell us what changed — there are no wrong answers, and nothing here is shared outside your Sanctuary."
-              : "We already have this from your diagnostic, so there's nothing to re-enter. Add anything else you'd like us to know, or continue as is — nothing here is shared outside your Sanctuary."}
+              ? "Every Survey starts with context. Tell us what changed — there are no wrong answers, and nothing here is shared outside your portal."
+              : "We already have this from your diagnostic, so there's nothing to re-enter. Add anything else you'd like us to know, or continue as is — nothing here is shared outside your portal."}
           </p>
         </div>
 

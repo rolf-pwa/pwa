@@ -65,7 +65,7 @@ const Workbench = () => {
               <Badge variant="outline" className="text-[10px] font-mono">Beta</Badge>
             </div>
             <p className="text-sm text-muted-foreground">
-              AI-powered operational intelligence for the Personal Sanctuary
+              AI-powered operational intelligence for the ProsperWise Portal
             </p>
           </div>
           <div className="flex gap-2">

@@ -89,17 +89,17 @@ async function getAccessToken(sa: ServiceAccountKey): Promise<string> {
 
 // ---------- Extraction Prompt ----------
 
-const EXTRACTION_PROMPT = `You are an expert ProsperWise stabilization analyst. You are drafting a one-page **Stabilization Map** that Rolf Issler will review with the client in their first live Stabilization Session.
+const EXTRACTION_PROMPT = `You are an expert ProsperWise stabilization analyst. You are drafting a one-page **Transition Map** that Rolf Issler will review with the client in their first live Transition Survey.
 
 You will receive:
 1. The raw intake data captured by Georgia (the AI Transition Assistant) — transition type, anxiety anchor, vision, vineyard summary, and full discovery notes.
 2. The client's first name.
 
-Your job: fill every field of the Stabilization Map with concrete, client-specific content derived STRICTLY from the intake.
+Your job: fill every field of the Transition Map with concrete, client-specific content derived STRICTLY from the intake.
 
 ## Rules
 - **Never fabricate** numbers, dates, firm names, or facts not present in the intake. If unknown, say so ("amount unspecified", "tax advisor not yet engaged", etc.).
-- **Write in the Sanctuary voice** — calm, direct, non-alarmist, professional. No jargon. No exclamations.
+- **Write in the ProsperWise voice** — calm, direct, non-alarmist, professional. No jargon. No exclamations.
 - **Each risk and next step MUST be a single line, max ~60 characters**, following the template style ("Short noun phrase — concrete consequence or action").
 - **Always fill all 5 risks and all 5 next steps**. If the intake is sparse, extrapolate the most likely SWS-stage risks for the event type.
 - **Status fields** MUST use the exact enum values:
@@ -109,7 +109,7 @@ Your job: fill every field of the Stabilization Map with concrete, client-specif
   - tax_status: "Not Assessed" | "In Progress" | "Assessed"
 - **event_type** must be one of: "Business Exit" | "Inheritance" | "Sudden Windfall" | "Taxable Event".
 - **situation_summary**: 1–2 sentences summarising the triggering event in the style: "You completed/received [event] on [date if known]. [Current state of the capital or situation]."
-- **urgency_flag**: 1 sentence describing what is currently absent or exposed — governance gaps, active solicitation pressure, missing Quiet Period, etc.
+- **urgency_flag**: 1 sentence describing what is currently absent or exposed — governance gaps, active solicitation pressure, missing Transition Period, etc.
 - **Detail fields** (storehouse_detail, solicitation_detail, sovereignty_charter_detail, tax_detail): one short sentence each, describing the current state and why.
 - **logic_trace**: 2–4 sentences explaining, for Rolf's eyes only, why you chose the risks, next steps, and status levels from the intake.
 
@@ -120,7 +120,7 @@ const TOOL_SCHEMA = {
   functionDeclarations: [
     {
       name: "populate_stabilization_map",
-      description: "Populate every field of the Stabilization Map from the Georgia intake.",
+      description: "Populate every field of the Transition Map from the Georgia intake.",
       parameters: {
         type: "OBJECT",
         properties: {
@@ -179,20 +179,20 @@ const TOOL_SCHEMA = {
   ],
 };
 
-// ---------- Household-track (Sovereignty Survey) narrative prompt ----------
+// ---------- Household-track (Transition Survey) narrative prompt ----------
 // Numbers are never generated here — they're computed deterministically by
 // sovereignty-diagnostics.ts and handed in as read-only facts. The model only
 // drafts prose: the situation summary, urgency flag, and 90-day action plan
 // bullets, exactly like generate-charter-draft does for the Sovereignty Charter.
 
-const HOUSEHOLD_EXTRACTION_PROMPT = `You are an expert ProsperWise stabilization analyst. You are drafting the narrative portions of a one-page **Sovereignty Survey Stabilization Map** that Rolf Issler will review with the client in their first live Stabilization Session.
+const HOUSEHOLD_EXTRACTION_PROMPT = `You are an expert ProsperWise stabilization analyst. You are drafting the narrative portions of a one-page **Transition Survey Transition Map** that Rolf Issler will review with the client in their first live Transition Survey.
 
 You will receive already-computed, verified facts about the household: its wealth event, track type (personal or corporate), document readiness, and — where applicable — quantified financial diagnostics (fee drag, tax exposure, governance risk flags). These numbers are final and correct.
 
 Your job: draft ONLY the narrative fields below. **Never invent, restate incorrectly, or alter any dollar figure or percentage** — reference them by describing their significance, not by recomputing them.
 
 ## Rules
-- Write in the Sanctuary voice — calm, direct, non-alarmist, professional. No jargon, no exclamations.
+- Write in the ProsperWise voice — calm, direct, non-alarmist, professional. No jargon, no exclamations.
 - If the facts state this is an existing/managed client formalizing their SOS (not a new engagement), the situation_summary and Phase 1 action items must reflect *formalizing/ratifying* their existing arrangement — never use "initiating," "Day One," or basic-document-collection language ("secure government IDs," "collect bank statements") for a client who already has a governed relationship on file.
 - If a "Causal AI Ontology assessment" or "Active Causal Risk Flags" fact is present, you may draw on it when writing the urgency_flag and Phase 1 action items — but NEVER quote a raw score, index, or internal field name from it (never write anything like "guilt/survivor feelings 9/10" or "secrecy_isolation_score"). Translate it into plain advisor language describing the real-world behavior or risk instead (e.g. "there are early signs of guilt-driven hesitation around engaging with this inheritance"). Named risk flags (e.g. "Legacy Asset Liquidation Paralysis") and their recommended actions ARE safe to reference directly — those are already advisor-facing labels, not raw internal data.
 - If a "Georgia diagnostic" fact is present, it is what the client told us about themselves before engaging: you may let it shape the tone of the situation_summary and the emphasis of the Phase 1 action items (for example, acknowledging that outside pressure or feeling stuck is real, or that governance is not yet written down). Translate it into plain advisor language. NEVER quote a score, never write "the diagnostic said" or "the client stated", and never present these as direct quotes or as verified facts — they are self-reported context, not findings.
@@ -211,7 +211,7 @@ const HOUSEHOLD_TOOL_SCHEMA = {
   functionDeclarations: [
     {
       name: "populate_household_stabilization_map",
-      description: "Populate the narrative fields of a household-track Stabilization Map.",
+      description: "Populate the narrative fields of a household-track Transition Map.",
       parameters: {
         type: "OBJECT",
         properties: {
@@ -642,7 +642,7 @@ async function handleHouseholdGeneration(
           contact_id: primaryContact.id,
           user_id: staffUserId,
           action_type: "stabilization_map_household_generate",
-          action_description: `Sovereignty Survey Stabilization Map generated for household ${householdId}`,
+          action_description: `Transition Survey Transition Map generated for household ${householdId}`,
           proposed_data: { mapId: existingMapId, householdId, track_type },
         });
       } catch (e) {
@@ -712,7 +712,7 @@ serve(async (req) => {
       serviceKey,
     );
 
-    // ---- Household-track (Sovereignty Survey) branch — entirely separate from
+    // ---- Household-track (Transition Survey) branch — entirely separate from
     // the lead/contact narrative-extraction flow below. ----
     let resolvedHouseholdId = householdId;
     if (mapId && !resolvedHouseholdId) {

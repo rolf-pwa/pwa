@@ -77,7 +77,7 @@ export function HouseholdAuditTrailRollup({ members }: { members: Member[] }) {
                 </div>
                 <p className="text-muted-foreground">{entry.action_description}</p>
                 <div className="mt-1 flex items-center justify-between">
-                  <p className="text-sanctuary-green font-medium">✓ Approved by Personal CFO</p>
+                  <p className="text-sanctuary-green font-medium">✓ Approved by Family CFO</p>
                   <p className="text-muted-foreground">{nameFor(entry.contact_id)}</p>
                 </div>
               </div>

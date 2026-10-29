@@ -154,7 +154,7 @@ export function actionPlanFor(catalyst: string | null | undefined): { title: str
   const v = vocabFor(catalyst);
   return [
     { title: v.holdingTitle, detail: v.holdingDetail },
-    { title: "Institute a 90-day (minimum) Stabilization Period", detail: v.pauseDetail },
+    { title: "Institute a 90-day (minimum) Transition Period", detail: v.pauseDetail },
     {
       title: "Centralize your documents",
       detail: `Gather ${v.documents} in one secure place, so every professional works from the same facts.`,

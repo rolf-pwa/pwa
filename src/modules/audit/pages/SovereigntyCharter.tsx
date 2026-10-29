@@ -240,7 +240,7 @@ const newSourceDraft = (kind: CharterSourceKind = "note", mode: CharterSourceInp
     kind === "statement"
       ? "Account statement"
       : kind === "stabilization_session"
-        ? "Stabilization Session"
+        ? "Transition Survey"
         : kind === "meeting_transcript"
           ? "Gemini meeting transcript"
           : kind === "link"
@@ -315,19 +315,19 @@ export default function SovereigntyCharter() {
       subtitle: "A constitutional framework for financial governance",
       intro_heading: "Constitutional Framework\nfor Financial Governance",
       intro_callout: `The assets of ${resolvedFullName} are to be governed as a Vineyard designed to serve stability, legacy, and disciplined decision-making rather than short-term reaction.`,
-      intro_note: "This portrait format mirrors the Stabilization Map and Quarterly Review so the Charter reads like one unified governance system.",
+      intro_note: "This portrait format mirrors the Transition Map and Quarterly Review so the Charter reads like one unified governance system.",
       mission_of_capital: `The current territory is stewarded toward durable household stability, tax-aware growth, and long-horizon legacy transfer. ${familyRecord?.annual_savings ? `The family is currently tracking approximately ${formatCurrency(familyRecord.annual_savings)} in annual savings capacity.` : "The strategy should define a target after-tax cash flow threshold and a reinvestment discipline."}`,
       vision_20_year: `${familyRecord?.total_family_assets ? `Current tracked family assets are ${formatCurrency(familyRecord.total_family_assets)}.` : `Current tracked stewardship value is ${formatCurrency(totalStewardship)}.`} The long-range objective is to compound core Vineyard assets, protect key reserves, and preserve intergenerational optionality through a deliberate governance structure.`,
-      governance_authority: `${resolvedFullName} remains the sovereign decision-maker. ProsperWise serves as Personal CFO, coordinating structure, sequencing, and the architectural integrity of the Charter.`,
+      governance_authority: `${resolvedFullName} remains the sovereign decision-maker. ProsperWise serves as Family CFO, coordinating structure, sequencing, and the architectural integrity of the Charter.`,
       conflict_resolution: `${contactRecord.poa_name ? `Powers of Attorney currently noted: ${contactRecord.poa_name}.` : "Powers of Attorney should be named explicitly."} In incapacity events, this Charter operates as an interpretive guide for aligned decision-making.`,
       fiduciary_alliance: `${contactRecord.lawyer_name || contactRecord.accountant_name ? `Current professionals include ${[contactRecord.lawyer_name, contactRecord.accountant_name].filter(Boolean).join(" and ")}.` : "Legal and tax professionals should be linked to this Charter."} All structural and tax actions remain subject to professional review.`,
       quiet_period: contactRecord.quiet_period_start_date
-        ? `A quiet period anchor exists from ${formatDate(contactRecord.quiet_period_start_date)}. New capital events should pause for structured integration before deployment.`
-        : "Capital inflows above the family threshold should trigger a quiet period before new deployment decisions are finalized.",
+        ? `A transition period anchor exists from ${formatDate(contactRecord.quiet_period_start_date)}. New capital events should pause for structured integration before deployment.`
+        : "Capital inflows above the family threshold should trigger a transition period before new deployment decisions are finalized.",
       architecture_intro: "The Vineyard serves as the master container for income-generating assets. Principal is protected by design; only designated harvest should move into storehouse allocation.",
       protected_assets_note: "No protected accounts have been explicitly classified yet.",
       harvest_accounts_note: "No eligible harvest accounts are currently defined.",
-      appendix_note: "This appendix condenses the current territory into a printable schedule so the Charter, Stabilization Map, and Quarterly Review all reference the same canonical structure.",
+      appendix_note: "This appendix condenses the current territory into a printable schedule so the Charter, Transition Map, and Quarterly Review all reference the same canonical structure.",
       footer_status: contactRecord.households?.governance_status === "sovereign" ? "Ratified / Sovereign phase" : "Draft / review in progress",
       footer_date_label: formatDate(contactRecord.quiet_period_start_date, "Ratification date to be confirmed"),
       full_markdown: "",
@@ -336,11 +336,11 @@ export default function SovereigntyCharter() {
       transition_summary: "",
       primary_goal: "",
       long_term_strategy: "",
-      monitoring_cadence: "Quarterly Governance Review with the ProsperWise Personal CFO.",
+      monitoring_cadence: "Quarterly Governance Review with the ProsperWise Family CFO.",
       withdrawal_safeguards: "Withdrawals from protected accounts require a documented review against this Charter before execution.",
-      roles_responsibilities: `${resolvedFullName} acts as Sovereign. ProsperWise serves as Personal CFO and architectural steward.`,
+      roles_responsibilities: `${resolvedFullName} acts as Sovereign. ProsperWise serves as Family CFO and architectural steward.`,
       professional_coordination: [contactRecord.lawyer_name, contactRecord.accountant_name, contactRecord.executor_name, contactRecord.poa_name].filter(Boolean).join("; ") || "Professional team to be confirmed.",
-      secondary_quiet_period_rule: "Material new capital events trigger a 30-day quiet period before deployment decisions.",
+      secondary_quiet_period_rule: "Material new capital events trigger a Transition Period before deployment decisions.",
       growth_primary_label: "Vineyard — Primary Growth",
       growth_primary_value: null,
       growth_primary_detail: "",
@@ -1119,7 +1119,7 @@ export default function SovereigntyCharter() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-foreground">AI drafting workflow</p>
-                    <p className="text-sm text-muted-foreground">Upload statements, paste Stabilization Session notes, or add Gemini transcript links before generating the first charter draft.</p>
+                    <p className="text-sm text-muted-foreground">Upload statements, paste Transition Survey notes, or add Gemini transcript links before generating the first charter draft.</p>
                   </div>
                   <div className="rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground">
                     Status: {charter.draft_status || "draft"}
@@ -1202,7 +1202,7 @@ export default function SovereigntyCharter() {
                 <Field label="Fiduciary Alliance">
                   <Textarea value={charter.fiduciary_alliance} onChange={(e) => updateField("fiduciary_alliance", e.target.value)} rows={5} />
                 </Field>
-                <Field label="Secondary Quiet Period">
+                <Field label="Secondary Transition Period">
                   <Textarea value={charter.quiet_period} onChange={(e) => updateField("quiet_period", e.target.value)} rows={5} />
                 </Field>
               </div>
@@ -1258,7 +1258,7 @@ export default function SovereigntyCharter() {
               <Field label="Professional Coordination">
                 <Textarea value={charter.professional_coordination} onChange={(e) => updateField("professional_coordination", e.target.value)} rows={4} />
               </Field>
-              <Field label="Secondary Quiet Period Rule">
+              <Field label="Secondary Transition Period Rule">
                 <Textarea value={charter.secondary_quiet_period_rule} onChange={(e) => updateField("secondary_quiet_period_rule", e.target.value)} rows={4} />
               </Field>
             </div>
@@ -1447,7 +1447,7 @@ export default function SovereigntyCharter() {
               <ArticleCard title="Governance & Authority" body={charter.governance_authority} />
               <ArticleCard title="Conflict Resolution & Representation" body={charter.conflict_resolution} />
               <ArticleCard title="Fiduciary Alliance" body={charter.fiduciary_alliance} />
-              <ArticleCard title="Secondary Quiet Period" body={charter.quiet_period} />
+              <ArticleCard title="Secondary Transition Period" body={charter.quiet_period} />
             </div>
 
             {charter.custom_sections.pageOne.length > 0 ? (
@@ -1844,7 +1844,7 @@ function SignatoriesEditor({
                 <Input value={sig.name} onChange={(e) => onUpdate(index, "name", e.target.value)} />
               </Field>
               <Field label="Role">
-                <Input value={sig.role} onChange={(e) => onUpdate(index, "role", e.target.value)} placeholder="Sovereign / Personal CFO / Witness" />
+                <Input value={sig.role} onChange={(e) => onUpdate(index, "role", e.target.value)} placeholder="Sovereign / Family CFO / Witness" />
               </Field>
               <Button type="button" size="sm" variant="ghost" onClick={() => onRemove(index)}>
                 <Trash2 className="h-4 w-4" />
@@ -1979,7 +1979,7 @@ function CharterSourceEditor({
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   <option value="statement">Account statement</option>
-                  <option value="stabilization_session">Stabilization Session</option>
+                  <option value="stabilization_session">Transition Survey</option>
                   <option value="meeting_transcript">Meeting transcript</option>
                   <option value="link">Reference link</option>
                   <option value="note">Advisor note</option>
@@ -2024,7 +2024,7 @@ function CharterSourceEditor({
                     value={source.contentText}
                     onChange={(e) => onUpdate(source.id, { contentText: e.target.value })}
                     rows={6}
-                    placeholder="Paste the Stabilization Session summary, Gemini meeting transcript, or advisor notes here."
+                    placeholder="Paste the Transition Survey summary, Gemini meeting transcript, or advisor notes here."
                   />
                 </Field>
               )}

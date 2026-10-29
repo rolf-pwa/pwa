@@ -60,7 +60,7 @@ export function StabilizationMapButton({ contactId, householdId, className }: Pr
     const toastId = toast.loading("Reading audit PDF…");
     try {
       const pdfBase64 = await fileToBase64(file);
-      toast.loading("Georgia is drafting the Stabilization Map…", { id: toastId });
+      toast.loading("Georgia is drafting the Transition Map…", { id: toastId });
 
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error("Not authenticated");
@@ -80,7 +80,7 @@ export function StabilizationMapButton({ contactId, householdId, className }: Pr
         throw new Error(data.error || "Failed to generate map");
       }
 
-      toast.success("Stabilization Map ready", { id: toastId });
+      toast.success("Transition Map ready", { id: toastId });
       navigate(`/stabilization-map/${data.mapId}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to generate map", { id: toastId });
@@ -106,7 +106,7 @@ export function StabilizationMapButton({ contactId, householdId, className }: Pr
             ) : (
               <FileText className="mr-2 h-4 w-4" />
             )}
-            Stabilization Map
+            Transition Map
             <ChevronDown className="ml-1 h-3.5 w-3.5 opacity-60" />
           </Button>
         </DropdownMenuTrigger>

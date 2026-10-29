@@ -6,9 +6,9 @@ import { STEP_ORDER, decideWorkbench, type StepKey, type WorkbenchFacts } from "
 
 const STEPS: Record<StepKey, { title: string; body: string }> = {
   guided_intake: { title: "Enroll in guided intake", body: "Send an existing client through the same guided wizard as a new client, no payment required." },
-  stabilization_map: { title: "Stabilization Map", body: "Generate or review the household's one-page Sovereignty Survey." },
+  stabilization_map: { title: "Transition Map", body: "Generate or review the household's one-page Transition Survey." },
   portfolio_review: { title: "Portfolio Review", body: "Allocation against the Investor Profile and iA's model portfolio, returns, death benefit resets, and what the client sees." },
-  sovereignty_review: { title: "Sovereignty Review", body: "A Quarterly Review for chartered households, or a Sovereignty Survey from the records on file when there is no Charter yet." },
+  sovereignty_review: { title: "Sovereignty Review", body: "A Quarterly Review for chartered households, or a Transition Survey from the records on file when there is no Charter yet." },
   governance_audit: { title: "Quarterly Governance Audit", body: "Generate or review the household's full Sovereignty Governance Audit." },
   charter: { title: "Sovereignty Charter v2.0", body: "Capture Family Vision, Core Values, and System Grounding Principles, the Foundational Bedrock of this household's Charter." },
   causal_ai: { title: "Causal AI Workbench", body: "Staff assessment of the household's financial, relational, and emotional state, reconciled against real meeting transcripts." },

@@ -1,4 +1,4 @@
-// quarterly-system-review-generate (v2) -- builds a household's Quarterly Review in the Stabilization Map
+// quarterly-system-review-generate (v2) -- builds a household's Quarterly Review in the Transition Map
 // document format. Figures and statuses are computed in code (sovereignty-diagnostics + quarterly-review-cards);
 // Gemini only writes the narrative (summary, Charter-alignment commentary, focus line); the 90-day plan is derived from
 // the cards' action lines (review-plan.ts). If the AI is
@@ -79,7 +79,7 @@ You will receive verified, already-computed facts: figures, an alignment status 
 Your job: draft ONLY the narrative fields. **Never invent, recompute or alter a dollar figure, percentage or status** -- describe their significance instead.
 
 ## Rules
-- Sanctuary voice: calm, direct, non-alarmist, professional. No jargon, no exclamation marks.
+- ProsperWise voice: calm, direct, non-alarmist, professional. No jargon, no exclamation marks.
 - review_summary: 1-2 sentences on where the household's system stands this quarter overall.
 - charter_alignment: 2-4 sentences on whether the household's assets, reserves, protection and documents are serving what the Charter says the family is for. Quote or paraphrase the Charter's purpose/mission/vision where it is provided. If no Charter exists, say plainly that nothing written yet governs the system and treat drafting and ratifying it as the first priority. Do not claim alignment that the statuses do not support.
 - urgency_flag: ONE sentence naming the single most important thing to resolve this quarter.
@@ -88,14 +88,14 @@ Your job: draft ONLY the narrative fields. **Never invent, recompute or alter a 
 ## Output
 Call populate_quarterly_review with all fields filled.`;
 
-const SURVEY_PROMPT = `You are drafting the narrative portions of a ProsperWise **Sovereignty Survey** for an EXISTING client household that does not yet have a ratified Sovereignty Charter. The Survey takes what ProsperWise already has on file about the household -- investments, reserves, insurance, estate and tax records, liabilities -- and shows, in the household's own numbers, what is and isn't governed today, and what a written Charter would add. Rolf Issler will walk the client through it.
+const SURVEY_PROMPT = `You are drafting the narrative portions of a ProsperWise **Transition Survey** for an EXISTING client household that does not yet have a ratified Sovereignty Charter. The Survey takes what ProsperWise already has on file about the household -- investments, reserves, insurance, estate and tax records, liabilities -- and shows, in the household's own numbers, what is and isn't governed today, and what a written Charter would add. Rolf Issler will walk the client through it.
 
 You will receive verified, already-computed facts: figures, a status and one-line detail for each area, and a list of areas with no records on file. These are final and correct.
 
 Your job: draft ONLY the narrative fields. **Never invent, recompute or alter a dollar figure, percentage or status.**
 
 ## Rules
-- Sanctuary voice: calm, direct, respectful, never salesy, never alarmist, no exclamation marks. This is an invitation to see their situation clearly, not a pitch.
+- ProsperWise voice: calm, direct, respectful, never salesy, never alarmist, no exclamation marks. This is an invitation to see their situation clearly, not a pitch.
 - A missing record is NOT a finding. For any area listed as "not yet on file" say it has not been assessed or recorded yet -- never imply the client is exposed or unprotected there. Only areas with a "Needs Attention" or "Partial" status are real gaps.
 - review_summary: 1-2 sentences on what ProsperWise can see of the household's system today and how complete that picture is.
 - charter_alignment: 3-4 sentences on what a Sovereignty Charter would govern for THIS household: use their actual figures and the specific gaps in the statuses (for example reserves with no written purpose, estate documents not reviewed, accounts not tracked). Describe the value concretely; do not use generic marketing language and do not promise outcomes.
@@ -111,7 +111,7 @@ function factsBlock(o: {
   mode: ReviewMode; notOnFile: string[];
 }): string {
   const lines = [
-    `Household: ${o.household} (family: ${o.family}). Review period: ${o.period}. Date: ${o.today}. Track: ${o.track}. Document: ${o.mode === "survey" ? "Sovereignty Survey (no ratified Charter)" : "Quarterly Review (chartered household)"}.`,
+    `Household: ${o.household} (family: ${o.family}). Review period: ${o.period}. Date: ${o.today}. Track: ${o.track}. Document: ${o.mode === "survey" ? "Transition Survey (no ratified Charter)" : "Quarterly Review (chartered household)"}.`,
     o.notOnFile.length ? `Areas with no records on file yet (not findings): ${o.notOnFile.join("; ")}.` : "All reviewed areas have records on file.",
     `Total assets (AUM): ${money(o.diag.aum)}; Holding Tank ${money(o.diag.holding_tank_total)}; Vineyard ${money(o.diag.vineyard_total)}.`,
     `Storehouse reserves -- Liquidity ${money(o.diag.storehouse_reserves?.liquidity ?? 0)}, Strategic ${money(o.diag.storehouse_reserves?.strategic ?? 0)}, Philanthropic ${money(o.diag.storehouse_reserves?.philanthropic ?? 0)}, Legacy ${money(o.diag.storehouse_reserves?.legacy ?? 0)}.`,
@@ -314,7 +314,7 @@ serve(async (req) => {
     const eh = diag.estate_hygiene;
     const loanFlags = (diag.intercompany_loan_flags ?? []).filter((f: any) => f.isOverdue);
 
-    // ---- Capital allocation (shared with the Stabilization Map): income funds -> Liquidity when no Liquidity Reserve
+    // ---- Capital allocation (shared with the Transition Map): income funds -> Liquidity when no Liquidity Reserve
     // is set up, insurance cash value -> Strategic, real estate -> Legacy, Harvest = withdrawals read from statements.
     const { allocation, allocAccounts } = await allocateForHousehold(supabase, financials, diag);
     const adjDiag = applyAllocation(diag, allocation);
@@ -452,12 +452,12 @@ serve(async (req) => {
       tracked_accounts: readAccounts.length, accounts: withStatements.length, data_completeness: completeness,
     };
     const logic = [
-      `Document type: ${mode === "survey" ? "Sovereignty Survey (no ratified Charter on file)" : "Quarterly Review (ratified Charter)"}. Records on file for ${completeness.onFile}/${completeness.total} areas${completeness.missing.length ? ` (not yet on file: ${completeness.missing.join(", ")})` : ""}.`,
+      `Document type: ${mode === "survey" ? "Transition Survey (no ratified Charter on file)" : "Quarterly Review (ratified Charter)"}. Records on file for ${completeness.onFile}/${completeness.total} areas${completeness.missing.length ? ` (not yet on file: ${completeness.missing.join(", ")})` : ""}.`,
       `Statuses are computed from live records: ${cards.map((c) => `${c.label} = ${c.status}`).join("; ")}.`,
       `Overall: ${overall.status} (${overall.attention} need attention, ${overall.partial} partial).`,
       vaultCharter ? `Charter found in the Vault: "${vaultCharter.name}"${vaultCharter.viaSubfolder ? " (Charter subfolder)" : " (Correspondence folder)"}; ${vaultExtract ? "its text was read for the narrative" : "its text could not be read"}.` : "No Charter file found in the Vault Correspondence folder.",
       `Charter source: ${charterSource ?? "none"}${charterSource ? (ratified ? ", ratified" : ", not ratified") : ""}. ${targetResults.length ? `${targetResults.length} numeric target(s) read from the Charter and checked against the balance sheet: ${targetResults.map((t) => `${t.label} = ${t.status}`).join("; ")}.` : "No numeric Charter targets were read."}`,
-      `Estate status comes from ${estate.source === "documents" ? "documents read from the Vault and approved in Glass-Box" : estate.source === "manual" ? "the advisor-entered fields on the latest Stabilization Map" : "nothing yet (no estate documents or entered statuses)"}. Accounts read more than ${FRESH_DAYS} days ago count as not updated. Tax is not part of this review.`,
+      `Estate status comes from ${estate.source === "documents" ? "documents read from the Vault and approved in Glass-Box" : estate.source === "manual" ? "the advisor-entered fields on the latest Transition Map" : "nothing yet (no estate documents or entered statuses)"}. Accounts read more than ${FRESH_DAYS} days ago count as not updated. Tax is not part of this review.`,
       aiNote,
     ].join(" ");
 

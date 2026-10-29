@@ -4,7 +4,7 @@ import { useGeorgia2 } from "./state";
 
 // Shown instead of the normal gate when the free-text answer trips the safety
 // screen. Everything on this screen is static, human-written copy: no model
-// output ever appears here. It reassures, offers the Clarity Call page as the
+// output ever appears here. It reassures, offers the Talk It Through page as the
 // one way to talk to someone (there is deliberately no request-a-callback
 // form, and nothing here promises a response), and gives a one-click way
 // back to the regular diagnostic in case the screening was a false alarm.
@@ -29,12 +29,12 @@ export function StepEmergency() {
       <div className="mt-8 rounded-md border border-border bg-muted/40 px-5 py-5">
         <p className="font-serif text-xl">Would you like to talk it through?</p>
         <p className="mt-1 text-sm text-muted-foreground">
-          You can book a Clarity Call at a time that suits you. There's no obligation.
+          You can book a Talk It Through at a time that suits you. There's no obligation.
         </p>
         <Button asChild size="lg" className="mt-4">
           <a href="https://www.prosperwise.ca/clarity-call" target="_blank" rel="noopener noreferrer">
             <Phone className="mr-2 h-4 w-4" />
-            Book a Clarity Call
+            Book a Talk It Through
           </a>
         </Button>
       </div>

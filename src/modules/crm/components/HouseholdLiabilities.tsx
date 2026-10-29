@@ -45,7 +45,7 @@ const toNum = (v: unknown) => (v === null || v === undefined || v === "" ? null 
  * The household's personal liabilities: balance, limit and, for revolving credit, credit available and how much of the
  * limit is used, with the estimated interest for the year. Unused credit on a revolving line can be assigned to the
  * Strategic Reserve (reserve capacity, never an asset). Corporate liabilities are shown read-only from the corporate
- * records. The Sovereignty Review, Stabilization Map and Governance Audit read the same records.
+ * records. The Sovereignty Review, Transition Map and Governance Audit read the same records.
  */
 export function HouseholdLiabilities({ householdId, onChanged }: { householdId: string; onChanged?: () => void }) {
   const [members, setMembers] = useState<Member[]>([]);

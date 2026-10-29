@@ -28,7 +28,7 @@ export function StepMeetingTranscripts({ transcripts, syncing, saving, onSync, o
           <h2 className="font-serif text-lg font-semibold text-foreground">Meeting Transcripts</h2>
           <p className="text-sm text-muted-foreground">
             Pulled directly from this household's Advisor Files → Meeting Notes folder in Drive — Gemini
-            meeting transcripts, Stabilization Session summaries, or advisor notes filed there. Nothing is
+            meeting transcripts, Transition Survey summaries, or advisor notes filed there. Nothing is
             pasted in manually; drop a file in that folder, then sync.
           </p>
         </div>

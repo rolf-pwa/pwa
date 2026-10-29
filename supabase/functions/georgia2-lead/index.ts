@@ -67,7 +67,7 @@ function computeNarrativeInsights(
   if (risk.noise_strain >= 70) {
     insights.push({
       tag: "Noise Exposure",
-      body: "With many eyes on this transition, the noise level around you is incredibly high. You have a legal and emotional right to step back. The single best decision right now is to declare a Quiet Period while we sort the sequence.",
+      body: "With many eyes on this transition, the noise level around you is incredibly high. You have a legal and emotional right to step back. The single best decision right now is to declare a Transition Period while we sort the sequence.",
     });
   }
   const probateExposure = catalyst === "inheritance" && answers.probate === "yes";
@@ -112,7 +112,7 @@ function computeBcContextNotes(domain: "corporate" | "personal", catalyst: strin
       notes.push("Retiring allowance rollovers into RRSP room can shelter significant severance from immediate BC tax.");
     }
     if (catalyst === "sudden_windfall") {
-      notes.push("A 90-day Quiet Period in a separate high-interest account is the strongest first structural move.");
+      notes.push("A Transition Period in a separate high-interest account is the strongest first structural move.");
     }
   }
   return notes;
@@ -295,8 +295,8 @@ function roadmapEmailHtml(opts: {
       ${insightsHtml ? `<div style="margin:16px 0;">${insightsHtml}</div>` : ""}
       ${bcNotesHtml}
       ${actionPlanHtml}
-      <p style="font-size:14px;line-height:1.6;margin-top:20px;">No pitch, no commitment. When you're ready, the Sovereignty Survey is the next step.</p>
-      <p style="font-size:14px;line-height:1.6;"><a href="https://www.prosperwise.ca/sovereignty-audit#pricing" style="color:#a37c58;">Learn more about the Sovereignty Survey →</a></p>
+      <p style="font-size:14px;line-height:1.6;margin-top:20px;">No pitch, no commitment. When you're ready, the Transition Survey is the next step.</p>
+      <p style="font-size:14px;line-height:1.6;"><a href="https://www.prosperwise.ca/sovereignty-audit#pricing" style="color:#a37c58;">Learn more about the Transition Survey →</a></p>
       <p style="font-size:14px;line-height:1.6;margin-top:24px;">— Rolf &amp; the ${APP_NAME} team</p>
     </div>
   `.trim();
@@ -386,7 +386,7 @@ serve(async (req) => {
       ...(existing ? {} : { validation_text: validation }),
     };
 
-    // Clicking "Start the Sovereignty Survey" puts the lead in the payment
+    // Clicking "Start the Transition Survey" puts the lead in the payment
     // pipeline: it is converted when they pay (convertMatchingLeads), and gets
     // one abandoned-cart email if still pending 48h later. Never touches a
     // lead that is already converted or dismissed.

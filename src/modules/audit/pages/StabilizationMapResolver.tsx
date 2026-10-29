@@ -56,7 +56,7 @@ export default function StabilizationMapResolver() {
         if (!cancelled) navigate(`/stabilization-map/${data.mapId}`, { replace: true });
       } catch (e) {
         if (!cancelled) {
-          toast.error(e instanceof Error ? e.message : "Failed to open Stabilization Map");
+          toast.error(e instanceof Error ? e.message : "Failed to open Transition Map");
           navigate(-1);
         }
       }
@@ -70,7 +70,7 @@ export default function StabilizationMapResolver() {
     <div className="flex h-screen items-center justify-center">
       <div className="flex flex-col items-center gap-3">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">Opening Stabilization Map…</p>
+        <p className="text-sm text-muted-foreground">Opening Transition Map…</p>
       </div>
     </div>
   );

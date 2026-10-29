@@ -6,7 +6,7 @@ const types = [
   { label: "Governance Review", client_label: null, reminders: true },
   { label: "Sovereignty Review", client_label: null, reminders: true },
   { label: "Interim Strategy Session", client_label: null, reminders: true, event_title: "Interim Strategy Consultation" },
-  { label: "Sovereignty Survey", client_label: null, reminders: false },
+  { label: "Transition Survey", client_label: null, reminders: false },
 ];
 const DAY = 86_400_000;
 const START = Date.parse("2026-11-10T17:00:00Z"); // 10:00 Pacific (B.C. stays on UTC-7 from 2026-11-01)
@@ -22,7 +22,7 @@ describe("which meetings get reminders", () => {
     expect(matchReminderType("System Review", types)?.label).toBe("Sovereignty Review");
   });
   it("ignores types without reminders and unrelated events", () => {
-    expect(matchReminderType("Sovereignty Survey (Sam)", types)).toBeNull();
+    expect(matchReminderType("Transition Survey (Sam)", types)).toBeNull();
     expect(matchReminderType("Lunch with Dave", types)).toBeNull();
     expect(matchReminderType(undefined, types)).toBeNull();
   });

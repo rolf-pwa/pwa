@@ -148,7 +148,7 @@ export function PortalAdminRequestForm({
         <CheckCircle className="h-8 w-8 text-accent mx-auto" />
         <h3 className="font-serif font-semibold text-foreground">Request Submitted</h3>
         <p className="text-sm text-muted-foreground">
-          {acknowledgement ?? "Your Personal CFO will review this and follow up with you shortly."}
+          {acknowledgement ?? "Your Family CFO will review this and follow up with you shortly."}
         </p>
       </div>
     );

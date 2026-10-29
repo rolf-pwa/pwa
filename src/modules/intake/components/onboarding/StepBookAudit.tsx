@@ -27,7 +27,7 @@ interface Props {
   onCheckBooking?: () => Promise<boolean>;
 }
 
-/** Final step — book the Survey Session with Rolf, the conversation that completes your Sovereignty Survey. */
+/** Final step — book the Survey Session with Rolf, the conversation that completes your Transition Survey. */
 export const StepBookAudit = ({
   fullName,
   email,

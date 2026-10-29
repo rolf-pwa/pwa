@@ -63,7 +63,7 @@ export function AuditTrail({ contactId }: { contactId: string }) {
                   </div>
                   <p className="text-muted-foreground">{entry.action_description}</p>
                   <p className="mt-1 text-sanctuary-green font-medium">
-                    ✓ Approved by Personal CFO
+                    ✓ Approved by Family CFO
                   </p>
                 </div>
               ))}

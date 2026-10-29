@@ -42,7 +42,7 @@ export function StepTreasuryCapital({ charter, recomputing, saving, onRecompute,
           <h2 className="font-serif text-lg font-semibold text-foreground">Treasury &amp; Capital Structure</h2>
           <p className="text-sm text-muted-foreground">
             How capital is partitioned, replenished, and compounded — pulled live from this household's
-            Sovereignty Survey.
+            Transition Survey.
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">

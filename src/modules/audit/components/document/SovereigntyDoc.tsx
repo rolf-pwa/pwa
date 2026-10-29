@@ -3,7 +3,7 @@ import pwLogoWhite from "@/assets/prosperwise-logo-white.png";
 
 // Shared look of ProsperWise's printed documents (Sovereignty Review, Governance Audit): A4 portrait, a dark brand
 // sidebar on the first page, the same type, the tan rule and the tan footer bar. Print is A4 with no margin so the
-// sidebar and footer bleed to the edge, the same as the Stabilization Map.
+// sidebar and footer bleed to the edge, the same as the Transition Map.
 
 export const DOC_FONT = "'DM Sans', sans-serif";
 export const DOC_SERIF = "'Cormorant Garamond', serif";

@@ -20,7 +20,7 @@ interface Props {
 }
 
 /**
- * Guided Sovereignty Survey onboarding. New clients: Household → Wealth event →
+ * Guided Transition Survey onboarding. New clients: Household → Wealth event →
  * Household context (personal sudden-wealth events only — skipped straight to
  * Documents for business_exit/business_growth) → Documents → Book the Survey Session. Legacy upgrades (existing clients staff enrolled, no payment):
  * Household info → Vision & values → Documents → Book meeting — no Household
@@ -71,13 +71,13 @@ export const OnboardingShell = ({ portalToken, onBack, onAskForHelp }: Props) =>
     );
   }
 
-  // Legacy clients aren't in the Sovereignty Survey onboarding flow.
+  // Legacy clients aren't in the Transition Survey onboarding flow.
   if (disabled) {
     return (
       <Card>
         <CardContent className="space-y-3 p-6 text-center">
           <p className="text-sm text-muted-foreground">
-            Your household isn't in the Sovereignty Survey onboarding flow — everything you need is
+            Your household isn't in the Transition Survey onboarding flow — everything you need is
             in your portal.
           </p>
           <Button variant="outline" size="sm" onClick={onBack}>
@@ -129,7 +129,7 @@ export const OnboardingShell = ({ portalToken, onBack, onAskForHelp }: Props) =>
             </h1>
             <p className="max-w-2xl text-sm text-muted-foreground">
               {state.household.onboardingIntroText ??
-                "I'm Georgia. There are a few short steps to get your Sovereignty Survey underway — no pressure, no sales, and you can stop and come back at any time."}
+                "I'm Georgia. There are a few short steps to get your Transition Survey underway — no pressure, no sales, and you can stop and come back at any time."}
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={onAskForHelp} className="shrink-0">

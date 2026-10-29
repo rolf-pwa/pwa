@@ -123,7 +123,7 @@ const Login = () => {
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">Email Address</label>
                 <p className="text-xs text-muted-foreground">
-                  Enter the email on file with your Personal CFO.
+                  Enter the email on file with your Family CFO.
                 </p>
                 <Input
                   type="email"

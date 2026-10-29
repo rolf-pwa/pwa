@@ -15,7 +15,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { planFromCards } from "../../../../supabase/functions/_shared/review-plan";
 import { DocPrintStyles, DocSidebar } from "../components/document/SovereigntyDoc";
 
-// Quarterly Review / Sovereignty Survey -- same A4 document format as the household Stabilization Map ("Sovereignty Survey"):
+// Quarterly Review / Transition Survey -- same A4 document format as the household Transition Map ("Transition Survey"):
 // brand sidebar, summary box, Capital & Asset Protection, status cards, then a 90-day plan on page two.
 
 type ActionItem = { title: string; detail: string };
@@ -272,7 +272,7 @@ export default function QuarterlySystemReview() {
 
   const isLegacy = review.layout_version < 2;
   const isSurvey = review.review_mode === "survey";
-  const docName = isSurvey ? "Sovereignty Survey" : "Quarterly Review";
+  const docName = isSurvey ? "Transition Survey" : "Quarterly Review";
   const PHASES = PHASES_BY_MODE[isSurvey ? "survey" : "quarterly"];
   const completeness = review.diagnostics?.data_completeness;
   const diag: Diag = review.diagnostics ?? {};
@@ -426,7 +426,7 @@ export default function QuarterlySystemReview() {
                   {docName} &nbsp;·&nbsp; Prepared for <strong>{name}</strong>{dateLabel && <> &nbsp;·&nbsp; {dateLabel}</>}
                 </div>
                 <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "25pt", fontWeight: 300, color: "#334155", lineHeight: 1.3, letterSpacing: "-0.005em" }}>
-                  {isSurvey ? "Sovereignty Survey™" : "Sovereignty Quarterly Review™"}
+                  {isSurvey ? "Transition Survey™" : "Sovereignty Quarterly Review™"}
                 </div>
                 <hr style={{ width: "18mm", height: "3px", background: "#a37c58", border: "none", marginTop: "4mm" }} />
               </div>
