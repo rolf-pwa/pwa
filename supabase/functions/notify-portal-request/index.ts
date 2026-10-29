@@ -23,7 +23,7 @@ const TYPE_LABELS: Record<string, string> = {
   banking_withdrawal: "Banking & Withdrawals",
   personal_info: "Personal Info",
   document_request: "Document Request",
-  data_access: "My Data — Access Request",
+  data_access: "My Data, Access Request",
   general_inquiry: "General Inquiry",
 };
 

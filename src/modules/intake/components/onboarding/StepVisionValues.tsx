@@ -30,7 +30,7 @@ export const StepVisionValues = ({ state, saving, onSave }: Props) => {
             Your vision, values &amp; purpose
           </h2>
           <p className="text-sm text-muted-foreground">
-            You're already part of the ProsperWise family — this Survey is about formalizing what
+            You're already part of the ProsperWise family, this Survey is about formalizing what
             we build together, not starting from scratch.
           </p>
         </div>
@@ -70,7 +70,7 @@ export const StepVisionValues = ({ state, saving, onSave }: Props) => {
             placeholder="What do you want this capital to accomplish, beyond the numbers?"
           />
           <p className="text-xs text-muted-foreground">
-            Please leave out account numbers, SIN or health details — we'll gather anything
+            Please leave out account numbers, SIN or health details, we'll gather anything
             sensitive securely during your Survey.
           </p>
         </div>

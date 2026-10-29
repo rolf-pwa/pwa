@@ -181,14 +181,14 @@ export function PortalIntakePage({ portalToken, onBack, onComplete }: Props) {
           <Progress value={percent} className="h-2" />
           <p className="flex items-start gap-1.5 text-sm font-medium text-foreground">
             <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-            Our AI reads each document to build your Survey — send as much as you can now for a more
+            Our AI reads each document to build your Survey, send as much as you can now for a more
             precise, personalized result.
           </p>
           <p className="text-xs text-muted-foreground">
             Every document you send is renamed and filed into the right vault folder automatically.
             Our team reviews anything that needs a second look.
             {processing > 0
-              ? ` ${processing} document${processing === 1 ? " is" : "s are"} still being processed — this list updates on its own.`
+              ? ` ${processing} document${processing === 1 ? " is" : "s are"} still being processed, this list updates on its own.`
               : ""}
           </p>
         </div>
@@ -271,7 +271,7 @@ export function PortalIntakePage({ portalToken, onBack, onComplete }: Props) {
             </p>
             {checklist.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No specific checklist yet — send whatever you have and we'll sort it. Your advisor
+                No specific checklist yet, send whatever you have and we'll sort it. Your advisor
                 will follow up if anything is missing.
               </p>
             ) : (
@@ -366,11 +366,11 @@ export function PortalIntakePage({ portalToken, onBack, onComplete }: Props) {
           <div className="flex flex-col items-center gap-2 border-t border-border pt-5 text-center">
             <Button onClick={onComplete}>
               <CheckCircle2 className="h-4 w-4" />
-              I've sent everything I have — Continue
+              I've sent everything I have, Continue
               <ArrowRight className="h-4 w-4" />
             </Button>
             <p className="text-xs text-muted-foreground">
-              Missing something? No problem — send it whenever it's ready, and our team will follow up
+              Missing something? No problem, send it whenever it's ready, and our team will follow up
               on anything still outstanding.
             </p>
           </div>

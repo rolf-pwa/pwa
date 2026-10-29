@@ -29,7 +29,7 @@ const TermsOfEngagementDoc = () => {
 
       <footer className="border-t border-border mt-12">
         <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6 text-center">
-          <p className="text-xs text-muted-foreground">ProsperWise Advisors — Your Family CFO</p>
+          <p className="text-xs text-muted-foreground">ProsperWise Advisors, Your Family CFO</p>
         </div>
       </footer>
     </div>

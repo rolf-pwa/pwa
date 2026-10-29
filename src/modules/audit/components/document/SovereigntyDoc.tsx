@@ -39,7 +39,7 @@ export function DocSidebar({ references }: { references?: { label: string; value
       <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,.18)" }} />
       <div>
         <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "rgba(255,255,255,.4)", marginBottom: "2mm" }}>Our Process</div>
-        {[["1 · Stabilization", "Secure your funds, lower the noise, buy time to think clearly."], ["2 · Charter", "Define your governing constitution and liquidity rules."], ["3 · Integration", "Deploy capital, coordinate your team, silence the noise."]].map(([t, d]) => (
+        {[["1 · Transition", "Secure your funds, lower the noise, buy time to think clearly."], ["2 · Charter", "Define your governing constitution and liquidity rules."], ["3 · Integration", "Deploy capital, coordinate your team, silence the noise."]].map(([t, d]) => (
           <div key={t} style={{ marginBottom: "3mm" }}>
             <strong style={{ fontSize: "8.5pt", fontWeight: 600 }}>{t}</strong>
             <p style={{ fontSize: "7.5pt", color: "rgba(255,255,255,.5)", marginTop: "1pt" }}>{d}</p>

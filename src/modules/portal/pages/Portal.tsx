@@ -352,7 +352,7 @@ const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = f
               ProsperWise Portal
             </h1>
             <p className="text-sm text-muted-foreground">
-              ProsperWise Advisors — Secure Client Access
+              ProsperWise Advisors, Secure Client Access
             </p>
           </div>
 
@@ -879,7 +879,7 @@ const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = f
                                 })();
                             return (
                               <p key={sh.contact_id} className="text-xs text-muted-foreground">
-                                {memberName} — {sh.ownership_percentage}% {sh.share_class || ""}
+                                {memberName}, {sh.ownership_percentage}% {sh.share_class || ""}
                                 {sh.role_title ? ` · ${sh.role_title}` : ""}
                               </p>
                             );
@@ -1477,7 +1477,7 @@ const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = f
 
   // Header subtitle based on current view
   const getHeaderSubtitle = () => {
-    if (drilldown.level === "family") return family?.name ? `${family.name} — Family Overview` : "Family Overview";
+    if (drilldown.level === "family") return family?.name ? `${family.name}, Family Overview` : "Family Overview";
     if (drilldown.level === "household") {
       const label = currentHousehold?.label || household?.label || "";
       return householdName(label);
@@ -1486,7 +1486,7 @@ const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = f
     if (!family?.name) return "Sovereign Financial Territory";
     // Many families share their name with their only household: say it once.
     const hh = (household?.label || "").trim();
-    return hh && hh.toLowerCase() !== family.name.trim().toLowerCase() ? `${family.name} — ${hh}` : family.name;
+    return hh && hh.toLowerCase() !== family.name.trim().toLowerCase() ? `${family.name}, ${hh}` : family.name;
   };
 
   return (
@@ -1555,7 +1555,7 @@ const Portal = ({ intakeRoute = false, reviewRoute = false, rebalancingRoute = f
       <footer className="border-t border-border mt-12">
         <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 text-center space-y-1.5">
           <p className="text-xs text-muted-foreground">
-            ProsperWise Advisors — Your Family CFO
+            ProsperWise Advisors, Your Family CFO
           </p>
           <Link
             to="/portal/privacy"

@@ -164,7 +164,7 @@ serve(async (req) => {
 
     if (sender_type === "staff" && proRecord.data?.email) {
       const to = proRecord.data.email;
-      const subject = `New message — ${engagement.title}`;
+      const subject = `New message, ${engagement.title}`;
       const text = `Hello ${proRecord.data.full_name || ""},\n\nA new message is waiting for you in the ProsperWise Pro Portal regarding "${engagement.title}".\n\nSign in to view it:\n${APP_URL}/pro-portal/login\n\n— ProsperWise`;
       await notifyViaGmail({ to, subject, text });
     } else if (sender_type === "pro") {
@@ -177,13 +177,13 @@ serve(async (req) => {
       }
       // Fallback: NOTIFICATION_CHANNEL admin (admin@prosperwise.ca)
       if (!staffEmail) staffEmail = "admin@prosperwise.ca";
-      const subject = `Pro reply — ${engagement.title}`;
+      const subject = `Pro reply, ${engagement.title}`;
       const text = `${proRecord.data?.full_name || "A professional"} has posted a new reply on the engagement "${engagement.title}".\n\nReview it in the ProsperWise dashboard:\n${APP_URL}/professionals\n`;
       await notifyViaGmail({ to: staffEmail, subject, text });
 
       // Also drop a staff bell notification
       await supabase.from("staff_notifications").insert({
-        title: `Pro reply — ${engagement.title}`,
+        title: `Pro reply, ${engagement.title}`,
         body: "A professional posted a new message.",
         link: `/professionals/${engagement.professional_id}`,
         source_type: "engagement_message",

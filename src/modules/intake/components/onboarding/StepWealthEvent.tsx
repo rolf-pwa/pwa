@@ -51,8 +51,8 @@ export const StepWealthEvent = ({ state, saving, onSave }: Props) => {
           <h2 className="font-serif text-lg font-semibold text-foreground">Your wealth event</h2>
           <p className="text-sm text-muted-foreground">
             {showSelect
-              ? "Every Survey starts with context. Tell us what changed — there are no wrong answers, and nothing here is shared outside your portal."
-              : "We already have this from your diagnostic, so there's nothing to re-enter. Add anything else you'd like us to know, or continue as is — nothing here is shared outside your portal."}
+              ? "Every Survey starts with context. Tell us what changed, there are no wrong answers, and nothing here is shared outside your portal."
+              : "We already have this from your diagnostic, so there's nothing to re-enter. Add anything else you'd like us to know, or continue as is, nothing here is shared outside your portal."}
           </p>
         </div>
 
@@ -97,7 +97,7 @@ export const StepWealthEvent = ({ state, saving, onSave }: Props) => {
             placeholder="What's on your mind, what you're hoping for, and anything weighing on you right now."
           />
           <p className="text-xs text-muted-foreground">
-            Please leave out account numbers, SIN or health details — we'll gather anything sensitive
+            Please leave out account numbers, SIN or health details, we'll gather anything sensitive
             securely during your Survey.
           </p>
         </div>

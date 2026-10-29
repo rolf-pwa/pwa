@@ -132,7 +132,7 @@ export default function BookingConfirmation() {
                 )}
                 {paid && !portalToken && booking.scheduling_url && (
                   <div className="space-y-2">
-                    <p className="text-sm">Last step — choose the time that works for you.</p>
+                    <p className="text-sm">Last step, choose the time that works for you.</p>
                     <Button asChild className="w-full">
                       <a href={booking.scheduling_url} target="_blank" rel="noopener noreferrer">
                         Choose your appointment time

@@ -311,7 +311,7 @@ export default function SovereigntyCharter() {
 
     return {
       contact_id: contactRecord.id,
-      title: `${familyRecord?.name || resolvedFullName} Sovereignty Charter`,
+      title: `${familyRecord?.name || resolvedFullName} Sovereignty Charter™`,
       subtitle: "A constitutional framework for financial governance",
       intro_heading: "Constitutional Framework\nfor Financial Governance",
       intro_callout: `The assets of ${resolvedFullName} are to be governed as a Vineyard designed to serve stability, legacy, and disciplined decision-making rather than short-term reaction.`,
@@ -998,7 +998,7 @@ export default function SovereigntyCharter() {
   const save = async () => {
     const ok = await autoSave.flush();
     if (ok) {
-      toast.success("Sovereignty Charter saved");
+      toast.success("Sovereignty Charter™ saved");
       setEditing(false);
       load();
     }
@@ -1032,7 +1032,7 @@ export default function SovereigntyCharter() {
               <ArrowLeft className="mr-1 h-4 w-4" /> Back
             </Button>
             <div className="text-sm text-[#334155]">
-              <span className="font-semibold">Sovereignty Charter</span>
+              <span className="font-semibold">Sovereignty Charter™</span>
               <span className="ml-2 text-xs uppercase tracking-wider text-[#a37c58]">Portrait template</span>
             </div>
           </div>
@@ -1412,7 +1412,7 @@ export default function SovereigntyCharter() {
           <div style={{ padding: "12mm", display: "flex", flexDirection: "column", gap: "6mm" }}>
             <div>
               <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "1.5mm" }}>
-                Sovereignty Charter &nbsp;·&nbsp; Prepared for <strong>{fullName}</strong>
+                Sovereignty Charter™ &nbsp;·&nbsp; Prepared for <strong>{fullName}</strong>
               </div>
               <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "25pt", fontWeight: 300, color: "#334155", lineHeight: 1.1, whiteSpace: "pre-line" }}>
                 {charter.intro_heading}

@@ -114,7 +114,7 @@ export default function Onboarding() {
 
       setResult(data);
       setStep("review");
-      toast.success(`Onboarding complete — ${data.contacts?.length || 0} contact(s), ${data.accountsInserted} account(s) staged`);
+      toast.success(`Onboarding complete, ${data.contacts?.length || 0} contact(s), ${data.accountsInserted} account(s) staged`);
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || "Onboarding failed");

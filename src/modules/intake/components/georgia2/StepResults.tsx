@@ -179,7 +179,7 @@ export function StepResults() {
             ) : (
               <Calendar className="mr-2 h-4 w-4 shrink-0" />
             )}
-            Start the Transition Survey — {formatCAD(result.surveyPrice)}
+            Start the Transition Survey, {formatCAD(result.surveyPrice)}
           </Button>
           <Button
             size="lg"

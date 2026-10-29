@@ -69,7 +69,7 @@ export function PortalMagicLinkButton({ contactId }: Props) {
       const url = `${window.location.origin}/${base}/${token}`;
       await navigator.clipboard.writeText(url);
       setCopied(true);
-      toast.success(`${base === "vfo" ? "VFO" : "Portal"} link copied to clipboard — valid for 7 days.`);
+      toast.success(`${base === "vfo" ? "VFO" : "Portal"} link copied to clipboard, valid for 7 days.`);
       setTimeout(() => setCopied(false), 3000);
     } catch {
       toast.error("Failed to generate portal link.");

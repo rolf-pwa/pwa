@@ -174,7 +174,7 @@ export function ServiceDialog({ open, onOpenChange, service, onSaved }: Props) {
             </div>
             <p className="text-xs text-muted-foreground">
               When an invoice with this service is paid, the client is matched or created in the CRM and their
-              onboarding portal is turned on automatically — same as paying through Checkout.
+              onboarding portal is turned on automatically, same as paying through Checkout.
             </p>
           </div>
           <div className="space-y-2">
@@ -214,7 +214,7 @@ export function ServiceDialog({ open, onOpenChange, service, onSaved }: Props) {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Direct payment link: {publicPayUrl(slugify(slug || name) || "handle")} — goes straight to Square checkout.
+              Direct payment link: {publicPayUrl(slugify(slug || name) || "handle")}, goes straight to Square checkout.
             </p>
             <Button
               type="button"
@@ -225,7 +225,7 @@ export function ServiceDialog({ open, onOpenChange, service, onSaved }: Props) {
                 const handle = slugify(slug || name);
                 if (!handle) return;
                 navigator.clipboard.writeText(bookingEmbedSnippet(handle, window.location.origin));
-                toast.success("Button code copied — paste into your marketing site");
+                toast.success("Button code copied, paste into your marketing site");
               }}
             >
               Copy button code for marketing site

@@ -176,8 +176,8 @@ export function CharterV2PrintDocument({ charter, householdLabel }: Props) {
           <div style={{ fontSize: "8pt", fontWeight: 300, color: "rgba(255,255,255,.55)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: "4mm" }}>
             Sovereignty Operating System™
           </div>
-          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "24pt", fontWeight: 300, lineHeight: 1.08 }}>The Sovereignty Charter</div>
-          <div style={{ fontSize: "8pt", color: "rgba(255,255,255,.7)", marginTop: "2.5mm" }}>Sovereignty Charter v2.0 · Prepared for {householdLabel}</div>
+          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "24pt", fontWeight: 300, lineHeight: 1.08 }}>The Sovereignty Charter™</div>
+          <div style={{ fontSize: "8pt", color: "rgba(255,255,255,.7)", marginTop: "2.5mm" }}>Sovereignty Charter™ v2.0 · Prepared for {householdLabel}</div>
         </div>
 
         <div style={{ padding: "12mm", display: "flex", flexDirection: "column", gap: "6mm" }}>
@@ -365,7 +365,7 @@ export function CharterV2PrintDocument({ charter, householdLabel }: Props) {
         </div>
 
         <div style={{ background: "#a37c58", color: "#fff", marginTop: "auto", padding: "3mm 12mm", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: "8.5pt", fontWeight: 500 }}>End of Sovereignty Charter</div>
+          <div style={{ fontSize: "8.5pt", fontWeight: 500 }}>End of Sovereignty Charter™</div>
           <div style={{ fontSize: "7.5pt", opacity: 0.9 }}>Status: {statusLabel}</div>
         </div>
       </div>

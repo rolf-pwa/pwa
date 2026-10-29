@@ -63,7 +63,7 @@ export const EVENT_VOCAB: Record<string, EventVocab> = {
     holdingDetail:
       "Set up a secure, insured place to receive the proceeds when the exit comes, so nothing is deployed before there is a plan.",
     pauseDetail:
-      "Hold off on irreversible commitments ahead of the exit — no new share arrangements, side deals, or discretionary investment mandates until the structure is settled.",
+      "Hold off on irreversible commitments ahead of the exit, no new share arrangements, side deals, or discretionary investment mandates until the structure is settled.",
     documents:
       "your corporate minute books, shareholder agreements, cap table, financial statements, and your own will and powers of attorney",
     taxSentence:
@@ -168,7 +168,7 @@ export function taxExposureBody(catalyst: string | null | undefined, probateExpo
   return (
     `There are structural tax drags apparent in your profile. ${v.taxSentence} Let's address tax exposures before any money moves.` +
     (probateExposure
-      ? " BC probate fees run about 1.4% on estate value over $50,000 — and assets held in joint tenancy or a trust may bypass probate entirely, so structure matters before anything is distributed."
+      ? " BC probate fees run about 1.4% on estate value over $50,000, and assets held in joint tenancy or a trust may bypass probate entirely, so structure matters before anything is distributed."
       : "")
   );
 }
@@ -181,7 +181,7 @@ function governanceDetail(catalyst: string | null | undefined): Record<string, O
   return {
     none: {
       value: "No written charter",
-      note: "Decisions are being made case-by-case, without documented rules of engagement or family boundaries — the most common way well-intentioned capital gets pulled off course.",
+      note: "Decisions are being made case-by-case, without documented rules of engagement or family boundaries, the most common way well-intentioned capital gets pulled off course.",
       status: "gap",
     },
     legal_only: {
@@ -191,7 +191,7 @@ function governanceDetail(catalyst: string | null | undefined): Record<string, O
     },
     charter: {
       value: "Written family constitution in place",
-      note: "A charter is the strongest protection you can have — the work is keeping it current as your circumstances change.",
+      note: "A charter is the strongest protection you can have, the work is keeping it current as your circumstances change.",
       status: "strong",
     },
   };
@@ -207,7 +207,7 @@ function advisoryDetail(catalyst: string | null | undefined): Record<string, Omi
     },
     bank: {
       value: "One institution runs everything",
-      note: "A single bank or broker is steering the structure, and their incentive is their own product shelf — not necessarily your charter.",
+      note: "A single bank or broker is steering the structure, and their incentive is their own product shelf, not necessarily your charter.",
       status: "partial",
     },
     vfo: {
@@ -231,7 +231,7 @@ export function governanceDetails(
   let nextMove: string | undefined;
   if (gov && gov.status !== "strong") {
     nextMove =
-      "Draft a Sovereignty Charter: put your family boundaries and the purpose of your capital in writing before capital moves.";
+      "Draft a Sovereignty Charter™: put your family boundaries and the purpose of your capital in writing before capital moves.";
   } else if (adv && adv.status !== "strong") {
     nextMove =
       "Bring your professionals under one plan: an independent Family CFO chairs regular sessions so your accountant, " +

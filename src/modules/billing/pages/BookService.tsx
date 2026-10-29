@@ -187,7 +187,7 @@ export default function BookService({ embed = false }: { embed?: boolean }) {
                   <SelectContent>
                     {services.map((s) => (
                       <SelectItem key={s.id} value={s.id}>
-                        {s.name} — {formatMoney(s.price, s.currency)}
+                        {s.name}, {formatMoney(s.price, s.currency)}
                       </SelectItem>
                     ))}
                   </SelectContent>

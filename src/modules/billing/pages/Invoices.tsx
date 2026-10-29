@@ -97,7 +97,7 @@ export default function Invoices() {
       const result = await getInvoiceAgent().draftInvoice(prompt.trim());
       toast.success(
         result.needsContact
-          ? "Draft created — pick the client before sending."
+          ? "Draft created, pick the client before sending."
           : `Draft created for ${result.contact?.full_name}`,
       );
       setPrompt("");
@@ -120,7 +120,7 @@ export default function Invoices() {
     try {
       if (invoice.payment_method === "e_transfer") {
         await getInvoiceAgent().markSentManually(invoice.id);
-        toast.success("Invoice issued — send your e-Transfer request to the client.");
+        toast.success("Invoice issued, send your e-Transfer request to the client.");
       } else {
         const result = await getInvoiceAgent().sendInvoice(invoice.id);
         toast.success("Invoice sent through Square");
@@ -268,7 +268,7 @@ export default function Invoices() {
             />
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs text-muted-foreground">
-                Drafts land here for your review and are logged to the review queue — never sent automatically.
+                Drafts land here for your review and are logged to the review queue, never sent automatically.
               </p>
               <Button onClick={draft} disabled={drafting}>
                 {drafting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}

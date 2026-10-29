@@ -98,7 +98,7 @@ export default function ProPortalHousehold() {
             <Card className="border-accent/15">
               <CardHeader>
                 <CardTitle className="text-base font-serif flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4 text-accent" /> Sovereignty Charter
+                  <ShieldCheck className="h-4 w-4 text-accent" /> Sovereignty Charter™
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -106,7 +106,7 @@ export default function ProPortalHousehold() {
                   <p className="text-sm text-muted-foreground">No charter on file for this household yet.</p>
                 ) : (
                   <div>
-                    <div className="text-sm text-foreground font-medium">{governance.charter.title || "Sovereignty Charter"}</div>
+                    <div className="text-sm text-foreground font-medium">{governance.charter.title || "Sovereignty Charter™"}</div>
                     <div className="text-[11px] text-muted-foreground mt-0.5">
                       Last updated {format(new Date(governance.charter.updated_at), "PP")}
                     </div>

@@ -18,7 +18,7 @@ const REQUEST_TYPES = [
   { value: "banking_withdrawal", label: "Banking & Withdrawals", description: "Update banking info, request withdrawals, PAC/SWP changes" },
   { value: "personal_info", label: "Personal Info Changes", description: "Address, name, phone, email, beneficiary updates" },
   { value: "document_request", label: "Document Requests", description: "Tax slips, account statements, confirmation letters" },
-  { value: "data_access", label: "My Data — Access Request", description: "Request a summary/export of the personal information we hold about you" },
+  { value: "data_access", label: "My Data, Access Request", description: "Request a summary/export of the personal information we hold about you" },
   { value: "general_inquiry", label: "General Inquiry", description: "Anything else you need help with" },
 ];
 

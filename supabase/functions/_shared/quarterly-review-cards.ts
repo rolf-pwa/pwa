@@ -239,14 +239,14 @@ export function buildAlignmentCards(f: ReviewFacts): ReviewCard[] {
   // Charter
   {
     const status: AlignStatus = f.charter.source === null ? "Needs Attention" : f.charter.ratified ? "Aligned" : "Partial";
-    const desired = ["A ratified Sovereignty Charter that governs the whole system."];
+    const desired = ["A ratified Sovereignty Charter™ that governs the whole system."];
     const current = f.charter.source === null
       ? ["No Charter is on file, so nothing written governs the system yet."]
       : [`Charter is ${f.charter.ratified ? "ratified" : "not yet ratified"}${f.charter.source === "contact" ? " (earlier-format Charter)" : f.charter.source === "vault" ? " (signed copy in the Vault)" : ""}; ${plural(f.targets.length, "numeric figure")} read from it.`];
     const actions = f.charter.source === null ? ["Draft and ratify the Charter."] : f.charter.ratified ? [] : ["Ratify the Charter."];
     // Charter rules that belong to no one area (waiting periods, review triggers) are listed for reference.
     for (const r of rules) desired.push(`${r.label}${r.quote ? ` — “${r.quote.length > 110 ? `${r.quote.slice(0, 107)}...` : r.quote}”` : ""}.`);
-    cards.push(make("charter", "Sovereignty Charter", status, desired, current, actions, rules));
+    cards.push(make("charter", "Sovereignty Charter™", status, desired, current, actions, rules));
   }
 
   // Vineyard

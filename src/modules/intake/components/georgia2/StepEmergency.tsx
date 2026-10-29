@@ -44,7 +44,7 @@ export function StepEmergency() {
         onClick={() => dispatch({ type: "set_step", step: 3 })}
         className="mt-6 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
       >
-        This isn't urgent — continue my diagnostic
+        This isn't urgent, continue my diagnostic
       </button>
     </div>
   );

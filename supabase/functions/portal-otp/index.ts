@@ -111,7 +111,7 @@ serve(async (req) => {
         .maybeSingle();
 
       if (!contact) {
-        console.log(`[OTP] No contact found for email: ${cleanEmail} — returning silent success`);
+        console.log(`[OTP] No contact found for email: ${cleanEmail}, returning silent success`);
         return new Response(JSON.stringify({ sent: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });

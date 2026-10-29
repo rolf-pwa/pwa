@@ -39,7 +39,7 @@ export function inviteWelcomeEmail(firstName: string, portalLink: string): { sub
       <p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;">Sovereignty Operating System™</p>
       <h2 style="font-family:'Cormorant Garamond',serif;font-weight:300;font-size:24px;color:#1e293b;margin:4px 0 16px;">Welcome to ProsperWise</h2>
       <p style="font-size:14px;line-height:1.6;">Hi ${escapeHtml(firstName || "there")},</p>
-      <p style="font-size:14px;line-height:1.6;">Thank you for taking a look at the Sovereignty Operating System. I'm Georgia, Rolf's AI assistant, and I'll help you get started.</p>
+      <p style="font-size:14px;line-height:1.6;">Thank you for taking a look at the Sovereignty Operating System™. I'm Georgia, Rolf's AI assistant, and I'll help you get started.</p>
       <p style="font-size:14px;line-height:1.6;">Your private portal is ready. Your first steps take about ten minutes: confirm your household, tell us a little about what matters to you, add the documents you have to hand, and choose a time for your Survey Session with Rolf.</p>
       <p style="margin:24px 0;"><a href="${portalLink}" style="background:#1e293b;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:6px;font-size:14px;">Start your onboarding</a></p>
       <p style="font-size:13px;line-height:1.6;color:#64748b;">This link is personal to you and works for 7 days. After that you can always sign in at <a href="${APP_URL}/portal" style="color:#a37c58;">${APP_URL}/portal</a> with this email address.</p>

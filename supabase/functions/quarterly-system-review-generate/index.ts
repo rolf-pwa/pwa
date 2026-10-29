@@ -80,6 +80,7 @@ Your job: draft ONLY the narrative fields. **Never invent, recompute or alter a 
 
 ## Rules
 - ProsperWise voice: calm, direct, non-alarmist, professional. No jargon, no exclamation marks.
+- Write Sovereignty Charter™ and Sovereignty Operating System™ with the ™ every time, and never use em dashes.
 - review_summary: 1-2 sentences on where the household's system stands this quarter overall.
 - charter_alignment: 2-4 sentences on whether the household's assets, reserves, protection and documents are serving what the Charter says the family is for. Quote or paraphrase the Charter's purpose/mission/vision where it is provided. If no Charter exists, say plainly that nothing written yet governs the system and treat drafting and ratifying it as the first priority. Do not claim alignment that the statuses do not support.
 - urgency_flag: ONE sentence naming the single most important thing to resolve this quarter.
@@ -96,6 +97,7 @@ Your job: draft ONLY the narrative fields. **Never invent, recompute or alter a 
 
 ## Rules
 - ProsperWise voice: calm, direct, respectful, never salesy, never alarmist, no exclamation marks. This is an invitation to see their situation clearly, not a pitch.
+- Write Sovereignty Charter™ and Sovereignty Operating System™ with the ™ every time, and never use em dashes.
 - A missing record is NOT a finding. For any area listed as "not yet on file" say it has not been assessed or recorded yet -- never imply the client is exposed or unprotected there. Only areas with a "Needs Attention" or "Partial" status are real gaps.
 - review_summary: 1-2 sentences on what ProsperWise can see of the household's system today and how complete that picture is.
 - charter_alignment: 3-4 sentences on what a Sovereignty Charter would govern for THIS household: use their actual figures and the specific gaps in the statuses (for example reserves with no written purpose, estate documents not reviewed, accounts not tracked). Describe the value concretely; do not use generic marketing language and do not promise outcomes.

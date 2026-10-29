@@ -66,7 +66,7 @@ export const StepHouseholdContext = ({ state, saving, onSave }: Props) => {
         <div className="space-y-1.5">
           <h2 className="font-serif text-lg font-semibold text-foreground">A bit more context</h2>
           <p className="text-sm text-muted-foreground">
-            Everything here is optional — skip anything that doesn't apply. It just helps us understand
+            Everything here is optional, skip anything that doesn't apply. It just helps us understand
             the full picture before your Survey.
           </p>
         </div>
@@ -74,7 +74,7 @@ export const StepHouseholdContext = ({ state, saving, onSave }: Props) => {
         <div className="space-y-1.5">
           <Label htmlFor="ob-anchor-amount">Anchor transfer amount ($)</Label>
           <p className="text-xs text-muted-foreground">
-            Is there a dollar figure you're anchored to for this transfer — a number that would make you
+            Is there a dollar figure you're anchored to for this transfer, a number that would make you
             feel secure?
           </p>
           <Input
