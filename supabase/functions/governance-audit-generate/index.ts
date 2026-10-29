@@ -25,7 +25,7 @@
 // province, and its accounts' current Income/Equity split -- no fund-level
 // asset-class tracking exists here) are accepted as optional advisor-
 // supplied overrides in the request body, mirroring the household-track
-// Stabilization Map's own "Diagnostic Inputs" convention rather than
+// Transition Map's own "Diagnostic Inputs" convention rather than
 // guessing at them. Province defaults to "BC"; without a current-equity
 // input, the Capital Infrastructure scorecard element is left as an honest
 // "PENDING ADVISOR REVIEW" row rather than a fabricated score.

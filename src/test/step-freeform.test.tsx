@@ -115,7 +115,7 @@ describe("StepFreeform", () => {
 });
 
 describe("StepEmergency", () => {
-  it("shows reassurance and the Clarity Call page, with no emergency numbers or callback form", () => {
+  it("shows reassurance and the Talk It Through page, with no emergency numbers or callback form", () => {
     render(
       <Georgia2Provider>
         <Arrange step={5}>
@@ -124,7 +124,7 @@ describe("StepEmergency", () => {
       </Georgia2Provider>
     );
     expect(screen.getByText(/Nothing about your finances needs to be decided or moved today/)).toBeTruthy();
-    const link = screen.getByText("Book a Clarity Call").closest("a");
+    const link = screen.getByText("Book a Talk It Through").closest("a");
     expect(link?.getAttribute("href")).toBe("https://www.prosperwise.ca/clarity-call");
     const text = document.body.textContent ?? "";
     expect(text).not.toMatch(/911|9-8-8|988/);

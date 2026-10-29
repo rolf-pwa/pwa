@@ -14,7 +14,7 @@ const AccessDenied = () => {
         </h1>
         <p className="text-sm text-primary-foreground/60">
           Your email is not associated with a ProsperWise client account.
-          Please contact your Personal CFO if you believe this is an error.
+          Please contact your Family CFO if you believe this is an error.
         </p>
         <Button
           onClick={() => signOut()}

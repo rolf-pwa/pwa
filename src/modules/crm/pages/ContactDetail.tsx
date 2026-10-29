@@ -569,7 +569,7 @@ const ContactDetail = () => {
   const PHASES = [
     { num: 1, label: "Discovery" },
     { num: 2, label: "Charter Drafting" },
-    { num: 3, label: "Quiet Period" },
+    { num: 3, label: "Transition Period" },
     { num: 4, label: "Ratification" },
     { num: 5, label: "Sovereign" },
   ];

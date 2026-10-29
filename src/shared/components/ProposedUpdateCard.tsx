@@ -559,7 +559,7 @@ export function ProposedUpdateCard({ functionCall, contactId, householdId, isApp
         {isApproved ? (
           <div className="flex items-center gap-1.5 text-xs text-sanctuary-green">
             <CheckCircle2 className="h-3.5 w-3.5" />
-            <span className="font-medium">Approved by Personal CFO</span>
+            <span className="font-medium">Approved by Family CFO</span>
           </div>
         ) : queued ? (
           <div className="flex items-center gap-1.5 text-xs text-amber-600">

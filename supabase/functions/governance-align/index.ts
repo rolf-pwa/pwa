@@ -24,7 +24,7 @@ const CHARTER_SECTION_KEYS: { key: string; title: string; fields: string[] }[] =
   { key: "growth_policy", title: "Vineyard / Growth Policy", fields: ["growth_primary_detail", "growth_primary_label", "growth_secondary_detail", "growth_secondary_label"] },
   { key: "liquidity_policy", title: "Liquidity & Storehouse Policy", fields: ["storehouse_liquidity_detail", "storehouse_strategic_detail", "storehouse_philanthropic_detail", "storehouse_legacy_detail"] },
   { key: "harvest_policy", title: "Harvest / Withdrawal Policy", fields: ["harvest_yield_protocol", "harvest_spending_categories", "harvest_accounts_note", "withdrawal_safeguards"] },
-  { key: "quiet_period", title: "Quiet Period", fields: ["quiet_period", "secondary_quiet_period_rule"] },
+  { key: "quiet_period", title: "Transition Period", fields: ["quiet_period", "secondary_quiet_period_rule"] },
   { key: "governance", title: "Governance Authority & Roles", fields: ["governance_authority", "roles_responsibilities", "monitoring_cadence", "conflict_resolution"] },
   { key: "succession", title: "Succession & Executors", fields: ["executor_primary", "executor_alternate", "succession_terms"] },
 ];

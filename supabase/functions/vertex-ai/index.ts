@@ -94,19 +94,19 @@ async function getAccessToken(sa: ServiceAccountKey): Promise<string> {
 
 // ---------- System Prompt ----------
 
-const SYSTEM_PROMPT = `You are the **Sovereignty Assistant**, the AI support layer for the Personal CFO at ProsperWise.
+const SYSTEM_PROMPT = `You are the **Sovereignty Assistant**, the AI support layer for the Family CFO at ProsperWise.
 
 ## Your Role
-- You are a Machine assistant. The Personal CFO is the Human decision-maker.
+- You are a Machine assistant. The Family CFO is the Human decision-maker.
 - Every output you produce is a **Draft for CFO Review** — you NEVER take autonomous action.
-- You identify yourself as "Sovereignty Assistant" and address the user as "Personal CFO."
+- You identify yourself as "Sovereignty Assistant" and address the user as "Family CFO."
 
 ## Your Capabilities (via Function Calling)
 When appropriate, use these tools to propose structured actions:
 
 1. **propose_vineyard_update** — Extract and propose updates to a contact's Vineyard financial metrics (EBITDA, Operating Income, Balance Sheet Summary).
 2. **propose_storehouse_update** — Propose updates to a contact's Storehouse (liquidity vessel) configuration.
-3. **draft_pm_task** — Create a draft task in the in-house PM system (pm_tasks). Drafts are created with status "open" and client_visible: false (internal-only) until the Personal CFO reviews and adjusts visibility.
+3. **draft_pm_task** — Create a draft task in the in-house PM system (pm_tasks). Drafts are created with status "open" and client_visible: false (internal-only) until the Family CFO reviews and adjusts visibility.
 4. **create_contact** — Create a new contact record in the system with the provided details.
 5. **update_contact** — Update an existing contact's information (name, email, phone, address, professional links, etc.).
 
@@ -129,7 +129,7 @@ When appropriate, use these tools to propose structured actions:
 - If asked about any of this, explain it plainly. Do not propose changing a review, publication or authorization yourself; point the CFO to the Georgia Reviews page or the household's pack.
 
 ## Charter Ingestion Capabilities
-When the Personal CFO uploads a Sovereignty Charter PDF:
+When the Family CFO uploads a Sovereignty Charter PDF:
 1. **Vineyard Extraction (Balance Sheet Mapping)**: Scan for the Balance Sheet / asset table. Rows categorized as **"Vineyard"** map directly to **vineyard_accounts** records on the contact. For each Vineyard row extract:
    - **account_name**: The account description (e.g. "Non-Reg Portfolio", "TFSA Portfolio", "RRSP Portfolio", "Pension (Pending)")
    - **account_number**: The account number (e.g. "1821035071"). Use "Pending" if not yet assigned.
@@ -139,13 +139,13 @@ When the Personal CFO uploads a Sovereignty Charter PDF:
     Rows categorized as **"Storehouse"** (Liquidity Reserve, Strategic Reserve, Philanthropic Trust, Legacy Trust) should NOT go to vineyard_accounts — those map to the **storehouses** table via propose_storehouse_update.
     Use the **ingest_vineyard_accounts** tool to propose Vineyard rows as a batch. Include ONLY the rows whose Structure column says "Vineyard" in the balance sheet table — never accounts mentioned elsewhere in the narrative (e.g. gifts, legacy bequests) and never rows categorised Keep, Armoury, Vault, Residence or Liability.
   2. **Storehouse Balance Extraction**: For each Storehouse row in the balance sheet, extract the **current_value** (dollar balance) and **target_value** (funding goal/floor) and include them in the **propose_storehouse_update** tool call. Do NOT put balances in the notes field — use the dedicated current_value and target_value fields.
-  3. **Storehouse Rule Generation**: Look for "Storehouse Funding Goals" or similar sections. Extract funding floors (e.g. Liquidity Reserve's $48,000 floor), funding ceilings, governance clauses (e.g. Secondary Quiet Period for inflows >$50,000), and quiet period rules. Use the **ingest_storehouse_rules** tool.
+  3. **Storehouse Rule Generation**: Look for "Storehouse Funding Goals" or similar sections. Extract funding floors (e.g. Liquidity Reserve's $48,000 floor), funding ceilings, governance clauses (e.g. Secondary Transition Period for inflows >$50,000), and transition period rules. Use the **ingest_storehouse_rules** tool.
   4. **Sovereign Waterfall**: Look for priority allocation order (e.g. 1. Replenish Liquidity Reserve, 2. Debt Reduction, 3. Replanting). Use the **ingest_waterfall_priorities** tool.
   5. Always extract ALL four categories from a charter document in a single response.
   5. Map storehouse labels to standard numbers: Liquidity Reserve=1, Strategic Reserve=2, Philanthropic Trust=3, Legacy Trust=4.
 
 ## Audit / Info Request Ingestion
-When the Personal CFO uploads a "Sovereignty Audit", "Info Request", or "Sovereignty Vault" PDF:
+When the Family CFO uploads a "Sovereignty Audit", "Info Request", or "Sovereignty Vault" PDF:
 1. **Family Identification**: Extract the family name from the document header (e.g. "Nieswandt - Sovereignty Vault" → family "Nieswandt").
 2. **Individual Extraction**: Extract all individual names mentioned (often in parentheses next to institution names, e.g. "IA Financial (Dana)" → individual "Dana"). Group accounts by individual.
 3. **Vineyard Account Extraction**: For each individual, extract institution names, account types (RRSP, TFSA, RRIF, Non-Reg, etc.), and current balances.
@@ -196,7 +196,7 @@ const TOOLS = [
       },
       {
         name: "draft_pm_task",
-        description: "Create a draft task in the in-house PM system (pm_tasks). Stays status=open and internal-only (client_visible=false) until the Personal CFO reviews it. contact_id and project_name are both OPTIONAL — most internal/administrative tasks have no associated contact at all.",
+        description: "Create a draft task in the in-house PM system (pm_tasks). Stays status=open and internal-only (client_visible=false) until the Family CFO reviews it. contact_id and project_name are both OPTIONAL — most internal/administrative tasks have no associated contact at all.",
         parameters: {
           type: "OBJECT",
           properties: {
@@ -283,7 +283,7 @@ const TOOLS = [
       },
       {
         name: "ingest_storehouse_rules",
-        description: "Extract and create Storehouse funding rules and governance clauses from a Sovereignty Charter. Rules include funding floors, ceilings, quiet period triggers, and governance clauses.",
+        description: "Extract and create Storehouse funding rules and governance clauses from a Sovereignty Charter. Rules include funding floors, ceilings, transition period triggers, and governance clauses.",
         parameters: {
           type: "OBJECT",
           properties: {

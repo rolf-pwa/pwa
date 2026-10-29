@@ -1,6 +1,6 @@
 // sovereignty-diagnostics.ts
 // Deterministic (non-AI) financial/document diagnostics for the household-track
-// Sovereignty Survey Stabilization Map. Pure functions + Supabase queries only —
+// Transition Survey Transition Map. Pure functions + Supabase queries only —
 // no HTTP/CORS handling — so this stays independently testable and reusable.
 //
 // Numbers here are computed in code, never by the AI: the generation edge
@@ -283,7 +283,7 @@ export interface LoanFlag {
  * the classic CRA s.15(2) trap (a loan from a corp to a shareholder must be
  * repaid within one year after the corp's fiscal year-end or it's deemed
  * income). Deliberately generic over any liabilities array, not tied to the
- * household-track Stabilization Map, so the Quarterly VFO Audit Agent can
+ * household-track Transition Map, so the Quarterly VFO Audit Agent can
  * reuse this same helper later instead of reimplementing the check.
  */
 export function computeIntercompanyLoanFlags(liabilities: any[], asOf: Date = new Date()): LoanFlag[] {

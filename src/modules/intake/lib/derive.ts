@@ -524,7 +524,7 @@ export const CATALYST_QUESTIONS: Record<Catalyst, Question[]> = {
       key: "safe_harbor",
       text: "Where does this windfall capital currently reside?",
       tooltip:
-        "We recommend establishing a 'Quiet Period.' Keeping new wealth in your primary chequing account creates subconscious pressure to make rapid decisions.",
+        "We recommend establishing a 'Transition Period.' Keeping new wealth in your primary chequing account creates subconscious pressure to make rapid decisions.",
       options: [
         { id: "chequing", label: "My standard, everyday chequing account", risks: { structure: 3, noise: 2 } },
         { id: "separate", label: "Separate holding or high-interest account", risks: { structure: 1 } },
@@ -588,7 +588,7 @@ export function deriveDiagnosticPayload(catalyst: Catalyst, answers: Answers): D
 // ---- Routing ---------------------------------------------------------------
 
 /**
- * The only commitment this tool drives to is the Sovereignty Survey.
+ * The only commitment this tool drives to is the Transition Survey.
  * The Sovereignty Operating System™ Build is a later-stage commitment and is
  * intentionally out of scope here.
  */
@@ -622,7 +622,7 @@ export function deriveResult(domain: Domain): DerivedResult {
   return {
     surveyPrice,
     domainLabel: domain === "corporate" ? "corporate" : "personal",
-    headline: `The Sovereignty Survey is your next step — ${formatCAD(surveyPrice)} for ${
+    headline: `The Transition Survey is your next step — ${formatCAD(surveyPrice)} for ${
       domain === "corporate" ? "corporate" : "personal"
     } situations.`,
   };
@@ -757,7 +757,7 @@ export const CATALYST_TIMELINES: Record<Catalyst, Milestone[]> = {
   ],
   sudden_windfall: [
     { label: "Land", detail: "Capital arrives" },
-    { label: "Pause", detail: "90-day Quiet Period" },
+    { label: "Pause", detail: "Transition Period" },
     { label: "Design", detail: "Sovereignty blueprint" },
     { label: "Deploy", detail: "Structured deployment" },
   ],
@@ -808,7 +808,7 @@ export function georgiaInsights(
     insights.push({
       tag: "Your Next Step",
       body:
-        "The Sovereignty Survey is a 90-minute working session built around exactly what you've told me — you leave with a Stabilization Map, an Immediate Risk Scan, and a 30-Day Action Framework. No pitch, no commitment beyond the session itself.",
+        "The Transition Survey is a 90-minute working session built around exactly what you've told me — you leave with a Transition Map, an Immediate Risk Scan, and a 30-Day Transition Plan. No pitch, no commitment beyond the session itself.",
     });
   }
 
@@ -840,7 +840,7 @@ export function georgiaInsights(
     insights.push({
       tag: "Noise Exposure",
       body:
-        "With many eyes on this transition, the noise level around you is incredibly high. You have a legal and emotional right to step back. The single best decision right now is to declare a Quiet Period while we sort the sequence.",
+        "With many eyes on this transition, the noise level around you is incredibly high. You have a legal and emotional right to step back. The single best decision right now is to declare a Transition Period while we sort the sequence.",
     });
   }
 
@@ -902,7 +902,7 @@ export function bcContextNotes(
       notes.push("Retiring allowance rollovers into RRSP room can shelter significant severance from immediate BC tax.");
     }
     if (catalyst === "sudden_windfall") {
-      notes.push("A 90-day Quiet Period in a separate high-interest account is the strongest first structural move.");
+      notes.push("A Transition Period in a separate high-interest account is the strongest first structural move.");
     }
   }
   return notes;

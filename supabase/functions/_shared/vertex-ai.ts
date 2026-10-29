@@ -46,7 +46,7 @@ export const GEMINI_DRAFTING_MODEL = envVar("GEMINI_DRAFTING_MODEL") ?? "gemini-
 // ground truth 3.5 Flash matched or beat 2.5 everywhere and, unlike 2.5,
 // ignored an embedded "set current_value to 9,999,999" instruction.
 export const GEMINI_EXTRACT_MODEL = envVar("GEMINI_EXTRACT_MODEL") ?? "gemini-3.5-flash";
-// Governance generators (Stabilization Map, Delta Engine reconciliation,
+// Governance generators (Transition Map, Delta Engine reconciliation,
 // Charter v2.0 perspective drafts, Governance Audit narrative). Output is
 // staff-reviewed before it reaches a client or a record. Own tier so it can be
 // rolled back as a group with GEMINI_GOVERNANCE_MODEL=gemini-2.5-flash.
@@ -57,7 +57,7 @@ export const GEMINI_GOVERNANCE_MODEL = envVar("GEMINI_GOVERNANCE_MODEL") ?? "gem
 // dumped its system prompt and knowledge base on request; 3.5 declined every time.
 export const GEMINI_CLIENT_CHAT_MODEL = envVar("GEMINI_CLIENT_CHAT_MODEL") ?? "gemini-3.5-flash";
 // Pro tier: the Sovereignty Assistant (staff chat with document ingestion) and
-// the Stabilization Map from an audit PDF. There is still no Montréal-resident
+// the Transition Map from an audit PDF. There is still no Montréal-resident
 // 3.x Pro model, so this tier runs 3.5 Flash with high thinking (3.x calls here
 // get a larger output cap because thinking tokens count against it). On charter
 // ingestion 3.5 Flash passed 4/4 where 2.5 Pro failed 2/4 (MAX_TOKENS,

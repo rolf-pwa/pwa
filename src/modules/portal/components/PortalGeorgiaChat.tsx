@@ -183,7 +183,7 @@ export function PortalGeorgiaChat({ open, onOpenChange, contactName, contactId, 
         role: "assistant",
         content: acknowledgement
           ? `${acknowledgement} Is there anything else I can help you with?`
-          : "Your request has been submitted successfully! Your Personal CFO will review it and follow up with you shortly. Is there anything else I can help you with?",
+          : "Your request has been submitted successfully! Your Family CFO will review it and follow up with you shortly. Is there anything else I can help you with?",
       },
     ]);
     if (acknowledgement) serverCount.current += 1;

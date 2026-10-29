@@ -128,7 +128,7 @@ export function PortalIntakePage({ portalToken, onBack, onComplete }: Props) {
           <div className="py-10 text-center">
             <Inbox className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
-              Your vault is still being prepared. We'll let you know as soon as your Sovereignty Survey is
+              Your vault is still being prepared. We'll let you know as soon as your Transition Survey is
               open.
             </p>
           </div>

@@ -20,7 +20,7 @@ interface Props {
   onConfirm: () => void;
 }
 
-/** Legacy-upgrade Step 4 (last step) — book the stabilization session via the
+/** Legacy-upgrade Step 4 (last step) — book the transition survey via the
  *  firm's Google Calendar link, then confirm to finish onboarding. */
 export const StepBookMeeting = ({ fullName, email, saving, onConfirm }: Props) => {
   const [iframeLoading, setIframeLoading] = useState(true);
@@ -42,7 +42,7 @@ export const StepBookMeeting = ({ fullName, email, saving, onConfirm }: Props) =
         <div className="space-y-1.5">
           <h2 className="font-serif text-lg font-semibold text-foreground">Book your meeting</h2>
           <p className="text-sm text-muted-foreground">
-            Last step — pick a time for your Stabilization Session below. Once you've booked,
+            Last step — pick a time for your Transition Survey below. Once you've booked,
             confirm it here.
           </p>
         </div>

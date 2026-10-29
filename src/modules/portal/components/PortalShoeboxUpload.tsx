@@ -98,7 +98,7 @@ export function PortalShoeboxUpload({ portalToken, householdId, row }: Props) {
       if (okCount > 0) {
         toast({
           title: okCount === 1 ? "Sent to your Shoebox" : `${okCount} files sent to Shoebox`,
-          description: "Your Personal CFO will review and file it for you.",
+          description: "Your Family CFO will review and file it for you.",
         });
       }
     } catch (e: any) {

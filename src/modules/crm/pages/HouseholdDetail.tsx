@@ -326,7 +326,7 @@ const HouseholdDetail = () => {
       }
       setHousehold((prev: any) => ({ ...prev, ...flagPatch }));
 
-      toast.success("Enrolled — the Sovereignty Survey intake will now appear in this household's portal.");
+      toast.success("Enrolled — the Transition Survey intake will now appear in this household's portal.");
     } finally {
       setEnrollingIntake(false);
     }
@@ -661,7 +661,7 @@ const HouseholdDetail = () => {
               </AlertDialogContent>
             </AlertDialog>
 
-            {/* The setup fields (governance status, fiduciary entity, quiet period) are no longer on this page; the address stays as a line. */}
+            {/* The setup fields (governance status, fiduciary entity, transition period) are no longer on this page; the address stays as a line. */}
             {household.address && <p className="mt-3 flex items-start gap-2 text-sm" data-testid="household-address"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />{household.address}</p>}
           </CardContent>
         </Card>

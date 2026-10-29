@@ -1140,7 +1140,7 @@ const VfoPortal = () => {
                     <h3 className="font-serif text-sm font-semibold text-foreground">Send a document</h3>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Statements, tax slips, anything your Personal CFO should have. Files go to your Shoebox and are filed for you.
+                    Statements, tax slips, anything your Family CFO should have. Files go to your Shoebox and are filed for you.
                   </p>
                   <PortalShoeboxUpload portalToken={portalToken} householdId={household?.id} />
                 </CardContent>

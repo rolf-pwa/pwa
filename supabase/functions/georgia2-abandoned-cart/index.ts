@@ -1,5 +1,5 @@
 // georgia2-abandoned-cart — one gentle follow-up for Georgia leads who clicked
-// "Start the Sovereignty Survey" but never paid. Called daily by pg_cron (see
+// "Start the Transition Survey" but never paid. Called daily by pg_cron (see
 // the scheduling migration) with a shared secret; there is no browser-facing
 // path. A lead is eligible when it is still status = 'pending_survey_payment'
 // (payment flips it to converted_to_contact via convertMatchingLeads), the
@@ -64,11 +64,11 @@ export function abandonedCartEmailHtml(firstName: string, spoke: string | null, 
       <p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;">Sovereignty Operating System™</p>
       <h2 style="font-family:'Cormorant Garamond',serif;font-weight:300;font-size:24px;color:#1e293b;margin:4px 0 16px;">Still here when you're ready</h2>
       <p style="font-size:14px;line-height:1.6;">Hi ${escapeHtml(firstName)},</p>
-      <p style="font-size:14px;line-height:1.6;">You started your Sovereignty Survey after completing the diagnostic, and I didn't want it to slip away. ${escapeHtml(spokeLine)}</p>
+      <p style="font-size:14px;line-height:1.6;">You started your Transition Survey after completing the diagnostic, and I didn't want it to slip away. ${escapeHtml(spokeLine)}</p>
       ${frictionLine ? `<p style="font-size:14px;line-height:1.6;">${escapeHtml(frictionLine)}</p>` : ""}
       <p style="font-size:14px;line-height:1.6;">The Survey is a working session built around exactly what you told Georgia. You can pick it up whenever you're ready:</p>
-      <p style="margin:24px 0;"><a href="${SURVEY_URL}" style="background:#1e293b;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:6px;font-size:14px;">Continue to the Sovereignty Survey</a></p>
-      <p style="font-size:14px;line-height:1.6;">Prefer to talk it through first? <a href="${CLARITY_URL}" style="color:#a37c58;">Book a short clarity call</a> — no commitment.</p>
+      <p style="margin:24px 0;"><a href="${SURVEY_URL}" style="background:#1e293b;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:6px;font-size:14px;">Continue to the Transition Survey</a></p>
+      <p style="font-size:14px;line-height:1.6;">Prefer to talk it through first? <a href="${CLARITY_URL}" style="color:#a37c58;">Book a short Talk It Through</a> — no commitment.</p>
       <p style="font-size:14px;line-height:1.6;margin-top:24px;">— Rolf &amp; the ProsperWise team</p>
       <p style="font-size:11px;line-height:1.5;color:#94a3b8;margin-top:28px;border-top:1px solid #e2e8f0;padding-top:12px;">You're receiving this one follow-up because you completed the Sovereignty Diagnostic on prosperwise.ca. If you'd rather not hear from us, just reply to this email and we'll remove you.</p>
     </div>
@@ -117,7 +117,7 @@ Deno.serve(async (req) => {
   for (const lead of leads ?? []) {
     const ok = await sendServiceEmail(db, {
       to: lead.email,
-      subject: "Your Sovereignty Survey — still here when you're ready",
+      subject: "Your Transition Survey — still here when you're ready",
       html: abandonedCartEmailHtml(lead.first_name, lead.spoke, lead.primary_friction),
       from: GEORGIA_SENDER,
     });

@@ -121,7 +121,7 @@ type ApiResponse = {
 
 const SOVEREIGN_ARCHITECT_SYSTEM_PROMPT = `ROLE
 
-You are the "Sovereign Architect." Your role is to draft the $3,999 Sovereignty Charter—a formal family constitution. You utilize the BMgt and CLU perspective to create a document of partner-level quality intended to drive referrals from Legal and Tax professionals.
+You are the "Sovereign Architect." Your role is to draft the Sovereignty Charter™—a formal family constitution. You utilize the BMgt and CLU perspective to create a document of partner-level quality intended to drive referrals from Legal and Tax professionals.
 
 CORE PHILOSOPHY
 
@@ -129,13 +129,13 @@ The Perimeter: The Charter is the boundary between family peace and "The Noise."
 
 Professional Alliance: We do not compete with the Lawyer/CPA; we provide the strategic architecture that their documents must inhabit.
 
-Command Phase: This document marks the end of "The Quiet Period."
+Command Phase: This document marks the end of "The Transition Period."
 
 DRAFTING STRUCTURE
 
 1. Preamble, Mission, & Vision
 
-Define the transition and the end of the Quiet Period.
+Define the transition and the end of the Transition Period.
 
 Synthesize the "Purpose of Capital" into a 1-2 sentence Mission.
 
@@ -151,7 +151,7 @@ Article III: Fiduciary Alliance: Specific directives for Legal and Tax partners.
 
 Article IV: Succession: Detailed instructions for Executors and Trustees.
 
-Article VI: Future Inflows: Codify the Secondary Quiet Period (90 days) for all future inheritances over $50k.
+Article VI: Future Inflows: Codify the Secondary Transition Period (no fixed length) for all future inheritances over $50k.
 
 3. Appendix A: The Structural Architecture
 
@@ -173,7 +173,7 @@ Detail the replenishment of the Philanthropic Trust (Cash) and Strategic Reserve
 
 5. Ratification
 
-Include signature blocks for the Sovereign, Personal CFO, Legal Counsel, and Tax Professional.
+Include signature blocks for the Sovereign, Family CFO, Legal Counsel, and Tax Professional.
 
 TONE & VOICE
 
@@ -218,19 +218,19 @@ function buildDefaultCharter(contact: any, family: any | null, totalStewardship:
     subtitle: "A constitutional framework for financial governance",
     intro_heading: "Constitutional Framework\nfor Financial Governance",
     intro_callout: `The assets of ${resolvedFullName} are to be governed as a Vineyard designed to serve stability, legacy, and disciplined decision-making rather than short-term reaction.`,
-    intro_note: "This portrait format mirrors the Stabilization Map and Quarterly Review so the Charter reads like one unified governance system.",
+    intro_note: "This portrait format mirrors the Transition Map and Quarterly Review so the Charter reads like one unified governance system.",
     mission_of_capital: `The current territory is stewarded toward durable household stability, tax-aware growth, and long-horizon legacy transfer. ${family?.annual_savings ? `The family is currently tracking approximately ${formatCurrency(family.annual_savings)} in annual savings capacity.` : "The strategy should define a target after-tax cash flow threshold and a reinvestment discipline."}`,
     vision_20_year: `${family?.total_family_assets ? `Current tracked family assets are ${formatCurrency(family.total_family_assets)}.` : `Current tracked stewardship value is ${formatCurrency(totalStewardship)}.`} The long-range objective is to compound core Vineyard assets, protect key reserves, and preserve intergenerational optionality through a deliberate governance structure.`,
-    governance_authority: `${resolvedFullName} remains the sovereign decision-maker. ProsperWise serves as Personal CFO, coordinating structure, sequencing, and the architectural integrity of the Charter.`,
+    governance_authority: `${resolvedFullName} remains the sovereign decision-maker. ProsperWise serves as Family CFO, coordinating structure, sequencing, and the architectural integrity of the Charter.`,
     conflict_resolution: `${contact.poa_name ? `Powers of Attorney currently noted: ${contact.poa_name}.` : "Powers of Attorney should be named explicitly."} In incapacity events, this Charter operates as an interpretive guide for aligned decision-making.`,
     fiduciary_alliance: `${contact.lawyer_name || contact.accountant_name ? `Current professionals include ${[contact.lawyer_name, contact.accountant_name].filter(Boolean).join(" and ")}.` : "Legal and tax professionals should be linked to this Charter."} All structural and tax actions remain subject to professional review.`,
     quiet_period: quietDate
-      ? `A quiet period anchor exists from ${quietDate}. New capital events should pause for structured integration before deployment.`
-      : "Capital inflows above the family threshold should trigger a quiet period before new deployment decisions are finalized.",
+      ? `A transition period anchor exists from ${quietDate}. New capital events should pause for structured integration before deployment.`
+      : "Capital inflows above the family threshold should trigger a transition period before new deployment decisions are finalized.",
     architecture_intro: "The Vineyard serves as the master container for income-generating assets. Principal is protected by design; only designated harvest should move into storehouse allocation.",
     protected_assets_note: "No protected accounts have been explicitly classified yet.",
     harvest_accounts_note: "No eligible harvest accounts are currently defined.",
-    appendix_note: "This appendix condenses the current territory into a printable schedule so the Charter, Stabilization Map, and Quarterly Review all reference the same canonical structure.",
+    appendix_note: "This appendix condenses the current territory into a printable schedule so the Charter, Transition Map, and Quarterly Review all reference the same canonical structure.",
     footer_status: contact.households?.governance_status === "sovereign" ? "Ratified / Sovereign phase" : "Draft / review in progress",
     footer_date_label: quietDate || "Ratification date to be confirmed",
     custom_sections: { pageOne: [], pageTwo: [] },
@@ -404,9 +404,9 @@ PURPOSE & OBJECTIVES (strings; from the Charter draft's "Purpose & Objectives" s
 - long_term_strategy: 2-4 sentences on the long-term capital deployment strategy (growth assets, reserves, philanthropic intent)
 
 GOVERNANCE & SAFEGUARDS (strings):
-- roles_responsibilities: who decides what (Sovereign / Personal CFO / advisors)
+- roles_responsibilities: who decides what (Sovereign / Family CFO / advisors)
 - withdrawal_safeguards: rules and limits around withdrawals from growth assets
-- secondary_quiet_period_rule: rule for future inflows above the family's threshold (e.g., "All future inflows over $50k trigger a 90-day Quiet Period")
+- secondary_quiet_period_rule: rule for future inflows above the family's threshold (e.g., "All future inflows over $50k trigger a Transition Period")
 - professional_coordination: how lawyer/CPA/insurance professionals coordinate with the Charter
 - monitoring_cadence: how often the Charter is reviewed (quarterly, annually, etc.)
 
@@ -436,7 +436,7 @@ SUCCESSION (strings):
 - succession_terms: 2-4 sentences summarizing succession terms and instructions to executors
 
 RATIFICATION:
-- ratification_signatories: a JSON array of objects with shape { "role": string, "name": string, "signed_at": string|null }. Include the Sovereign, Personal CFO, Legal Counsel, and Tax Professional. Use empty string for "name" if unknown and null for "signed_at" if not yet signed.
+- ratification_signatories: a JSON array of objects with shape { "role": string, "name": string, "signed_at": string|null }. Include the Sovereign, Family CFO, Legal Counsel, and Tax Professional. Use empty string for "name" if unknown and null for "signed_at" if not yet signed.
 
 CUSTOM SECTIONS:
 - custom_sections: an object with pageOne and pageTwo arrays, where each array contains objects with title, meta, and body. Keep pageOne containers constitutional/governance oriented and pageTwo containers operational/container oriented.

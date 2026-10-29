@@ -194,7 +194,7 @@ export function SovereigntyAssistant({
                   <Shield className="h-6 w-6 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium">Ready to assist, Personal CFO</p>
+                  <p className="text-sm font-medium">Ready to assist, Family CFO</p>
                   <p className="mt-1 text-xs text-muted-foreground max-w-[280px]">
                     Upload documents for analysis, ask about contact financials, or request draft emails and tasks.
                   </p>

@@ -12,7 +12,7 @@ export function PortalTimeline({ auditTrail }: Props) {
         <Clock className="h-12 w-12 text-muted-foreground/40 mb-4" />
         <h3 className="text-lg font-semibold text-foreground font-serif">Governance Timeline</h3>
         <p className="text-sm text-muted-foreground mt-2 max-w-sm">
-          Key governance decisions will appear here as they are ratified by your Personal CFO.
+          Key governance decisions will appear here as they are ratified by your Family CFO.
         </p>
       </div>
     );

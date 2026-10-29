@@ -1,6 +1,6 @@
 // booking-enrollment.ts
 // When a public website booking is paid, turn the buyer into a real CRM record
-// and enroll them in the Sovereignty Survey (document) workflow:
+// and enroll them in the Transition Survey (document) workflow:
 //   1. link/create a contact (matched on email)
 //   2. create a family + household when the contact is brand new
 //   3. leave the household in `stabilization` so the portal Audit checklist

@@ -1,4 +1,4 @@
-// Shared by the Sovereignty Review and the Stabilization Map: gathers what the capital-allocation rules need
+// Shared by the Sovereignty Review and the Transition Map: gathers what the capital-allocation rules need
 // (income funds and withdrawals on each account, real-estate Storehouse rows, insurance cash value) and returns
 // the household's balance-sheet figures. The pure rules live in quarterly-review-allocation.ts.
 //

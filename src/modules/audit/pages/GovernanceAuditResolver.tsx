@@ -7,7 +7,7 @@ import { toast } from "sonner";
 /**
  * Resolves /governance-audit/household/:householdId into an actual audit
  * id, then redirects to /governance-audit/:id -- same pattern as
- * StabilizationMapResolver.tsx. Unlike the Stabilization Map, there's no
+ * StabilizationMapResolver.tsx. Unlike the Transition Map, there's no
  * "no existing map yet" first-run distinction worth surfacing: every open
  * either lands on the most recent audit for this household, or generates
  * a brand new one on the spot.

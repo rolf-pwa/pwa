@@ -215,7 +215,7 @@ export default function Leads() {
       if (contactErr || !contact) throw contactErr ?? new Error("Failed to create contact");
 
       // 4. Mark lead as converted (hide from queue) and, for discovery leads only,
-      // carry over any Stabilization Map (georgia2 leads have no equivalent).
+      // carry over any Transition Map (georgia2 leads have no equivalent).
       if (convertTarget.source === "discovery") {
         await supabase
           .from("discovery_leads")
@@ -277,7 +277,7 @@ export default function Leads() {
             <p className="text-muted-foreground">
               <strong>Convert to Contact</strong> initializes a Family and Household in the
               Sovereignty Tree, creates a Contact record, and triggers fee tier calculation
-              (Stabilization Map carry-over applies to VFO Onboarding leads only).{" "}
+              (Transition Map carry-over applies to VFO Onboarding leads only).{" "}
               <strong>Dismiss</strong> removes the lead from this queue without creating any records.
             </p>
           </div>
@@ -380,7 +380,7 @@ export default function Leads() {
                           </Button>
                           <Button size="sm" variant="ghost" onClick={() => navigate(`/stabilization-map/lead/${lead.id}`)}>
                             <FileText className="mr-1.5 h-3.5 w-3.5" />
-                            Stabilization Map
+                            Transition Map
                           </Button>
                           <Button
                             size="sm"

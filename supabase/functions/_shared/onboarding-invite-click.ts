@@ -1,5 +1,5 @@
 // onboarding-invite-click.ts: what a click on an invitation link does. Called from intake-portal's public `invite_click` action.
-// First click only: record it, switch Georgia's onboarding on for the household (the same Sovereignty Survey onboarding a paid client
+// First click only: record it, switch Georgia's onboarding on for the household (the same Transition Survey onboarding a paid client
 // gets), open or wake her case, and email the head of household (and the spouse, if they have an email) their portal link at once.
 // Later clicks just count. Georgia's mode is respected: in shadow mode nothing is sent, and when she is off nothing starts.
 
@@ -76,6 +76,6 @@ export async function ensureNoChargeBooking(db: any, memberIds: string[], contac
   const { data: service } = await db.from("services").select("id").ilike("name", "%sovereignty%audit%").limit(1).maybeSingle();
   await db.from("service_bookings").insert({
     contact_id: contactId, service_id: service?.id ?? null, status: "confirmed", payment_status: "not_required", amount: 0, total: 0, currency: "CAD",
-    paid_at: new Date().toISOString(), notes: "Invited by Rolf: Sovereignty Survey onboarding. No payment required.",
+    paid_at: new Date().toISOString(), notes: "Invited by Rolf: Transition Survey onboarding. No payment required.",
   });
 }

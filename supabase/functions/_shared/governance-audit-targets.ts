@@ -15,7 +15,7 @@
 // prototype's author test-extracted the real Lively-Lambert Charter and
 // asked the extraction model to characterize its tone, it concluded the
 // Charter reads as *moderately* growth-oriented (hard non-alienation
-// clause, $48k Keep floor, 90-day quiet period) -- the opposite of the
+// clause, $48k Keep floor, transition period) -- the opposite of the
 // 80/20 aggressive-edge split the real advisor actually used for this
 // client. That's a live demonstration that this specific judgment call is
 // not safe to automate silently. So this module only computes the

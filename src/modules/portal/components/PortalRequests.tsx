@@ -114,7 +114,7 @@ export function PortalRequests({ requests, contactId, contactName, portalToken, 
         <ClipboardList className="mx-auto h-8 w-8 text-muted-foreground/40 mb-3" />
         <p className="text-sm text-muted-foreground">No requests submitted yet.</p>
         <p className="text-xs text-muted-foreground mt-1">
-          Use "Ask Georgia for Help" to submit a request to your Personal CFO.
+          Use "Ask Georgia for Help" to submit a request to your Family CFO.
         </p>
       </div>
     );
@@ -229,7 +229,7 @@ export function PortalRequests({ requests, contactId, contactName, portalToken, 
                         }`}
                       >
                         <p className="text-[10px] font-medium mb-0.5 opacity-70">
-                          {msg.sender_type === "advisor" ? "Your Personal CFO" : "You"}
+                          {msg.sender_type === "advisor" ? "Your Family CFO" : "You"}
                         </p>
                         <p className="whitespace-pre-wrap"><LinkifyText text={msg.content} /></p>
                         <p className="text-[9px] opacity-50 mt-1">

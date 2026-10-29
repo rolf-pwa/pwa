@@ -460,7 +460,7 @@ serve(async (req) => {
       });
     }
 
-    // ---- syncContact (push Sanctuary contact → Quo, name+phone only) ----
+    // ---- syncContact (push ProsperWise contact → Quo, name+phone only) ----
     if (action === "syncContact") {
       const { contactId } = body;
       const { data: contact, error: cErr } = await adminClient

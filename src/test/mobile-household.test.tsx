@@ -34,7 +34,7 @@ describe("the household page on a phone", () => {
   it("has no setup fields on the household page, and keeps the address as a line", () => {
     expect(src).not.toContain("household-setup-fields");
     expect(src).not.toContain("Fiduciary Entity");
-    expect(src).not.toContain("Quiet Period Start");
+    expect(src).not.toContain("Transition Period Start");
     expect(src).not.toContain("<OnboardingInviteCard householdId={id!} embedded /></div>");
     expect(src).toContain('data-testid="household-address"');
   });

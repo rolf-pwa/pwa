@@ -38,7 +38,7 @@ export interface EstateAdult {
 }
 
 export interface EstateFacts {
-  /** documents = read from the Vault and approved in Glass-Box; manual = typed on the Stabilization Map; none = nothing. */
+  /** documents = read from the Vault and approved in Glass-Box; manual = typed on the Transition Map; none = nothing. */
   source: "documents" | "manual" | "none";
   adults: EstateAdult[];
   trusts: number;
@@ -164,7 +164,7 @@ const withMoves = (status: AlignStatus, moves: Move[], area: MoveArea): AlignSta
 
 /**
  * Builds the estate facts the Review and the Governance Audit both use: per adult, a signed Will and a Power of Attorney
- * read from documents approved in Glass-Box; with no documents, the hand-entered Stabilization Map statuses; else none.
+ * read from documents approved in Glass-Box; with no documents, the hand-entered Transition Map statuses; else none.
  */
 export function estateFactsFrom(
   contacts: Array<{ id: string; first_name: string | null; family_role: string | null }>,
@@ -403,7 +403,7 @@ export function computeDeltas(
 
 export type ReviewMode = "quarterly" | "survey";
 
-/** Chartered (ratified Charter) households get the Quarterly Review; everyone else gets the Sovereignty Survey. */
+/** Chartered (ratified Charter) households get the Quarterly Review; everyone else gets the Transition Survey. */
 export function reviewMode(charter: { source: "vault" | "household" | "contact" | null; ratified: boolean }): ReviewMode {
   return charter.source !== null && charter.ratified ? "quarterly" : "survey";
 }

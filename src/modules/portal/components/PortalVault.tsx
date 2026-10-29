@@ -229,7 +229,7 @@ export function PortalVault({ portalToken, householdId }: Props) {
     } catch (e: any) {
       toast({
         title: "Could not open file",
-        description: e.message || "Please try again or ask your Personal CFO.",
+        description: e.message || "Please try again or ask your Family CFO.",
         variant: "destructive",
       });
     } finally {
@@ -367,7 +367,7 @@ export function PortalVault({ portalToken, householdId }: Props) {
             Your secure vault has not been activated yet.
           </p>
           <p className="text-xs text-muted-foreground">
-            Your Personal CFO will set this up for your household.
+            Your Family CFO will set this up for your household.
           </p>
         </CardContent>
       </Card>
@@ -484,7 +484,7 @@ export function PortalVault({ portalToken, householdId }: Props) {
                     ? "There are no family documents here yet."
                     : activeKind === "entity"
                       ? "There are no company documents here yet."
-                    : "Your Personal CFO has not shared any documents yet."
+                    : "Your Family CFO has not shared any documents yet."
                 : "This folder is empty."}
             </p>
           </CardContent>

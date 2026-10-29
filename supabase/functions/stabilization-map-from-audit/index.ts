@@ -84,13 +84,13 @@ async function getAccessToken(sa: ServiceAccountKey): Promise<string> {
 
 // ---------- Extraction Prompt ----------
 
-const EXTRACTION_PROMPT = `You are an expert ProsperWise stabilization analyst. You are drafting a one-page **Stabilization Map** that Rolf Issler will review with the client in their Stabilization Session.
+const EXTRACTION_PROMPT = `You are an expert ProsperWise stabilization analyst. You are drafting a one-page **Transition Map** that Rolf Issler will review with the client in their Transition Survey.
 
 You will receive:
 1. A PDF of the client's completed **Sovereignty Audit** (a structured intake covering Family, Inventory, Nucleus/Why, Protocols, and Governance Audit sections).
 2. The client's first name.
 
-Your job: read the entire PDF carefully and fill every field of the Stabilization Map with concrete, client-specific content derived STRICTLY from the audit.
+Your job: read the entire PDF carefully and fill every field of the Transition Map with concrete, client-specific content derived STRICTLY from the audit.
 
 ## Reading the Audit
 - **Part 1 (Your Family)**: family members, spouses, children, special-needs flags.
@@ -102,7 +102,7 @@ Your job: read the entire PDF carefully and fill every field of the Stabilizatio
 
 ## Rules
 - **Never fabricate** numbers, dates, firm names, or facts not present in the audit. If unknown, say so ("amount unspecified", "tax advisor not yet engaged", etc.).
-- **Write in the Sanctuary voice** — calm, direct, non-alarmist, professional. No jargon. No exclamations.
+- **Write in the ProsperWise voice** — calm, direct, non-alarmist, professional. No jargon. No exclamations.
 - **Each risk and next step MUST be a single line, max ~70 characters**, following the template style ("Short noun phrase — concrete consequence or action").
 - **Always fill all 5 risks and all 5 next steps**. Prioritise the most material exposures revealed by the audit (e.g. missing EPOA, no Liquidity Rule met, untested executor, concentrated single-institution risk, no Storehouse, no Generosity protocol, looming taxable events, etc.).
 - **Status fields** MUST use the exact enum values:
@@ -127,7 +127,7 @@ const TOOL_SCHEMA = {
   functionDeclarations: [
     {
       name: "populate_stabilization_map",
-      description: "Populate every field of the Stabilization Map from the Sovereignty Audit PDF.",
+      description: "Populate every field of the Transition Map from the Sovereignty Audit PDF.",
       parameters: {
         type: "OBJECT",
         properties: {
@@ -290,7 +290,7 @@ serve(async (req) => {
     const intakeText =
       `Client first name: ${contact.first_name || "(unknown)"}\n` +
       (pdfName ? `Audit file: ${pdfName}\n` : "") +
-      `Generate the Stabilization Map by reading the attached PDF.`;
+      `Generate the Transition Map by reading the attached PDF.`;
 
     console.log(`[stabilization-map-from-audit] Calling Vertex for contact ${contactId} (map ${mapId})`);
 
@@ -399,7 +399,7 @@ serve(async (req) => {
         contact_id: contactId,
         user_id: userId,
         action_type: "stabilization_map_from_audit",
-        action_description: `Stabilization Map generated from Sovereignty Audit${pdfName ? `: ${pdfName}` : ""}`,
+        action_description: `Transition Map generated from Sovereignty Audit${pdfName ? `: ${pdfName}` : ""}`,
         proposed_data: { mapId, fileName: pdfName || null },
       });
     } catch (e) {

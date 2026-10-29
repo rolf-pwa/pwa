@@ -1,7 +1,7 @@
 // Intercompany/Shareholder Loan Audit (CRA s.15(2)): a scheduled, firm-wide
 // sweep of every shareholder/intercompany loan on file, surfaced proactively
 // via a staff notification -- independent of whether anyone's looked at that
-// household's Stabilization Map recently (the only other place
+// household's Transition Map recently (the only other place
 // computeIntercompanyLoanFlags is currently invoked, one household at a
 // time). Dual-mode, mirroring daily-briefing-generate's exact
 // isCronCaller/staff-JWT structure -- cron path for the quarterly schedule,
