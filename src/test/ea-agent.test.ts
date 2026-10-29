@@ -212,13 +212,39 @@ describe("linking tasks to clients", () => {
 import { emailText, stoppedText } from "../../supabase/functions/_shared/ea-agent";
 
 describe("when she runs out of steps", () => {
-  it("has room to work: ten steps", () => { expect(MAX_STEPS).toBe(10); });
+  it("has room to work: sixteen steps", () => { expect(MAX_STEPS).toBe(16); });
   it("says what she did so far, so the next turn carries on and does not start over", () => {
     const t = stoppedText([{ name: "search_email", args: { query: "Geneva" } }, { name: "create_task", args: { title: "Address failed payment" } }]);
     expect(t).toContain("search email (Geneva)");
     expect(t).toContain("create task (Address failed payment)");
     expect(t).toMatch(/carry on/);
     expect(stoppedText([])).toContain("nothing yet");
+  });
+});
+
+describe("working within her steps", () => {
+  const call = (name: string, args: Record<string, unknown> = {}) => ({ parts: [{ functionCall: { name, args } }] });
+  it("runs searches asked for in the same step together, but changes one at a time in order", async () => {
+    const order: string[] = [];
+    const runTool = vi.fn(async (name: string) => { order.push(`start ${name}`); await new Promise((r) => setTimeout(r, 5)); order.push(`end ${name}`); return { ok: true, message: "ok" }; });
+    let n = 0;
+    const callModel = vi.fn(async () => (n++ === 0 ? { parts: [{ functionCall: { name: "search_email", args: {} } }, { functionCall: { name: "search_tasks", args: {} } }] } : n === 2 ? { parts: [{ functionCall: { name: "create_task", args: {} } }, { functionCall: { name: "complete_task", args: {} } }] } : { parts: [{ text: "Done." }] }));
+    await runAgentTurn([{ role: "user", parts: [{ text: "go" }] }], { callModel, runTool });
+    expect(order.slice(0, 4)).toEqual(["start search_email", "start search_tasks", "end search_email", "end search_tasks"]);
+    expect(order.slice(4)).toEqual(["start create_task", "end create_task", "start complete_task", "end complete_task"]);
+  });
+  it("tells her two steps before the end to answer with what she has", async () => {
+    const seen: string[] = [];
+    const callModel = vi.fn(async (contents: { parts: { text?: string }[] }[]) => { const last = contents[contents.length - 1].parts.find((p) => p.text?.includes("two steps left")); if (last) seen.push(last.text!); return call("search_email"); });
+    const r = await runAgentTurn([{ role: "user", parts: [{ text: "go" }] }], { callModel, runTool: async () => ({ ok: true, message: "ok" }) });
+    expect(r.stoppedEarly).toBe(true);
+    expect(seen.length).toBe(1);
+    expect(seen[0]).toContain("tell Rolf what you found");
+    expect(callModel).toHaveBeenCalledTimes(MAX_STEPS);
+  });
+  it("is told to work economically, asking for independent searches together", () => {
+    expect(SYSTEM_PROMPT).toContain("Ask for several searches in the same step");
+    expect(SYSTEM_PROMPT).toContain("if two searches find nothing, say so");
   });
 });
 
