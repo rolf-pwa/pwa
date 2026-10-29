@@ -99,6 +99,12 @@ function pacificMidnightUtcIso(dateStr: string): string {
   return new Date(`${dateStr}T00:00:00${offset === -7 ? "-07:00" : "-08:00"}`).toISOString();
 }
 
+const BRIEFING_MAX_OUTPUT_TOKENS = 8192;
+// deno-lint-ignore no-explicit-any
+const briefingCall = (r: any) => (r?.candidates?.[0]?.content?.parts ?? []).find((p: any) => p.functionCall)?.functionCall;
+// deno-lint-ignore no-explicit-any
+const briefingFinish = (r: any) => `finish: ${r?.candidates?.[0]?.finishReason ?? (r?.promptFeedback?.blockReason ? `blocked ${r.promptFeedback.blockReason}` : "no candidate")}`;
+
 // deno-lint-ignore no-explicit-any
 type Db = any;
 
@@ -681,22 +687,27 @@ Call populate_daily_briefing with all fields filled.
 Facts:
 ${block}`;
 
-    const result = await generateVertexContent(
+    // Gemini 3 spends part of the output budget on thinking: with a tight cap the answer can run out before the function call, so the cap is generous,
+    // and an empty answer gets one more try before the briefing is reported as failed (with the reason, so it can be diagnosed).
+    // deno-lint-ignore no-explicit-any
+    const ask = (): Promise<any> => generateVertexContent(
       sa,
       GEMINI_DRAFTING_MODEL,
       [{ role: "user", parts: [{ text: prompt }] }],
-      withThinking(GEMINI_DRAFTING_MODEL, { temperature: 0.3, maxOutputTokens: 2048 }, "low"),
+      withThinking(GEMINI_DRAFTING_MODEL, { temperature: 0.3, maxOutputTokens: BRIEFING_MAX_OUTPUT_TOKENS }, "low"),
       {
         tools: [BRIEFING_TOOL_SCHEMA],
         toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["populate_daily_briefing"] } },
       },
     );
-
-    // deno-lint-ignore no-explicit-any
-    const parts = result.candidates?.[0]?.content?.parts || [];
-    // deno-lint-ignore no-explicit-any
-    const fnCall = parts.find((p: any) => p.functionCall)?.functionCall;
-    if (!fnCall?.args) throw new Error("AI did not return structured data");
+    let result = await ask();
+    let fnCall = briefingCall(result);
+    if (!fnCall?.args) {
+      console.error("[briefing] no function call, trying once more:", briefingFinish(result));
+      result = await ask();
+      fnCall = briefingCall(result);
+    }
+    if (!fnCall?.args) throw new Error(`AI did not return structured data (${briefingFinish(result)})`);
 
     // Resolve each cited fact_index back to its real, deterministically-built
     // label/link -- never trust AI-generated text as a URL. Out-of-range or
