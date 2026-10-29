@@ -640,7 +640,7 @@ export default function StabilizationMap() {
                       <BsRow label="Net Worth" value={fmtCurrency(diag.net_worth ?? diag.aum)} strong />
                       <div style={{ marginTop: "auto", paddingTop: "1.5mm" }}>
                         <hr style={{ border: "none", borderTop: "1.5px solid #334155", margin: "0 0 1.5mm" }} />
-                        <BsRow label="Total Liabilities & Net Worth" value={fmtCurrency((diag.personal_liabilities_total ?? 0) + (diag.corp_liabilities_total ?? 0) + (diag.net_worth ?? diag.aum ?? 0))} strong />
+                        <BsRow label="Total Liabilities & Net Worth" value={fmtCurrency((diag.personal_liabilities_total ?? 0) + (diag.corp_liabilities_total ?? 0) + (diag.allocation?.credit_capacity ?? 0) + (diag.net_worth ?? diag.aum ?? 0))} strong />
                       </div>
                     </div>
                   </div>
