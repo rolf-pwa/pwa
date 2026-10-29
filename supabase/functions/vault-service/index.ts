@@ -24,6 +24,7 @@ import { classifyShoeboxFile, buildProposedFilename, resolvePrimaryAdultName } f
 import { planBulkStatement, normalizeContract, isIsoDate, type AccountHit, type BulkPlan } from "../_shared/bulk-statement-plan.ts";
 import { autoFileBlocker, isSignedCopy, uniqueFilename } from "../_shared/vault-shoebox-naming.ts";
 import { driveDownloadFile, matchVaultCategoryFolder } from "../_shared/vault-provisioning.ts";
+import { vaultContentsSummary, vaultHasContentsError } from "../_shared/vault-contents.ts";
 import { logActionEvent } from "../_shared/action-brain.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
 import { provisionClientFolderTree } from "../_shared/vault-provisioning.ts";
@@ -1371,7 +1372,7 @@ serve(async (req) => {
     if (action === "provisionVault") {
       if (actor.kind !== "staff")
         return new Response(JSON.stringify({ error: "staff_only" }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
-      const { householdId, contactId, parentFolderId, force } = body;
+      const { householdId, contactId, parentFolderId, force, acknowledgeContents } = body;
       if (!parentFolderId || (!householdId && !contactId))
         return new Response(JSON.stringify({ error: "householdId (or contactId) and parentFolderId required" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
 
@@ -1392,6 +1393,13 @@ serve(async (req) => {
       if (!hh) return new Response(JSON.stringify({ error: "household_not_found" }), { status: 404, headers: { ...cors, "Content-Type": "application/json" } });
       if (hh.vault_root_folder_id && !force) {
         return new Response(JSON.stringify({ ok: true, folderId: hh.vault_root_folder_id, alreadyExists: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+      }
+
+      if (force && hh.vault_root_folder_id && acknowledgeContents !== true) {
+        try {
+          const held = vaultContentsSummary(await driveListChildren(hh.vault_root_folder_id, accessToken));
+          if (held.folders.length || held.files) return new Response(JSON.stringify({ error: vaultHasContentsError(held) }), { status: 409, headers: { ...cors, "Content-Type": "application/json" } });
+        } catch { /* couldn't look: the staff confirmation still applies */ }
       }
 
       const familyName = (hh as any).families?.name ?? hh.label ?? "Household";
@@ -2233,11 +2241,11 @@ serve(async (req) => {
     if (action === "provisionFamilyStructure") {
       if (actor.kind !== "staff")
         return new Response(JSON.stringify({ error: "staff_only" }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
-      const { householdId, force } = body;
+      const { householdId, force, acknowledgeContents } = body;
       if (!householdId) return new Response(JSON.stringify({ error: "householdId required" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
       const { data: p } = await supabaseAdmin.from("profiles").select("email").eq("user_id", actor.userId).maybeSingle();
-      const result = await provisionClientFolderTree(supabaseAdmin, householdId, "staff", { force: force === true, requestedBy: { id: actor.userId, email: p?.email ?? null } });
-      if (!result.ok) return new Response(JSON.stringify({ error: result.error }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
+      const result = await provisionClientFolderTree(supabaseAdmin, householdId, "staff", { force: force === true, acknowledgeContents: acknowledgeContents === true, requestedBy: { id: actor.userId, email: p?.email ?? null } });
+      if (!result.ok) return new Response(JSON.stringify({ error: result.error }), { status: result.error?.startsWith("vault_has_contents") ? 409 : 500, headers: { ...cors, "Content-Type": "application/json" } });
       return new Response(JSON.stringify({ ok: true, vaultRootFolderId: result.vaultRootFolderId, personalDrawers: result.personalDrawers ?? 0 }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
 

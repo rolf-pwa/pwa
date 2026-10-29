@@ -76,6 +76,23 @@ export async function callVault(action: string, payload: Record<string, unknown>
   return json;
 }
 
+/**
+ * Calls a provisioning action that can replace a household's current Vault. When the server says the Vault being
+ * replaced still holds folders or files, shows what is in it and only goes ahead if staff confirm again. Returns
+ * null when staff decline.
+ */
+export async function callVaultReplacing(action: string, payload: Record<string, unknown>) {
+  try {
+    return await callVault(action, payload);
+  } catch (e: any) {
+    const m = /^vault_has_contents: (.*)$/.exec(e?.message ?? "");
+    if (!m) throw e;
+    const ok = window.confirm(`WARNING: this household's current Vault is not empty. It holds ${m[1]}.\n\nReplacing it unlinks all of that from the CRM and the portal (the Drive folders are left where they are, but nothing filed in them will show).\n\nUse "Complete structure" instead if you only need missing folders. Replace the Vault anyway?`);
+    if (!ok) return null;
+    return await callVault(action, { ...payload, acknowledgeContents: true });
+  }
+}
+
 function FolderNode({
   folderId,
   name,
@@ -1001,7 +1018,8 @@ function DrawersPanel({ householdId }: { householdId: string }) {
     if (fresh && !window.confirm("Build a BRAND-NEW family structure for this household?\n\nThis creates a new Family Vault, Household Vault, Personal Docs and Family Docs in Drive and points the system at them. The existing folders stay in Drive but are no longer linked, and anything filed in them is no longer shown in the portal.\n\nContinue?")) return;
     setBusy(fresh ? "fresh" : "complete");
     try {
-      const res = await callVault("provisionFamilyStructure", { householdId, force: fresh });
+      const res = await callVaultReplacing("provisionFamilyStructure", { householdId, force: fresh });
+      if (!res) return;
       toast.success(fresh ? "New structure created" : `Structure complete${res.personalDrawers ? `: ${res.personalDrawers} personal drawer${res.personalDrawers === 1 ? "" : "s"} added` : ""}`);
       await load();
     } catch (e: any) { toast.error(e.message); }
@@ -1172,7 +1190,8 @@ export function VaultView({ forcedHouseholdId, familyTreeId, embedded = false, s
     if (force && !window.confirm("Create a NEW vault folder for this household? The old root will be left in Drive but unlinked.")) return;
     setProvisioning(true);
     try {
-      const res = await callVault("provisionVault", { householdId, parentFolderId, force });
+      const res = await callVaultReplacing("provisionVault", { householdId, parentFolderId, force });
+      if (!res) return;
       toast.success(force ? "New vault provisioned" : "Vault provisioned");
       setRootId(res.folderId);
     } catch (e: any) {
