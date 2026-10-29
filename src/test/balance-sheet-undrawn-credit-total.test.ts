@@ -10,3 +10,10 @@ describe("balance sheet total with undrawn credit", () => {
     });
   }
 });
+
+describe("quarterly review stores the credit figure", () => {
+  it("saves credit_capacity in the stored allocation so the document can show the offset", () => {
+    const src = readFileSync("supabase/functions/quarterly-system-review-generate/index.ts", "utf8");
+    expect(src).toMatch(/allocation: \{[^}]*credit_capacity: allocation\.creditCapacity/);
+  });
+});

@@ -447,7 +447,7 @@ serve(async (req) => {
     const diagnostics = {
       ...adjDiag, charter_file: charterFile, charter_extract: charterExtract, income_sources: vaultExtract?.income_sources ?? [], track_type, deltas,
       harvest: { current: allocation.harvest, accounts_read: allocation.accountsWithWithdrawalData },
-      allocation: { notes: allocation.notes, income_funds_moved: allocation.incomeFundsMoved, income_funds_on_file: allocation.incomeFundsOnFile, cash_value_added: allocation.cashValueAdded, real_estate_added: allocation.realEstateAdded },
+      allocation: { notes: allocation.notes, income_funds_moved: allocation.incomeFundsMoved, income_funds_on_file: allocation.incomeFundsOnFile, cash_value_added: allocation.cashValueAdded, real_estate_added: allocation.realEstateAdded, credit_capacity: allocation.creditCapacity, credit_lines: allocation.creditLines },
       estate: { source: estate.source, adults: estate.adults, trusts: estate.trusts },
       tracked_accounts: readAccounts.length, accounts: withStatements.length, data_completeness: completeness,
     };
