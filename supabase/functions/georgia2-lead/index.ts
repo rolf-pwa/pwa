@@ -50,7 +50,7 @@ function computeNarrativeInsights(
   if (risk.readiness_score <= 40) {
     insights.push({
       tag: "Decision Readiness",
-      body: "It is completely normal to feel paralyzed right now. Your nervous system is catching up with a massive life change. We will prioritize reducing your cognitive overhead — no major plans are needed today.",
+      body: "It is completely normal to feel paralyzed right now. Your nervous system is catching up with a massive life change. We will prioritize reducing your cognitive overhead, no major plans are needed today.",
     });
   }
   if (risk.structure_safety <= GOVERNANCE_SHOW_AT) {
@@ -80,7 +80,7 @@ function computeNarrativeInsights(
   if (insights.length === 0) {
     insights.push({
       tag: "Foundations in Good Standing",
-      body: "Your answers point to a steady footing — decision readiness, governance, noise, and tax exposure are all within a healthy range. The plan below is about keeping it that way while capital moves.",
+      body: "Your answers point to a steady footing, decision readiness, governance, noise, and tax exposure are all within a healthy range. The plan below is about keeping it that way while capital moves.",
     });
   }
   return insights;
@@ -98,10 +98,10 @@ function computeBcContextNotes(domain: "corporate" | "personal", catalyst: strin
       notes.push("Without an active HoldCo, retained earnings face full corporate + personal tax on distribution.");
     }
     if (answers.lcge === "unsure") {
-      notes.push("Multiplying the LCGE through family trusts requires 24-month share holding rules — plan early.");
+      notes.push("Multiplying the LCGE through family trusts requires 24-month share holding rules, plan early.");
     }
     if (answers.purification === "yes") {
-      notes.push("Excess passive cash inside the OpCo can disqualify the LCGE — purification is the first move.");
+      notes.push("Excess passive cash inside the OpCo can disqualify the LCGE, purification is the first move.");
     }
   }
   if (domain === "personal") {
@@ -474,7 +474,7 @@ serve(async (req) => {
           bcNotes: computeBcContextNotes(data.domain, data.catalyst, data.answers),
           validation,
         });
-        const subject = "Your Confidential Roadmap — ProsperWise";
+        const subject = "Your Confidential Roadmap, ProsperWise";
 
         // Reflecting the lead's own self-reported answers back to them
         // isn't the leak this shield exists to prevent (same rationale

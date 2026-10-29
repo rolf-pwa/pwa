@@ -77,7 +77,7 @@ export const OnboardingShell = ({ portalToken, onBack, onAskForHelp }: Props) =>
       <Card>
         <CardContent className="space-y-3 p-6 text-center">
           <p className="text-sm text-muted-foreground">
-            Your household isn't in the Transition Survey onboarding flow — everything you need is
+            Your household isn't in the Transition Survey onboarding flow, everything you need is
             in your portal.
           </p>
           <Button variant="outline" size="sm" onClick={onBack}>
@@ -109,7 +109,7 @@ export const OnboardingShell = ({ portalToken, onBack, onAskForHelp }: Props) =>
     <div className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-2">
         <PartyPopper className="h-4 w-4 shrink-0 text-primary" />
-        Your onboarding is complete — thank you. We'll take it from here.
+        Your onboarding is complete, thank you. We'll take it from here.
       </div>
       <Button variant="outline" size="sm" className="shrink-0" onClick={() => setSummaryOpen(true)}>
         <FileText className="h-4 w-4" />
@@ -129,7 +129,7 @@ export const OnboardingShell = ({ portalToken, onBack, onAskForHelp }: Props) =>
             </h1>
             <p className="max-w-2xl text-sm text-muted-foreground">
               {state.household.onboardingIntroText ??
-                "I'm Georgia. There are a few short steps to get your Transition Survey underway — no pressure, no sales, and you can stop and come back at any time."}
+                "I'm Georgia. There are a few short steps to get your Transition Survey underway, no pressure, no sales, and you can stop and come back at any time."}
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={onAskForHelp} className="shrink-0">

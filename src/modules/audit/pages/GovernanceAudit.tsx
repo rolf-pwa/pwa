@@ -113,7 +113,7 @@ const DISCLOSURE_FOOTER =
   "ability of the issuing insurer. Tax: Prosperwise does not provide legal or tax advice; all strategies should be ratified by a " +
   "CPA or Tax Lawyer. Market Risk: managed portfolios are subject to market fluctuations and may lose value.";
 
-const DRAFT_WATERMARK_TEXT = "DRAFT — FOR INTERNAL REVIEW ONLY, NOT FOR CLIENT DELIVERY";
+const DRAFT_WATERMARK_TEXT = "DRAFT, FOR INTERNAL REVIEW ONLY, NOT FOR CLIENT DELIVERY";
 
 function ScoreBadge({ row }: { row: { currentScore?: number; current_score?: number; maxScore?: number; max_score?: number; status: string } }) {
   const score = row.currentScore ?? row.current_score ?? 0;
@@ -288,7 +288,7 @@ export default function GovernanceAudit() {
         )}
         {isGenerating && (
           <div className="border-t border-amber-300 bg-amber-50 px-6 py-2 text-xs text-amber-800">
-            Assembling the audit — extracting documents, computing figures, and drafting the narrative. Auto-refreshing every 3 seconds…
+            Assembling the audit, extracting documents, computing figures, and drafting the narrative. Auto-refreshing every 3 seconds…
           </div>
         )}
       </div>
@@ -297,7 +297,7 @@ export default function GovernanceAudit() {
         <div className="print:hidden mx-auto flex max-w-[900px] items-center justify-between gap-3 border-b border-primary/20 bg-primary/5 px-6 py-2 text-sm">
           <span>This household's Charter is still on the v1 format.</span>
           <Button size="sm" variant="outline" onClick={() => navigate(`/charter-intake/household/${audit.household_id}`)}>
-            Migrate to Sovereignty Charter v2.0
+            Migrate to Sovereignty Charter™ v2.0
           </Button>
         </div>
       )}
@@ -308,7 +308,7 @@ export default function GovernanceAudit() {
             <AlertDialogTitle>Finalize this audit?</AlertDialogTitle>
             <AlertDialogDescription>
               This removes the DRAFT watermark, signaling the document is ready for client delivery. You can mark it back
-              to draft at any time — finalizing doesn't lock the content or prevent regeneration.
+              to draft at any time, finalizing doesn't lock the content or prevent regeneration.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -364,7 +364,7 @@ export default function GovernanceAudit() {
                   <p style={colText}>
                     {doc.charter_summary.source === null
                       ? "No Charter is on file for this household."
-                      : `Sovereignty Charter ${doc.charter_summary.ratified ? "ratified" : "not yet ratified"}.`}
+                      : `Sovereignty Charter™ ${doc.charter_summary.ratified ? "ratified" : "not yet ratified"}.`}
                   </p>
                   {doc.charter_summary.purpose && <p style={{ ...colText, fontStyle: "italic", color: "#64748b", marginTop: "1.5mm" }}>“{doc.charter_summary.purpose}”</p>}
                 </div>
@@ -611,7 +611,7 @@ export default function GovernanceAudit() {
               )}
               {doc.narrative_ungrounded_dollar_figures.length > 0 && (
                 <div>
-                  <p className="mb-1 font-medium text-destructive">Unverified dollar figures in the draft narrative — review before delivery</p>
+                  <p className="mb-1 font-medium text-destructive">Unverified dollar figures in the draft narrative, review before delivery</p>
                   <ul className="list-disc space-y-0.5 pl-5">
                     {doc.narrative_ungrounded_dollar_figures.map((f, i) => <li key={i}>{f}</li>)}
                   </ul>

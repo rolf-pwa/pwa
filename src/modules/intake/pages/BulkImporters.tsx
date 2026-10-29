@@ -81,7 +81,7 @@ function RegistryImporter() {
             {plan.duplicateContracts?.length > 0 && (
               <div className="mb-3 text-xs text-amber-600 flex items-start gap-2">
                 <AlertTriangle className="h-3.5 w-3.5 mt-0.5" />
-                <span>{plan.duplicateContracts.length} contract number(s) already exist in Holding Tank — will be skipped: {plan.duplicateContracts.slice(0, 6).join(", ")}{plan.duplicateContracts.length > 6 ? "…" : ""}</span>
+                <span>{plan.duplicateContracts.length} contract number(s) already exist in Holding Tank, will be skipped: {plan.duplicateContracts.slice(0, 6).join(", ")}{plan.duplicateContracts.length > 6 ? "…" : ""}</span>
               </div>
             )}
             <div className="max-h-96 overflow-y-auto space-y-2 border rounded p-2">
@@ -95,7 +95,7 @@ function RegistryImporter() {
                     <div key={j} className="ml-3 mt-0.5">
                       {m.existing_contact_id ? "· " : "+ "}{m.first_name} {m.last_name}
                       <span className="text-muted-foreground"> ({m.container}{m.storehouse_label ? `: ${m.storehouse_label}` : ""})</span>
-                      <span className="text-muted-foreground"> — {m.accounts.length} account{m.accounts.length !== 1 ? "s" : ""}</span>
+                      <span className="text-muted-foreground">, {m.accounts.length} account{m.accounts.length !== 1 ? "s" : ""}</span>
                     </div>
                   ))}
                 </div>
@@ -338,7 +338,7 @@ function PerformanceImporter() {
             <div>
               <Label className="text-xs">Upload XLSX</Label>
               <Input type="file" accept=".xlsx,.xls" onChange={(e) => e.target.files?.[0] && parseFile(e.target.files[0])} />
-              {file && <p className="text-xs text-muted-foreground mt-1">{file.name} — {rows.length} rows</p>}
+              {file && <p className="text-xs text-muted-foreground mt-1">{file.name}, {rows.length} rows</p>}
             </div>
             <div>
               <Label className="text-xs">Snapshot Date</Label>
@@ -359,7 +359,7 @@ function PerformanceImporter() {
 
       {report && (
         <Card>
-          <CardHeader><CardTitle>Match Report — {report.snapshot_date}</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Match Report, {report.snapshot_date}</CardTitle></CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
               <Stat label="Total rows" value={report.total_rows} />
@@ -421,7 +421,7 @@ function PerformanceImporter() {
                   {report.missing.map((m: any) => (
                     <li key={m.id} className="flex items-center gap-2">
                       <input type="checkbox" aria-label={`Close #${m.accountNumber}`} checked={closeSel.has(m.id)} onChange={() => setCloseSel((s) => { const n = new Set(s); n.has(m.id) ? n.delete(m.id) : n.add(m.id); return n; })} />
-                      <span>#{m.accountNumber} — {m.owner || "no owner"} · {m.label} · {m.custodian}</span>
+                      <span>#{m.accountNumber}, {m.owner || "no owner"} · {m.label} · {m.custodian}</span>
                     </li>
                   ))}
                 </ul>
@@ -437,11 +437,11 @@ function PerformanceImporter() {
             {report.unmatched_no_contact?.length > 0 && (
               <div className="text-xs">
                 <div className="font-medium text-destructive mb-1 flex items-center gap-1">
-                  <AlertTriangle className="h-3 w-3" /> {report.unmatched_no_contact.length} rows had no matching contract AND no matching contact — skipped:
+                  <AlertTriangle className="h-3 w-3" /> {report.unmatched_no_contact.length} rows had no matching contract AND no matching contact, skipped:
                 </div>
                 <ul className="max-h-40 overflow-y-auto border rounded p-2 space-y-0.5">
                   {report.unmatched_no_contact.map((u: any, i: number) => (
-                    <li key={i}>#{u.contract} — {u.first} {u.last} ({u.registration})</li>
+                    <li key={i}>#{u.contract}, {u.first} {u.last} ({u.registration})</li>
                   ))}
                 </ul>
               </div>

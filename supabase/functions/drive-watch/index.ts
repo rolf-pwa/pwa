@@ -280,7 +280,7 @@ function inferSourceKind(name: string, mimeType?: string): "quarterly_review" | 
   // Quarterly Governance Review PDFs (saved from the QSR page) — pin to Portal Reviews
   if (normalized.includes("quarterly") || normalized.includes("governance review") || normalized.includes("qsr")) return "quarterly_review";
   if (normalized.includes("transcript") || normalized.includes("meeting")) return "meeting_transcript";
-  if (normalized.includes("stabilization") || normalized.includes("session")) return "stabilization_session";
+  if (normalized.includes("stabilization") || normalized.includes("transition survey") || normalized.includes("transition map") || normalized.includes("session")) return "stabilization_session";
   if (normalized.includes("statement") || normalized.includes("account") || normalized.includes("pdf")) return "statement";
   return "note";
 }

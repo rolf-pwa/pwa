@@ -133,7 +133,7 @@ export const StepHouseholdProfile = ({ state, saving, onSave }: Props) => {
             />
             {legacyUpgrade && (
               <p className="text-xs text-muted-foreground">
-                On file — let us know if this needs to change.
+                On file, let us know if this needs to change.
               </p>
             )}
           </div>
@@ -150,7 +150,7 @@ export const StepHouseholdProfile = ({ state, saving, onSave }: Props) => {
             />
             {legacyUpgrade && (
               <p className="text-xs text-muted-foreground">
-                On file — let us know if this needs to change.
+                On file, let us know if this needs to change.
               </p>
             )}
           </div>
@@ -217,7 +217,7 @@ export const StepHouseholdProfile = ({ state, saving, onSave }: Props) => {
           {sortedExistingMembers.length > 0 && (
             <div className="space-y-1.5 rounded-lg border border-border bg-muted/20 p-3">
               <p className="text-xs font-medium text-muted-foreground">
-                Already on file — no need to re-add these:
+                Already on file, no need to re-add these:
               </p>
               <ul className="space-y-1">
                 {sortedExistingMembers.map((m) => (

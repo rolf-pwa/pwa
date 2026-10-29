@@ -73,7 +73,7 @@ export function StepLeadCapture() {
   return (
     <div>
       <WizardProgress />
-      <Question hint="Enter your details to unlock your Sovereignty Snapshot, prescribed directives, and action plan — we'll email you a copy too. Just enough to follow up privately, nothing more.">
+      <Question hint="Enter your details to unlock your Sovereignty Snapshot, prescribed directives, and action plan, we'll email you a copy too. Just enough to follow up privately, nothing more.">
         Your Sovereignty Diagnostic is Ready
       </Question>
 

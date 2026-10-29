@@ -32,7 +32,7 @@ const SPOKE_LINE: Record<string, string> = {
     "The best exits are prepared for years before the deal. Looking at your structure now puts you ahead.",
   Inheritance: "An inheritance arrives with more than money. There is no deadline on getting your footing.",
   Divorce:
-    "A separation resets the financial picture as much as the personal one — and you can rebuild it deliberately.",
+    "A separation resets the financial picture as much as the personal one, and you can rebuild it deliberately.",
   Executive_Retirement:
     "Leaving a senior role is a financial and personal reset at once, and the tax calendar doesn't wait for either.",
   Financial_Windfall:
@@ -47,7 +47,7 @@ const FRICTION_LINE: Record<string, string> = {
   professional_pressure:
     "You mentioned being pulled in different directions by advisors and other professionals. The Survey gives you one independent view, with no products attached.",
   internal_paralysis:
-    "You mentioned feeling stuck. That is completely normal — and the Survey is built so that no big decision is needed from you today.",
+    "You mentioned feeling stuck. That is completely normal, and the Survey is built so that no big decision is needed from you today.",
   operational_overload:
     "You mentioned being stretched thin. The Survey does the organizing for you: you bring the documents, we bring the structure.",
   liquidity_gap:
@@ -68,7 +68,7 @@ export function abandonedCartEmailHtml(firstName: string, spoke: string | null, 
       ${frictionLine ? `<p style="font-size:14px;line-height:1.6;">${escapeHtml(frictionLine)}</p>` : ""}
       <p style="font-size:14px;line-height:1.6;">The Survey is a working session built around exactly what you told Georgia. You can pick it up whenever you're ready:</p>
       <p style="margin:24px 0;"><a href="${SURVEY_URL}" style="background:#1e293b;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:6px;font-size:14px;">Continue to the Transition Survey</a></p>
-      <p style="font-size:14px;line-height:1.6;">Prefer to talk it through first? <a href="${CLARITY_URL}" style="color:#a37c58;">Book a short Talk It Through</a> — no commitment.</p>
+      <p style="font-size:14px;line-height:1.6;">Prefer to talk it through first? <a href="${CLARITY_URL}" style="color:#a37c58;">Book a short Talk It Through</a>, no commitment.</p>
       <p style="font-size:14px;line-height:1.6;margin-top:24px;">— Rolf &amp; the ProsperWise team</p>
       <p style="font-size:11px;line-height:1.5;color:#94a3b8;margin-top:28px;border-top:1px solid #e2e8f0;padding-top:12px;">You're receiving this one follow-up because you completed the Sovereignty Diagnostic on prosperwise.ca. If you'd rather not hear from us, just reply to this email and we'll remove you.</p>
     </div>
@@ -117,7 +117,7 @@ Deno.serve(async (req) => {
   for (const lead of leads ?? []) {
     const ok = await sendServiceEmail(db, {
       to: lead.email,
-      subject: "Your Transition Survey — still here when you're ready",
+      subject: "Your Transition Survey, still here when you're ready",
       html: abandonedCartEmailHtml(lead.first_name, lead.spoke, lead.primary_friction),
       from: GEORGIA_SENDER,
     });

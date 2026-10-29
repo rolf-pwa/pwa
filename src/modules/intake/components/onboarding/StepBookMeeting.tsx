@@ -42,7 +42,7 @@ export const StepBookMeeting = ({ fullName, email, saving, onConfirm }: Props) =
         <div className="space-y-1.5">
           <h2 className="font-serif text-lg font-semibold text-foreground">Book your meeting</h2>
           <p className="text-sm text-muted-foreground">
-            Last step — pick a time for your Transition Survey below. Once you've booked,
+            Last step, pick a time for your Transition Survey below. Once you've booked,
             confirm it here.
           </p>
         </div>

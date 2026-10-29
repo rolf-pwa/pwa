@@ -30,7 +30,7 @@ export function StepFamilyVision({ visionText, prefill, saving, onSave }: Props)
         {prefill.available && !value.trim() && (
           <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
             <p className="mb-2 text-foreground">
-              A Sovereignty Charter already exists for this household — pre-fill Family Vision from it?
+              A Sovereignty Charter™ already exists for this household — pre-fill Family Vision from it?
             </p>
             <p className="mb-2 whitespace-pre-wrap text-xs text-muted-foreground line-clamp-3">
               {prefill.suggestedVisionText}

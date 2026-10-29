@@ -556,7 +556,7 @@ export default function QuarterlySystemReview() {
                   {review.diagnostics.charter_extract.targets.map((t, i) => (
                     <li key={i}>
                       <span style={{ color: TARGET_COLOR[t.status] }}>{targetMark(t.status).trim()}</span> {t.summary.replace(/^Charter: /, "")}
-                      {t.quote && <span className="italic"> — “{t.quote}”</span>}
+                      {t.quote && <span className="italic">, “{t.quote}”</span>}
                     </li>
                   ))}
                 </ul>

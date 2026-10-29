@@ -77,7 +77,7 @@ export function StepFreeform() {
         />
         <div className="mt-2 flex items-start justify-between gap-4 text-xs text-muted-foreground">
           <span>
-            Please leave out account numbers, SIN, or health details — we'll gather anything sensitive securely later.
+            Please leave out account numbers, SIN, or health details, we'll gather anything sensitive securely later.
           </span>
           <span className="shrink-0 tabular-nums">
             {text.length}/{MAX_LENGTH}

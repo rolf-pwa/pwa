@@ -115,7 +115,7 @@ export default function Services() {
             <CardContent className="flex items-start gap-3 py-4 text-sm">
               <AlertTriangle className="mt-0.5 h-4 w-4 text-accent" />
               <span>
-                Square isn't connected yet. You can build the catalog now — syncing and invoice sending activate once
+                Square isn't connected yet. You can build the catalog now, syncing and invoice sending activate once
                 the Square access token and location are saved.
               </span>
             </CardContent>

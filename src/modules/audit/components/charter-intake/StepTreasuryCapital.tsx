@@ -69,7 +69,7 @@ export function StepTreasuryCapital({ charter, recomputing, saving, onRecompute,
             iconBgClassName="bg-amber-500/10"
             iconColorClassName="text-amber-600"
             title="Holding Tank"
-            subtitle="Initial influx &amp; catchment — 90-day stabilization"
+            subtitle="Initial influx &amp; catchment — Transition"
             headerRight={<p className="text-xl font-bold text-amber-600">{formatCurrency(snapshot.holding_tank_total)}</p>}
           >
             {snapshot.holding_tank_rows.length > 0 ? (
@@ -161,7 +161,7 @@ export function StepTreasuryCapital({ charter, recomputing, saving, onRecompute,
             <p className="text-xs text-muted-foreground">
               The external market/macro environment is never modeled as an internal funding stream. An
               external windfall (e.g. an unsolicited buyout offer) routes into the Holding Tank for the
-              90-day stabilization cycle — never straight to personal accounts or speculation.
+              Transition cycle — never straight to personal accounts or speculation.
             </p>
             <Textarea id="river-boundary" rows={3} value={riverText} onChange={(e) => setRiverText(e.target.value)} />
           </div>

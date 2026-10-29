@@ -18,12 +18,12 @@ export const HUB_LABELS = {
     euphoria: "Excitement",
   },
   relational_state: {
-    private: "Private — only them, perhaps one trusted person",
-    small_circle: "A small circle — close family and a few advisors",
+    private: "Private, only them, perhaps one trusted person",
+    small_circle: "A small circle, close family and a few advisors",
     public_knowledge: "Public knowledge",
   },
   timeline_urgency: {
-    pre_liquidity: "Pre-liquidity — still ahead",
+    pre_liquidity: "Pre-liquidity, still ahead",
     under_30_days: "Landed, or landing within 30 days",
     one_to_six_months: "One to six months ago",
     over_six_months: "More than six months ago",

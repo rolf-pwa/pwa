@@ -22,8 +22,8 @@ export function PortalIntakeBanner({ portalToken, to = "/portal/intake" }: Props
   const c = manifest?.completion ?? {};
   const hasAudit = audit && typeof audit.criticalTotal === "number" && audit.criticalTotal > 0;
   const label = hasAudit
-    ? `Transition Survey — ${audit!.criticalSatisfied ?? 0} of ${audit!.criticalTotal} essentials confirmed`
-    : `Transition Survey — ${c.uploadedFiles ?? 0} ${c.expectedItems ? `of ${c.expectedItems} ` : ""}received`;
+    ? `Transition Survey, ${audit!.criticalSatisfied ?? 0} of ${audit!.criticalTotal} essentials confirmed`
+    : `Transition Survey, ${c.uploadedFiles ?? 0} ${c.expectedItems ? `of ${c.expectedItems} ` : ""}received`;
 
   return (
     <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.04] p-4">

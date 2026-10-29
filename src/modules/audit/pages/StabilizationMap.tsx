@@ -355,7 +355,7 @@ export default function StabilizationMap() {
             label: "USA Status",
             status: !diag.usa_staleness?.onFile ? "Not Assessed" : diag.usa_staleness.isStale ? "In Progress" : "Assessed",
             detail: diag.usa_staleness?.onFile
-              ? `Last reviewed ${diag.usa_staleness.ageYears} years ago${diag.usa_staleness.isStale ? " — stale" : ""}`
+              ? `Last reviewed ${diag.usa_staleness.ageYears} years ago${diag.usa_staleness.isStale ? ", stale" : ""}`
               : "No Unanimous Shareholder Agreement on file",
           },
           {
@@ -368,7 +368,7 @@ export default function StabilizationMap() {
                   ? "Partial"
                   : "Not Established",
             detail: diag.active_asset_ratio
-              ? `${Math.round(diag.active_asset_ratio.ratio * 100)}% active — 90% threshold for LCGE eligibility`
+              ? `${Math.round(diag.active_asset_ratio.ratio * 100)}% active, 90% threshold for LCGE eligibility`
               : "Not yet assessed",
           },
           {
@@ -596,7 +596,7 @@ export default function StabilizationMap() {
                 ) : (
                   <>
                     {map.event_type} &nbsp;·&nbsp; {map.event_context || "Post-Close Governance"}<br />
-                    Your Sovereignty OS — Session One Findings
+                    Your Sovereignty OS, Session One Findings
                   </>
                 )}
               </div>
@@ -728,7 +728,7 @@ export default function StabilizationMap() {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3mm" }}>
                   <StatusCard label="Storehouse" status={map.storehouse_status} detail={map.storehouse_detail} />
                   <StatusCard label="Solicitation Protocol" status={map.solicitation_status} detail={map.solicitation_detail} />
-                  <StatusCard label="Sovereignty Charter" status={map.sovereignty_charter_status} detail={map.sovereignty_charter_detail} />
+                  <StatusCard label="Sovereignty Charter™" status={map.sovereignty_charter_status} detail={map.sovereignty_charter_detail} />
                   <StatusCard label="Tax Assessment" status={map.tax_status} detail={map.tax_detail} />
                 </div>
               </>
@@ -782,14 +782,14 @@ export default function StabilizationMap() {
                   key={f.id}
                   label={f.description}
                   status={f.isOverdue ? "Not Established" : "Partial"}
-                  detail={`${fmtCurrency(f.current_balance)}${f.due_date ? ` — due ${f.due_date}` : ""}${f.isOverdue ? " (OVERDUE — s.15(2) deemed-income risk)" : " (due soon)"}`}
+                  detail={`${fmtCurrency(f.current_balance)}${f.due_date ? `, due ${f.due_date}` : ""}${f.isOverdue ? " (OVERDUE, s.15(2) deemed-income risk)" : " (due soon)"}`}
                 />
               ))}
             </div>
           </div>
         )}
 
-        {/* Page 3 — 90-Day Stabilization Action Plan (household maps only) */}
+        {/* Page 3 — Transition Plan (household maps only) */}
         {isHouseholdMap && (
           <div
             className="stab-doc-page2 bg-white shadow-lg print:shadow-none mt-6 print:mt-0"
@@ -811,7 +811,7 @@ export default function StabilizationMap() {
                 Transition Map &nbsp;·&nbsp; Prepared for <strong>{fullName}</strong>
               </div>
               <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "18pt", fontWeight: 300, color: "#334155", lineHeight: 1.1 }}>
-                90-Day Transition Plan
+                Transition Plan
               </div>
               <hr style={{ width: "18mm", height: "3px", background: "#a37c58", border: "none", marginTop: "2.5mm" }} />
             </div>
@@ -1007,7 +1007,7 @@ function EditorForm({
           <div className="space-y-2 rounded-md border border-[#e2e8f0] p-3">
             <div className="text-xs font-semibold uppercase tracking-wider text-[#a37c58]">Diagnostic Inputs</div>
             <p className="text-[11px] text-muted-foreground">
-              These come from documents on file (T2 financials, the USA) — type in what the advisor reads, the
+              These come from documents on file (T2 financials, the USA), type in what the advisor reads, the
               system computes the figures. Fee drag is paused until CRM3's fee-disclosure data is live.
             </p>
             {map.track_type === "corporate" ? (
@@ -1033,7 +1033,7 @@ function EditorForm({
           </div>
 
           <div className="space-y-2 rounded-md border border-[#e2e8f0] p-3">
-            <div className="text-xs font-semibold uppercase tracking-wider text-[#a37c58]">90-Day Action Plan</div>
+            <div className="text-xs font-semibold uppercase tracking-wider text-[#a37c58]">Transition Plan</div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               {ACTION_PHASES.map((phase) => (
                 <div key={phase.key} className="space-y-2">
@@ -1117,8 +1117,8 @@ function EditorForm({
             {F("storehouse_detail", "Storehouse Detail")}
             {S("solicitation_status", "Solicitation Status", SOLICITATION_OPTS)}
             {F("solicitation_detail", "Solicitation Detail")}
-            {S("sovereignty_charter_status", "Sovereignty Charter Status", CHARTER_OPTS)}
-            {F("sovereignty_charter_detail", "Sovereignty Charter Detail")}
+            {S("sovereignty_charter_status", "Sovereignty Charter™ Status", CHARTER_OPTS)}
+            {F("sovereignty_charter_detail", "Sovereignty Charter™ Detail")}
             {S("tax_status", "Tax Status", TAX_OPTS)}
             {F("tax_detail", "Tax Detail")}
           </div>

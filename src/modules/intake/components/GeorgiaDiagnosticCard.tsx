@@ -48,7 +48,7 @@ export function GeorgiaDiagnosticView({ lead }: { lead: GeorgiaDiagnosticLead })
   return (
     <div className="space-y-4 text-sm">
       <p className="text-xs text-muted-foreground">
-        Self-reported by the client before engagement. Staff-only — never shown to the client in this form.
+        Self-reported by the client before engagement. Staff-only, never shown to the client in this form.
       </p>
 
       <Row label="Came from" value={lead.source ?? null} />

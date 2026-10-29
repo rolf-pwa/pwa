@@ -181,7 +181,7 @@ const Households = () => {
               <SelectItem value="all">All Governance</SelectItem>
               <SelectItem value="none">None</SelectItem>
               <SelectItem value="core">Core</SelectItem>
-              <SelectItem value="stabilization">Stabilization</SelectItem>
+              <SelectItem value="stabilization">Transition</SelectItem>
               <SelectItem value="sovereign">Sovereign</SelectItem>
             </SelectContent>
           </Select>
@@ -241,7 +241,7 @@ const Households = () => {
                                     }
                                   >
                                     {hh.governance_status === "stabilization"
-                                      ? "Stabilization"
+                                      ? "Transition"
                                       : hh.governance_status === "sovereign"
                                         ? "Sovereign"
                                         : "Core"}

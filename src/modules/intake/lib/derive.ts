@@ -158,9 +158,9 @@ export function domainForCatalyst(catalyst: Catalyst): Domain {
 
 export const DOMAIN_GREETING: Record<Domain, string> = {
   corporate:
-    "Building a company takes intense focus. Stepping out of that momentum — or preparing to — can feel like stepping off a fast-moving train. Let's look at the structure of your transition so we can protect what you have built.",
+    "Building a company takes intense focus. Stepping out of that momentum, or preparing to, can feel like stepping off a fast-moving train. Let's look at the structure of your transition so we can protect what you have built.",
   personal:
-    "Sudden personal wealth — whether from loss, transition, or luck — carries a quiet weight. Before we look at any numbers, remember: you do not need to make any irreversible decisions today. This is a safe space to map out your sequence.",
+    "Sudden personal wealth, whether from loss, transition, or luck, carries a quiet weight. Before we look at any numbers, remember: you do not need to make any irreversible decisions today. This is a safe space to map out your sequence.",
 };
 
 // ---- Question schema -------------------------------------------------------
@@ -220,7 +220,7 @@ export const PERSON_QUESTIONS: Question[] = [
   },
   {
     key: "governance",
-    text: "Do you have a written Sovereignty Charter or personal constitution?",
+    text: "Do you have a written Sovereignty Charter™ or personal constitution?",
     tooltip:
       "A written charter turns your intentions into rules before emotion, family, or salespeople test them.",
     options: [
@@ -281,7 +281,7 @@ export const PERSON_QUESTIONS: Question[] = [
     options: [
       {
         id: "pre_liquidity",
-        label: "Not yet — it's still ahead of me",
+        label: "Not yet, it's still ahead of me",
         description: "I am planning before the money moves.",
         risks: {},
         hub: { timeline_urgency: "pre_liquidity" },
@@ -313,7 +313,7 @@ export const PERSON_QUESTIONS: Question[] = [
     key: "advisory",
     text: "How do your external professionals (Accountant, {Lawyer}, Custodian) collaborate?",
     tooltip:
-      "Uncoordinated professionals each optimize their own piece — the gaps between them are where the costly mistakes happen.",
+      "Uncoordinated professionals each optimize their own piece, the gaps between them are where the costly mistakes happen.",
     options: [
       {
         id: "siloed",
@@ -375,42 +375,42 @@ const WINDFALL_FRICTION = frictionQuestion(
     ["guilt", "Guilt or discomfort about having it", "internal_paralysis", "guilt"],
     ["people_asking", "People are already asking for money or offering deals", "family_pressure", "anxiety"],
     ["advisors_circling", "Advisors and salespeople are circling", "professional_pressure", "anxiety"],
-    ["steady", "Steady — I just want to park it safely and plan", "no_friction", "relief"],
+    ["steady", "Steady, I just want to park it safely and plan", "no_friction", "relief"],
   ]
 );
 
 export const FRICTION_QUESTIONS: Record<Catalyst, Question> = {
   founder_exit: frictionQuestion(
     "What is weighing on you most as this exit approaches?",
-    "Founders rarely struggle with the deal itself — it is the pressure around it, and who you are afterward.",
+    "Founders rarely struggle with the deal itself, it is the pressure around it, and who you are afterward.",
     [
       ["pulled_apart", "Buyers, partners, and advisors are pulling me in different directions", "professional_pressure", "anxiety"],
       ["identity", "Who I am once the business is gone", "internal_paralysis", "loss_of_identity"],
       ["family_expectations", "Family expectations about what happens to the proceeds", "family_pressure", "anxiety"],
-      ["consumed", "The day-to-day is consuming me — I can't think about what comes next", "operational_overload", "anxiety"],
-      ["relief", "Mostly relief — I just want to do this right", "no_friction", "relief"],
+      ["consumed", "The day-to-day is consuming me, I can't think about what comes next", "operational_overload", "anxiety"],
+      ["relief", "Mostly relief, I just want to do this right", "no_friction", "relief"],
     ]
   ),
   growth_stage_founder: frictionQuestion(
     "What is the biggest tension in the business right now?",
     "Paper wealth, overload, and misaligned partners are the three most common pressure points before an exit.",
     [
-      ["paper_wealth", "Most of my wealth is paper — tied up in shares I can't touch", "liquidity_gap", "anxiety"],
+      ["paper_wealth", "Most of my wealth is paper, tied up in shares I can't touch", "liquidity_gap", "anxiety"],
       ["stretched", "I'm stretched thin running it while planning what comes next", "operational_overload", "anxiety"],
       ["misaligned", "Co-founders, investors, or advisors want different things", "professional_pressure", "anxiety"],
       ["family", "My family doesn't understand what's at stake, or expects a lot", "family_pressure", "anxiety"],
-      ["energized", "I'm energized — I just want the structure ready before the exit", "no_friction", "relief"],
+      ["energized", "I'm energized, I just want the structure ready before the exit", "no_friction", "relief"],
     ]
   ),
   inheritance: frictionQuestion(
     "What feels heaviest about this inheritance?",
     "An inheritance is money and loss at the same time. There is no wrong answer here.",
     [
-      ["guilt", "Guilt — about receiving it, or about what I might do with it", "internal_paralysis", "guilt"],
+      ["guilt", "Guilt, about receiving it, or about what I might do with it", "internal_paralysis", "guilt"],
       ["siblings", "Tension with siblings or extended family", "family_pressure", "anxiety"],
-      ["everyone_advising", "Everyone — banks, advisors, relatives — suddenly has advice", "professional_pressure", "anxiety"],
+      ["everyone_advising", "Everyone, banks, advisors, relatives, suddenly has advice", "professional_pressure", "anxiety"],
       ["grief", "Grief, and a sense that I can't think clearly yet", "internal_paralysis", "grief"],
-      ["honour", "Relief — I just want to honour it properly", "no_friction", "relief"],
+      ["honour", "Relief, I just want to honour it properly", "no_friction", "relief"],
     ]
   ),
   divorce_restructuring: frictionQuestion(
@@ -421,7 +421,7 @@ export const FRICTION_QUESTIONS: Record<Catalyst, Question> = {
       ["independence", "Rebuilding my identity and independence", "internal_paralysis", "loss_of_identity"],
       ["sides", "Family, friends, and in-laws taking sides", "family_pressure", "anxiety"],
       ["what_i_own", "Understanding what I actually own and owe", "operational_overload", "anxiety"],
-      ["clean_start", "Relief that it's nearly over — I want a clean foundation", "no_friction", "relief"],
+      ["clean_start", "Relief that it's nearly over, I want a clean foundation", "no_friction", "relief"],
     ]
   ),
   executive_exit: frictionQuestion(
@@ -432,7 +432,7 @@ export const FRICTION_QUESTIONS: Record<Catalyst, Question> = {
       ["tax_bill", "A large tax bill and deadlines I don't fully understand", "operational_overload", "anxiety"],
       ["decide_fast", "Pressure to decide quickly on options, stock, or the package", "professional_pressure", "anxiety"],
       ["family_retirement", "Family expectations about what retirement should look like", "family_pressure", "anxiety"],
-      ["clear_plan", "Relief — I just want a clear plan", "no_friction", "relief"],
+      ["clear_plan", "Relief, I just want a clear plan", "no_friction", "relief"],
     ]
   ),
   sudden_windfall: WINDFALL_FRICTION,
@@ -447,8 +447,8 @@ export const CATALYST_QUESTIONS: Record<Catalyst, Question[]> = {
       tooltip:
         `For BC founders, the LCGE shelters up to ${LCGE_LIMIT_LABEL} of capital gains per shareholder if structured correctly before the sale.`,
       options: [
-        { id: "intact", label: "No — it is fully intact", risks: { tax: 1 } },
-        { id: "used", label: "Yes — it has been used", risks: { tax: 1 } },
+        { id: "intact", label: "No, it is fully intact", risks: { tax: 1 } },
+        { id: "used", label: "Yes, it has been used", risks: { tax: 1 } },
         { id: "unsure", label: "Unsure / not structured yet", risks: { tax: 3, readiness: 2 } },
       ],
     },
@@ -458,10 +458,10 @@ export const CATALYST_QUESTIONS: Record<Catalyst, Question[]> = {
       key: "purification",
       text: "Are you currently using your active business accounts to hold passive investments or excess cash?",
       tooltip:
-        "To qualify for a tax-free sale later, your business must be 'purified' — at least 90% of assets actively used in the business.",
+        "To qualify for a tax-free sale later, your business must be 'purified', at least 90% of assets actively used in the business.",
       options: [
-        { id: "yes", label: "Yes — most cash sits in the OpCo", risks: { structure: 3, tax: 2 } },
-        { id: "no", label: "No — we run a purified structure", risks: { structure: 1 } },
+        { id: "yes", label: "Yes, most cash sits in the OpCo", risks: { structure: 3, tax: 2 } },
+        { id: "no", label: "No, we run a purified structure", risks: { structure: 1 } },
         { id: "unsure", label: "Unsure / basic corporate account", risks: { structure: 2, readiness: 2 } },
       ],
     },
@@ -473,8 +473,8 @@ export const CATALYST_QUESTIONS: Record<Catalyst, Question[]> = {
       tooltip:
         "BC Probate is a flat 1.4% tax drag on all assets over $50k passing through a will. It is entirely legal to structure around this.",
       options: [
-        { id: "yes", label: "Yes — currently going through probate", risks: { tax: 3 } },
-        { id: "no", label: "No — structured to bypass it", risks: { tax: 1 } },
+        { id: "yes", label: "Yes, currently going through probate", risks: { tax: 3 } },
+        { id: "no", label: "No, structured to bypass it", risks: { tax: 1 } },
         { id: "unsure", label: "Unsure", risks: { tax: 2, readiness: 2 } },
       ],
     },
@@ -486,8 +486,8 @@ export const CATALYST_QUESTIONS: Record<Catalyst, Question[]> = {
       tooltip:
         "In BC, failure to use specialized rollover provisions for retiring allowances can cost up to 53.5% of your payout to immediate taxation.",
       options: [
-        { id: "no", label: "No — I expect a massive tax bill this year", risks: { tax: 3 } },
-        { id: "yes", label: "Yes — my accounts are optimized", risks: { tax: 1 } },
+        { id: "no", label: "No, I expect a massive tax bill this year", risks: { tax: 3 } },
+        { id: "yes", label: "Yes, my accounts are optimized", risks: { tax: 1 } },
         { id: "unsure", label: "Unsure of my contribution limits", risks: { tax: 2, readiness: 2 } },
       ],
     },
@@ -622,7 +622,7 @@ export function deriveResult(domain: Domain): DerivedResult {
   return {
     surveyPrice,
     domainLabel: domain === "corporate" ? "corporate" : "personal",
-    headline: `The Transition Survey is your next step — ${formatCAD(surveyPrice)} for ${
+    headline: `The Transition Survey is your next step, ${formatCAD(surveyPrice)} for ${
       domain === "corporate" ? "corporate" : "personal"
     } situations.`,
   };
@@ -723,7 +723,7 @@ export const CATALYST_TIMELINES: Record<Catalyst, Milestone[]> = {
     { label: "LOI", detail: "Letter of intent signed" },
     { label: "Diligence", detail: "Financial & legal review" },
     { label: "Close", detail: "Transaction executes" },
-    { label: "Stabilize", detail: "90-day sovereignty setup" },
+    { label: "Transition", detail: "Sovereignty setup" },
   ],
   growth_stage_founder: [
     { label: "Assess", detail: "Corporate structure review" },
@@ -741,7 +741,7 @@ export const CATALYST_TIMELINES: Record<Catalyst, Milestone[]> = {
     { label: "Vest", detail: "Options & equity crystallize" },
     { label: "Sever", detail: "Package finalized" },
     { label: "Deploy", detail: "Tax-aware allocation" },
-    { label: "Stabilize", detail: "New income architecture" },
+    { label: "Transition", detail: "New income architecture" },
   ],
   divorce_restructuring: [
     { label: "File", detail: "Separation initiated" },
@@ -785,7 +785,7 @@ export function timelineStageIndex(
 export const STEADY_FOOTING = {
   tag: "Foundations in Good Standing",
   body:
-    "Your answers point to a steady footing — decision readiness, governance, noise, and tax exposure are all within a healthy range. The plan below is about keeping it that way while capital moves.",
+    "Your answers point to a steady footing, decision readiness, governance, noise, and tax exposure are all within a healthy range. The plan below is about keeping it that way while capital moves.",
 };
 
 export interface GeorgiaInsight {
@@ -808,7 +808,7 @@ export function georgiaInsights(
     insights.push({
       tag: "Your Next Step",
       body:
-        "The Transition Survey is a 90-minute working session built around exactly what you've told me — you leave with a Transition Map, an Immediate Risk Scan, and a 30-Day Transition Plan. No pitch, no commitment beyond the session itself.",
+        "The Transition Survey is a 90-minute working session built around exactly what you've told me, you leave with a Transition Map, an Immediate Risk Scan, and a 30-Day Transition Plan. No pitch, no commitment beyond the session itself.",
     });
   }
 
@@ -820,7 +820,7 @@ export function georgiaInsights(
     insights.push({
       tag: "Decision Readiness",
       body:
-        "It is completely normal to feel paralyzed right now. Your nervous system is catching up with a massive life change. We will prioritize reducing your cognitive overhead — no major plans are needed today.",
+        "It is completely normal to feel paralyzed right now. Your nervous system is catching up with a massive life change. We will prioritize reducing your cognitive overhead, no major plans are needed today.",
     });
   }
 
@@ -888,10 +888,10 @@ export function bcContextNotes(
       notes.push("Without an active HoldCo, retained earnings face full corporate + personal tax on distribution.");
     }
     if (answers.lcge === "unsure") {
-      notes.push("Multiplying the LCGE through family trusts requires 24-month share holding rules — plan early.");
+      notes.push("Multiplying the LCGE through family trusts requires 24-month share holding rules, plan early.");
     }
     if (answers.purification === "yes") {
-      notes.push("Excess passive cash inside the OpCo can disqualify the LCGE — purification is the first move.");
+      notes.push("Excess passive cash inside the OpCo can disqualify the LCGE, purification is the first move.");
     }
   }
   if (domain === "personal") {

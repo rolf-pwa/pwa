@@ -97,7 +97,7 @@ export default function ProPortalContact() {
                   <p className="text-sm text-muted-foreground">No individual charter on file.</p>
                 ) : (
                   <div>
-                    <div className="text-sm text-foreground font-medium">{governance.charter.title || "Sovereignty Charter"}</div>
+                    <div className="text-sm text-foreground font-medium">{governance.charter.title || "Sovereignty Charter™"}</div>
                     <div className="text-[11px] text-muted-foreground mt-0.5">
                       Last updated {format(new Date(governance.charter.updated_at), "PP")}
                     </div>

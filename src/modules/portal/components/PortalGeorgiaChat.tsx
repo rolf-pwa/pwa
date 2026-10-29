@@ -197,7 +197,7 @@ export function PortalGeorgiaChat({ open, onOpenChange, contactName, contactId, 
       {
         role: "assistant",
         content:
-          "No problem — the form has been closed. If you'd like to submit a request later, just let me know. Is there anything else I can help with?",
+          "No problem, the form has been closed. If you'd like to submit a request later, just let me know. Is there anything else I can help with?",
       },
     ]);
   };
