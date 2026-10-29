@@ -18,6 +18,7 @@
 // Family" folder is created directly inside) and a connected Google account
 // in `google_tokens` (see _shared/google-token.ts).
 
+import { vaultContentsSummary, vaultHasContentsError } from "./vault-contents.ts";
 import { buildVaultCreatedRow, buildPersonalDrawerRow, buildEntityVaultRow } from "./vault-audit-events.ts";
 import { hasPersonalDrawerRole, FAMILY_VAULT_CATEGORIES } from "./vault-drawers.ts";
 import { FAMILY_DOCS, HOUSEHOLD_DOCS, PERSONAL_DOCS, ENTITY_VAULTS, CORPORATE_DOCS, CORPORATE_ADVISOR_FILES, CORPORATE_CATEGORIES, withVaultSuffix } from "./vault-structure.ts";
@@ -171,7 +172,7 @@ export async function provisionClientFolderTree(
   admin: any,
   householdId: string,
   source = "automatic",
-  opts: { force?: boolean; /** Build the household a new structure inside its existing Family Vault, leaving the old Drive folders untouched and unlinked. */ rebuild?: boolean; requestedBy?: { id: string; email: string | null } | null } = {},
+  opts: { force?: boolean; /** The caller has been shown what the current Vault holds and wants it replaced anyway. */ acknowledgeContents?: boolean; /** Build the household a new structure inside its existing Family Vault, leaving the old Drive folders untouched and unlinked. */ rebuild?: boolean; requestedBy?: { id: string; email: string | null } | null } = {},
 ): Promise<ProvisionResult> {
   if (!CLIENT_ROOT_FOLDER_ID) {
     return { ok: false, error: "CLIENT_VAULT_ROOT_FOLDER_ID is not configured" };
@@ -200,6 +201,14 @@ export async function provisionClientFolderTree(
     accessToken = await getServiceGoogleAccessToken(admin);
   } catch (e) {
     return { ok: false, error: `google_auth_failed: ${e instanceof Error ? e.message : String(e)}` };
+  }
+
+  // A forced rebuild unlinks the current Vault: say what is in it first, so a Vault that is in use isn't replaced by mistake.
+  if (opts.force && household.vault_root_folder_id && !opts.acknowledgeContents) {
+    try {
+      const held = vaultContentsSummary(await driveListChildren(household.vault_root_folder_id, accessToken));
+      if (held.folders.length || held.files) return { ok: false, error: vaultHasContentsError(held) };
+    } catch { /* couldn't look: the staff confirmation still applies */ }
   }
 
   const { data: family } = household.family_id
