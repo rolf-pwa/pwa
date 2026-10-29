@@ -475,7 +475,7 @@ export default function QuarterlySystemReview() {
                     )}
                     <div style={{ marginTop: "auto", paddingTop: "1.5mm" }}>
                       <hr style={{ border: "none", borderTop: "1.5px solid #334155", margin: "0 0 1.5mm" }} />
-                      <BsRow label="Total Liabilities & Net Worth" value={money(liabilities + (diag.net_worth ?? diag.aum ?? 0))} strong />
+                      <BsRow label="Total Liabilities & Net Worth" value={money(liabilities + (diag.allocation?.credit_capacity ?? 0) + (diag.net_worth ?? diag.aum ?? 0))} strong />
                     </div>
                   </div>
                 </div>
