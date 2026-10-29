@@ -17,9 +17,16 @@ export default {
         sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
         display: ["'Playfair Display'", "Georgia", "serif"],
         serif: ["'Playfair Display'", "Georgia", "serif"],
-        mono: ["'JetBrains Mono'", "ui-monospace", "SFMono-Regular", "monospace"],
+        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"],
       },
       colors: {
+        midnight: { DEFAULT: "hsl(var(--midnight))", deep: "hsl(var(--midnight-deep))" },
+        limestone: "hsl(var(--limestone))",
+        paper: "hsl(var(--paper))",
+        spruce: "hsl(var(--spruce))",
+        bronze: { DEFAULT: "hsl(var(--bronze))", ink: "hsl(var(--bronze-ink))", light: "hsl(var(--bronze-light))" },
+        sand: { DEFAULT: "hsl(var(--sand))", hover: "hsl(var(--sand-hover))" },
+        brick: "hsl(var(--brick))",
         pw: {
           navy: "hsl(var(--pw-navy))",
           amber: "hsl(var(--pw-amber))",
@@ -51,6 +58,7 @@ export default {
         muted: {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",
+          dark: "hsl(var(--ink-muted-dark))",
         },
         accent: {
           DEFAULT: "hsl(var(--accent))",

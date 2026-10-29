@@ -24,7 +24,7 @@ function appendAppLinkText(body: string): string {
 
 function appendAppLinkHtml(body: string): string {
   if (body.includes(APP_URL)) return body;
-  const footer = `<hr style="border:none;border-top:1px solid #2A4034;margin:24px 0 12px" /><p style="font-family:'DM Sans',sans-serif;font-size:13px;color:#8a8a8a;margin:0">ProsperWise &middot; <a href="${APP_URL}" style="color:#f59e0b;text-decoration:none">${APP_URL}</a></p>`;
+  const footer = `<hr style="border:none;border-top:1px solid #2A4034;margin:24px 0 12px" /><p style="font-family:Inter,sans-serif;font-size:13px;color:#8a8a8a;margin:0">ProsperWise &middot; <a href="${APP_URL}" style="color:#f59e0b;text-decoration:none">${APP_URL}</a></p>`;
   if (/<\/body\s*>/i.test(body)) return body.replace(/<\/body\s*>/i, `${footer}</body>`);
   return `${body}${footer}`;
 }

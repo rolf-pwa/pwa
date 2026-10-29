@@ -7,7 +7,7 @@ import type { HouseholdCharter, NamedItem } from "../../hooks/useCharterIntake";
 // GovernanceAudit.tsx/ProTasksPanel.tsx independently duplicates its own copy),
 // so this is a deliberate, consistent sixth copy of the same recipe: A4
 // portrait, a dark header band per page, bronze-accented card helpers, a
-// window.print() trigger in the parent page. Cormorant Garamond/DM Sans are
+// window.print() trigger in the parent page. Playfair Display/Inter are
 // already loaded globally via index.html — nothing to add here.
 
 const pageStyle: React.CSSProperties = {
@@ -15,7 +15,7 @@ const pageStyle: React.CSSProperties = {
   minHeight: "297mm",
   display: "flex",
   flexDirection: "column",
-  fontFamily: "'DM Sans', sans-serif",
+  fontFamily: "Inter, sans-serif",
   color: "#334155",
 };
 
@@ -36,19 +36,19 @@ function formatDate(val: string | null) {
 
 function PageHeader({ eyebrow, title }: { eyebrow: string; title: string }) {
   return (
-    <div style={{ backgroundColor: "#1e293b", color: "#fff", padding: "9mm 12mm 8mm" }}>
+    <div style={{ backgroundColor: "#0A192F", color: "#fff", padding: "9mm 12mm 8mm" }}>
       <div style={{ fontSize: "8pt", fontWeight: 300, color: "rgba(255,255,255,.55)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: "3mm" }}>
         {eyebrow}
       </div>
-      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "23pt", fontWeight: 300, lineHeight: 1.08 }}>{title}</div>
+      <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "23pt", fontWeight: 700, lineHeight: 1.08 }}>{title}</div>
     </div>
   );
 }
 
 function SectionCard({ title, body }: { title: string; body?: string | null }) {
   return (
-    <div style={{ background: "#fafafa", borderLeft: "3px solid #a37c58", padding: "3mm 4mm" }}>
-      <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "1.5mm" }}>{title}</div>
+    <div style={{ background: "#FBFBF8", borderLeft: "3px solid #7E684C", padding: "3mm 4mm" }}>
+      <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "1.5mm" }}>{title}</div>
       <p style={{ fontSize: "7.5pt", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{body?.trim() || "Not yet written."}</p>
     </div>
   );
@@ -56,8 +56,8 @@ function SectionCard({ title, body }: { title: string; body?: string | null }) {
 
 function ArticleCard({ title, body }: { title: string; body?: string | null }) {
   return (
-    <div style={{ border: "1px solid #e2e8f0", padding: "4mm", background: "#fff" }}>
-      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "13pt", fontWeight: 500, color: "#334155", marginBottom: "1.5mm" }}>{title}</div>
+    <div style={{ border: "1px solid #D9D2C5", padding: "4mm", background: "#fff" }}>
+      <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "13pt", fontWeight: 700, color: "#334155", marginBottom: "1.5mm" }}>{title}</div>
       <p style={{ fontSize: "7.5pt", lineHeight: 1.6, color: "#334155", whiteSpace: "pre-wrap" }}>{body?.trim() || "Not yet drafted."}</p>
     </div>
   );
@@ -65,7 +65,7 @@ function ArticleCard({ title, body }: { title: string; body?: string | null }) {
 
 function ContainerCard({ title, description }: { title: string; description?: string }) {
   return (
-    <div style={{ background: "#fafafa", borderLeft: "3px solid #a37c58", padding: "3mm 4mm" }}>
+    <div style={{ background: "#FBFBF8", borderLeft: "3px solid #7E684C", padding: "3mm 4mm" }}>
       <strong style={{ display: "block", fontSize: "8.5pt", fontWeight: 600, color: "#334155", marginBottom: "1mm" }}>{title}</strong>
       {description?.trim() ? <p style={{ fontSize: "7.5pt", lineHeight: 1.5, color: "#334155" }}>{description}</p> : null}
     </div>
@@ -74,16 +74,16 @@ function ContainerCard({ title, description }: { title: string; description?: st
 
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ background: "#fafafa", borderLeft: "3px solid #a37c58", padding: "3mm 4mm" }}>
-      <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "1.2mm" }}>{label}</div>
-      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "16pt", fontWeight: 500, color: "#334155" }}>{value}</div>
+    <div style={{ background: "#FBFBF8", borderLeft: "3px solid #7E684C", padding: "3mm 4mm" }}>
+      <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "1.2mm" }}>{label}</div>
+      <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "16pt", fontWeight: 700, color: "#334155" }}>{value}</div>
     </div>
   );
 }
 
 function EyebrowLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "2mm" }}>{children}</div>
+    <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "2mm" }}>{children}</div>
   );
 }
 
@@ -99,23 +99,23 @@ function ListTable({
   const headCell: React.CSSProperties = {
     fontSize: "7pt",
     fontWeight: 600,
-    color: "#64748b",
+    color: "#5A6A80",
     textTransform: "uppercase",
     letterSpacing: ".08em",
     padding: "2.4mm 2mm",
-    borderBottom: "1px solid #e2e8f0",
+    borderBottom: "1px solid #D9D2C5",
     textAlign: "left",
   };
-  const bodyCell: React.CSSProperties = { fontSize: "7.5pt", padding: "2.4mm 2mm", borderBottom: "1px solid #e2e8f0", verticalAlign: "top" };
+  const bodyCell: React.CSSProperties = { fontSize: "7.5pt", padding: "2.4mm 2mm", borderBottom: "1px solid #D9D2C5", verticalAlign: "top" };
 
   if (rows.length === 0) {
-    return <div style={{ background: "#fafafa", padding: "4mm", fontSize: "8pt", color: "#64748b" }}>{emptyLabel}</div>;
+    return <div style={{ background: "#FBFBF8", padding: "4mm", fontSize: "8pt", color: "#5A6A80" }}>{emptyLabel}</div>;
   }
 
   return (
     <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
       <thead>
-        <tr style={{ background: "#fafafa" }}>
+        <tr style={{ background: "#FBFBF8" }}>
           {headers.map((h) => (
             <th key={h} style={headCell}>
               {h}
@@ -171,24 +171,24 @@ export function CharterV2PrintDocument({ charter, householdLabel }: Props) {
     <div id="charter-v2-printable-root" className="mx-auto max-w-[210mm]">
       {/* Page 1 — Cover + Foundational Bedrock */}
       <div className={pageWrap} style={pageStyle}>
-        <div style={{ backgroundColor: "#1e293b", color: "#fff", padding: "10mm 12mm 9mm" }}>
+        <div style={{ backgroundColor: "#0A192F", color: "#fff", padding: "10mm 12mm 9mm" }}>
           <img src={pwLogoWhite} alt="ProsperWise" style={{ width: "54mm", height: "auto", display: "block", marginBottom: "4mm" }} />
           <div style={{ fontSize: "8pt", fontWeight: 300, color: "rgba(255,255,255,.55)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: "4mm" }}>
             Sovereignty Operating System™
           </div>
-          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "24pt", fontWeight: 300, lineHeight: 1.08 }}>The Sovereignty Charter™</div>
+          <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "24pt", fontWeight: 700, lineHeight: 1.08 }}>The Sovereignty Charter™</div>
           <div style={{ fontSize: "8pt", color: "rgba(255,255,255,.7)", marginTop: "2.5mm" }}>Sovereignty Charter™ v2.0 · Prepared for {householdLabel}</div>
         </div>
 
         <div style={{ padding: "12mm", display: "flex", flexDirection: "column", gap: "6mm" }}>
           <div>
-            <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "1.5mm" }}>
+            <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "1.5mm" }}>
               Foundational Bedrock
             </div>
-            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "25pt", fontWeight: 300, color: "#334155", lineHeight: 1.1 }}>
+            <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "25pt", fontWeight: 700, color: "#334155", lineHeight: 1.1 }}>
               Family Vision, Values &amp; Grounding Principles
             </div>
-            <hr style={{ width: "18mm", height: "3px", background: "#a37c58", border: "none", marginTop: "2.5mm" }} />
+            <hr style={{ width: "18mm", height: "3px", background: "#7E684C", border: "none", marginTop: "2.5mm" }} />
           </div>
 
           <SectionCard title="Family Vision" body={charter.vision_text} />
@@ -212,7 +212,7 @@ export function CharterV2PrintDocument({ charter, householdLabel }: Props) {
           </div>
         </div>
 
-        <div style={{ background: "#a37c58", color: "#fff", marginTop: "auto", padding: "3mm 12mm", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ background: "#7E684C", color: "#fff", marginTop: "auto", padding: "3mm 12mm", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ fontSize: "8.5pt", fontWeight: 500 }}>Status: {statusLabel}</div>
           <div style={{ fontSize: "7.5pt", opacity: 0.9 }}>Generated {formatDate(new Date().toISOString())}</div>
         </div>
@@ -352,7 +352,7 @@ export function CharterV2PrintDocument({ charter, householdLabel }: Props) {
 
           <div>
             <EyebrowLabel>Family Values Addendum</EyebrowLabel>
-            <div style={{ background: "#fafafa", padding: "3mm 4mm", fontSize: "7.5pt", display: "flex", flexDirection: "column", gap: "1mm" }}>
+            <div style={{ background: "#FBFBF8", padding: "3mm 4mm", fontSize: "7.5pt", display: "flex", flexDirection: "column", gap: "1mm" }}>
               <div>Signed: {formatDate(charter.family_values_addendum_signed_at)}</div>
               <div>Reaffirmed: {formatDate(charter.family_values_addendum_reaffirmed_at)}</div>
               {staleness ? (
@@ -364,7 +364,7 @@ export function CharterV2PrintDocument({ charter, householdLabel }: Props) {
           </div>
         </div>
 
-        <div style={{ background: "#a37c58", color: "#fff", marginTop: "auto", padding: "3mm 12mm", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ background: "#7E684C", color: "#fff", marginTop: "auto", padding: "3mm 12mm", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ fontSize: "8.5pt", fontWeight: 500 }}>End of Sovereignty Charter™</div>
           <div style={{ fontSize: "7.5pt", opacity: 0.9 }}>Status: {statusLabel}</div>
         </div>

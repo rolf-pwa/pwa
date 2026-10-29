@@ -289,7 +289,7 @@ const HouseholdDetail = () => {
         .limit(1);
 
       if (!existing?.length) {
-        // Best-effort link to the real "Sovereignty Audit" service catalog entry, if one exists.
+        // Best-effort link to the real "Transition Survey" service catalog entry, if one exists.
         const { data: service } = await supabase
           .from("services")
           .select("id")
@@ -955,7 +955,7 @@ const HouseholdDetail = () => {
                         .eq("id", id);
                       if (error) {
                         setHousehold((prev: any) => ({ ...prev, onboarding_enabled: !checked }));
-                        toast.error("Couldn't update the Audit onboarding setting");
+                        toast.error("Couldn't update the Transition Survey onboarding setting");
                       } else {
                         toast.success(
                           checked

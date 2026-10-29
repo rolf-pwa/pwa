@@ -264,7 +264,7 @@ export default function Invoices() {
               rows={3}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Invoice the Jerczynski household for a Sovereignty Audit and two governance review sessions, due in 15 days."
+              placeholder="Invoice the Jerczynski household for a Transition Survey and two governance review sessions, due in 15 days."
             />
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs text-muted-foreground">

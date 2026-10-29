@@ -107,7 +107,7 @@ describe("More", () => {
 describe("the installable app", () => {
   const m = JSON.parse(readFileSync("public/manifest.webmanifest", "utf8"));
   it("has a manifest that opens full screen on Today with the navy colour", () => {
-    expect(m).toMatchObject({ name: "ProsperWise", display: "standalone", start_url: "/briefing", theme_color: "#1e293b", background_color: "#1e293b" });
+    expect(m).toMatchObject({ name: "ProsperWise", display: "standalone", start_url: "/briefing", theme_color: "#0a192f", background_color: "#0a192f" });
     expect(m.icons.map((i: any) => i.sizes)).toEqual(["192x192", "512x512"]);
   });
   it("has square icons of the sizes it promises", () => {
@@ -118,7 +118,7 @@ describe("the installable app", () => {
   });
   it("tells iPhone to run it as an app and to draw under the notch", () => {
     const html = readFileSync("index.html", "utf8");
-    for (const s of ["viewport-fit=cover", 'rel="manifest" href="/manifest.webmanifest"', 'rel="apple-touch-icon" href="/apple-touch-icon.png"', 'name="apple-mobile-web-app-capable" content="yes"', 'name="apple-mobile-web-app-status-bar-style"', 'name="theme-color" content="#1e293b"']) expect(html).toContain(s);
+    for (const s of ["viewport-fit=cover", 'rel="manifest" href="/manifest.webmanifest"', 'rel="apple-touch-icon" href="/apple-touch-icon.png"', 'name="apple-mobile-web-app-capable" content="yes"', 'name="apple-mobile-web-app-status-bar-style"', 'name="theme-color" content="#0a192f"']) expect(html).toContain(s);
   });
   it("stops iOS zooming into form fields", () => {
     expect(readFileSync("src/index.css", "utf8")).toMatch(/max-width: 767px[\s\S]*\.advisor-app input, \.advisor-app select, \.advisor-app textarea \{ font-size: 16px; \}/);
@@ -132,11 +132,11 @@ describe("the installable app", () => {
 describe("the status bar on a phone", () => {
   it("is navy: the page behind the shell is navy while the shell shows, and the top bar is a sticky navy bar", () => {
     const css = readFileSync("src/index.css", "utf8");
-    expect(css).toContain("html.advisor-shell, html.advisor-shell body { background-color: #1e293b; }");
+    expect(css).toContain("html.advisor-shell, html.advisor-shell body { background-color: #0a192f; }");
     const { unmount } = at("/briefing", <MobileShell>x</MobileShell>);
     expect(document.documentElement.classList.contains("advisor-shell")).toBe(true);
     expect(screen.getByTestId("mobile-top-bar").className).toContain("sticky");
-    expect(screen.getByTestId("mobile-top-bar").className).toContain("bg-[#1e293b]");
+    expect(screen.getByTestId("mobile-top-bar").className).toContain("bg-[#0a192f]");
     unmount();
     expect(document.documentElement.classList.contains("advisor-shell")).toBe(false); // other pages, and the client portals, keep their own background
   });

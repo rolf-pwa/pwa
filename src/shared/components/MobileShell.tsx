@@ -49,7 +49,7 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="advisor-app flex h-[100dvh] flex-col overflow-hidden bg-background" style={keyboardOpen && height ? { height } : undefined} data-testid="mobile-shell">
-      <header className="sticky top-0 z-30 shrink-0 bg-[#1e293b] pt-[env(safe-area-inset-top)] text-white" data-testid="mobile-top-bar">
+      <header className="sticky top-0 z-30 shrink-0 bg-[#0a192f] pt-[env(safe-area-inset-top)] text-white" data-testid="mobile-top-bar">
         <div className="flex h-12 items-center gap-1 px-2">
           {root ? <span className="px-2 font-serif text-lg font-semibold tracking-tight">{TITLE[pathname]}</span> : (
             <button type="button" onClick={() => navigate(-1)} aria-label="Back" className="flex h-11 items-center gap-0.5 rounded-md pl-1 pr-3 text-sm font-medium active:bg-white/10"><ChevronLeft className="h-6 w-6" />Back</button>

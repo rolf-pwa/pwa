@@ -128,7 +128,7 @@ export function StabilizationMapButton({ contactId, householdId, className }: Pr
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={pickFile} disabled={uploading}>
                 <Upload className="mr-2 h-4 w-4" />
-                Generate from Sovereignty Audit PDF…
+                Generate from Transition Survey PDF…
               </DropdownMenuItem>
             </>
           )}

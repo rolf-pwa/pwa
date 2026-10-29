@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,102 +6,119 @@
 
 @layer base {
   :root {
-    /* ProsperWise brand ramp — Navy / Amber / Sand / Paper */
-    --pw-navy: 217 33% 17%;
-    --pw-amber: 26 31% 49%;
-    --pw-sand: 39 21% 81%;
-    --pw-paper: 0 0% 98%;
-    --pw-slate: 215 25% 27%;
-    --pw-ash: 215 16% 47%;
-    --pw-mist: 213 20% 65%;
-    --pw-cloud: 213 27% 84%;
+    /* ProsperWise Brand & Interface Guide V2.0 tokens (HSL). Use these by name; never a hex value in a component. */
+    --midnight: 216 65% 11%;        /* #0A192F  chrome, ink, primary buttons */
+    --midnight-deep: 216 70% 6%;    /* #050E1C  primary hover */
+    --limestone: 60 15% 95%;        /* #F4F4F0  page ground */
+    --paper: 60 27% 98%;            /* #FBFBF8  cards, inputs */
+    --spruce: 156 32% 17%;          /* #1E3A2F  the one highlight per view */
+    --bronze: 33 24% 44%;           /* #8C7355  fills and borders only */
+    --bronze-ink: 34 25% 40%;       /* #7E684C  eyebrows, links, small text on light */
+    --bronze-light: 34 19% 65%;     /* #B6A793  text and fills on Midnight or Spruce */
+    --sand: 39 21% 81%;             /* #D9D2C5  borders, dividers, secondary buttons */
+    --sand-hover: 39 16% 75%;       /* #C9C2B5 */
+    --ink-muted: 215 17% 43%;       /* #5A6A80  secondary text on light */
+    --ink-muted-dark: 215 19% 63%;  /* #8E9DB2  secondary text on Midnight */
+    --slate-700: 215 25% 27%;       /* #334155  body copy on light */
+    --slate-300: 214 32% 91%;       /* #CBD5E1  body copy on Midnight and Spruce */
+    --brick: 0 56% 39%;             /* #9B2C2C  errors only */
 
-    --background: var(--pw-paper);
-    --foreground: var(--pw-slate);
+    /* Older names, now pointing at the guide's tokens so existing screens follow */
+    --pw-navy: var(--midnight);
+    --pw-amber: var(--bronze-ink);
+    --pw-sand: var(--sand);
+    --pw-paper: var(--paper);
+    --pw-slate: var(--slate-700);
+    --pw-ash: var(--ink-muted);
+    --pw-mist: var(--ink-muted-dark);
+    --pw-cloud: var(--slate-300);
 
-    --card: 0 0% 100%;
-    --card-foreground: var(--pw-slate);
+    --background: var(--limestone);
+    --foreground: var(--slate-700);
 
-    --popover: 0 0% 100%;
-    --popover-foreground: var(--pw-slate);
+    --card: var(--paper);
+    --card-foreground: var(--slate-700);
 
-    --primary: var(--pw-navy);
-    --primary-foreground: var(--pw-paper);
+    --popover: var(--paper);
+    --popover-foreground: var(--slate-700);
 
-    --secondary: var(--pw-sand);
-    --secondary-foreground: var(--pw-navy);
+    --primary: var(--midnight);
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: var(--sand);
+    --secondary-foreground: var(--midnight);
 
     --muted: 39 21% 92%;
-    --muted-foreground: var(--pw-ash);
+    --muted-foreground: var(--ink-muted);
 
-    --accent: var(--pw-amber);
-    --accent-foreground: var(--pw-paper);
+    --accent: var(--bronze-ink);
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 45%;
-    --destructive-foreground: var(--pw-paper);
+    --destructive: var(--brick);
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 39 21% 86%;
-    --input: 39 21% 86%;
-    --ring: var(--pw-amber);
+    --border: var(--sand);
+    --input: var(--sand-hover);
+    --ring: var(--midnight);
 
-    --radius: 0.625rem; /* --r-lg 10px, cards & panels */
-    --radius-sm: 0.375rem; /* --r-sm 6px, buttons */
+    --radius: 0.5rem; /* cards, panels, callouts, tabs: 8px */
+    --radius-sm: 0.375rem; /* buttons and inputs: 6px; small tags use rounded (4px) */
 
-    /* Legacy Sanctuary aliases mapped onto the new brand ramp */
-    --sanctuary-green: var(--pw-navy);
-    --sanctuary-bronze: var(--pw-amber);
-    --sanctuary-stone: var(--pw-sand);
-    --sanctuary-charcoal: var(--pw-slate);
-    --chat-client: 26 31% 93%;
-    --chat-client-border: 26 31% 80%;
+    /* Legacy Sanctuary aliases mapped onto the guide's tokens */
+    --sanctuary-green: var(--midnight);
+    --sanctuary-bronze: var(--bronze-ink);
+    --sanctuary-stone: var(--sand);
+    --sanctuary-charcoal: var(--slate-700);
+    --chat-client: 34 25% 93%;
+    --chat-client-border: 34 19% 80%;
 
-    --sidebar-background: var(--pw-navy);
-    --sidebar-foreground: var(--pw-cloud);
-    --sidebar-primary: var(--pw-amber);
-    --sidebar-primary-foreground: var(--pw-paper);
-    --sidebar-accent: 217 33% 22%;
+    --sidebar-background: var(--midnight);
+    --sidebar-foreground: var(--slate-300);
+    --sidebar-primary: var(--bronze-light);
+    --sidebar-primary-foreground: var(--midnight);
+    --sidebar-accent: 216 55% 16%;
     --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 217 33% 25%;
-    --sidebar-ring: var(--pw-amber);
+    --sidebar-border: 216 45% 20%;
+    --sidebar-ring: var(--bronze-light);
   }
 
   .dark {
-    --background: 217 33% 11%;
-    --foreground: var(--pw-cloud);
+    --background: var(--midnight);
+    --foreground: var(--slate-300);
 
-    --card: 217 33% 15%;
-    --card-foreground: var(--pw-cloud);
+    --card: 216 60% 14%;
+    --card-foreground: var(--slate-300);
 
-    --popover: 217 33% 15%;
-    --popover-foreground: var(--pw-cloud);
+    --popover: 216 60% 14%;
+    --popover-foreground: var(--slate-300);
 
-    --primary: var(--pw-paper);
-    --primary-foreground: var(--pw-navy);
+    --primary: var(--paper);
+    --primary-foreground: var(--midnight);
 
-    --secondary: 217 33% 20%;
-    --secondary-foreground: var(--pw-cloud);
+    --secondary: 216 50% 18%;
+    --secondary-foreground: var(--slate-300);
 
-    --muted: 217 33% 18%;
-    --muted-foreground: var(--pw-mist);
+    --muted: 216 50% 16%;
+    --muted-foreground: var(--ink-muted-dark);
 
-    --accent: var(--pw-amber);
-    --accent-foreground: var(--pw-paper);
+    --accent: var(--bronze-light);
+    --accent-foreground: var(--midnight);
 
-    --destructive: 0 62% 40%;
-    --destructive-foreground: var(--pw-paper);
+    --destructive: 0 60% 50%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 217 33% 24%;
-    --input: 217 33% 24%;
-    --ring: var(--pw-amber);
+    --border: 216 40% 22%;
+    --input: 216 40% 24%;
+    --ring: var(--bronze-light);
 
-    --sidebar-background: 217 33% 9%;
-    --sidebar-foreground: var(--pw-cloud);
-    --sidebar-primary: var(--pw-amber);
-    --sidebar-primary-foreground: var(--pw-paper);
-    --sidebar-accent: 217 33% 15%;
+    --sidebar-background: var(--midnight-deep);
+    --sidebar-foreground: var(--slate-300);
+    --sidebar-primary: var(--bronze-light);
+    --sidebar-primary-foreground: var(--midnight);
+    --sidebar-accent: 216 55% 12%;
     --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 217 33% 18%;
-    --sidebar-ring: var(--pw-amber);
+    --sidebar-border: 216 45% 16%;
+    --sidebar-ring: var(--bronze-light);
   }
 }
 
@@ -112,7 +129,7 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    line-height: 1.625;
+    line-height: 1.6;
   }
 
   h1, h2, h3, h4 {
@@ -131,12 +148,12 @@
 }
 
 @layer components {
-  /* Eyebrow: mono, uppercase, tracked, amber */
+  /* Eyebrow: mono, 12px, 600, uppercase, tracking 0.1em, bronze-ink (bronze-light on dark via --accent) */
   .pw-eyebrow {
     @apply font-mono text-accent uppercase;
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     font-weight: 600;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.1em;
   }
 
   /* One italic Playfair accent phrase per view, used sparingly */
@@ -186,4 +203,4 @@
 
 /* The phone shell: the page behind everything is the navy of its top bar, so the iPhone status bar takes the same navy (with white time and battery) instead of a grey fade.
    MobileShell sets the class while it is showing; the shell paints its own background over this. */
-html.advisor-shell, html.advisor-shell body { background-color: #1e293b; }
+html.advisor-shell, html.advisor-shell body { background-color: #0a192f; }

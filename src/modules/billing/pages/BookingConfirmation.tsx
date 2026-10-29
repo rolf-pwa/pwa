@@ -123,7 +123,7 @@ export default function BookingConfirmation() {
                 {paid && portalToken && (
                   <div className="space-y-2">
                     <p className="text-sm">
-                      Taking you to your portal to book your Audit and finish onboarding…
+                      Taking you to your portal to book your Transition Survey and finish onboarding…
                     </p>
                     <Button asChild className="w-full">
                       <a href={`/portal/${portalToken}/intake`}>Continue to your onboarding</a>

@@ -100,7 +100,7 @@ export function ServiceDialog({ open, onOpenChange, service, onSaved }: Props) {
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="svc-name">Name</Label>
-            <Input id="svc-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Sovereignty Audit" />
+            <Input id="svc-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Transition Survey" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="svc-desc">Description</Label>

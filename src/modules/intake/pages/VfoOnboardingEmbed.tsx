@@ -25,9 +25,9 @@ function saveState(messages: Message[], phase: Phase, vfoData: Record<string, an
 
 // ProsperWise brand palette (embed is rendered outside the app theme, so hex is required)
 const C = {
-  bg: "#FAFAFA", surface: "#F1EEE8", border: "rgba(164,123,87,0.35)",
-  borderSubtle: "rgba(164,123,87,0.18)", vellum: "#FAFAFA",
-  charcoal: "#334155", muted: "#64748B", green: "#1D2939", bronze: "#A47B57",
+  bg: "#FBFBF8", surface: "#F1EEE8", border: "rgba(164,123,87,0.35)",
+  borderSubtle: "rgba(164,123,87,0.18)", vellum: "#FBFBF8",
+  charcoal: "#334155", muted: "#5A6A80", green: "#1D2939", bronze: "#A47B57",
 };
 
 const WELCOME: Message = {
@@ -112,7 +112,7 @@ export default function VfoOnboardingEmbed() {
       setPhase("complete");
       setMessages((prev) => [...prev, {
         role: "assistant",
-        content: "Thank you. Your details are with Rolf. He will personally review your context and reach out to coordinate your Sovereignty Audit.",
+        content: "Thank you. Your details are with Rolf. He will personally review your context and reach out to coordinate your Transition Survey.",
       }]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Submission failed");
@@ -198,7 +198,7 @@ export default function VfoOnboardingEmbed() {
                 <div className="flex items-center gap-1.5">
                   <ShieldCheck className="h-3.5 w-3.5" style={{ color: C.bronze }} />
                   <span className="text-[11px] font-semibold font-serif" style={{ color: C.green }}>
-                    Reserve Your Sovereignty Audit ({auditPrice} {auditType === "corporate" ? "B2B" : "personal"})
+                    Reserve Your Transition Survey ({auditPrice} {auditType === "corporate" ? "B2B" : "personal"})
                   </span>
                 </div>
                 <p className="text-[10px]" style={{ color: C.muted }}>
@@ -213,7 +213,7 @@ export default function VfoOnboardingEmbed() {
                     value={leadForm[key as keyof typeof leadForm]}
                     onChange={(e) => setLeadForm((f) => ({ ...f, [key]: e.target.value }))}
                     placeholder={placeholder} maxLength={max}
-                    className="w-full h-8 rounded-lg px-3 text-xs focus-visible:outline-none placeholder:text-[#64748B]"
+                    className="w-full h-8 rounded-lg px-3 text-xs focus-visible:outline-none placeholder:text-[#5A6A80]"
                     style={{ backgroundColor: "#FFFFFF", border: `1px solid ${C.border}`, color: C.charcoal }} />
                 ))}
                 <div className="flex items-start gap-2 rounded-lg p-2"
@@ -233,7 +233,7 @@ export default function VfoOnboardingEmbed() {
                     <span className="flex items-center justify-center gap-1.5">
                       <Loader2 className="h-3 w-3 animate-spin" /> Submitting...
                     </span>
-                  ) : `Request Sovereignty Audit (${auditPrice})`}
+                  ) : `Request Transition Survey (${auditPrice})`}
                 </button>
               </div>
             </motion.div>
@@ -246,7 +246,7 @@ export default function VfoOnboardingEmbed() {
                   style={{ backgroundColor: "rgba(169,140,90,0.12)", border: `1px solid ${C.border}` }}>
                   <ShieldCheck className="h-4 w-4" style={{ color: C.bronze }} />
                 </div>
-                <p className="text-xs font-semibold font-serif" style={{ color: C.green }}>Sovereignty Audit Requested</p>
+                <p className="text-xs font-semibold font-serif" style={{ color: C.green }}>Transition Survey Requested</p>
                 <p className="mt-1 text-[10px]" style={{ color: C.muted }}>
                   Rolf will personally reach out to coordinate your 90-minute diagnostic.
                 </p>

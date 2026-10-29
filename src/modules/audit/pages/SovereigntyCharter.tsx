@@ -1024,8 +1024,8 @@ export default function SovereigntyCharter() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fafafa]">
-      <div className="print:hidden sticky top-0 z-20 border-b border-[#e2e8f0] bg-[#fafafa]/95 backdrop-blur">
+    <div className="min-h-screen bg-[#FBFBF8]">
+      <div className="print:hidden sticky top-0 z-20 border-b border-[#D9D2C5] bg-[#FBFBF8]/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1100px] items-center justify-between px-6 py-3">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
@@ -1033,7 +1033,7 @@ export default function SovereigntyCharter() {
             </Button>
             <div className="text-sm text-[#334155]">
               <span className="font-semibold">Sovereignty Charter™</span>
-              <span className="ml-2 text-xs uppercase tracking-wider text-[#a37c58]">Portrait template</span>
+              <span className="ml-2 text-xs uppercase tracking-wider text-[#7E684C]">Portrait template</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1396,12 +1396,12 @@ export default function SovereigntyCharter() {
         )}
 
         <div className={pageWrap} style={pageStyle}>
-          <div style={{ backgroundColor: "#1e293b", color: "#fff", padding: "10mm 12mm 9mm" }}>
+          <div style={{ backgroundColor: "#0A192F", color: "#fff", padding: "10mm 12mm 9mm" }}>
             <img src={pwLogoWhite} alt="ProsperWise" style={{ width: "54mm", height: "auto", display: "block", marginBottom: "4mm" }} />
             <div style={{ fontSize: "8pt", fontWeight: 300, color: "rgba(255,255,255,.55)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: "4mm" }}>
               Sovereignty Operating System™
             </div>
-            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "24pt", fontWeight: 300, lineHeight: 1.08 }}>
+            <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "24pt", fontWeight: 700, lineHeight: 1.08 }}>
               {charter.title}
             </div>
             <div style={{ fontSize: "8pt", color: "rgba(255,255,255,.7)", marginTop: "2.5mm" }}>
@@ -1411,25 +1411,25 @@ export default function SovereigntyCharter() {
 
           <div style={{ padding: "12mm", display: "flex", flexDirection: "column", gap: "6mm" }}>
             <div>
-              <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "1.5mm" }}>
+              <div style={{ fontSize: "7.5pt", letterSpacing: ".1em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "1.5mm" }}>
                 Sovereignty Charter™ &nbsp;·&nbsp; Prepared for <strong>{fullName}</strong>
               </div>
-              <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "25pt", fontWeight: 300, color: "#334155", lineHeight: 1.1, whiteSpace: "pre-line" }}>
+              <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "25pt", fontWeight: 700, color: "#334155", lineHeight: 1.1, whiteSpace: "pre-line" }}>
                 {charter.intro_heading}
               </div>
-              <hr style={{ width: "18mm", height: "3px", background: "#a37c58", border: "none", marginTop: "2.5mm" }} />
+              <hr style={{ width: "18mm", height: "3px", background: "#7E684C", border: "none", marginTop: "2.5mm" }} />
             </div>
 
-            <div style={{ background: "#fafafa", borderLeft: "3px solid #a37c58", padding: "3mm 5mm", display: "flex", flexDirection: "column", gap: "1.5mm" }}>
-              <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "7.5pt", fontWeight: 400, fontStyle: "italic", color: "#334155", lineHeight: 1.55 }}>
+            <div style={{ background: "#FBFBF8", borderLeft: "3px solid #7E684C", padding: "3mm 5mm", display: "flex", flexDirection: "column", gap: "1.5mm" }}>
+              <div style={{ fontFamily: "Inter, sans-serif", fontSize: "7.5pt", fontWeight: 400, fontStyle: "italic", color: "#334155", lineHeight: 1.55 }}>
                 {charter.intro_callout}
               </div>
               <div style={{ fontSize: "7.5pt", color: "#334155" }}>
                 {charter.intro_note}
               </div>
               {charter.transition_summary?.trim() ? (
-                <div style={{ fontSize: "7.5pt", color: "#334155", borderTop: "1px dashed #e2e8f0", paddingTop: "1.8mm", marginTop: "0.5mm" }}>
-                  <strong style={{ color: "#1e293b" }}>Transition context: </strong>{charter.transition_summary}
+                <div style={{ fontSize: "7.5pt", color: "#334155", borderTop: "1px dashed #D9D2C5", paddingTop: "1.8mm", marginTop: "0.5mm" }}>
+                  <strong style={{ color: "#0A192F" }}>Transition context: </strong>{charter.transition_summary}
                 </div>
               ) : null}
             </div>
@@ -1464,7 +1464,7 @@ export default function SovereigntyCharter() {
             ) : null}
           </div>
 
-          <div style={{ background: "#a37c58", color: "#fff", marginTop: "auto", padding: "3mm 12mm", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ background: "#7E684C", color: "#fff", marginTop: "auto", padding: "3mm 12mm", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ fontSize: "8.5pt", fontWeight: 500, maxWidth: "75%" }}>
               Ratification status: {charter.footer_status}
             </div>
@@ -1473,11 +1473,11 @@ export default function SovereigntyCharter() {
         </div>
 
         <div className={`${pageWrap} print-page-break`} style={{ ...pageStyle, marginTop: "6mm" }}>
-          <div style={{ backgroundColor: "#1e293b", color: "#fff", padding: "9mm 12mm 8mm" }}>
+          <div style={{ backgroundColor: "#0A192F", color: "#fff", padding: "9mm 12mm 8mm" }}>
             <div style={{ fontSize: "8pt", fontWeight: 300, color: "rgba(255,255,255,.55)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: "3mm" }}>
               Charter Architecture
             </div>
-            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "23pt", fontWeight: 300, lineHeight: 1.08 }}>
+            <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "23pt", fontWeight: 700, lineHeight: 1.08 }}>
               Vineyard Protocol & Storehouses
             </div>
           </div>
@@ -1485,7 +1485,7 @@ export default function SovereigntyCharter() {
           <div style={{ padding: "12mm", display: "flex", flexDirection: "column", gap: "6mm" }}>
             {(charter.growth_primary_detail || charter.growth_secondary_detail) ? (
               <div>
-                <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "2mm" }}>Vineyard Growth Allocation</div>
+                <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "2mm" }}>Vineyard Growth Allocation</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4mm" }}>
                   {charter.growth_primary_detail ? (
                     <ContainerCard
@@ -1505,7 +1505,7 @@ export default function SovereigntyCharter() {
 
             {(charter.storehouse_liquidity_detail || charter.storehouse_strategic_detail || charter.storehouse_legacy_detail || charter.storehouse_philanthropic_detail) ? (
               <div>
-                <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "2mm" }}>Storehouse Strategic Notes</div>
+                <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "2mm" }}>Storehouse Strategic Notes</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4mm" }}>
                   {charter.storehouse_liquidity_detail ? (
                     <ContainerCard
@@ -1537,7 +1537,7 @@ export default function SovereigntyCharter() {
 
             {(charter.harvest_yield_protocol || charter.harvest_spending_categories) ? (
               <div>
-                <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "2mm" }}>Harvest Protocol</div>
+                <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "2mm" }}>Harvest Protocol</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4mm" }}>
                   {charter.harvest_yield_protocol ? (
                     <ArticleCard title="Yield Protocol" body={charter.harvest_yield_protocol} />
@@ -1551,7 +1551,7 @@ export default function SovereigntyCharter() {
 
             {charter.custom_sections.pageTwo.length > 0 ? (
               <div>
-                <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "2mm" }}>Strategic Narratives</div>
+                <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "2mm" }}>Strategic Narratives</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4mm" }}>
                   {charter.custom_sections.pageTwo.map((section) => (
                     <PageOneContainerCard
@@ -1569,11 +1569,11 @@ export default function SovereigntyCharter() {
 
         {(charter.long_term_strategy || charter.monitoring_cadence || charter.withdrawal_safeguards || charter.roles_responsibilities || charter.professional_coordination || charter.executor_primary || charter.executor_alternate || charter.succession_terms || charter.ratification_signatories.length > 0) ? (
           <div className={`${pageWrap} print-page-break`} style={{ ...pageStyle, marginTop: "6mm" }}>
-            <div style={{ backgroundColor: "#1e293b", color: "#fff", padding: "9mm 12mm 8mm" }}>
+            <div style={{ backgroundColor: "#0A192F", color: "#fff", padding: "9mm 12mm 8mm" }}>
               <div style={{ fontSize: "8pt", fontWeight: 300, color: "rgba(255,255,255,.55)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: "3mm" }}>
                 Strategic Stewardship
               </div>
-              <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "23pt", fontWeight: 300, lineHeight: 1.08 }}>
+              <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "23pt", fontWeight: 700, lineHeight: 1.08 }}>
                 Long-Term Strategy, Roles & Succession
               </div>
             </div>
@@ -1603,7 +1603,7 @@ export default function SovereigntyCharter() {
 
               {(charter.executor_primary || charter.executor_alternate || charter.succession_terms) ? (
                 <div>
-                  <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "2mm" }}>Succession Plan</div>
+                  <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "2mm" }}>Succession Plan</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4mm" }}>
                     {charter.executor_primary ? (
                       <MetricCard label="Primary Executor" value={charter.executor_primary} />
@@ -1622,21 +1622,21 @@ export default function SovereigntyCharter() {
 
               {charter.ratification_signatories.length > 0 ? (
                 <div>
-                  <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "2mm" }}>Ratification Signatories</div>
+                  <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "2mm" }}>Ratification Signatories</div>
                   <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
                     <thead>
-                      <tr style={{ background: "#fafafa" }}>
-                        <th style={{ fontSize: "7pt", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: ".08em", padding: "2.4mm 2mm", borderBottom: "1px solid #e2e8f0", textAlign: "left", width: "40%" }}>Name</th>
-                        <th style={{ fontSize: "7pt", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: ".08em", padding: "2.4mm 2mm", borderBottom: "1px solid #e2e8f0", textAlign: "left", width: "35%" }}>Role</th>
-                        <th style={{ fontSize: "7pt", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: ".08em", padding: "2.4mm 2mm", borderBottom: "1px solid #e2e8f0", textAlign: "left", width: "25%" }}>Signed</th>
+                      <tr style={{ background: "#FBFBF8" }}>
+                        <th style={{ fontSize: "7pt", fontWeight: 600, color: "#5A6A80", textTransform: "uppercase", letterSpacing: ".08em", padding: "2.4mm 2mm", borderBottom: "1px solid #D9D2C5", textAlign: "left", width: "40%" }}>Name</th>
+                        <th style={{ fontSize: "7pt", fontWeight: 600, color: "#5A6A80", textTransform: "uppercase", letterSpacing: ".08em", padding: "2.4mm 2mm", borderBottom: "1px solid #D9D2C5", textAlign: "left", width: "35%" }}>Role</th>
+                        <th style={{ fontSize: "7pt", fontWeight: 600, color: "#5A6A80", textTransform: "uppercase", letterSpacing: ".08em", padding: "2.4mm 2mm", borderBottom: "1px solid #D9D2C5", textAlign: "left", width: "25%" }}>Signed</th>
                       </tr>
                     </thead>
                     <tbody>
                       {charter.ratification_signatories.map((signatory, idx) => (
                         <tr key={`sig-${idx}`}>
-                          <td style={{ fontSize: "7.5pt", padding: "2.4mm 2mm", borderBottom: "1px solid #e2e8f0", verticalAlign: "top" }}>{signatory.name || "—"}</td>
-                          <td style={{ fontSize: "7.5pt", padding: "2.4mm 2mm", borderBottom: "1px solid #e2e8f0", verticalAlign: "top" }}>{signatory.role || "—"}</td>
-                          <td style={{ fontSize: "7.5pt", padding: "2.4mm 2mm", borderBottom: "1px solid #e2e8f0", verticalAlign: "top" }}>
+                          <td style={{ fontSize: "7.5pt", padding: "2.4mm 2mm", borderBottom: "1px solid #D9D2C5", verticalAlign: "top" }}>{signatory.name || "—"}</td>
+                          <td style={{ fontSize: "7.5pt", padding: "2.4mm 2mm", borderBottom: "1px solid #D9D2C5", verticalAlign: "top" }}>{signatory.role || "—"}</td>
+                          <td style={{ fontSize: "7.5pt", padding: "2.4mm 2mm", borderBottom: "1px solid #D9D2C5", verticalAlign: "top" }}>
                             {signatory.signed_at ? formatDate(signatory.signed_at, signatory.signed_at) : "—"}
                           </td>
                         </tr>
@@ -1650,17 +1650,17 @@ export default function SovereigntyCharter() {
         ) : null}
 
         <div className={`${pageWrap} print-page-break`} style={{ ...pageStyle, marginTop: "6mm" }}>
-          <div style={{ backgroundColor: "#1e293b", color: "#fff", padding: "9mm 12mm 8mm" }}>
+          <div style={{ backgroundColor: "#0A192F", color: "#fff", padding: "9mm 12mm 8mm" }}>
             <div style={{ fontSize: "8pt", fontWeight: 300, color: "rgba(255,255,255,.55)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: "3mm" }}>
               Appendix A
             </div>
-            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "23pt", fontWeight: 300, lineHeight: 1.08 }}>
+            <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "23pt", fontWeight: 700, lineHeight: 1.08 }}>
               Structural Architecture & Territory Schedule
             </div>
           </div>
 
           <div style={{ padding: "12mm", display: "flex", flexDirection: "column", gap: "5mm" }}>
-            <div style={{ background: "#fafafa", borderLeft: "3px solid #a37c58", padding: "3mm 5mm", fontFamily: "'DM Sans', sans-serif", fontSize: "7.5pt", fontWeight: 400, fontStyle: "italic", color: "#334155", lineHeight: 1.65 }}>
+            <div style={{ background: "#FBFBF8", borderLeft: "3px solid #7E684C", padding: "3mm 5mm", fontFamily: "Inter, sans-serif", fontSize: "7.5pt", fontWeight: 400, fontStyle: "italic", color: "#334155", lineHeight: 1.65 }}>
               {charter.appendix_note}
             </div>
 
@@ -1709,11 +1709,11 @@ export default function SovereigntyCharter() {
 
         {charter.full_markdown?.trim() ? (
           <div className={`${pageWrap} print-page-break`} style={{ ...pageStyle, marginTop: "6mm" }}>
-            <div style={{ backgroundColor: "#1e293b", color: "#fff", padding: "9mm 12mm 8mm" }}>
+            <div style={{ backgroundColor: "#0A192F", color: "#fff", padding: "9mm 12mm 8mm" }}>
               <div style={{ fontSize: "8pt", fontWeight: 300, color: "rgba(255,255,255,.55)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: "3mm" }}>
                 Full Charter
               </div>
-              <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "23pt", fontWeight: 300, lineHeight: 1.08 }}>
+              <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "23pt", fontWeight: 700, lineHeight: 1.08 }}>
                 Long-Form Constitutional Draft
               </div>
             </div>
@@ -1728,17 +1728,17 @@ export default function SovereigntyCharter() {
 
         {charterSources.filter((s) => (s.contentText || "").trim() || s.sourceUrl || s.fileName).length > 0 ? (
           <div className={`${pageWrap} print-page-break`} style={{ ...pageStyle, marginTop: "6mm" }}>
-            <div style={{ backgroundColor: "#1e293b", color: "#fff", padding: "9mm 12mm 8mm" }}>
+            <div style={{ backgroundColor: "#0A192F", color: "#fff", padding: "9mm 12mm 8mm" }}>
               <div style={{ fontSize: "8pt", fontWeight: 300, color: "rgba(255,255,255,.55)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: "3mm" }}>
                 Appendix B
               </div>
-              <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "23pt", fontWeight: 300, lineHeight: 1.08 }}>
+              <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "23pt", fontWeight: 700, lineHeight: 1.08 }}>
                 Source Documents
               </div>
             </div>
 
             <div style={{ padding: "12mm", display: "flex", flexDirection: "column", gap: "5mm" }}>
-              <div style={{ background: "#fafafa", borderLeft: "3px solid #a37c58", padding: "3mm 5mm", fontFamily: "'DM Sans', sans-serif", fontSize: "7.5pt", fontWeight: 400, fontStyle: "italic", color: "#334155", lineHeight: 1.65 }}>
+              <div style={{ background: "#FBFBF8", borderLeft: "3px solid #7E684C", padding: "3mm 5mm", fontFamily: "Inter, sans-serif", fontSize: "7.5pt", fontWeight: 400, fontStyle: "italic", color: "#334155", lineHeight: 1.65 }}>
                 The following materials were provided by the Sovereign and used as the canonical source for this Charter. They are reproduced here verbatim for traceability and audit.
               </div>
 
@@ -1750,17 +1750,17 @@ export default function SovereigntyCharter() {
                   return (
                     <div
                       key={source.id || `source-${index}`}
-                      style={{ border: "1px solid #e2e8f0", background: "#fff", display: "flex", flexDirection: "column" }}
+                      style={{ border: "1px solid #D9D2C5", background: "#fff", display: "flex", flexDirection: "column" }}
                     >
-                      <div style={{ background: "#fafafa", borderBottom: "1px solid #e2e8f0", padding: "3mm 4mm", display: "flex", flexDirection: "column", gap: "0.8mm" }}>
-                        <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#94a3b8" }}>
+                      <div style={{ background: "#FBFBF8", borderBottom: "1px solid #D9D2C5", padding: "3mm 4mm", display: "flex", flexDirection: "column", gap: "0.8mm" }}>
+                        <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#5A6A80" }}>
                           Source {index + 1} · {kindLabel} · {modeLabel}
                         </div>
-                        <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "13pt", fontWeight: 500, color: "#334155" }}>
+                        <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "13pt", fontWeight: 700, color: "#334155" }}>
                           {source.title || "Untitled source"}
                         </div>
                         {(source.fileName || source.sourceUrl) ? (
-                          <div style={{ fontSize: "7pt", color: "#64748b", wordBreak: "break-all" }}>
+                          <div style={{ fontSize: "7pt", color: "#5A6A80", wordBreak: "break-all" }}>
                             {source.fileName ? <span>{source.fileName}</span> : null}
                             {source.fileName && source.sourceUrl ? <span> · </span> : null}
                             {source.sourceUrl ? <span>{source.sourceUrl}</span> : null}
@@ -1799,7 +1799,7 @@ const pageStyle: React.CSSProperties = {
   minHeight: "297mm",
   display: "flex",
   flexDirection: "column",
-  fontFamily: "'DM Sans', sans-serif",
+  fontFamily: "Inter, sans-serif",
   color: "#334155",
 };
 
@@ -2038,14 +2038,14 @@ function CharterSourceEditor({
 
 function SectionCard({ title, body, items }: { title: string; body?: string; items?: string[] }) {
   return (
-    <div style={{ background: "#fafafa", borderLeft: "3px solid #a37c58", padding: "3mm 4mm" }}>
-      <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "1.5mm" }}>{title}</div>
+    <div style={{ background: "#FBFBF8", borderLeft: "3px solid #7E684C", padding: "3mm 4mm" }}>
+      <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "1.5mm" }}>{title}</div>
       {body && <p style={{ fontSize: "7.5pt", lineHeight: 1.55 }}>{body}</p>}
       {items?.length ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "1.4mm" }}>
           {items.map((item, index) => (
             <div key={index} style={{ display: "flex", gap: "2mm" }}>
-              <div style={{ width: "4px", height: "4px", borderRadius: "999px", background: "#a37c58", marginTop: "5px", flexShrink: 0 }} />
+              <div style={{ width: "4px", height: "4px", borderRadius: "999px", background: "#7E684C", marginTop: "5px", flexShrink: 0 }} />
               <p style={{ fontSize: "7.5pt", lineHeight: 1.5 }}>{item}</p>
             </div>
           ))}
@@ -2057,8 +2057,8 @@ function SectionCard({ title, body, items }: { title: string; body?: string; ite
 
 function ArticleCard({ title, body }: { title: string; body: string }) {
   return (
-    <div style={{ border: "1px solid #e2e8f0", padding: "4mm", background: "#fff" }}>
-      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "13pt", fontWeight: 500, color: "#334155", marginBottom: "1.5mm" }}>{title}</div>
+    <div style={{ border: "1px solid #D9D2C5", padding: "4mm", background: "#fff" }}>
+      <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "13pt", fontWeight: 700, color: "#334155", marginBottom: "1.5mm" }}>{title}</div>
       <p style={{ fontSize: "7.5pt", lineHeight: 1.6, color: "#334155" }}>{body}</p>
     </div>
   );
@@ -2071,9 +2071,9 @@ function PageOneContainerCard({ title, meta, body }: { title: string; meta?: str
     .filter(Boolean);
 
   return (
-    <div style={{ border: "1px solid #e2e8f0", padding: "4mm", background: "#fff" }}>
-      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "13pt", fontWeight: 500, color: "#334155", marginBottom: "1.5mm" }}>{title}</div>
-      {meta ? <div style={{ fontSize: "7pt", color: "#64748b", marginBottom: "2mm", textTransform: "uppercase", letterSpacing: ".08em" }}>{meta}</div> : null}
+    <div style={{ border: "1px solid #D9D2C5", padding: "4mm", background: "#fff" }}>
+      <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "13pt", fontWeight: 700, color: "#334155", marginBottom: "1.5mm" }}>{title}</div>
+      {meta ? <div style={{ fontSize: "7pt", color: "#5A6A80", marginBottom: "2mm", textTransform: "uppercase", letterSpacing: ".08em" }}>{meta}</div> : null}
       <div style={{ display: "flex", flexDirection: "column", gap: "1.5mm" }}>
         {lines.map((line, index) => (
           <p key={index} style={{ fontSize: "7.5pt", lineHeight: 1.6, color: "#334155" }}>
@@ -2097,13 +2097,13 @@ function ContainerCard({
   items: string[];
 }) {
   return (
-    <div style={{ background: "#fafafa", borderLeft: "3px solid #a37c58", padding: "3mm 4mm" }}>
+    <div style={{ background: "#FBFBF8", borderLeft: "3px solid #7E684C", padding: "3mm 4mm" }}>
       <strong style={{ display: "block", fontSize: "8.5pt", fontWeight: 600, color: "#334155", marginBottom: "1mm" }}>{title}</strong>
-      {meta ? <div style={{ fontSize: "7.5pt", color: "#64748b", marginBottom: "1.5mm" }}>{meta}</div> : null}
+      {meta ? <div style={{ fontSize: "7.5pt", color: "#5A6A80", marginBottom: "1.5mm" }}>{meta}</div> : null}
       {subtitle ? <div style={{ fontSize: "7.5pt", color: "#334155", marginBottom: "1.5mm" }}>{subtitle}</div> : null}
       {items.map((item, index) => (
         <div key={index} style={{ display: "flex", gap: "2mm", marginTop: "1.2mm" }}>
-          <div style={{ width: "4px", height: "4px", borderRadius: "999px", background: "#a37c58", marginTop: "5px", flexShrink: 0 }} />
+          <div style={{ width: "4px", height: "4px", borderRadius: "999px", background: "#7E684C", marginTop: "5px", flexShrink: 0 }} />
           <p style={{ fontSize: "7.5pt", lineHeight: 1.5 }}>{item}</p>
         </div>
       ))}
@@ -2123,30 +2123,30 @@ function ScheduleTable({
   const headCell: React.CSSProperties = {
     fontSize: "7pt",
     fontWeight: 600,
-    color: "#64748b",
+    color: "#5A6A80",
     textTransform: "uppercase",
     letterSpacing: ".08em",
     padding: "2.4mm 2mm",
-    borderBottom: "1px solid #e2e8f0",
+    borderBottom: "1px solid #D9D2C5",
     textAlign: "left",
   };
 
   const bodyCell: React.CSSProperties = {
     fontSize: "7.5pt",
     padding: "2.4mm 2mm",
-    borderBottom: "1px solid #e2e8f0",
+    borderBottom: "1px solid #D9D2C5",
     verticalAlign: "top",
   };
 
   return (
     <div>
-      <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "2mm" }}>{title}</div>
+      <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "2mm" }}>{title}</div>
       {rows.length === 0 ? (
-        <div style={{ background: "#fafafa", padding: "4mm", fontSize: "8pt", color: "#64748b" }}>{emptyLabel}</div>
+        <div style={{ background: "#FBFBF8", padding: "4mm", fontSize: "8pt", color: "#5A6A80" }}>{emptyLabel}</div>
       ) : (
         <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
           <thead>
-            <tr style={{ background: "#fafafa" }}>
+            <tr style={{ background: "#FBFBF8" }}>
               <th style={{ ...headCell, width: "32%" }}>Account</th>
               <th style={{ ...headCell, width: "22%" }}>Type</th>
               <th style={{ ...headCell, width: "18%" }}>Value</th>
@@ -2171,9 +2171,9 @@ function ScheduleTable({
 
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ background: "#fafafa", borderLeft: "3px solid #a37c58", padding: "3mm 4mm" }}>
-      <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#94a3b8", marginBottom: "1.2mm" }}>{label}</div>
-      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "16pt", fontWeight: 500, color: "#334155" }}>{value}</div>
+    <div style={{ background: "#FBFBF8", borderLeft: "3px solid #7E684C", padding: "3mm 4mm" }}>
+      <div style={{ fontSize: "6.5pt", letterSpacing: ".12em", textTransform: "uppercase", color: "#5A6A80", marginBottom: "1.2mm" }}>{label}</div>
+      <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "16pt", fontWeight: 700, color: "#334155" }}>{value}</div>
     </div>
   );
 }

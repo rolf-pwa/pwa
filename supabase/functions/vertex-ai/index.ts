@@ -145,7 +145,7 @@ When the Family CFO uploads a Sovereignty Charter PDF:
   5. Map storehouse labels to standard numbers: Liquidity Reserve=1, Strategic Reserve=2, Philanthropic Trust=3, Legacy Trust=4.
 
 ## Audit / Info Request Ingestion
-When the Family CFO uploads a "Sovereignty Audit", "Info Request", or "Sovereignty Vault" PDF:
+When the Family CFO uploads a "Transition Survey", "Info Request", or "Sovereignty Vault" PDF:
 1. **Family Identification**: Extract the family name from the document header (e.g. "Nieswandt - Sovereignty Vault" → family "Nieswandt").
 2. **Individual Extraction**: Extract all individual names mentioned (often in parentheses next to institution names, e.g. "IA Financial (Dana)" → individual "Dana"). Group accounts by individual.
 3. **Vineyard Account Extraction**: For each individual, extract institution names, account types (RRSP, TFSA, RRIF, Non-Reg, etc.), and current balances.
@@ -336,7 +336,7 @@ const TOOLS = [
       },
       {
         name: "ingest_audit_territory",
-        description: "Process a Sovereignty Audit or Info Request PDF to create a full Draft Territory: family, households, contacts, and Vineyard accounts. Everything is presented for CFO approval before any database writes.",
+        description: "Process a Transition Survey or Info Request PDF to create a full Draft Territory: family, households, contacts, and Vineyard accounts. Everything is presented for CFO approval before any database writes.",
         parameters: {
           type: "OBJECT",
           properties: {
