@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { allocateCapital, staleOtherAssets, type AllocInput } from "../../supabase/functions/_shared/quarterly-review-allocation";
-import { evenSplit, ownerSplitError, shareOfValue, valueIsStale } from "../modules/crm/lib/otherAssets";
+import { assetTotals, evenSplit, ownerSplitError, shareOfValue, valueByOwner, valueIsStale } from "../modules/crm/lib/otherAssets";
 
 const base = (o: Partial<AllocInput> = {}): AllocInput => ({
   aum: 100_000, netWorth: 100_000, holdingTank: 0, vineyard: 100_000,
@@ -24,6 +24,21 @@ describe("owner splits", () => {
     expect(Math.round(t.reduce((s, o) => s + o.ownership_pct, 0) * 100) / 100).toBe(100);
     expect(ownerSplitError(t)).toBeNull();
     expect(shareOfValue(800_000, 50)).toBe(400_000);
+  });
+});
+
+describe("household totals", () => {
+  const rows = [
+    { current_value: 800_000, value_as_of: "2026-09-01", owners: [{ contact_id: "a", ownership_pct: 50 }, { contact_id: "b", ownership_pct: 50 }] },
+    { current_value: 40_000, value_as_of: "2024-01-01", owners: [{ contact_id: "a", ownership_pct: 100 }] },
+  ];
+  it("counts value once and tallies joint and stale assets", () => {
+    expect(assetTotals(rows, "2026-10-30")).toEqual({ value: 840_000, count: 2, joint: 1, stale: 1 });
+  });
+  it("splits value by owner so the shares add up to the household total", () => {
+    const by = valueByOwner(rows);
+    expect(by).toEqual({ a: 440_000, b: 400_000 });
+    expect(by.a + by.b).toBe(840_000);
   });
 });
 
@@ -73,7 +88,7 @@ describe("wiring", () => {
     expect(alloc).toContain("!replaced.has(s.id)");
   });
   it("is on the household page and the migration grants the app roles", () => {
-    expect(readFileSync("src/modules/crm/pages/HouseholdDetail.tsx", "utf8")).toContain("<OtherAssetsCard");
+    expect(readFileSync("src/modules/crm/pages/HouseholdDetail.tsx", "utf8")).toContain("<HouseholdAssets");
     const m = readFileSync("supabase/migrations/20270106120000_other_assets.sql", "utf8");
     expect(m).toContain("TO authenticated");
     expect(m).toContain("TO service_role");
