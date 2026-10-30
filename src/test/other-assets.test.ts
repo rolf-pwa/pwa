@@ -87,6 +87,11 @@ describe("wiring", () => {
     expect(alloc).toContain('.from("other_assets")');
     expect(alloc).toContain("!replaced.has(s.id)");
   });
+  it("shows on the contact page, sharing one editor with the household tab", () => {
+    expect(readFileSync("src/modules/crm/pages/ContactDetail.tsx", "utf8")).toContain("<ContactAssetsCard");
+    expect(readFileSync("src/modules/crm/components/ContactAssetsCard.tsx", "utf8")).toContain("<AssetEditor");
+    expect(readFileSync("src/modules/crm/components/HouseholdAssets.tsx", "utf8")).toContain("<AssetEditor");
+  });
   it("is on the household page and the migration grants the app roles", () => {
     expect(readFileSync("src/modules/crm/pages/HouseholdDetail.tsx", "utf8")).toContain("<HouseholdAssets");
     const m = readFileSync("supabase/migrations/20270106120000_other_assets.sql", "utf8");

@@ -60,6 +60,7 @@ import { AuditTrail } from "@/modules/audit";
 import { StatementUpload } from "@/modules/crm";
 import { HoldingTank } from "@/modules/crm/components/HoldingTank";
 import { LiabilitiesCard } from "@/modules/crm/components/LiabilitiesCard";
+import { ContactAssetsCard } from "@/modules/crm/components/ContactAssetsCard";
 import { AssetContainer, type MoveTarget } from "@/modules/crm/components/AssetContainer";
 import type { WebFormRecord } from "@/modules/crm/components/WebFormEditorDialog";
 import { InsuranceTab } from "@/modules/crm/components/InsuranceTab";
@@ -1105,6 +1106,10 @@ const ContactDetail = () => {
 
                 <SidebarSection title="Holding Tank">
                 <HoldingTank contactId={id!} onAccountMoved={() => fetchData()} />
+                </SidebarSection>
+
+                <SidebarSection title="Assets">
+                <ContactAssetsCard contactId={id!} householdId={contact?.household_id ?? null} />
                 </SidebarSection>
 
                 <SidebarSection title="Liabilities">
