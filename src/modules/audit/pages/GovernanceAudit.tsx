@@ -350,7 +350,7 @@ export default function GovernanceAudit() {
                   Governance Audit &nbsp;·&nbsp; Prepared for <strong>{doc.client_name}</strong> &nbsp;·&nbsp; {doc.review_date}
                 </div>
                 <div style={{ fontFamily: DOC_SERIF, fontSize: "25pt", fontWeight: 300, color: "#334155", lineHeight: 1.3, letterSpacing: "-0.005em" }}>
-                  Sovereignty Governance Audit™
+                  Sovereignty Governance Audit
                 </div>
                 <hr style={{ width: "18mm", height: "3px", background: DOC_TAN, border: "none", marginTop: "4mm" }} />
                 <div style={{ fontSize: "7.5pt", color: "#5A6A80", marginTop: "3mm" }}>
