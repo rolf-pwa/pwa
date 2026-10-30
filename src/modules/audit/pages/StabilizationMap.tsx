@@ -592,7 +592,7 @@ export default function StabilizationMap() {
               </div>
               <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: isHouseholdMap ? "25pt" : "26pt", fontWeight: 700, color: "#334155", lineHeight: isHouseholdMap ? 1.3 : 1.1, letterSpacing: "-0.005em" }}>
                 {isHouseholdMap ? (
-                  "Transition Survey™"
+                  "Transition Survey"
                 ) : (
                   <>
                     {map.event_type} &nbsp;·&nbsp; {map.event_context || "Post-Close Governance"}<br />

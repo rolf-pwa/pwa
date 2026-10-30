@@ -426,7 +426,7 @@ export default function QuarterlySystemReview() {
                   {docName} &nbsp;·&nbsp; Prepared for <strong>{name}</strong>{dateLabel && <> &nbsp;·&nbsp; {dateLabel}</>}
                 </div>
                 <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "25pt", fontWeight: 700, color: "#334155", lineHeight: 1.3, letterSpacing: "-0.005em" }}>
-                  {isSurvey ? "Transition Survey™" : "Sovereignty Quarterly Review™"}
+                  {isSurvey ? "Transition Survey" : "Sovereignty Quarterly Review"}
                 </div>
                 <hr style={{ width: "18mm", height: "3px", background: "#7E684C", border: "none", marginTop: "4mm" }} />
               </div>
