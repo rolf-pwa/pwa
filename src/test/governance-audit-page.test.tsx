@@ -39,7 +39,7 @@ import GovernanceAudit from "../modules/audit/pages/GovernanceAudit";
 describe("Governance Audit page in the Review's document style", () => {
   it("renders the sections in A4 pages with the shared sidebar, balance sheet, Charter and estate blocks", async () => {
     render(<MemoryRouter initialEntries={["/governance-audit/a1"]}><Routes><Route path="/governance-audit/:id" element={<GovernanceAudit />} /></Routes></MemoryRouter>);
-    await waitFor(() => expect(screen.getByText("Sovereignty Governance Audit")).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText("Sovereignty Governance Audit").length).toBeGreaterThan(0));
     for (const t of ["I. Executive Governance Summary", "Systemic Health Scorecard", "II. Capital Infrastructure Ledger", "Liquidity Reserve", "Legacy Trust", "Total Assets", "Liabilities & Net Worth", "Estate Documents on File", "Income & Tax", "Charter requires", "Year to date", "Projected year", "Total income", "Income after tax", "III. Element Deep-Dive & Scoring", "IV. Facilitated Discussion Points", "Compliance status"]) {
       expect(screen.getAllByText((_, el) => !!el?.textContent?.includes(t)).length, t).toBeGreaterThan(0);
     }
