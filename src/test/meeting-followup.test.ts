@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { decodeEid, extractEid, extractEmails, isNotesName, parseNextSteps, parseNotes, parseNotesName, section } from "../../supabase/functions/_shared/meeting-notes";
-import { dueDateFor, followupAlreadyExists, identifyHousehold, nextSyncText, ownerIsRolf, renderRecapHtml, scrubText, taskTitleFor, validateDraft, type DraftModel } from "../../supabase/functions/_shared/meeting-followup";
+import { identificationReason, identifyByName, isSettled, titleNames, dueDateFor, followupAlreadyExists, identifyHousehold, nextSyncText, ownerIsRolf, renderRecapHtml, scrubText, taskTitleFor, validateDraft, type DraftModel } from "../../supabase/functions/_shared/meeting-followup";
 
 describe("reading the notes' name", () => {
   it("gets the event title and start time (PDT is UTC-7)", () => {
@@ -200,5 +200,38 @@ describe("what drafting can and cannot do", () => {
   });
   it("gives Georgia a way to draft an older meeting on request", () => {
     expect(TOOL_DECLARATIONS.map((t) => t.name)).toContain("draft_meeting_followup");
+  });
+});
+
+describe("notes that are still being written", () => {
+  const now = Date.parse("2026-10-30T16:50:00Z");
+  it("waits until the document has been quiet for ten minutes", () => {
+    expect(isSettled("2026-10-30T16:47:27Z", now)).toBe(false);
+    expect(isSettled("2026-10-30T16:40:00Z", now)).toBe(true);
+    expect(isSettled(undefined, now)).toBe(true);
+  });
+});
+
+describe("the client named in the meeting title", () => {
+  it("reads names out of the brackets", () => {
+    expect(titleNames("Governance Review (Jordan Rivers-Hale)")).toEqual(["Jordan Rivers-Hale"]);
+    expect(titleNames("Annual Review (Sam Lee & Alex Lee)")).toEqual(["Sam Lee", "Alex Lee"]);
+    expect(titleNames("Weekly planning")).toEqual([]);
+    expect(titleNames(null)).toEqual([]);
+  });
+  const jordan = { id: "c1", email: "jordan@example.com", household_id: "h1", family_role: "head_of_household", full_name: "Jordan Rivers-Hale" };
+  it("finds the household when the invite named no client", () => {
+    const r = identifyByName(["jordan rivers-hale"], [jordan, { ...jordan, id: "c2", household_id: "h2", full_name: "Someone Else" }]);
+    expect(r).toMatchObject({ status: "matched", householdId: "h1" });
+  });
+  it("will not guess when no one, or two households, match", () => {
+    expect(identifyByName(["Nobody Known"], [jordan]).status).toBe("unmatched");
+    expect(identifyByName(["Sam Lee"], [{ ...jordan, id: "a", household_id: "h1", full_name: "Sam Lee" }, { ...jordan, id: "b", household_id: "h2", full_name: "Sam Lee" }]).status).toBe("unmatched");
+  });
+  it("records which source gave the addresses", () => {
+    const why = identificationReason({ eventFound: false, eventGuests: 0, notesAddresses: 0, outsideAddresses: 0, titleNames: ["Jordan Rivers-Hale"], matchedBy: "title" });
+    expect(why).toContain("event not found");
+    expect(why).toContain("notes list 0 addresses");
+    expect(why).toContain("matched by title");
   });
 });

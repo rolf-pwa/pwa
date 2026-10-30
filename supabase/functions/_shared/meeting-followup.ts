@@ -172,6 +172,37 @@ export function identifyHousehold(attendeeEmails: string[], contacts: ContactLit
   return { status: "matched", householdId, primary, matches: group };
 }
 
+/** Notes still being written: Gemini edits the document for a while after creating it, so wait until it has been quiet. */
+export const NOTES_QUIET_MS = 10 * 60_000;
+export function isSettled(modifiedIso: string | null | undefined, nowMs: number = Date.now(), quietMs: number = NOTES_QUIET_MS): boolean {
+  const t = modifiedIso ? Date.parse(modifiedIso) : NaN;
+  return Number.isNaN(t) ? true : nowMs - t >= quietMs;
+}
+
+/** Client names a meeting title carries: "Governance Review (Jordan Rivers-Hale)" gives ["Jordan Rivers-Hale"]; "(A & B)" gives both. */
+export function titleNames(title: string | null | undefined): string[] {
+  const out: string[] = [];
+  for (const m of String(title ?? "").matchAll(/\(([^)]+)\)/g)) {
+    for (const part of m[1].split(/\s*(?:&|\band\b|,|\/)\s*/i)) { const n = part.trim(); if (/\s/.test(n) || n.length > 3) out.push(n); }
+  }
+  return [...new Set(out)];
+}
+
+/** A household from names alone (when the invite names no client): the contacts whose full name is one of these, if they share one household. */
+export function identifyByName(names: string[], contacts: ContactLite[]): Identified {
+  const wanted = new Set(names.map((n) => n.trim().toLowerCase()).filter(Boolean));
+  const matches = contacts.filter((c) => c.household_id && c.full_name && wanted.has(c.full_name.trim().toLowerCase()));
+  const households = new Set(matches.map((c) => c.household_id));
+  if (households.size !== 1) return { status: "unmatched" };
+  const primary = [...matches].sort((a, b) => (ROLE_RANK[a.family_role ?? ""] ?? 9) - (ROLE_RANK[b.family_role ?? ""] ?? 9))[0];
+  return { status: "matched", householdId: primary.household_id!, primary, matches };
+}
+
+/** Why a meeting was or was not matched to a client, for the notes record: which source gave the addresses. */
+export function identificationReason(i: { eventFound: boolean; eventGuests: number; notesAddresses: number; outsideAddresses: number; titleNames: string[]; matchedBy?: "invite" | "title" | null }): string {
+  return `event ${i.eventFound ? `found, ${i.eventGuests} guests` : "not found"}; notes list ${i.notesAddresses} addresses; ${i.outsideAddresses} outside the firm; title names ${i.titleNames.length ? i.titleNames.join(", ") : "no one"}${i.matchedBy ? `; matched by ${i.matchedBy}` : ""}`;
+}
+
 /** True when a follow-up task for this meeting already exists (Rolf made one by hand), so Georgia does not duplicate it. */
 export function followupAlreadyExists(tasks: { title: string; meeting_followup: boolean; created_at: string }[], meetingStartIso: string): boolean {
   const from = Date.parse(meetingStartIso) - 3_600_000;
