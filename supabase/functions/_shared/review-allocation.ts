@@ -15,7 +15,7 @@ const nn = (v: unknown) => (v === null || v === undefined || v === "" ? null : N
 
 export async function allocateForHousehold(
   supabase: any,
-  financials: { holdingTank: any[]; vineyardAccounts: any[]; storehouses: any[]; insurancePolicies: any[]; liabilities?: any[] },
+  financials: { householdId?: string; holdingTank: any[]; vineyardAccounts: any[]; storehouses: any[]; insurancePolicies: any[]; liabilities?: any[] },
   diag: { aum: number; net_worth: number; holding_tank_total: number; vineyard_total: number; storehouse_reserves: Allocation["reserves"] },
 ) {
   const { data: tankRows } = financials.holdingTank.length
@@ -31,17 +31,23 @@ export async function allocateForHousehold(
     ...(tankRows ?? []).map(toAccount("holding_tank")),
   ];
   const liquidityRow = financials.storehouses.find((x) => x.storehouse_number === 1 && x.asset_type !== REAL_ESTATE_ASSET_TYPE);
+  // Other Assets replace the real-estate Storehouse rows they were carried over from, so skip those rows.
+  const { data: otherRows } = financials.householdId
+    ? await supabase.from("other_assets").select("name, category, current_value, value_as_of, storehouse_id").eq("household_id", financials.householdId)
+    : { data: [] };
+  const replaced = new Set((otherRows ?? []).map((a: any) => a.storehouse_id).filter(Boolean));
+  const otherAssets = (otherRows ?? []).map((a: any) => ({ name: a.name, category: a.category, value: nn(a.current_value), as_of: a.value_as_of }));
   const realEstate = { liquidity: 0, strategic: 0, philanthropic: 0, legacy: 0 };
   const keyOf: Record<number, keyof typeof realEstate> = { 1: "liquidity", 2: "strategic", 3: "philanthropic", 4: "legacy" };
   for (const s of financials.storehouses) {
     const key = keyOf[s.storehouse_number];
-    if (s.asset_type === REAL_ESTATE_ASSET_TYPE && key) realEstate[key] += nn(s.current_value) ?? 0;
+    if (s.asset_type === REAL_ESTATE_ASSET_TYPE && key && !replaced.has(s.id)) realEstate[key] += nn(s.current_value) ?? 0;
   }
   const allocation = allocateCapital({
     aum: diag.aum, netWorth: diag.net_worth, holdingTank: diag.holding_tank_total, vineyard: diag.vineyard_total,
     reserves: diag.storehouse_reserves,
     liquidityStorehouse: { exists: !!liquidityRow, target: nn(liquidityRow?.target_value) },
-    accounts: allocAccounts, realEstate,
+    accounts: allocAccounts, realEstate, otherAssets,
     credit: (financials.liabilities ?? []).filter((l) => l.holder_type === "contact"),
     policies: financials.insurancePolicies.map((p) => ({ cash_value: nn(p.cash_value), cash_value_storehouse_id: p.cash_value_storehouse_id ?? null, cv_in_strategic: p.cv_in_strategic ?? true })),
   });
@@ -60,5 +66,5 @@ export function applyAllocation<T extends { aum: number; net_worth: number; hold
 
 export const allocationSummary = (a: Allocation) => ({
   notes: a.notes, income_funds_moved: a.incomeFundsMoved, income_funds_on_file: a.incomeFundsOnFile,
-  cash_value_added: a.cashValueAdded, real_estate_added: a.realEstateAdded, credit_capacity: a.creditCapacity, credit_lines: a.creditLines,
+  cash_value_added: a.cashValueAdded, real_estate_added: a.realEstateAdded, other_assets_added: a.otherAssetsAdded, credit_capacity: a.creditCapacity, credit_lines: a.creditLines,
 });

@@ -54,6 +54,7 @@ import { VaultScanButton } from "@/modules/crm/components/vault/VaultScanButton"
 import { ShoeboxToolbar } from "@/modules/crm/components/vault/ShoeboxReviewPanel";
 import { VineyardDashboard } from "@/modules/crm/components/VineyardDashboard";
 import { RentalPropertiesCard } from "@/modules/crm/components/RentalPropertiesCard";
+import { OtherAssetsCard } from "@/modules/crm/components/OtherAssetsCard";
 import { HouseholdTotalsStrip } from "@/modules/crm/components/HouseholdTotalsStrip";
 import { HouseholdTaxSummary } from "@/modules/crm/components/HouseholdTaxSummary";
 import { StabilizationMapButton, GovernanceAuditButton, QuarterlySystemReviewButton, HouseholdAuditTrailRollup, StartCharterIntakeButton, CausalAIWorkbenchButton } from "@/modules/audit";
@@ -834,6 +835,7 @@ const HouseholdDetail = () => {
                 </Card>
 
                 <RentalPropertiesCard householdId={id!} members={members} />
+                <OtherAssetsCard householdId={id!} members={members} />
               </div>
 
 
