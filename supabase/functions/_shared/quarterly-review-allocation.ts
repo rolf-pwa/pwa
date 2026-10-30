@@ -63,6 +63,22 @@ export interface AllocInput {
   realEstate?: { liquidity?: number; strategic?: number; philanthropic?: number; legacy?: number };
   /** The household's personal liabilities, for credit assigned to the Strategic Reserve. */
   credit?: CreditLine[];
+  /** Other assets (principal residence, vehicles...), each counted once at full value in the Legacy Trust. */
+  otherAssets?: OtherAssetLine[];
+  /** Today (YYYY-MM-DD), for the stale-value check; defaults to the current date. */
+  today?: string;
+}
+
+export interface OtherAssetLine { name: string; category?: string | null; value: number | string | null; as_of?: string | null }
+
+/** Other assets whose value is missing a date or is more than 12 months old. */
+export function staleOtherAssets(items: OtherAssetLine[], today: string = new Date().toISOString().slice(0, 10)): OtherAssetLine[] {
+  const cutoff = new Date(today); cutoff.setFullYear(cutoff.getFullYear() - 1);
+  return items.filter((a) => {
+    if (!(Number(a.value) > 0)) return false;
+    const d = a.as_of ? new Date(a.as_of) : null;
+    return !d || Number.isNaN(d.getTime()) || d < cutoff;
+  });
 }
 
 export interface Allocation {
@@ -74,7 +90,8 @@ export interface Allocation {
   incomeFundsMoved: number;       // income funds counted as Liquidity (0 when a Liquidity Reserve is set up)
   incomeFundsOnFile: number;      // income funds known from statements, moved or not
   cashValueAdded: number;         // policy cash value counted as Strategic
-  realEstateAdded: number;        // real estate counted in the reserves (and in assets / net worth)
+  realEstateAdded: number;        // real estate and other assets counted in the reserves (and in assets / net worth)
+  otherAssetsAdded: number;       // the part of realEstateAdded that comes from Other Assets (residence, vehicles...)
   creditCapacity: number;         // available credit assigned to the Strategic Reserve: in the reserve and Total Assets, offset by an equal undrawn-credit liability (Net Worth unchanged)
   creditLines: { description: string; available: number }[];
   totalWithdrawals: number;       // all withdrawals read from statements
@@ -125,13 +142,21 @@ export function allocateCapital(i: AllocInput): Allocation {
 
   // Real estate rows the shared totals left out.
   const re = i.realEstate ?? {};
-  const realEstateAdded = round2(num(re.liquidity) + num(re.strategic) + num(re.philanthropic) + num(re.legacy));
+  const otherItems = (i.otherAssets ?? []).filter((a) => Number(a.value) > 0);
+  const otherAssetsAdded = round2(otherItems.reduce((t, a) => t + Number(a.value), 0));
+  const realEstateAdded = round2(num(re.liquidity) + num(re.strategic) + num(re.philanthropic) + num(re.legacy) + otherAssetsAdded);
   if (realEstateAdded > 0) {
     reserves.liquidity += num(re.liquidity);
     reserves.strategic += num(re.strategic);
     reserves.philanthropic += num(re.philanthropic);
     reserves.legacy += num(re.legacy);
-    notes.push(`Legacy Trust includes ${money(num(re.legacy))} of real estate (principal residence and investment property).`);
+    if (num(re.legacy) > 0) notes.push(`Legacy Trust includes ${money(num(re.legacy))} of real estate (principal residence and investment property).`);
+    if (otherAssetsAdded > 0) {
+      reserves.legacy += otherAssetsAdded;
+      notes.push(`Legacy Trust includes ${money(otherAssetsAdded)} of other assets (${otherItems.map((a) => a.name).join(", ")}).`);
+      const stale = staleOtherAssets(otherItems, i.today);
+      if (stale.length) notes.push(`Update the value of ${stale.map((a) => a.name).join(", ")}: not confirmed in the last 12 months.`);
+    }
   }
 
   // Available credit assigned to the Strategic Reserve: an asset in the reserve and Total Assets, offset by an equal
@@ -162,7 +187,7 @@ export function allocateCapital(i: AllocInput): Allocation {
       liquidity: round2(reserves.liquidity), strategic: round2(reserves.strategic),
       philanthropic: round2(reserves.philanthropic), legacy: round2(reserves.legacy),
     },
-    incomeFundsMoved, incomeFundsOnFile, cashValueAdded, realEstateAdded, creditCapacity: credit.total, creditLines: credit.lines, totalWithdrawals,
+    incomeFundsMoved, incomeFundsOnFile, cashValueAdded, realEstateAdded, otherAssetsAdded, creditCapacity: credit.total, creditLines: credit.lines, totalWithdrawals,
     accountsWithWithdrawalData: withData.length, harvest, notes,
   };
 }

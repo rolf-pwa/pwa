@@ -345,6 +345,7 @@ export function computeStorehouseFundedPct(
 }
 
 export interface HouseholdFinancials {
+  householdId: string;
   householdLabel: string;
   familyName: string;
   members: { id: string; first_name: string; last_name: string; family_role: string | null }[];
@@ -400,6 +401,7 @@ export async function gatherHouseholdFinancials(
 
   if (memberIds.length === 0) {
     return {
+      householdId,
       householdLabel: household?.label ?? "Household",
       familyName: family?.name ?? "Family",
       members: [],
@@ -523,6 +525,7 @@ export async function gatherHouseholdFinancials(
   const netWorth = totalAum - totalPersonalLiabilities - totalCorpLiabilities;
 
   return {
+    householdId,
     householdLabel: household?.label ?? "Household",
     familyName: family?.name ?? "Family",
     members,
