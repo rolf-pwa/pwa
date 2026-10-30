@@ -54,7 +54,7 @@ import { VaultScanButton } from "@/modules/crm/components/vault/VaultScanButton"
 import { ShoeboxToolbar } from "@/modules/crm/components/vault/ShoeboxReviewPanel";
 import { VineyardDashboard } from "@/modules/crm/components/VineyardDashboard";
 import { RentalPropertiesCard } from "@/modules/crm/components/RentalPropertiesCard";
-import { OtherAssetsCard } from "@/modules/crm/components/OtherAssetsCard";
+import { HouseholdAssets } from "@/modules/crm/components/HouseholdAssets";
 import { HouseholdTotalsStrip } from "@/modules/crm/components/HouseholdTotalsStrip";
 import { HouseholdTaxSummary } from "@/modules/crm/components/HouseholdTaxSummary";
 import { StabilizationMapButton, GovernanceAuditButton, QuarterlySystemReviewButton, HouseholdAuditTrailRollup, StartCharterIntakeButton, CausalAIWorkbenchButton } from "@/modules/audit";
@@ -93,6 +93,7 @@ import {
   UserCheck,
   TrendingDown,
   HeartHandshake,
+  Gem,
 } from "lucide-react";
 import { ContactAnalytics } from "@/modules/crm/components/ContactAnalytics";
 import { familyTitle } from "@/shared/lib/utils";
@@ -143,6 +144,7 @@ const HOUSEHOLD_SECTIONS: MobileSection[] = [
   { value: "insurance", label: "Insurance", icon: Shield },
   { value: "actions", label: "Action Items", icon: ListChecks },
   { value: "vineyard", label: "The Vineyard", icon: Grape },
+  { value: "assets", label: "Assets", icon: Gem },
   { value: "liabilities", label: "Liabilities", icon: Landmark },
   { value: "tax", label: "Tax", icon: Receipt },
   { value: "pros", label: "Pros", icon: Briefcase },
@@ -713,6 +715,10 @@ const HouseholdDetail = () => {
               <Grape className="mr-1.5 h-3.5 w-3.5" />
               The Vineyard
             </TabsTrigger>
+            <TabsTrigger value="assets" className="flex-1">
+              <Gem className="mr-1.5 h-3.5 w-3.5" />
+              Assets
+            </TabsTrigger>
             <TabsTrigger value="liabilities" className="flex-1">
               <Landmark className="mr-1.5 h-3.5 w-3.5" />
               Liabilities
@@ -835,7 +841,6 @@ const HouseholdDetail = () => {
                 </Card>
 
                 <RentalPropertiesCard householdId={id!} members={members} />
-                <OtherAssetsCard householdId={id!} members={members} />
               </div>
 
 
@@ -1245,6 +1250,10 @@ const HouseholdDetail = () => {
           {/* Analytics */}
           <TabsContent value="analytics" className="space-y-6 mt-4">
             <ContactAnalytics contactIds={members.map((m) => m.id)} />
+          </TabsContent>
+
+          <TabsContent value="assets" className="space-y-6 mt-4">
+            <HouseholdAssets householdId={id!} />
           </TabsContent>
 
           {/* Pros */}

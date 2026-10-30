@@ -45,3 +45,22 @@ export function valueIsStale(asOf: string | null, today: string = new Date().toI
   cutoff.setFullYear(cutoff.getFullYear() - 1);
   return d < cutoff;
 }
+
+export interface AssetLike { current_value: number | null; value_as_of: string | null; owners: OwnerShare[] }
+
+/** Household totals for the Assets tab: value counted once, how many are joint, how many need a fresh value. */
+export function assetTotals(rows: AssetLike[], today?: string) {
+  return {
+    value: Math.round(rows.reduce((s, r) => s + (r.current_value ?? 0), 0) * 100) / 100,
+    count: rows.length,
+    joint: rows.filter((r) => isJoint(r.owners)).length,
+    stale: rows.filter((r) => valueIsStale(r.value_as_of, today)).length,
+  };
+}
+
+/** What each person's share of the assets is worth (their % of each asset's full value). Adds up to the household total. */
+export function valueByOwner(rows: AssetLike[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const r of rows) for (const o of r.owners) out[o.contact_id] = Math.round(((out[o.contact_id] ?? 0) + (shareOfValue(r.current_value, o.ownership_pct) ?? 0)) * 100) / 100;
+  return out;
+}
