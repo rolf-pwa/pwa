@@ -10,7 +10,7 @@ import { loadVoice } from "./voice-profile.ts";
 import { driveEnsureFolder, driveFindFolder } from "./meeting-record-service.ts";
 import { decodeEid, isNotesName, parseNotes, parseNotesName } from "./meeting-notes.ts";
 import { pacificDate, pacificYmd } from "./meeting-record.ts";
-import { DRAFT_TOOL, RECAP_INSTRUCTIONS, dueDateFor, followupAlreadyExists, identifyHousehold, nextSyncText, ownerIsRolf, renderRecapHtml, taskTitleFor, validateDraft, type UpcomingEvent } from "./meeting-followup.ts";
+import { DRAFT_TOOL, RECAP_INSTRUCTIONS, dueDateFor, followupAlreadyExists, identificationReason, identifyByName, identifyHousehold, isSettled, titleNames, nextSyncText, ownerIsRolf, renderRecapHtml, taskTitleFor, validateDraft, type UpcomingEvent } from "./meeting-followup.ts";
 
 const DRIVE = "https://www.googleapis.com/drive/v3";
 const CAL = "https://www.googleapis.com/calendar/v3";
@@ -19,11 +19,11 @@ const MAX_NOTES_CHARS = 300_000;
 const MAX_ATTEMPTS = 3;
 const sig = () => AbortSignal.timeout(30_000);
 
-export interface NotesDoc { id: string; name: string; createdTime: string }
+export interface NotesDoc { id: string; name: string; createdTime: string; modifiedTime?: string }
 
 export async function listNotesDocs(token: string, sinceIso: string): Promise<NotesDoc[]> {
   const q = `name contains 'Notes by Gemini' and mimeType = 'application/vnd.google-apps.document' and createdTime > '${sinceIso}' and trashed = false`;
-  const res = await fetch(`${DRIVE}/files?${new URLSearchParams({ q, fields: "files(id,name,createdTime)", orderBy: "createdTime desc", pageSize: "30", supportsAllDrives: "true", includeItemsFromAllDrives: "true" })}`, { headers: { Authorization: `Bearer ${token}` }, signal: sig() });
+  const res = await fetch(`${DRIVE}/files?${new URLSearchParams({ q, fields: "files(id,name,createdTime,modifiedTime)", orderBy: "createdTime desc", pageSize: "30", supportsAllDrives: "true", includeItemsFromAllDrives: "true" })}`, { headers: { Authorization: `Bearer ${token}` }, signal: sig() });
   if (!res.ok) throw new Error(`Drive search failed [${res.status}]`);
   return ((await res.json()).files ?? []).filter((f: NotesDoc) => isNotesName(f.name));
 }
@@ -67,7 +67,7 @@ async function tell(db: any, title: string, body: string, contactId: string | nu
 export type ProcessResult = { status: "drafted" | "unmatched" | "internal" | "skipped" | "failed"; message: string; taskId?: string };
 
 /** Handles one notes document end to end. `force` (Rolf asked for it) skips the duplicate check. */
-export async function processNotesDoc(db: any, doc: NotesDoc, opts: { force?: boolean } = {}): Promise<ProcessResult> {
+export async function processNotesDoc(db: any, doc: NotesDoc, opts: { force?: boolean; attempts?: number } = {}): Promise<ProcessResult> {
   const name = parseNotesName(doc.name);
   if (!name) return { status: "skipped", message: "That is not a Gemini notes document." };
   const token = await getServiceGoogleAccessToken(db);
@@ -85,12 +85,23 @@ export async function processNotesDoc(db: any, doc: NotesDoc, opts: { force?: bo
 
   const external = emails.filter((e) => !e.endsWith(`@${STAFF_DOMAIN}`));
   const { data: found } = external.length ? await db.from("contacts").select("id, full_name, email, household_id, family_id, family_role").or(external.map((e) => `email.ilike.${e}`).join(",")) : { data: [] as any[] };
-  const who = identifyHousehold(emails, found ?? [], STAFF_DOMAIN);
-  if (who.status === "internal") { await mark(db, doc, "internal"); return { status: "internal", message: "A staff-only meeting; no client recap needed." }; }
-  if (who.status === "unmatched") {
-    await mark(db, doc, "unmatched", { reason: "no contact matches the invitees" });
+  let who = identifyHousehold(emails, found ?? [], STAFF_DOMAIN);
+  // The invite may not name the client (a guest who joined another way, or the notes were read before they were complete):
+  // fall back to the client named in the meeting title.
+  const names = titleNames(eventTitle ?? doc.name);
+  let matchedBy: "invite" | "title" | null = who.status === "matched" ? "invite" : null;
+  if (who.status !== "matched" && names.length) {
+    const { data: byName } = await db.from("contacts").select("id, full_name, email, household_id, family_id, family_role").or(names.map((n) => `full_name.ilike.${n.replace(/[,()%]/g, " ").trim()}`).join(","));
+    const named = identifyByName(names, byName ?? []);
+    if (named.status === "matched") { who = named; matchedBy = "title"; }
+  }
+  const why = identificationReason({ eventFound: !!event, eventGuests: event?.attendees.length ?? 0, notesAddresses: notes.invited.length, outsideAddresses: external.length, titleNames: names, matchedBy });
+  if (who.status === "internal" && !names.length) { await mark(db, doc, "internal", { reason: why, attempts: opts.attempts }); return { status: "internal", message: `A staff-only meeting; no client recap needed (${why}).` }; }
+  if (who.status !== "matched") {
+    // Includes "staff only" meetings whose title names someone: better a nudge than a silent skip.
+    await mark(db, doc, "unmatched", { reason: why, attempts: opts.attempts });
     await tell(db, "Meeting notes with no matching client", `${eventTitle ?? doc.name} (${pacificDate(startIso)}). Ask me to draft the recap for ${ymd} once the household exists.`, null);
-    return { status: "unmatched", message: `No client in the CRM matches the people on "${eventTitle ?? doc.name}".` };
+    return { status: "unmatched", message: `No client in the CRM matches the people on "${eventTitle ?? doc.name}" (${why}).` };
   }
 
   const { data: household } = await db.from("households").select("id, label, family_id, vault_folder_id").eq("id", who.householdId).maybeSingle();
@@ -160,13 +171,21 @@ export async function scanMeetingNotes(db: any): Promise<{ skipped?: string; han
   const token = await getServiceGoogleAccessToken(db);
   const docs = await listNotesDocs(token, cfg.go_live_at);
   if (!docs.length) return {};
-  const { data: seen } = await db.from("meeting_notes_seen").select("doc_id, status, attempts").in("doc_id", docs.map((d) => d.id));
+  const { data: seen } = await db.from("meeting_notes_seen").select("doc_id, status, attempts, processed_at").in("doc_id", docs.map((d) => d.id));
   const done = new Map((seen ?? []).map((s: any) => [s.doc_id, s]));
-  const todo = docs.filter((d) => { const s: any = done.get(d.id); return !s || (s.status === "failed" && s.attempts < MAX_ATTEMPTS); }).reverse()[0];
+  // Only notes that have gone quiet. A "staff only" or "no client" answer is looked at again once if the document is edited afterwards.
+  const todo = docs.filter((d) => {
+    if (!isSettled(d.modifiedTime)) return false;
+    const s: any = done.get(d.id);
+    if (!s) return true;
+    if (s.status === "failed") return s.attempts < MAX_ATTEMPTS;
+    return (s.status === "internal" || s.status === "unmatched") && s.attempts < 1 && !!d.modifiedTime && Date.parse(d.modifiedTime) > Date.parse(s.processed_at);
+  }).reverse()[0];
   if (!todo) return {};
   const attempts = ((done.get(todo.id) as any)?.attempts ?? 0) + 1;
   try {
-    const r = await processNotesDoc(db, todo);
+    const prior: any = done.get(todo.id);
+    const r = await processNotesDoc(db, todo, { attempts: prior && prior.status !== "failed" ? prior.attempts + 1 : 0 });
     return { handled: `${todo.name}: ${r.status}` };
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e);
