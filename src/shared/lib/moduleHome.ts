@@ -10,6 +10,7 @@ export const MODULES: Module[] = [
   { label: "Workbench", home: "/workbench", prefixes: ["/workbench", "/quarterly-review", "/quarterly-vfo-audit"], listIsHome: true },
   { label: "Projects", home: "/projects", prefixes: ["/projects"] },
   { label: "Pipeline", home: "/pipeline", prefixes: ["/pipeline"] },
+  { label: "Book of Business", home: "/book-of-business", prefixes: ["/book-of-business"] },
   { label: "Insurance", home: "/insurance", prefixes: ["/insurance"] },
   { label: "Investments", home: "/investments", prefixes: ["/investments"] },
 ];

@@ -83,6 +83,7 @@ export const GROUPS = [
     label: "Business",
     icon: Briefcase,
     items: [
+      { to: "/book-of-business", label: "Book of Business", icon: TrendingUp },
       { to: "/holding-tank", label: "Holding Tank", icon: Anchor },
       { to: "/professionals", label: "Professionals", icon: Briefcase },
       { to: "/invoices", label: "Invoices", icon: Receipt },
