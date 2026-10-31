@@ -68,6 +68,10 @@ describe("wiring", () => {
   it("the migration adds the date column", () => {
     expect(read("supabase/migrations/20270110120000_opportunity_due_on.sql")).toContain("ADD COLUMN IF NOT EXISTS due_on date");
   });
+  it("the page words the sheet's window from the run rather than assuming it, and the run records it", () => {
+    expect(read("src/modules/crm/pages/BookOfBusiness.tsx")).toContain("migration.windowMonths ?? 6");
+    expect(read("supabase/functions/_shared/opportunity-run.ts")).toContain("windowMonths: DEFAULT_FCLASS.windowMonths");
+  });
   it("the page reads the date, offers the sort and the type filter, and orders through the helpers", () => {
     const src = read("src/modules/crm/pages/BookOfBusiness.tsx");
     expect(src).toContain("first_seen, due_on");

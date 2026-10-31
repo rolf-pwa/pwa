@@ -27,7 +27,7 @@ export interface FClassConfig {
   /** The share of that fee the schedule pays the advisor. */
   advisorShare: number;
 }
-export const DEFAULT_FCLASS: FClassConfig = { windowMonths: 6, feeRate: 0.01, advisorShare: 0.8 };
+export const DEFAULT_FCLASS: FClassConfig = { windowMonths: 12, feeRate: 0.01, advisorShare: 0.8 };
 
 /** CB2's published percentages for months 13 to 24 in force (they step by 100/13, so they are listed as printed). */
 const CB2_STEPS = [92.3, 84.6, 76.9, 69.2, 61.5, 53.8, 46.1, 38.4, 30.7, 23, 15.3, 7.6];
