@@ -160,6 +160,10 @@ export interface AccountLine {
   withdrawn: number;
   /** "net": from iA's net transactions in the sheet. "estimated": from the market value, because the sheet has no net transactions for the account. */
   basis: "net" | "estimated";
+  /** Net Transactions is positive although the account is below its original investment: iA shows withdrawals as negative, so the figure was probably entered without its minus sign. It is not used. */
+  signSuspect: boolean;
+  /** The Net Transactions figure as entered, for the finding to quote. */
+  netTransactions: number | null;
   /** Null when the original investment is not in the sheet. */
   chargeback: number | null;
   marketValue: number;
@@ -190,11 +194,16 @@ export function accountLine(r: ReturnType<typeof dueRows>["due"][number], asOf: 
   // the base, and it cannot see withdrawals hidden by growth when the market value is at or above the original.
   let base: number | null = null;
   const net = r.netTransactions ?? null;
-  const basis: AccountLine["basis"] = net !== null ? "net" : "estimated";
-  if (r.original !== null) base = net !== null ? Math.min(r.original, Math.max(0, r.original + net)) : Math.min(r.original, r.marketValue);
+  // A positive figure on an account that is below its original investment is almost certainly withdrawals entered without the minus sign.
+  // Reading it as net deposits would charge back on the whole original with full confidence, so it is not used: the estimate stands and the
+  // entry is flagged for checking.
+  const signSuspect = net !== null && net > 0 && r.original !== null && r.marketValue < r.original;
+  const useNet = net !== null && !signSuspect;
+  const basis: AccountLine["basis"] = useNet ? "net" : "estimated";
+  if (r.original !== null) base = useNet ? Math.min(r.original, Math.max(0, r.original + (net ?? 0))) : Math.min(r.original, r.marketValue);
   return {
     account: r.account, accountType: r.accountType, load: r.load, investedOn: r.investedOn, maturesOn: r.maturesOn, monthInForce: month, pctCharged: pct,
-    original: r.original, chargeableBase: base, withdrawn: r.original === null || base === null ? 0 : round2(r.original - base), basis,
+    original: r.original, chargeableBase: base, withdrawn: r.original === null || base === null ? 0 : round2(r.original - base), basis, signSuspect, netTransactions: net,
     chargeback: base === null ? null : round2(base * CB_SALES_COMMISSION[r.load] * (pct / 100)),
     marketValue: r.marketValue, monthlyFee: monthlyFClassFee(r.marketValue, cfg),
   };
@@ -230,7 +239,8 @@ export function buildMigrationFindings(rows: MigrationRow[], accountToHousehold:
     const known = lines.filter((l) => l.chargeback !== null);
     const missing = lines.length - known.length;
     // An estimated base with money already gone is a guess; the sheet needs iA's net transactions for that account.
-    const guessed = lines.filter((l) => l.basis === "estimated" && l.withdrawn > 0);
+    const suspects = lines.filter((l) => l.signSuspect);
+    const guessed = lines.filter((l) => l.basis === "estimated" && l.withdrawn > 0 && !l.signSuspect);
     const totalCb = round2(known.reduce((t, l) => t + (l.chargeback ?? 0), 0));
     const totalFee = round2(lines.reduce((t, l) => t + l.monthlyFee, 0));
     const totalValue = lines.reduce((t, l) => t + l.marketValue, 0);
@@ -245,15 +255,16 @@ export function buildMigrationFindings(rows: MigrationRow[], accountToHousehold:
         { label: "Market value in these accounts", value: money(totalValue) },
         ...lines.map((l) => ({
           label: `${l.accountType || "Account"} ...${last4(l.account)} (${l.load}, ${l.maturesOn <= asOf ? "matured" : "matures"} ${l.maturesOn}, month ${l.monthInForce}, ${l.pctCharged}% charged)`,
-          value: `${l.chargeback === null ? "chargeback unknown" : `chargeback ${money2(l.chargeback)}${l.withdrawn > 0 ? ` on ${money(l.chargeableBase ?? 0)} (${l.basis === "net" ? `${money(l.withdrawn)} of the ${money(l.original ?? 0)} invested already withdrawn` : `estimated: ${money(l.withdrawn)} of the ${money(l.original ?? 0)} invested assumed withdrawn; add Net Transactions to the sheet for the exact figure`})` : ""}`}; fee ${money2(l.monthlyFee)}/month`,
+          value: `${l.chargeback === null ? "chargeback unknown" : `chargeback ${money2(l.chargeback)}${l.withdrawn > 0 ? ` on ${money(l.chargeableBase ?? 0)} (${l.basis === "net" ? `${money(l.withdrawn)} of the ${money(l.original ?? 0)} invested already withdrawn` : `estimated: ${money(l.withdrawn)} of the ${money(l.original ?? 0)} invested assumed withdrawn; ${l.signSuspect ? `Net Transactions of +${money(l.netTransactions ?? 0)} was not used: it is positive but the account is below its original, and iA shows withdrawals as negative` : "add Net Transactions to the sheet for the exact figure"}`})` : ""}`}; fee ${money2(l.monthlyFee)}/month`,
         })),
       ],
-      confidence: missing || guessed.length ? "medium" : "high",
+      confidence: missing || guessed.length || suspects.length ? "medium" : "high",
       nextStep: final <= asOf
         ? "The chargeback period is over on every one of these accounts: moving to F-class costs nothing in chargeback."
         : `The chargeback falls away account by account (the first on ${first}, the last on ${final}). Weigh each account's chargeback against its F-class fee to choose when to move it.`,
       estValue: null,
     });
+    if (suspects.length) gaps.push({ householdId, field: "Net transactions (migration sheet)", why: `${suspects.map((l) => `...${last4(l.account)} (+${money(l.netTransactions ?? 0)})`).join(", ")}: Net Transactions is positive but the account is below its original investment. iA shows withdrawals as negative numbers (for example -18,584.17), so the figure was not used. Check the sign.`, blocks: ["fclass_migration"] });
     if (guessed.length) gaps.push({ householdId, field: "Net transactions (migration sheet)", why: `${guessed.length} account${guessed.length === 1 ? "" : "s"} (${guessed.map((l) => "..." + last4(l.account)).join(", ")}) ${guessed.length === 1 ? "is" : "are"} below ${guessed.length === 1 ? "its" : "their"} original investment; iA's net transactions since contract issue would replace the estimate of what was withdrawn.`, blocks: ["fclass_migration"] });
     if (missing) gaps.push({ householdId, field: "Original investment (migration sheet)", why: `${missing} account${missing === 1 ? "" : "s"} near the end of chargeback ${missing === 1 ? "has" : "have"} no original investment in the sheet, so the chargeback is ${missing === lines.length ? "unknown" : "understated"}.`, blocks: ["fclass_migration"] });
   }

@@ -173,6 +173,23 @@ describe("the finding for a household", () => {
     expect(f.confidence).toBe("high");
     expect(r.gaps).toEqual([]);
   });
+  it("does not use a positive Net Transactions on an account below its original: it flags the sign and keeps the estimate", () => {
+    // Withdrawals typed as +18,584 instead of -18,584: reading it as deposits would charge back on the whole $22,500 ($54.00) at high confidence.
+    const r = buildMigrationFindings([row({ original: 22_500, marketValue: 8_091, netTransactions: 18_584 })], new Map([["1000000001", "h1"]]), TODAY);
+    const f = r.findings[0];
+    expect(f.evidence[0].value).toBe("$19.42");
+    expect(f.evidence[3].value).toContain("Net Transactions of +$18,584 was not used");
+    expect(f.confidence).toBe("medium");
+    expect(r.gaps).toHaveLength(1);
+    expect(r.gaps[0].why).toContain("...0001 (+$18,584)");
+    expect(r.gaps[0].why).toContain("Check the sign");
+  });
+  it("uses a positive Net Transactions when the account is not below its original (more was deposited)", () => {
+    const r = buildMigrationFindings([row({ original: 6_000, marketValue: 6_900, netTransactions: 500 })], new Map([["1000000001", "h1"]]), TODAY);
+    expect(r.findings[0].evidence[0].value).toBe("$14.40");
+    expect(r.findings[0].confidence).toBe("high");
+    expect(r.gaps).toEqual([]);
+  });
   it("keeps the base within zero and the original", () => {
     const base = (netTransactions: number) => buildMigrationFindings([row({ original: 7_000, netTransactions })], new Map([["1000000001", "h1"]]), TODAY).findings[0].evidence[0].value;
     expect(base(-30_000)).toBe("$0.00"); // more withdrawn than deposited
