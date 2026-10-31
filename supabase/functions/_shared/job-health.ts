@@ -15,6 +15,7 @@ export const JOBS: JobDef[] = [
   { key: "briefing", label: "Morning briefing", everyMinutes: 24 * 60, graceMinutes: 180 },
   { key: "call_archive", label: "Call recordings copied to Drive and transcribed", everyMinutes: 24 * 60, graceMinutes: 240 },
   { key: "insurance_file_check", label: "Insurance file checks", everyMinutes: 24 * 60, graceMinutes: 180 },
+  { key: "book_of_business", label: "Weekly book-of-business diagnostic", everyMinutes: 7 * 24 * 60, graceMinutes: 24 * 60 },
   { key: "rule_suggestions", label: "Weekly rule suggestions", everyMinutes: 7 * 24 * 60, graceMinutes: 24 * 60 },
 ];
 

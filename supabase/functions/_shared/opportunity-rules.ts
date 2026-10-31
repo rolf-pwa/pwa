@@ -14,6 +14,9 @@ export type OpportunityType =
   | "idle_cash"
   | "policy_event";
 
+/** Bump when a rule's meaning changes, so stored findings show which version produced them. */
+export const RULE_VERSION = "1";
+
 export type Confidence = "high" | "medium" | "low";
 
 export interface Member { id: string; name: string; role: string | null; isMinor: boolean }

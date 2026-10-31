@@ -254,12 +254,6 @@ describe("book summary", () => {
 
 describe("wiring", () => {
   const read = (p: string) => readFileSync(p, "utf8");
-  it("the report function is staff only and reads only", () => {
-    const src = read("supabase/functions/book-of-business-report/index.ts");
-    expect(src).toContain("requireStaff");
-    expect(src).toContain("@prosperwise.ca");
-    expect(src).not.toMatch(/\.(insert|update|upsert|delete)\(/);
-  });
   it("the snapshot gatherer reads only", () => {
     expect(read("supabase/functions/_shared/opportunity-snapshot.ts")).not.toMatch(/\.(insert|update|upsert|delete)\(/);
   });

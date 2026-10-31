@@ -1,25 +1,30 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronDown, ChevronRight, Loader2, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 import { AppLayout } from "@/shared/components/AppLayout";
 import { ListRowStatic } from "@/shared/components/ListRow";
 import { supabase } from "@/shared/integrations/supabase/client";
+import { useAuth } from "@/shared/hooks/useAuth";
 import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
+import { Input } from "@/shared/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import { cn } from "@/shared/lib/utils";
 
 type Confidence = "high" | "medium" | "low";
-interface Finding { type: string; key: string; title: string; evidence: { label: string; value: string }[]; confidence: Confidence; nextStep: string }
-interface Gap { field: string; why: string; blocks: string[] }
-interface HouseholdResult {
-  householdId: string; label: string; tier: string | null; groupedAum: number; error?: string;
-  evaluation: { findings: Finding[]; gaps: Gap[]; completeness: number };
+type Status = "open" | "snoozed" | "dismissed" | "converted" | "resolved";
+interface Opportunity {
+  id: string; household_id: string; type: string; key: string; title: string; evidence: { label: string; value: string }[];
+  confidence: Confidence; next_step: string | null; status: Status; snoozed_until: string | null; dismissed_reason: string | null; first_seen: string;
 }
-interface Report {
-  generatedAt: string;
-  summary: { households: number; findingsByType: Record<string, number>; findingsByConfidence: Record<Confidence, number>; topGaps: { field: string; households: number }[]; averageCompleteness: number };
-  households: HouseholdResult[];
+interface Gap { field: string; why: string; blocks: string[] }
+interface HouseholdRun { householdId: string; label: string; tier: string | null; groupedAum: number; completeness: number | null; gaps: Gap[]; error: string | null }
+interface Run {
+  id: string; started_at: string; finished_at: string | null;
+  summary: { households: number; averageCompleteness: number; topGaps: { field: string; households: number }[]; unreadable?: number };
+  households: HouseholdRun[];
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -28,27 +33,92 @@ const TYPE_LABELS: Record<string, string> = {
   estate_gap: "Estate gaps", idle_cash: "Idle cash", policy_event: "Policy renewal",
 };
 const TIER_LABELS: Record<string, string> = { tier_0: "Tier 0", tier_1: "Tier 1", tier_2a: "Tier 2A", tier_2b: "Tier 2B", tier_3: "Tier 3", tier_4: "Tier 4" };
+const CONFIDENCE_LABEL: Record<Confidence, string> = { high: "Sure", medium: "Likely", low: "To confirm" };
+const FILTERS: { value: Status; label: string }[] = [
+  { value: "open", label: "Open" }, { value: "snoozed", label: "Snoozed" }, { value: "dismissed", label: "Dismissed" }, { value: "converted", label: "Converted" }, { value: "resolved", label: "No longer found" },
+];
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
-const confidenceClass: Record<Confidence, string> = { high: "bg-primary/10 text-primary", medium: "bg-muted text-foreground", low: "bg-muted text-muted-foreground" };
+const SNOOZE_DAYS = 90;
+const POLL_MS = 5000;
+const POLL_LIMIT_MS = 5 * 60_000;
 
 export default function BookOfBusiness() {
-  const [report, setReport] = useState<Report | null>(null);
+  const { user } = useAuth();
+  const [run, setRun] = useState<Run | null>(null);
+  const [opps, setOpps] = useState<Opportunity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Status>("open");
+  const [dismissing, setDismissing] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
+  const poll = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const load = async () => {
-    setLoading(true);
-    setError(null);
-    const { data, error: err } = await supabase.functions.invoke("book-of-business-report", { body: {} });
-    if (err || data?.error) setError(err?.message || data?.error || "The report could not be run.");
-    else setReport(data as Report);
+  const load = useCallback(async () => {
+    const [{ data: runs, error: runErr }, { data: rows, error: rowErr }] = await Promise.all([
+      supabase.from("opportunity_runs" as never).select("id, started_at, finished_at, summary, households").eq("ok", true).order("started_at", { ascending: false }).limit(1),
+      supabase.from("opportunities" as never).select("id, household_id, type, key, title, evidence, confidence, next_step, status, snoozed_until, dismissed_reason, first_seen"),
+    ]);
+    if (runErr || rowErr) setError((runErr || rowErr)!.message);
+    else setError(null);
+    setRun(((runs ?? []) as unknown as Run[])[0] ?? null);
+    setOpps((rows ?? []) as unknown as Opportunity[]);
     setLoading(false);
-  };
-  useEffect(() => { load(); }, []);
+  }, []);
+  useEffect(() => { load(); return () => { if (poll.current) clearInterval(poll.current); }; }, [load]);
 
-  const rows = report ? [...report.households].sort((a, b) => b.evaluation.findings.length - a.evaluation.findings.length || a.label.localeCompare(b.label)) : [];
+  const runAgain = async () => {
+    setRunning(true);
+    const before = run?.started_at ?? "";
+    const { data, error: err } = await supabase.functions.invoke("book-of-business-run", { body: {} });
+    if (err || data?.error) { setRunning(false); toast.error(err?.message || data?.error || "The run could not start."); return; }
+    const began = Date.now();
+    poll.current = setInterval(async () => {
+      const { data: latest } = await supabase.from("opportunity_runs" as never).select("started_at, finished_at, ok").order("started_at", { ascending: false }).limit(1);
+      const r = ((latest ?? []) as unknown as { started_at: string; finished_at: string | null; ok: boolean | null }[])[0];
+      const done = r && r.started_at > before && r.finished_at;
+      if (done || Date.now() - began > POLL_LIMIT_MS) {
+        if (poll.current) clearInterval(poll.current);
+        setRunning(false);
+        if (done && r.ok === false) toast.error("The run failed. See Georgia's job health.");
+        else if (!done) toast.error("The run is taking longer than expected. Reload in a few minutes.");
+        await load();
+      }
+    }, POLL_MS);
+  };
+
+  const decide = async (o: Opportunity, patch: Record<string, unknown>, done: string) => {
+    const { error: err } = await supabase.from("opportunities" as never).update({ ...patch, decided_by: user?.email ?? null, decided_at: new Date().toISOString() } as never).eq("id", o.id);
+    if (err) { toast.error(err.message); return; }
+    toast.success(done);
+    setDismissing(null);
+    setReason("");
+    await load();
+  };
+  const snooze = (o: Opportunity) => decide(o, { status: "snoozed", snoozed_until: new Date(Date.now() + SNOOZE_DAYS * 86_400_000).toISOString().slice(0, 10) }, `Snoozed for ${SNOOZE_DAYS} days`);
+  const dismiss = (o: Opportunity) => decide(o, { status: "dismissed", dismissed_reason: reason.trim() || null }, "Dismissed");
+  const convert = (o: Opportunity) => decide(o, { status: "converted", converted_at: new Date().toISOString() }, "Marked converted");
+  const reopen = (o: Opportunity) => decide(o, { status: "open", snoozed_until: null, dismissed_reason: null, converted_at: null, resolved_at: null }, "Reopened");
+
+  const counts = useMemo(() => {
+    const c: Record<Status, number> = { open: 0, snoozed: 0, dismissed: 0, converted: 0, resolved: 0 };
+    for (const o of opps) c[o.status] += 1;
+    return c;
+  }, [opps]);
+  const byType = useMemo(() => {
+    const t: Record<string, number> = {};
+    for (const o of opps) if (o.status === "open") t[o.type] = (t[o.type] ?? 0) + 1;
+    return t;
+  }, [opps]);
+  const shown = useMemo(() => {
+    const m = new Map<string, Opportunity[]>();
+    for (const o of opps) if (o.status === filter) m.set(o.household_id, [...(m.get(o.household_id) ?? []), o]);
+    return m;
+  }, [opps, filter]);
+  const rank = { high: 0, medium: 1, low: 2 } as const;
+  const rows = [...(run?.households ?? [])].sort((a, b) => (shown.get(b.householdId)?.length ?? 0) - (shown.get(a.householdId)?.length ?? 0) || a.label.localeCompare(b.label));
 
   return (
     <AppLayout>
@@ -57,54 +127,53 @@ export default function BookOfBusiness() {
           <div>
             <h1 className="font-display text-2xl">Book of Business</h1>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Where the book could use more products or services, found by fixed rules over the data in the CRM. These are prompts for a conversation, never recommendations to a client. Missing data is listed separately, so a quiet household may just be an empty one.
+              Where the book could use more products or services, found by fixed rules over the data in the CRM. Georgia runs it every Monday. These are prompts for a conversation, never recommendations to a client. Missing data is listed separately, so a quiet household may just be an empty one.
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}Run again
+          <Button variant="outline" size="sm" onClick={runAgain} disabled={running || loading}>
+            {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}{running ? "Running" : "Run now"}
           </Button>
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
-        {loading && !report && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Reading every household. This takes a minute.</div>}
+        {loading && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading</div>}
+        {!loading && !run && !error && <p className="text-sm text-muted-foreground">No run yet. Press Run now; it reads every household and takes a minute or two.</p>}
 
-        {report && (
+        {run && (
           <>
             <div className="grid gap-4 md:grid-cols-3">
               <Card>
                 <CardHeader><CardTitle>Households</CardTitle></CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-semibold">{report.summary.households}</div>
-                  <p className="text-sm text-muted-foreground">Data on file: {pct(report.summary.averageCompleteness)} on average</p>
+                  <div className="text-2xl font-semibold">{run.summary.households}</div>
+                  <p className="text-sm text-muted-foreground">Data on file: {pct(run.summary.averageCompleteness)} on average{run.summary.unreadable ? ` · ${run.summary.unreadable} could not be read` : ""}</p>
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader><CardTitle>Opportunities</CardTitle></CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-semibold">{report.summary.findingsByConfidence.high + report.summary.findingsByConfidence.medium + report.summary.findingsByConfidence.low}</div>
-                  <p className="text-sm text-muted-foreground">
-                    {report.summary.findingsByConfidence.high} sure · {report.summary.findingsByConfidence.medium} likely · {report.summary.findingsByConfidence.low} to confirm
-                  </p>
+                  <div className="text-2xl font-semibold">{counts.open}</div>
+                  <p className="text-sm text-muted-foreground">{counts.snoozed} snoozed · {counts.dismissed} dismissed · {counts.converted} converted</p>
                 </CardContent>
               </Card>
               <Card>
-                <CardHeader><CardTitle>By type</CardTitle></CardHeader>
+                <CardHeader><CardTitle>Open, by type</CardTitle></CardHeader>
                 <CardContent className="space-y-1 text-sm">
-                  {Object.entries(report.summary.findingsByType).sort((a, b) => b[1] - a[1]).map(([t, n]) => (
+                  {Object.entries(byType).sort((a, b) => b[1] - a[1]).map(([t, n]) => (
                     <div key={t} className="flex justify-between"><span>{TYPE_LABELS[t] ?? t}</span><span className="tabular-nums">{n}</span></div>
                   ))}
-                  {Object.keys(report.summary.findingsByType).length === 0 && <span className="text-muted-foreground">None found</span>}
+                  {Object.keys(byType).length === 0 && <span className="text-muted-foreground">None open</span>}
                 </CardContent>
               </Card>
             </div>
 
-            {report.summary.topGaps.length > 0 && (
+            {run.summary.topGaps.length > 0 && (
               <Card>
                 <CardHeader><CardTitle>What is missing most</CardTitle></CardHeader>
                 <CardContent>
                   <p className="mb-2 text-sm text-muted-foreground">Fixing these unlocks the most rules. Each count is households.</p>
                   <div className="grid gap-x-8 gap-y-1 text-sm md:grid-cols-2">
-                    {report.summary.topGaps.map((g) => (
+                    {run.summary.topGaps.map((g) => (
                       <div key={g.field} className="flex justify-between"><span>{g.field}</span><span className="tabular-nums">{g.households}</span></div>
                     ))}
                   </div>
@@ -112,10 +181,18 @@ export default function BookOfBusiness() {
               </Card>
             )}
 
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground">Show</span>
+              <Select value={filter} onValueChange={(v) => setFilter(v as Status)}>
+                <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+                <SelectContent>{FILTERS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label} ({counts[f.value]})</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+
             <div>
               {rows.map((h) => {
                 const isOpen = open === h.householdId;
-                const { findings, gaps, completeness } = h.evaluation;
+                const list = [...(shown.get(h.householdId) ?? [])].sort((a, b) => rank[a.confidence] - rank[b.confidence]);
                 return (
                   <div key={h.householdId} className="border-b border-border last:border-0">
                     <ListRowStatic className="cursor-pointer border-0" onClick={() => setOpen(isOpen ? null : h.householdId)}>
@@ -123,46 +200,58 @@ export default function BookOfBusiness() {
                       <span className="min-w-0 flex-1 truncate font-medium">{h.label}</span>
                       <span className="w-16 text-muted-foreground">{h.tier ? TIER_LABELS[h.tier] ?? h.tier : "No tier"}</span>
                       <span className="w-24 text-right tabular-nums text-muted-foreground">{money(h.groupedAum)}</span>
-                      <span className="w-28 text-right tabular-nums">{findings.length} found</span>
-                      <span className={cn("w-28 text-right tabular-nums", completeness < 0.6 && "text-destructive")}>{pct(completeness)} on file</span>
+                      <span className="w-28 text-right tabular-nums">{list.length} {FILTERS.find((f) => f.value === filter)!.label.toLowerCase()}</span>
+                      <span className={cn("w-28 text-right tabular-nums", h.completeness !== null && h.completeness < 0.6 && "text-destructive")}>{h.completeness === null ? "unreadable" : `${pct(h.completeness)} on file`}</span>
                     </ListRowStatic>
                     {isOpen && (
                       <div className="space-y-4 bg-muted/30 px-10 py-4 text-sm">
                         {h.error && <p className="text-destructive">This household could not be read: {h.error}</p>}
                         <Link to={`/households/${h.householdId}`} className="text-primary hover:underline">Open household</Link>
-                        {findings.length > 0 && (
-                          <div className="space-y-3">
-                            {findings.map((f) => (
-                              <div key={`${f.type}:${f.key}`}>
-                                <div className="flex items-center gap-2">
-                                  <Badge variant="secondary" className={confidenceClass[f.confidence]}>{f.confidence === "high" ? "Sure" : f.confidence === "medium" ? "Likely" : "To confirm"}</Badge>
-                                  <span className="text-muted-foreground">{TYPE_LABELS[f.type] ?? f.type}</span>
-                                </div>
-                                <p className="mt-1 font-medium">{f.title}</p>
-                                <ul className="mt-1 text-muted-foreground">
-                                  {f.evidence.map((e, i) => <li key={i}>{e.label}: {e.value}</li>)}
-                                </ul>
-                                <p className="mt-1">Next: {f.nextStep}</p>
-                              </div>
-                            ))}
+                        {list.map((o) => (
+                          <div key={o.id}>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="secondary">{CONFIDENCE_LABEL[o.confidence]}</Badge>
+                              <span className="text-muted-foreground">{TYPE_LABELS[o.type] ?? o.type}</span>
+                              <span className="text-xs text-muted-foreground">first seen {o.first_seen}</span>
+                              {o.status === "snoozed" && o.snoozed_until && <span className="text-xs text-muted-foreground">back on {o.snoozed_until}</span>}
+                            </div>
+                            <p className="mt-1 font-medium">{o.title}</p>
+                            <ul className="mt-1 text-muted-foreground">{o.evidence.map((e, i) => <li key={i}>{e.label}: {e.value}</li>)}</ul>
+                            {o.next_step && <p className="mt-1">Next: {o.next_step}</p>}
+                            {o.dismissed_reason && <p className="mt-1 text-muted-foreground">Dismissed because: {o.dismissed_reason}</p>}
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              {o.status === "open" && dismissing !== o.id && (
+                                <>
+                                  <Button size="sm" variant="outline" onClick={() => convert(o)}>Mark converted</Button>
+                                  <Button size="sm" variant="outline" onClick={() => snooze(o)}>Snooze {SNOOZE_DAYS} days</Button>
+                                  <Button size="sm" variant="outline" onClick={() => { setDismissing(o.id); setReason(""); }}>Dismiss</Button>
+                                </>
+                              )}
+                              {dismissing === o.id && (
+                                <>
+                                  <Input className="h-8 w-72" placeholder="Why (e.g. already in place)" value={reason} onChange={(e) => setReason(e.target.value)} />
+                                  <Button size="sm" onClick={() => dismiss(o)}>Dismiss</Button>
+                                  <Button size="sm" variant="ghost" onClick={() => setDismissing(null)}>Cancel</Button>
+                                </>
+                              )}
+                              {o.status !== "open" && o.status !== "resolved" && <Button size="sm" variant="outline" onClick={() => reopen(o)}>Reopen</Button>}
+                            </div>
                           </div>
-                        )}
-                        {gaps.length > 0 && (
+                        ))}
+                        {h.gaps.length > 0 && (
                           <div>
                             <p className="font-medium">Missing data</p>
-                            <ul className="mt-1 text-muted-foreground">
-                              {gaps.map((g, i) => <li key={i}>{g.field}: {g.why}</li>)}
-                            </ul>
+                            <ul className="mt-1 text-muted-foreground">{h.gaps.map((g, i) => <li key={i}>{g.field}: {g.why}</li>)}</ul>
                           </div>
                         )}
-                        {findings.length === 0 && gaps.length === 0 && <p className="text-muted-foreground">Nothing found and nothing missing.</p>}
+                        {list.length === 0 && h.gaps.length === 0 && <p className="text-muted-foreground">Nothing here and nothing missing.</p>}
                       </div>
                     )}
                   </div>
                 );
               })}
             </div>
-            <p className="text-xs text-muted-foreground">Run {new Date(report.generatedAt).toLocaleString("en-CA")}. Reads only; nothing is saved.</p>
+            <p className="text-xs text-muted-foreground">Last run {run.finished_at ? new Date(run.finished_at).toLocaleString("en-CA") : ""}. Revenue estimates come later.</p>
           </>
         )}
       </div>

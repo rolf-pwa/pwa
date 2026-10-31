@@ -810,6 +810,12 @@ Deno.serve(async (req) => {
       EdgeRuntime.waitUntil(trackJob(db, "insurance_file_check", () => checkOpenFiles(db)));
       return json({ started: true });
     }
+    // Book of business: the weekly diagnostic of where the book could use more products or services.
+    if (cronBody.job === "book_of_business") {
+      // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
+      EdgeRuntime.waitUntil(trackJob(db, "book_of_business", async () => { const { runBookOfBusiness } = await import("../_shared/opportunity-run.ts"); return await runBookOfBusiness(db); }));
+      return json({ started: true });
+    }
     // Call recordings: a few a run, overnight, copied to the client's Advisor Files and transcribed by our own AI.
     if (cronBody.job === "call_archive") {
       // @ts-ignore EdgeRuntime is provided by Supabase Edge Functions runtime
