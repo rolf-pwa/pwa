@@ -16,9 +16,9 @@ export interface StoredOpportunity {
 }
 
 export interface Plan {
-  inserts: { household_id: string; type: string; key: string; title: string; evidence: Finding["evidence"]; confidence: Finding["confidence"]; next_step: string; est_value: number | null; rule_version: string; first_seen: string; last_seen: string }[];
+  inserts: { household_id: string; type: string; key: string; title: string; evidence: Finding["evidence"]; confidence: Finding["confidence"]; next_step: string; est_value: number | null; due_on: string | null; rule_version: string; first_seen: string; last_seen: string }[];
   /** Fresh content for a row that stays; reopen clears a lapsed snooze or a resolution. */
-  updates: { id: string; title: string; evidence: Finding["evidence"]; confidence: Finding["confidence"]; next_step: string; est_value: number | null; rule_version: string; last_seen: string; reopen: boolean }[];
+  updates: { id: string; title: string; evidence: Finding["evidence"]; confidence: Finding["confidence"]; next_step: string; est_value: number | null; due_on: string | null; rule_version: string; last_seen: string; reopen: boolean }[];
   /** Rows whose finding no longer fires. */
   resolves: string[];
 }
@@ -39,7 +39,7 @@ export function reconcile(existing: StoredOpportunity[], findings: Finding[], ev
     const id = idOf(f.householdId, f.type, f.key);
     firing.add(id);
     const row = byId.get(id);
-    const content = { title: f.title, evidence: f.evidence, confidence: f.confidence, next_step: f.nextStep, est_value: f.estValue, rule_version: ruleVersion, last_seen: today };
+    const content = { title: f.title, evidence: f.evidence, confidence: f.confidence, next_step: f.nextStep, est_value: f.estValue, due_on: f.dueOn ?? null, rule_version: ruleVersion, last_seen: today };
     if (!row) {
       plan.inserts.push({ household_id: f.householdId, type: f.type, key: f.key, first_seen: today, ...content });
       continue;

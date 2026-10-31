@@ -259,7 +259,7 @@ export function buildMigrationFindings(rows: MigrationRow[], accountToHousehold:
     const first = lines[0].maturesOn, final = lines[lines.length - 1].maturesOn;
     const cbText = missing === lines.length ? "chargeback not yet known" : `chargeback ${missing ? "at least " : ""}${money2(totalCb)} if moved today`;
     findings.push({
-      householdId, type: "fclass_migration", key: "fclass-migration",
+      householdId, type: "fclass_migration", key: "fclass-migration", dueOn: first,
       title: `${lines.length} account${lines.length === 1 ? "" : "s"} near the end of chargeback: ${cbText}, F-class fee ${money2(totalFee)} a month`,
       evidence: [
         { label: "Total chargeback if moved today", value: missing === lines.length ? "Not known: original investment missing" : `${missing ? "At least " : ""}${money2(totalCb)}` },

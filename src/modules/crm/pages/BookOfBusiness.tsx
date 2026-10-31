@@ -12,12 +12,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui
 import { Input } from "@/shared/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import { cn } from "@/shared/lib/utils";
+import { earliestDue, orderHouseholds, orderOpps } from "@/modules/crm/lib/bookOfBusiness";
 
 type Confidence = "high" | "medium" | "low";
 type Status = "open" | "snoozed" | "accepted" | "dismissed" | "converted" | "resolved";
 interface Opportunity {
   id: string; household_id: string; type: string; key: string; title: string; evidence: { label: string; value: string }[];
-  confidence: Confidence; next_step: string | null; status: Status; snoozed_until: string | null; dismissed_reason: string | null; first_seen: string;
+  confidence: Confidence; next_step: string | null; status: Status; snoozed_until: string | null; dismissed_reason: string | null; first_seen: string; due_on: string | null;
 }
 interface Gap { field: string; why: string; blocks: string[] }
 interface HouseholdRun { householdId: string; label: string; tier: string | null; groupedAum: number; householdAum: number; pooled: boolean; familyName: string | null; familyAum: number | null; completeness: number | null; gaps: Gap[]; error: string | null }
@@ -57,6 +58,8 @@ export default function BookOfBusiness() {
   // The briefing links here with ?household=<id>: that household opens on arrival.
   const [open, setOpen] = useState<string | null>(params.get("household"));
   const [filter, setFilter] = useState<Status>("open");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [sort, setSort] = useState<"most" | "date">("most");
   const [dismissing, setDismissing] = useState<string | null>(null);
   // Click a kind of missing data to list only the households missing it.
   const [gapFilter, setGapFilter] = useState<string | null>(null);
@@ -66,7 +69,7 @@ export default function BookOfBusiness() {
   const load = useCallback(async () => {
     const [{ data: runs, error: runErr }, { data: rows, error: rowErr }] = await Promise.all([
       supabase.from("opportunity_runs" as never).select("id, started_at, finished_at, summary, households").eq("ok", true).order("started_at", { ascending: false }).limit(1),
-      supabase.from("opportunities" as never).select("id, household_id, type, key, title, evidence, confidence, next_step, status, snoozed_until, dismissed_reason, first_seen"),
+      supabase.from("opportunities" as never).select("id, household_id, type, key, title, evidence, confidence, next_step, status, snoozed_until, dismissed_reason, first_seen, due_on"),
     ]);
     if (runErr || rowErr) setError((runErr || rowErr)!.message);
     else setError(null);
@@ -127,12 +130,11 @@ export default function BookOfBusiness() {
   }, [opps]);
   const shown = useMemo(() => {
     const m = new Map<string, Opportunity[]>();
-    for (const o of opps) if (o.status === filter) m.set(o.household_id, [...(m.get(o.household_id) ?? []), o]);
+    for (const o of opps) if (o.status === filter && (typeFilter === "all" || o.type === typeFilter)) m.set(o.household_id, [...(m.get(o.household_id) ?? []), o]);
     return m;
-  }, [opps, filter]);
-  const rank = { high: 0, medium: 1, low: 2 } as const;
+  }, [opps, filter, typeFilter]);
   const gapKind = (field: string) => field.split(":")[0];
-  const rows = [...(run?.households ?? [])].filter((h) => !gapFilter || h.gaps.some((g) => gapKind(g.field) === gapFilter)).sort((a, b) => (shown.get(b.householdId)?.length ?? 0) - (shown.get(a.householdId)?.length ?? 0) || a.label.localeCompare(b.label));
+  const rows = orderHouseholds([...(run?.households ?? [])].filter((h) => !gapFilter || h.gaps.some((g) => gapKind(g.field) === gapFilter)), shown, sort);
 
   return (
     <AppLayout>
@@ -216,12 +218,28 @@ export default function BookOfBusiness() {
                 <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
                 <SelectContent>{FILTERS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label} ({counts[f.value]})</SelectItem>)}</SelectContent>
               </Select>
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All types</SelectItem>
+                  {Object.entries(TYPE_LABELS).map(([k, label]) => <SelectItem key={k} value={k}>{label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <span className="ml-2 text-sm text-muted-foreground">Sort</span>
+              <Select value={sort} onValueChange={(v) => setSort(v as "most" | "date")}>
+                <SelectTrigger className="w-64"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="most">Most opportunities first</SelectItem>
+                  <SelectItem value="date">Earliest maturity or renewal first</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
               {rows.map((h) => {
                 const isOpen = open === h.householdId;
-                const list = [...(shown.get(h.householdId) ?? [])].sort((a, b) => rank[a.confidence] - rank[b.confidence]);
+                const list = orderOpps(shown.get(h.householdId) ?? [], sort === "date" ? "date" : "confidence");
+                const next = earliestDue(list);
                 return (
                   <div key={h.householdId} className="border-b border-border last:border-0">
                     <ListRowStatic className="cursor-pointer border-0" onClick={() => setOpen(isOpen ? null : h.householdId)}>
@@ -229,6 +247,7 @@ export default function BookOfBusiness() {
                       <span className="min-w-0 flex-1 truncate font-medium">{h.label}</span>
                       <span className="w-16 text-muted-foreground">{h.tier ? TIER_LABELS[h.tier] ?? h.tier : "No tier"}</span>
                       <span className="w-24 text-right tabular-nums text-muted-foreground" title="This household's own assets under management">{money(h.householdAum ?? 0)}</span>
+                      <span className="w-24 text-right tabular-nums text-muted-foreground" title="The earliest chargeback maturity or renewal among these">{next ?? ""}</span>
                       <span className="w-28 text-right tabular-nums">{list.length} {FILTERS.find((f) => f.value === filter)!.label.toLowerCase()}</span>
                       <span className={cn("w-28 text-right tabular-nums", h.completeness !== null && h.completeness < 0.6 && "text-destructive")}>{h.completeness === null ? "unreadable" : `${pct(h.completeness)} on file`}</span>
                     </ListRowStatic>
@@ -247,6 +266,7 @@ export default function BookOfBusiness() {
                               <Badge variant="secondary">{CONFIDENCE_LABEL[o.confidence]}</Badge>
                               <span className="text-muted-foreground">{TYPE_LABELS[o.type] ?? o.type}</span>
                               <span className="text-xs text-muted-foreground">first seen {o.first_seen}</span>
+                              {o.due_on && <span className="text-xs text-muted-foreground">{o.type === "fclass_migration" ? "first maturity" : "date"} {o.due_on}</span>}
                               {o.status === "snoozed" && o.snoozed_until && <span className="text-xs text-muted-foreground">back on {o.snoozed_until}</span>}
                             </div>
                             <p className="mt-1 font-medium">{o.title}</p>
