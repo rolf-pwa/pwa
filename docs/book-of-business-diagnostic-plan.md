@@ -1,13 +1,13 @@
 # Book-of-business diagnostic: plan
 
-Status: stage 1 built (rulebook, report function, Book of Business page); not yet deployed. Stages 2 to 5 not started.
+Status: stages 1 and 2 built (stage 1 live; stage 2 awaiting merge). Stages 3 to 5 not started: the page already has the stage 3 basics (accept, dismiss, snooze, filters), so stage 3 is now filtering, sorting and totals.
 
 ## Goal
 Examine every household against a fixed rulebook and produce a ranked, evidence-backed list of opportunities to offer more products and services. Staff only. The list prompts Rolf to start a conversation; it never recommends anything to a client.
 
 ## Decisions (Rolf, 2026-10-30)
 - Opportunity types to start: insurance gaps, Sovereignty Charter, tier upgrade, consolidation of outside assets, corporate structuring, estate gaps. More later, so the rulebook must be easy to extend.
-- Revenue estimates: yes, using the iA commission schedule (Rolf to supply). Until then the estimate is blank, not guessed.
+- Revenue estimates: yes, using the iA commission schedule (received; it is the advisor's net rate). An estimate is blank, not guessed, when there is no premium to apply it to.
 - Surfaces: a standalone "Book of Business" page, plus a weekly section in Georgia's briefing.
 - Order: stage 1 (data-gaps report and rulebook) comes first, ahead of the monthly pipeline and meeting loop follow-ups.
 
@@ -77,4 +77,12 @@ Table `opportunities`: id, household_id, type, evidence jsonb, est_value, confid
 - Commission needs a premium, and an opportunity has none until quoted. A stage 2 estimate therefore needs an assumed annual premium (from the needs-analysis shortfall and the client's age) or a real quote. Proposed: use the latest `insurance_quotes` premium when one exists, otherwise leave the estimate blank rather than guess.
 - Savings and retirement lines pay a sales commission or an F-class fee; those suit the AUM-based types (consolidation, tier upgrade) but need the fee Rolf actually charges, not iA's schedule.
 - There is a 2-year chargeback period on some structures and a first-year cap rule ($25,000 total); estimates should say "first-year, before chargeback".
-- Open: does Rolf's contract with his MGA pass the full schedule through, or a share? The estimate should use his net rate.
+- Answered 2026-10-30: the iA schedule is what is paid to the advisor, so its percentages are the net rate (no MGA split).
+
+## Stage 2 as built
+- `opportunities` (one row per household, type and key; staff read and update, only the run adds rows) and `opportunity_runs` (summary plus each household's completeness and gaps).
+- `_shared/opportunity-reconcile.ts` (pure): new findings insert; existing ones refresh; a dismissed or converted opportunity is never reopened; a snooze lapses on its date; one that stops firing is marked resolved, not deleted; a household that could not be read never resolves anything.
+- `_shared/opportunity-run.ts`: reads every household, applies the rules, saves through the reconcile plan, records the run.
+- Monday 5 am Pacific cron (`book_of_business`, through `daily-briefing-generate`), watched by the job-health watchdog. `book-of-business-run` lets staff start a run from the page.
+- The stage 1 `book-of-business-report` function is removed; the page now reads stored data.
+- Revenue estimates (`est_value`) remain null for now. The rate question is settled (the iA schedule is the net rate); what is still needed is a premium, so the next step is to price from the latest `insurance_quotes` premium and leave the estimate blank when there is none.
