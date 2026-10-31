@@ -2,6 +2,7 @@
 // move to F-class would pay each month. Pure; no I/O. The migration plan sheet is read elsewhere (fclass-migration-service.ts) and
 // handed in as CSV text.
 //
+// Chargeback is worked out on what is still invested, not on withdrawals already made (see accountLine).
 // Chargeback (the iA MGA schedule effective 2026-10-26, "Charges when a deposit is surrendered (agent's charge)"): the charge is the
 // sales commission paid on the deposit times a percentage that steps down with the months the deposit has been in force, to nothing at
 // the end of the chargeback period (CB2: 24 months, CB3: 36, CB5: 60). F-class: fees are paid monthly on the daily balance at the
@@ -111,9 +112,11 @@ export interface MigrationRow {
   loadType: string;
   maturesOn: string | null;
   marketValue: number | null;
+  /** iA's "Net Transactions (Deposits - Withdrawals)" since contract issue: negative when more has been withdrawn than deposited. Optional column. */
+  netTransactions: number | null;
 }
 
-const COLUMNS = { account: "Account Number", accountType: "Account Type", investedOn: "Investment Date", original: "Original Investment", loadType: "Load Type", maturesOn: "CB Maturity Date", marketValue: "Managed Investments", first: "First Name", last: "Last Name" } as const;
+const COLUMNS = { account: "Account Number", accountType: "Account Type", investedOn: "Investment Date", original: "Original Investment", loadType: "Load Type", maturesOn: "CB Maturity Date", marketValue: "Managed Investments", netTransactions: "Net Transactions", first: "First Name", last: "Last Name" } as const;
 
 /** Reads the sheet by its header names, not by column letter, so inserting a column does not shift the meaning. */
 export function parseSheet(csv: string): { rows: MigrationRow[]; missingColumns: string[] } {
@@ -132,7 +135,7 @@ export function parseSheet(csv: string): { rows: MigrationRow[]; missingColumns:
     rows.push({
       account, accountType: cell(r, "accountType"), owner: [cell(r, "first"), cell(r, "last")].filter(Boolean).join(" "),
       investedOn: parseDate(cell(r, "investedOn")), original: parseMoney(cell(r, "original")), loadType: cell(r, "loadType").toUpperCase().replace(/\s+/g, ""),
-      maturesOn: parseDate(cell(r, "maturesOn")), marketValue: parseMoney(cell(r, "marketValue")),
+      maturesOn: parseDate(cell(r, "maturesOn")), marketValue: parseMoney(cell(r, "marketValue")), netTransactions: parseMoney(cell(r, "netTransactions")),
     });
   }
   return { rows, missingColumns: [] };
@@ -151,6 +154,12 @@ export interface AccountLine {
   monthInForce: number;
   pctCharged: number;
   original: number | null;
+  /** What a chargeback can still apply to: the original investment less what has been withdrawn (see accountLine). Null with no original. */
+  chargeableBase: number | null;
+  /** The part of the original investment withdrawn already (its chargeback was charged to the advisor then). */
+  withdrawn: number;
+  /** "net": from iA's net transactions in the sheet. "estimated": from the market value, because the sheet has no net transactions for the account. */
+  basis: "net" | "estimated";
   /** Null when the original investment is not in the sheet. */
   chargeback: number | null;
   marketValue: number;
@@ -175,9 +184,18 @@ export function dueRows(rows: MigrationRow[], asOf: string, cfg: FClassConfig = 
 export function accountLine(r: ReturnType<typeof dueRows>["due"][number], asOf: string, cfg: FClassConfig = DEFAULT_FCLASS): AccountLine {
   const month = monthInForce(r.investedOn, asOf);
   const pct = chargebackPct(r.load, month);
+  // What a chargeback can still apply to is the original investment less what has been withdrawn since (the chargeback on a withdrawal was
+  // already charged to the advisor when it was made: Rolf, 2026-10-31). iA's net transactions give that exactly. Without them it is
+  // estimated from the market value: the shortfall below the original is taken to be withdrawals. That ignores growth, so it overstates
+  // the base, and it cannot see withdrawals hidden by growth when the market value is at or above the original.
+  let base: number | null = null;
+  const net = r.netTransactions ?? null;
+  const basis: AccountLine["basis"] = net !== null ? "net" : "estimated";
+  if (r.original !== null) base = net !== null ? Math.min(r.original, Math.max(0, r.original + net)) : Math.min(r.original, r.marketValue);
   return {
     account: r.account, accountType: r.accountType, load: r.load, investedOn: r.investedOn, maturesOn: r.maturesOn, monthInForce: month, pctCharged: pct,
-    original: r.original, chargeback: r.original === null ? null : round2(r.original * CB_SALES_COMMISSION[r.load] * (pct / 100)),
+    original: r.original, chargeableBase: base, withdrawn: r.original === null || base === null ? 0 : round2(r.original - base), basis,
+    chargeback: base === null ? null : round2(base * CB_SALES_COMMISSION[r.load] * (pct / 100)),
     marketValue: r.marketValue, monthlyFee: monthlyFClassFee(r.marketValue, cfg),
   };
 }
@@ -211,6 +229,8 @@ export function buildMigrationFindings(rows: MigrationRow[], accountToHousehold:
     const lines = items.map((i) => i.line).sort((a, b) => a.maturesOn.localeCompare(b.maturesOn));
     const known = lines.filter((l) => l.chargeback !== null);
     const missing = lines.length - known.length;
+    // An estimated base with money already gone is a guess; the sheet needs iA's net transactions for that account.
+    const guessed = lines.filter((l) => l.basis === "estimated" && l.withdrawn > 0);
     const totalCb = round2(known.reduce((t, l) => t + (l.chargeback ?? 0), 0));
     const totalFee = round2(lines.reduce((t, l) => t + l.monthlyFee, 0));
     const totalValue = lines.reduce((t, l) => t + l.marketValue, 0);
@@ -225,15 +245,16 @@ export function buildMigrationFindings(rows: MigrationRow[], accountToHousehold:
         { label: "Market value in these accounts", value: money(totalValue) },
         ...lines.map((l) => ({
           label: `${l.accountType || "Account"} ...${last4(l.account)} (${l.load}, ${l.maturesOn <= asOf ? "matured" : "matures"} ${l.maturesOn}, month ${l.monthInForce}, ${l.pctCharged}% charged)`,
-          value: `${l.chargeback === null ? "chargeback unknown" : `chargeback ${money2(l.chargeback)}`}; fee ${money2(l.monthlyFee)}/month`,
+          value: `${l.chargeback === null ? "chargeback unknown" : `chargeback ${money2(l.chargeback)}${l.withdrawn > 0 ? ` on ${money(l.chargeableBase ?? 0)} (${l.basis === "net" ? `${money(l.withdrawn)} of the ${money(l.original ?? 0)} invested already withdrawn` : `estimated: ${money(l.withdrawn)} of the ${money(l.original ?? 0)} invested assumed withdrawn; add Net Transactions to the sheet for the exact figure`})` : ""}`}; fee ${money2(l.monthlyFee)}/month`,
         })),
       ],
-      confidence: missing ? "medium" : "high",
+      confidence: missing || guessed.length ? "medium" : "high",
       nextStep: final <= asOf
         ? "The chargeback period is over on every one of these accounts: moving to F-class costs nothing in chargeback."
         : `The chargeback falls away account by account (the first on ${first}, the last on ${final}). Weigh each account's chargeback against its F-class fee to choose when to move it.`,
       estValue: null,
     });
+    if (guessed.length) gaps.push({ householdId, field: "Net transactions (migration sheet)", why: `${guessed.length} account${guessed.length === 1 ? "" : "s"} (${guessed.map((l) => "..." + last4(l.account)).join(", ")}) ${guessed.length === 1 ? "is" : "are"} below ${guessed.length === 1 ? "its" : "their"} original investment; iA's net transactions since contract issue would replace the estimate of what was withdrawn.`, blocks: ["fclass_migration"] });
     if (missing) gaps.push({ householdId, field: "Original investment (migration sheet)", why: `${missing} account${missing === 1 ? "" : "s"} near the end of chargeback ${missing === 1 ? "has" : "have"} no original investment in the sheet, so the chargeback is ${missing === lines.length ? "unknown" : "understated"}.`, blocks: ["fclass_migration"] });
   }
   return { findings, gaps, unmatched, dueCount: due.length, undated };
