@@ -108,4 +108,4 @@ Rolf's migration plan sheet ("PWA 3.0 - Migration Plan", read each Monday run th
 - **Original Investment** is empty in the sheet today; Rolf will fill it. Until then each finding says the chargeback is not yet known (or "at least" when some accounts have it) and the household gets a missing-data entry.
 - Accounts are matched to households by account number (digits only) from the investment accounts and the holding tank; accounts that match nothing are counted on the page by their last four digits.
 - If the sheet cannot be read, these findings are left exactly as they were and the page says so.
-- Not decided: whether to show a break-even (chargeback divided by the monthly fee).
+- **Break-even (2026-10-31):** each finding shows the months of F-class fees needed to cover the chargeback, for the household (total chargeback over the total monthly fee, "at least" when some originals are missing) and for each account ("covered in N months"). It says "No chargeback to cover" once the period is over, and cannot be worked out while no original investment is known.

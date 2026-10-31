@@ -66,6 +66,13 @@ export function monthlyFClassFee(marketValue: number, cfg: FClassConfig = DEFAUL
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+/** Months of F-class fees it takes to earn back a chargeback, to one decimal. Null when there is no fee to count. */
+export function breakEvenMonths(chargeback: number, monthlyFee: number): number | null {
+  return monthlyFee > 0 ? Math.round((chargeback / monthlyFee) * 10) / 10 : null;
+}
+
+const monthsText = (m: number) => `${m} ${m === 1 ? "month" : "months"}`;
+
 // --- the sheet -------------------------------------------------------------------------------------------------------------------
 
 /** RFC 4180 CSV: quoted fields with commas, doubled quotes and line breaks. */
@@ -168,6 +175,8 @@ export interface AccountLine {
   chargeback: number | null;
   marketValue: number;
   monthlyFee: number;
+  /** Months of this account's F-class fee needed to cover its chargeback; null when the chargeback is unknown. */
+  breakEven: number | null;
 }
 
 /** Chargeback-load accounts with a maturity date inside the window (or already past it) and something invested. */
@@ -206,6 +215,7 @@ export function accountLine(r: ReturnType<typeof dueRows>["due"][number], asOf: 
     original: r.original, chargeableBase: base, withdrawn: r.original === null || base === null ? 0 : round2(r.original - base), basis, signSuspect, netTransactions: net,
     chargeback: base === null ? null : round2(base * CB_SALES_COMMISSION[r.load] * (pct / 100)),
     marketValue: r.marketValue, monthlyFee: monthlyFClassFee(r.marketValue, cfg),
+    breakEven: base === null ? null : breakEvenMonths(round2(base * CB_SALES_COMMISSION[r.load] * (pct / 100)), monthlyFClassFee(r.marketValue, cfg)),
   };
 }
 
@@ -243,6 +253,8 @@ export function buildMigrationFindings(rows: MigrationRow[], accountToHousehold:
     const guessed = lines.filter((l) => l.basis === "estimated" && l.withdrawn > 0 && !l.signSuspect);
     const totalCb = round2(known.reduce((t, l) => t + (l.chargeback ?? 0), 0));
     const totalFee = round2(lines.reduce((t, l) => t + l.monthlyFee, 0));
+    const knownFee = round2(known.reduce((t, l) => t + l.monthlyFee, 0));
+    const be = known.length ? breakEvenMonths(totalCb, knownFee) : null;
     const totalValue = lines.reduce((t, l) => t + l.marketValue, 0);
     const first = lines[0].maturesOn, final = lines[lines.length - 1].maturesOn;
     const cbText = missing === lines.length ? "chargeback not yet known" : `chargeback ${missing ? "at least " : ""}${money2(totalCb)} if moved today`;
@@ -252,10 +264,14 @@ export function buildMigrationFindings(rows: MigrationRow[], accountToHousehold:
       evidence: [
         { label: "Total chargeback if moved today", value: missing === lines.length ? "Not known: original investment missing" : `${missing ? "At least " : ""}${money2(totalCb)}` },
         { label: `Monthly F-class fee (your ${Math.round(cfg.advisorShare * 100)}% of ${cfg.feeRate * 100}%)`, value: money2(totalFee) },
+        {
+          label: "Months of F-class fees to cover the chargeback",
+          value: known.length === 0 ? "Not known: original investment missing" : be === null ? "No fee to count" : totalCb === 0 ? "No chargeback to cover" : `${missing ? "At least " : ""}${monthsText(be)}`,
+        },
         { label: "Market value in these accounts", value: money(totalValue) },
         ...lines.map((l) => ({
           label: `${l.accountType || "Account"} ...${last4(l.account)} (${l.load}, ${l.maturesOn <= asOf ? "matured" : "matures"} ${l.maturesOn}, month ${l.monthInForce}, ${l.pctCharged}% charged)`,
-          value: `${l.chargeback === null ? "chargeback unknown" : `chargeback ${money2(l.chargeback)}${l.withdrawn > 0 ? ` on ${money(l.chargeableBase ?? 0)} (${l.basis === "net" ? `${money(l.withdrawn)} of the ${money(l.original ?? 0)} invested already withdrawn` : `estimated: ${money(l.withdrawn)} of the ${money(l.original ?? 0)} invested assumed withdrawn; ${l.signSuspect ? `Net Transactions of +${money(l.netTransactions ?? 0)} was not used: it is positive but the account is below its original, and iA shows withdrawals as negative` : "add Net Transactions to the sheet for the exact figure"}`})` : ""}`}; fee ${money2(l.monthlyFee)}/month`,
+          value: `${l.chargeback === null ? "chargeback unknown" : `chargeback ${money2(l.chargeback)}${l.withdrawn > 0 ? ` on ${money(l.chargeableBase ?? 0)} (${l.basis === "net" ? `${money(l.withdrawn)} of the ${money(l.original ?? 0)} invested already withdrawn` : `estimated: ${money(l.withdrawn)} of the ${money(l.original ?? 0)} invested assumed withdrawn; ${l.signSuspect ? `Net Transactions of +${money(l.netTransactions ?? 0)} was not used: it is positive but the account is below its original, and iA shows withdrawals as negative` : "add Net Transactions to the sheet for the exact figure"}`})` : ""}`}; fee ${money2(l.monthlyFee)}/month${l.breakEven === null || !l.chargeback ? "" : `; covered in ${monthsText(l.breakEven)}`}`,
         })),
       ],
       confidence: missing || guessed.length || suspects.length ? "medium" : "high",
