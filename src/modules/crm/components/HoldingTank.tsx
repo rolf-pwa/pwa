@@ -261,6 +261,11 @@ export function HoldingTank({ contactId, householdId, onAccountMoved }: HoldingT
 
   const handleAddAccount = async () => {
     if (!addForm.account_name || !contactId) return;
+    // A blank custodian drops the account from the managed AUM, so it is required.
+    if (!addForm.custodian.trim()) {
+      toast.error("Choose the custodian: accounts without one are left out of AUM.");
+      return;
+    }
     setAdding(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -394,7 +399,7 @@ export function HoldingTank({ contactId, householdId, onAccountMoved }: HoldingT
                   }}
                 >
                   <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Custodian" />
+                    <SelectValue placeholder="Custodian *" />
                   </SelectTrigger>
                   <SelectContent>
                     {CUSTODIAN_OPTIONS.map((c) => (
