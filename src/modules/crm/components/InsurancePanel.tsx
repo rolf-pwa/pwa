@@ -341,12 +341,12 @@ export function InsurancePanel({ scope, storehouses, onStorehousesChanged }: { s
       )}
 
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-h-[90vh] max-w-2xl grid-rows-[auto_minmax(0,1fr)_auto]">
             <DialogHeader>
               <DialogTitle>{editing?.id ? "Edit Policy" : "New Insurance Policy"}</DialogTitle>
             </DialogHeader>
             {editing && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 overflow-y-auto px-1">
                 <div className="col-span-2 grid grid-cols-2 gap-3">
                   <div>
                     <Label>Carrier *</Label>
