@@ -6,6 +6,7 @@
 import { applyOpen, pendingSorts, type OpenState } from "./briefing-open.ts";
 import { getValidGoogleAccessToken } from "./google-token.ts";
 import { GMAIL_MODIFY_SCOPE, findHandledLabelId, gmailFor, handledLabelId, stillInInbox, withConversationSiblings } from "./gmail-handled.ts";
+import { FCLASS_LATER_KEY } from "./fclass-migration.ts";
 
 const keysOf = (items: { key?: string }[], prefix: string) => items.map((i) => i.key).filter((k): k is string => !!k && k.startsWith(prefix)).map((k) => k.split(":").slice(-1)[0]);
 
@@ -98,7 +99,7 @@ export async function refreshBriefing(db: any, userId: string, todayStr: string)
     gmailState(db, userId, emailIds),
     hasSweep ? db.from("inbox_sweep_items").select("message_id, bucket, feedback, archived_at").eq("user_id", userId).gte("swept_at", new Date(Date.now() - 26 * 3_600_000).toISOString()).limit(500) : { data: null },
     oppIds.length ? db.from("opportunities").select("id, status").in("id", oppIds) : { data: [] },
-    hasOppMore ? db.from("opportunities").select("id", { count: "exact", head: true }).eq("status", "open").gte("first_seen", new Date(Date.parse(`${todayStr}T12:00:00Z`) - 7 * 86_400_000).toISOString().slice(0, 10)) : { count: undefined },
+    hasOppMore ? db.from("opportunities").select("id", { count: "exact", head: true }).eq("status", "open").neq("key", FCLASS_LATER_KEY).gte("first_seen", new Date(Date.parse(`${todayStr}T12:00:00Z`) - 7 * 86_400_000).toISOString().slice(0, 10)) : { count: undefined },
   ]);
 
   const state: OpenState = {

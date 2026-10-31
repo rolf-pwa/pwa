@@ -32,6 +32,8 @@ export interface FClassConfig {
   overrideBasis?: "client_fee" | "advisor_fee";
 }
 // Overrides are 5% of the 80% of the advisory fee paid to the advisor (Rolf, 2026-10-31): 0.04% of market value a year at a 1% fee.
+/** The key of a finding for a household whose chargeback accounts all mature after the window: kept apart from the live list, and off the briefing. */
+export const FCLASS_LATER_KEY = "fclass-migration-later";
 export const DEFAULT_FCLASS: FClassConfig = { windowMonths: 12, feeRate: 0.01, advisorShare: 0.8, overrideRate: 0.05, overrideBasis: "advisor_fee" };
 
 /** CB2's published percentages for months 13 to 24 in force (they step by 100/13, so they are listed as printed). */
@@ -259,8 +261,9 @@ export interface MigrationReport {
 }
 
 /**
- * One finding per household that has at least one chargeback account maturing inside the window. The finding covers all of that household's
- * chargeback accounts: the chargeback if every one moved today, and the monthly F-class fee on all of them. Accounts inside the window are tagged.
+ * One finding per household that has a chargeback account. The finding covers all of that household's chargeback accounts: the chargeback if
+ * every one moved today, and the monthly F-class fee on all of them. Households with an account maturing inside the window are the live list;
+ * the others carry the "later" key. Accounts inside the window are tagged.
  */
 export function buildMigrationFindings(rows: MigrationRow[], accountToHousehold: Map<string, string>, asOf: string, cfg: FClassConfig = DEFAULT_FCLASS): MigrationReport {
   const { all, undated } = chargebackRows(rows);
@@ -277,8 +280,9 @@ export function buildMigrationFindings(rows: MigrationRow[], accountToHousehold:
 
   const findings: Finding[] = [], gaps: DataGap[] = [];
   for (const [householdId, items] of byHousehold) {
-    if (!items.some((i) => i.inWindow)) continue; // no account maturing inside the window: the household is not on the list
-    includedCount += items.length;
+    // No account maturing inside the window: the household goes in the "later" list, with the same figures but no data requests.
+    const later = !items.some((i) => i.inWindow);
+    if (!later) includedCount += items.length;
     const inWindow = new Set(items.filter((i) => i.inWindow).map((i) => i.line.account));
     const lines = items.map((i) => i.line).sort((a, b) => a.maturesOn.localeCompare(b.maturesOn));
     const known = lines.filter((l) => l.chargeback !== null);
@@ -296,8 +300,8 @@ export function buildMigrationFindings(rows: MigrationRow[], accountToHousehold:
     const first = lines[0].maturesOn, final = lines[lines.length - 1].maturesOn;
     const cbText = missing === lines.length ? "chargeback not yet known" : `chargeback ${missing ? "at least " : ""}${money2(totalCb)} if all moved today`;
     findings.push({
-      householdId, type: "fclass_migration", key: "fclass-migration", dueOn: first,
-      title: `${lines.length} account${lines.length === 1 ? "" : "s"} under chargeback, ${inWindow.size} maturing within ${cfg.windowMonths} months: ${cbText}, ${money2(totalComp)} a month in fees${totalOverride > 0 ? " and overrides" : ""}`,
+      householdId, type: "fclass_migration", key: later ? FCLASS_LATER_KEY : "fclass-migration", dueOn: first,
+      title: `${lines.length} account${lines.length === 1 ? "" : "s"} under chargeback, ${later ? `none maturing within ${cfg.windowMonths} months (the first on ${first})` : `${inWindow.size} maturing within ${cfg.windowMonths} months`}: ${cbText}, ${money2(totalComp)} a month in fees${totalOverride > 0 ? " and overrides" : ""}`,
       evidence: [
         { label: "Total chargeback if every account moved today", value: missing === lines.length ? "Not known: original investment missing" : `${missing ? "At least " : ""}${money2(totalCb)}` },
         { label: `Monthly F-class fee (your ${Math.round(cfg.advisorShare * 100)}% of ${cfg.feeRate * 100}%)`, value: money2(totalFee) },
@@ -319,6 +323,7 @@ export function buildMigrationFindings(rows: MigrationRow[], accountToHousehold:
         : `The chargeback falls away account by account (the first on ${first}, the last on ${final}). Moving the household together costs the total above; weigh each account's chargeback against its F-class fee to choose when to move each one.`,
       estValue: null,
     });
+    if (later) continue;
     if (suspects.length) gaps.push({ householdId, field: "Net transactions (migration sheet)", why: `${suspects.map((l) => `...${last4(l.account)} (+${money(l.netTransactions ?? 0)})`).join(", ")}: Net Transactions is positive but the account is below its original investment. iA shows withdrawals as negative numbers (for example -18,584.17), so the figure was not used. Check the sign.`, blocks: ["fclass_migration"] });
     if (guessed.length) gaps.push({ householdId, field: "Net transactions (migration sheet)", why: `${guessed.length} account${guessed.length === 1 ? "" : "s"} (${guessed.map((l) => "..." + last4(l.account)).join(", ")}) ${guessed.length === 1 ? "is" : "are"} below ${guessed.length === 1 ? "its" : "their"} original investment; iA's net transactions since contract issue would replace the estimate of what was withdrawn.`, blocks: ["fclass_migration"] });
     if (missing) gaps.push({ householdId, field: "Original investment (migration sheet)", why: `${missing} account${missing === 1 ? "" : "s"} under chargeback ${missing === 1 ? "has" : "have"} no original investment in the sheet, so the chargeback is ${missing === lines.length ? "unknown" : "understated"}.`, blocks: ["fclass_migration"] });

@@ -26,7 +26,7 @@ interface Run {
   id: string; started_at: string; finished_at: string | null;
   summary: {
     households: number; averageCompleteness: number; topGaps: { field: string; households: number }[]; unreadable?: number;
-    migration?: { ok: boolean; error?: string; windowMonths?: number; rows?: number; due?: number; included?: number; households?: number; unmatched?: string[]; undated?: number };
+    migration?: { ok: boolean; error?: string; windowMonths?: number; rows?: number; due?: number; included?: number; households?: number; later?: number; unmatched?: string[]; undated?: number };
   };
   households: HouseholdRun[];
 }
@@ -36,6 +36,11 @@ const TYPE_LABELS: Record<string, string> = {
   tier_upgrade: "Near a tier line", consolidation: "Outside assets", corporate_structuring: "Corporate structuring",
   estate_gap: "Estate gaps", idle_cash: "Idle cash", policy_event: "Policy renewal", fclass_migration: "F-class migration",
 };
+// F-class findings for households whose chargeback accounts all mature after the window: their own kind on this page, apart from the live list.
+const LATER_KEY = "fclass-migration-later";
+const LATER_KIND = "fclass_migration_later";
+const kindOf = (o: { type: string; key: string }) => (o.key === LATER_KEY ? LATER_KIND : o.type);
+const KIND_LABELS: Record<string, string> = { ...TYPE_LABELS, [LATER_KIND]: "F-class migration, later" };
 const TIER_LABELS: Record<string, string> = { tier_0: "Tier 0", tier_1: "Tier 1", tier_2a: "Tier 2A", tier_2b: "Tier 2B", tier_3: "Tier 3", tier_4: "Tier 4" };
 const CONFIDENCE_LABEL: Record<Confidence, string> = { high: "Sure", medium: "Likely", low: "To confirm" };
 const FILTERS: { value: Status; label: string }[] = [
@@ -120,17 +125,17 @@ export default function BookOfBusiness() {
 
   const counts = useMemo(() => {
     const c: Record<Status, number> = { open: 0, snoozed: 0, accepted: 0, dismissed: 0, converted: 0, resolved: 0 };
-    for (const o of opps) c[o.status] += 1;
+    for (const o of opps) if (kindOf(o) !== LATER_KIND) c[o.status] += 1;
     return c;
   }, [opps]);
   const byType = useMemo(() => {
     const t: Record<string, number> = {};
-    for (const o of opps) if (o.status === "open") t[o.type] = (t[o.type] ?? 0) + 1;
+    for (const o of opps) if (o.status === "open") t[kindOf(o)] = (t[kindOf(o)] ?? 0) + 1;
     return t;
   }, [opps]);
   const shown = useMemo(() => {
     const m = new Map<string, Opportunity[]>();
-    for (const o of opps) if (o.status === filter && (typeFilter === "all" || o.type === typeFilter)) m.set(o.household_id, [...(m.get(o.household_id) ?? []), o]);
+    for (const o of opps) if (o.status === filter && (typeFilter === "all" ? kindOf(o) !== LATER_KIND : kindOf(o) === typeFilter)) m.set(o.household_id, [...(m.get(o.household_id) ?? []), o]);
     return m;
   }, [opps, filter, typeFilter]);
   const gapKind = (field: string) => field.split(":")[0];
@@ -176,7 +181,7 @@ export default function BookOfBusiness() {
                 <CardHeader><CardTitle>Open, by type</CardTitle></CardHeader>
                 <CardContent className="space-y-1 text-sm">
                   {Object.entries(byType).sort((a, b) => b[1] - a[1]).map(([t, n]) => (
-                    <div key={t} className="flex justify-between"><span>{TYPE_LABELS[t] ?? t}</span><span className="tabular-nums">{n}</span></div>
+                    <div key={t} className="flex justify-between"><span>{KIND_LABELS[t] ?? t}</span><span className="tabular-nums">{n}</span></div>
                   ))}
                   {Object.keys(byType).length === 0 && <span className="text-muted-foreground">None open</span>}
                 </CardContent>
@@ -188,6 +193,7 @@ export default function BookOfBusiness() {
                 <p className="text-sm text-muted-foreground">
                   Migration plan sheet: {run.summary.migration.rows} accounts read. {run.summary.migration.households} households have an account maturing within {run.summary.migration.windowMonths ?? 6} months ({run.summary.migration.due} accounts), and each is shown with all its chargeback accounts ({run.summary.migration.included ?? run.summary.migration.due} in all).
                   {run.summary.migration.unmatched && run.summary.migration.unmatched.length > 0 && ` ${run.summary.migration.unmatched.length} matched no household (account numbers ending ${run.summary.migration.unmatched.slice(0, 8).join(", ")}).`}
+                  {!!run.summary.migration.later && ` ${run.summary.migration.later} more households have chargeback accounts maturing later: choose "F-class migration, later" under the types.`}
                   {!!run.summary.migration.undated && ` ${run.summary.migration.undated} chargeback accounts have no investment or maturity date.`}
                 </p>
               ) : (
@@ -222,7 +228,7 @@ export default function BookOfBusiness() {
                 <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All types</SelectItem>
-                  {Object.entries(TYPE_LABELS).map(([k, label]) => <SelectItem key={k} value={k}>{label}</SelectItem>)}
+                  {Object.entries(KIND_LABELS).map(([k, label]) => <SelectItem key={k} value={k}>{label}</SelectItem>)}
                 </SelectContent>
               </Select>
               <span className="ml-2 text-sm text-muted-foreground">Sort</span>
@@ -264,7 +270,7 @@ export default function BookOfBusiness() {
                           <div key={o.id}>
                             <div className="flex items-center gap-2">
                               <Badge variant="secondary">{CONFIDENCE_LABEL[o.confidence]}</Badge>
-                              <span className="text-muted-foreground">{TYPE_LABELS[o.type] ?? o.type}</span>
+                              <span className="text-muted-foreground">{KIND_LABELS[kindOf(o)] ?? o.type}</span>
                               <span className="text-xs text-muted-foreground">first seen {o.first_seen}</span>
                               {o.due_on && <span className="text-xs text-muted-foreground">{o.type === "fclass_migration" ? "first maturity" : "date"} {o.due_on}</span>}
                               {o.status === "snoozed" && o.snoozed_until && <span className="text-xs text-muted-foreground">back on {o.snoozed_until}</span>}

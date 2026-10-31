@@ -4,7 +4,7 @@
 import { buildSnapshot } from "./opportunity-snapshot.ts";
 import { assignAnchors, evaluateHousehold, summarizeBook, RULE_VERSION, type Evaluation, type Finding, type HouseholdSnapshot } from "./opportunity-rules.ts";
 import { reconcile, type StoredOpportunity } from "./opportunity-reconcile.ts";
-import { buildMigrationFindings, DEFAULT_FCLASS, parseSheet } from "./fclass-migration.ts";
+import { buildMigrationFindings, DEFAULT_FCLASS, FCLASS_LATER_KEY, parseSheet } from "./fclass-migration.ts";
 import { accountHouseholds, loadMigrationCsv } from "./fclass-migration-service.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -58,7 +58,7 @@ export async function runBookOfBusiness(db: SupabaseClient): Promise<string> {
       const rep = buildMigrationFindings(parsed.rows, accounts, today);
       migrationFindings = rep.findings;
       for (const g of rep.gaps) evaluated.find((r) => r.householdId === g.householdId)?.evaluation.gaps.push(g);
-      migration = { ok: true, windowMonths: DEFAULT_FCLASS.windowMonths, rows: parsed.rows.length, due: rep.dueCount, included: rep.includedCount, households: rep.findings.length, unmatched: rep.unmatched, undated: rep.undated };
+      migration = { ok: true, windowMonths: DEFAULT_FCLASS.windowMonths, rows: parsed.rows.length, due: rep.dueCount, included: rep.includedCount, households: rep.findings.filter((f) => f.key !== FCLASS_LATER_KEY).length, later: rep.findings.filter((f) => f.key === FCLASS_LATER_KEY).length, unmatched: rep.unmatched, undated: rep.undated };
     } catch (e) {
       migration = { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
