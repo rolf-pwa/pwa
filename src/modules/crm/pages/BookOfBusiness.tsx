@@ -26,7 +26,7 @@ interface Run {
   id: string; started_at: string; finished_at: string | null;
   summary: {
     households: number; averageCompleteness: number; topGaps: { field: string; households: number }[]; unreadable?: number;
-    migration?: { ok: boolean; error?: string; windowMonths?: number; rows?: number; due?: number; households?: number; unmatched?: string[]; undated?: number };
+    migration?: { ok: boolean; error?: string; windowMonths?: number; rows?: number; due?: number; included?: number; households?: number; unmatched?: string[]; undated?: number };
   };
   households: HouseholdRun[];
 }
@@ -186,7 +186,7 @@ export default function BookOfBusiness() {
             {run.summary.migration && (
               run.summary.migration.ok ? (
                 <p className="text-sm text-muted-foreground">
-                  Migration plan sheet: {run.summary.migration.rows} accounts read, {run.summary.migration.due} within {run.summary.migration.windowMonths ?? 6} months of the end of their chargeback, across {run.summary.migration.households} households.
+                  Migration plan sheet: {run.summary.migration.rows} accounts read. {run.summary.migration.households} households have an account maturing within {run.summary.migration.windowMonths ?? 6} months ({run.summary.migration.due} accounts), and each is shown with all its chargeback accounts ({run.summary.migration.included ?? run.summary.migration.due} in all).
                   {run.summary.migration.unmatched && run.summary.migration.unmatched.length > 0 && ` ${run.summary.migration.unmatched.length} matched no household (account numbers ending ${run.summary.migration.unmatched.slice(0, 8).join(", ")}).`}
                   {!!run.summary.migration.undated && ` ${run.summary.migration.undated} chargeback accounts have no investment or maturity date.`}
                 </p>
