@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { addMonthsYmd, buildMigrationFindings, chargebackPct, dueRows, monthInForce, monthlyFClassFee, parseCsv, parseDate, parseMoney, parseSheet, type MigrationRow } from "../../supabase/functions/_shared/fclass-migration";
+import { addMonthsYmd, breakEvenMonths, buildMigrationFindings, chargebackPct, dueRows, monthInForce, monthlyFClassFee, parseCsv, parseDate, parseMoney, parseSheet, type MigrationRow } from "../../supabase/functions/_shared/fclass-migration";
 
 const TODAY = "2026-10-31";
 const row = (o: Partial<MigrationRow> = {}): MigrationRow => ({
@@ -46,6 +46,17 @@ describe("the monthly F-class fee", () => {
   });
   it("follows the configured rate and share", () => {
     expect(monthlyFClassFee(120_000, { windowMonths: 6, feeRate: 0.01, advisorShare: 1 })).toBe(100);
+  });
+});
+
+describe("break-even", () => {
+  it("is the chargeback divided by the monthly fee, to one decimal", () => {
+    expect(breakEvenMonths(13.72, 10.28)).toBe(1.3);
+    expect(breakEvenMonths(9.4, 5.39)).toBe(1.7);
+    expect(breakEvenMonths(0, 5)).toBe(0);
+  });
+  it("is null when there is no fee to count", () => {
+    expect(breakEvenMonths(10, 0)).toBeNull();
   });
 });
 
@@ -130,9 +141,9 @@ describe("the finding for a household", () => {
     expect(r.gaps).toEqual([]);
   });
   it("lists each account with its month in force, the share charged and its own figures, soonest maturity first", () => {
-    const lines = buildMigrationFindings(two, map, TODAY).findings[0].evidence.slice(3);
+    const lines = buildMigrationFindings(two, map, TODAY).findings[0].evidence.slice(4);
     expect(lines[0].label).toBe("TFSA ...0001 (CB5, matures 2026-12-24, month 59, 6% charged)");
-    expect(lines[0].value).toBe("chargeback $16.80; fee $5.13/month");
+    expect(lines[0].value).toBe("chargeback $16.80; fee $5.13/month; covered in 3.3 months");
     expect(lines[1].label).toContain("RRIF ...0002 (CB3, matures 2027-03-19, month 32, 20% charged)");
   });
   it("says 'at least' and drops to medium confidence when an original investment is missing, and reports the gap", () => {
@@ -169,7 +180,7 @@ describe("the finding for a household", () => {
     const r = buildMigrationFindings([row({ original: 22_500, marketValue: 8_091.92, netTransactions: -18_584.17 })], new Map([["1000000001", "h1"]]), TODAY);
     const f = r.findings[0];
     expect(f.evidence[0].value).toBe("$9.40");
-    expect(f.evidence[3].value).toBe("chargeback $9.40 on $3,916 ($18,584 of the $22,500 invested already withdrawn); fee $5.39/month");
+    expect(f.evidence[4].value).toBe("chargeback $9.40 on $3,916 ($18,584 of the $22,500 invested already withdrawn); fee $5.39/month; covered in 1.7 months");
     expect(f.confidence).toBe("high");
     expect(r.gaps).toEqual([]);
   });
@@ -178,7 +189,7 @@ describe("the finding for a household", () => {
     const r = buildMigrationFindings([row({ original: 22_500, marketValue: 8_091, netTransactions: 18_584 })], new Map([["1000000001", "h1"]]), TODAY);
     const f = r.findings[0];
     expect(f.evidence[0].value).toBe("$19.42");
-    expect(f.evidence[3].value).toContain("Net Transactions of +$18,584 was not used");
+    expect(f.evidence[4].value).toContain("Net Transactions of +$18,584 was not used");
     expect(f.confidence).toBe("medium");
     expect(r.gaps).toHaveLength(1);
     expect(r.gaps[0].why).toContain("...0001 (+$18,584)");
@@ -201,7 +212,7 @@ describe("the finding for a household", () => {
     const r = buildMigrationFindings([row({ original: 22_500, marketValue: 8_091 })], new Map([["1000000001", "h1"]]), TODAY);
     const f = r.findings[0];
     expect(f.evidence[0].value).toBe("$19.42");
-    expect(f.evidence[3].value).toBe("chargeback $19.42 on $8,091 (estimated: $14,409 of the $22,500 invested assumed withdrawn; add Net Transactions to the sheet for the exact figure); fee $5.39/month");
+    expect(f.evidence[4].value).toBe("chargeback $19.42 on $8,091 (estimated: $14,409 of the $22,500 invested assumed withdrawn; add Net Transactions to the sheet for the exact figure); fee $5.39/month; covered in 3.6 months");
     expect(f.confidence).toBe("medium");
     expect(r.gaps).toHaveLength(1);
     expect(r.gaps[0]).toMatchObject({ field: "Net transactions (migration sheet)", blocks: ["fclass_migration"] });
@@ -211,13 +222,36 @@ describe("the finding for a household", () => {
     for (const marketValue of [6_164, 6_000]) {
       const r = buildMigrationFindings([row({ original: 6_000, marketValue })], new Map([["1000000001", "h1"]]), TODAY);
       expect(r.findings[0].evidence[0].value).toBe("$14.40"); // $6,000 x 4% x 6%
-      expect(r.findings[0].evidence[3].value).not.toContain("withdrawn");
+      expect(r.findings[0].evidence[4].value).not.toContain("withdrawn");
       expect(r.findings[0].confidence).toBe("high");
       expect(r.gaps).toEqual([]);
     }
   });
   it("shows no withdrawal note when nothing has been withdrawn", () => {
-    expect(buildMigrationFindings([row({ netTransactions: 0 })], new Map([["1000000001", "h1"]]), TODAY).findings[0].evidence[3].value).toBe("chargeback $16.80; fee $5.13/month");
+    expect(buildMigrationFindings([row({ netTransactions: 0 })], new Map([["1000000001", "h1"]]), TODAY).findings[0].evidence[4].value).toBe("chargeback $16.80; fee $5.13/month; covered in 3.3 months");
+  });
+  it("shows how many months of F-class fees cover the chargeback, for the household and for each account", () => {
+    // The live Banfield rows: $9.40 + $4.32 = $13.72 against $5.39 + $4.89 = $10.28 a month.
+    const rows = [
+      row({ account: "1000000001", original: 22_500, marketValue: 8_091, netTransactions: -18_584.17 }),
+      row({ account: "1000000002", original: 12_500, marketValue: 7_335, netTransactions: -11_150, investedOn: "2022-01-13", maturesOn: "2027-01-13", accountType: "RRSP" }),
+    ];
+    const f = buildMigrationFindings(rows, new Map([["1000000001", "h1"], ["1000000002", "h1"]]), TODAY).findings[0];
+    expect(f.evidence[2]).toEqual({ label: "Months of F-class fees to cover the chargeback", value: "1.3 months" });
+    expect(f.evidence[4].value).toContain("covered in 1.7 months");
+    expect(f.evidence[5].value).toContain("covered in 0.9 months");
+  });
+  it("says so when there is no chargeback left to cover, and adds no per-account break-even", () => {
+    const f = buildMigrationFindings([row({ maturesOn: "2026-09-01", investedOn: "2021-08-01" })], new Map([["1000000001", "h1"]]), TODAY).findings[0];
+    expect(f.evidence[2].value).toBe("No chargeback to cover");
+    expect(f.evidence[4].value).not.toContain("covered in");
+  });
+  it("says it cannot be worked out when no original investment is known, and 'at least' when only some are", () => {
+    const map = new Map([["1000000001", "h1"], ["1000000002", "h1"]]);
+    const none = buildMigrationFindings([row({ original: null }), row({ account: "1000000002", original: null })], map, TODAY).findings[0];
+    expect(none.evidence[2].value).toBe("Not known: original investment missing");
+    const some = buildMigrationFindings([row(), row({ account: "1000000002", original: null })], map, TODAY).findings[0];
+    expect(some.evidence[2].value).toMatch(/^At least \d+(\.\d)? months?$/);
   });
   it("never writes an estimated value, so no figure is presented as revenue", () => {
     expect(buildMigrationFindings(two, map, TODAY).findings[0].estValue).toBeNull();
