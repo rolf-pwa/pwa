@@ -140,23 +140,23 @@ describe("the finding for a household", () => {
     expect(r.findings).toHaveLength(1);
     const f = r.findings[0];
     // CB5: $7,000 x 4% x 6% (month 59) = $16.80.  CB3: $50,000 x 2.5% x 20% (month 32) = $250.
-    expect(f.evidence[0]).toEqual({ label: "Total chargeback if moved today", value: "$266.80" });
+    expect(f.evidence[0]).toEqual({ label: "Total chargeback if every account moved today", value: "$266.80" });
     // $7,698.76 -> $5.13 and $135,991 -> $90.66 a month at 80% of 1%.
     expect(f.evidence[1]).toEqual({ label: "Monthly F-class fee (your 80% of 1%)", value: "$95.79" });
-    expect(f.title).toBe("2 accounts near the end of chargeback: chargeback $266.80 if moved today, F-class fee $95.79 a month");
+    expect(f.title).toBe("2 accounts under chargeback, 2 maturing within 12 months: chargeback $266.80 if all moved today, F-class fee $95.79 a month");
     expect(f.type).toBe("fclass_migration");
     expect(f.confidence).toBe("high");
     expect(r.gaps).toEqual([]);
   });
   it("lists each account with its month in force, the share charged and its own figures, soonest maturity first", () => {
     const lines = buildMigrationFindings(two, map, TODAY).findings[0].evidence.slice(4);
-    expect(lines[0].label).toBe("TFSA ...0001 (CB5, matures 2026-12-24, month 59, 6% charged)");
+    expect(lines[0].label).toBe("TFSA ...0001 (CB5, matures 2026-12-24, within 12 months, month 59, 6% charged)");
     expect(lines[0].value).toBe("chargeback $16.80; fee $5.13/month; covered in 3.3 months");
-    expect(lines[1].label).toContain("RRIF ...0002 (CB3, matures 2027-03-19, month 32, 20% charged)");
+    expect(lines[1].label).toContain("RRIF ...0002 (CB3, matures 2027-03-19, within 12 months, month 32, 20% charged)");
   });
   it("says 'at least' and drops to medium confidence when an original investment is missing, and reports the gap", () => {
     const r = buildMigrationFindings([two[0], { ...two[1], original: null }], map, TODAY);
-    expect(r.findings[0].title).toContain("chargeback at least $16.80 if moved today");
+    expect(r.findings[0].title).toContain("chargeback at least $16.80 if all moved today");
     expect(r.findings[0].confidence).toBe("medium");
     expect(r.gaps).toHaveLength(1);
     expect(r.gaps[0]).toMatchObject({ householdId: "h1", field: "Original investment (migration sheet)", blocks: ["fclass_migration"] });
@@ -260,6 +260,54 @@ describe("the finding for a household", () => {
     expect(none.evidence[2].value).toBe("Not known: original investment missing");
     const some = buildMigrationFindings([row(), row({ account: "1000000002", original: null })], map, TODAY).findings[0];
     expect(some.evidence[2].value).toMatch(/^At least \d+(\.\d)? months?$/);
+  });
+  it("brings in a household when only one of its accounts matures inside the window, and totals all of its chargeback accounts", () => {
+    // One account matures in two months; the other (CB5 deposited in 2025) not until 2030. Moving the household moves both.
+    const rows = [
+      row({ account: "1000000001" }),
+      row({ account: "1000000002", investedOn: "2025-05-16", maturesOn: "2030-05-16", original: 6_000, marketValue: 6_164, accountType: "RRSP" }),
+    ];
+    const r = buildMigrationFindings(rows, new Map([["1000000001", "h1"], ["1000000002", "h1"]]), TODAY);
+    expect(r.findings).toHaveLength(1);
+    const f = r.findings[0];
+    // 2025-05-16 to 2026-10-31 is 17 full months, so month 18: CB5 88% of 4% of $6,000 = $211.20; plus $16.80.
+    expect(f.evidence[0].value).toBe("$228.00");
+    expect(f.title).toContain("2 accounts under chargeback, 1 maturing within 12 months");
+    expect(f.evidence).toHaveLength(6);
+    expect(r.dueCount).toBe(1);
+    expect(r.includedCount).toBe(2);
+  });
+  it("tags only the accounts inside the window, and dates the finding by the household's earliest maturity", () => {
+    const rows = [
+      row({ account: "1000000001", maturesOn: "2026-12-24" }),
+      row({ account: "1000000002", investedOn: "2025-05-16", maturesOn: "2030-05-16", original: 6_000, marketValue: 6_164 }),
+    ];
+    const f = buildMigrationFindings(rows, new Map([["1000000001", "h1"], ["1000000002", "h1"]]), TODAY).findings[0];
+    expect(f.evidence[4].label).toContain("within 12 months");
+    expect(f.evidence[5].label).not.toContain("within 12 months");
+    expect(f.dueOn).toBe("2026-12-24");
+  });
+  it("leaves a household off the list when none of its accounts matures inside the window", () => {
+    const r = buildMigrationFindings([row({ maturesOn: "2030-05-16", investedOn: "2025-05-16" })], new Map([["1000000001", "h1"]]), TODAY);
+    expect(r.findings).toEqual([]);
+    expect(r.includedCount).toBe(0);
+    expect(r.dueCount).toBe(0);
+  });
+  it("does not count F-class accounts in a household's chargeback, and still lists the household", () => {
+    const rows = [row({ account: "1000000001" }), row({ account: "1000000002", loadType: "FCLASS", maturesOn: "2025-02-18" })];
+    const r = buildMigrationFindings(rows, new Map([["1000000001", "h1"], ["1000000002", "h1"]]), TODAY);
+    expect(r.findings[0].title).toContain("1 account under chargeback");
+    expect(r.includedCount).toBe(1);
+  });
+  it("asks for the original investment on every chargeback account in a listed household, not only those maturing soon", () => {
+    const rows = [row({ account: "1000000001" }), row({ account: "1000000002", investedOn: "2025-05-16", maturesOn: "2030-05-16", original: null })];
+    const r = buildMigrationFindings(rows, new Map([["1000000001", "h1"], ["1000000002", "h1"]]), TODAY);
+    expect(r.gaps.find((g) => g.field === "Original investment (migration sheet)")?.why).toContain("1 account under chargeback has no original investment");
+    expect(r.findings[0].title).toContain("chargeback at least $16.80 if all moved today");
+  });
+  it("reports chargeback accounts that match no household by their last digits, whether or not they mature soon", () => {
+    const rows = [row({ account: "1000000001" }), row({ account: "9999 8888 7777", maturesOn: "2030-05-16", investedOn: "2025-05-16" })];
+    expect(buildMigrationFindings(rows, new Map([["1000000001", "h1"]]), TODAY).unmatched).toEqual(["7777"]);
   });
   it("never writes an estimated value, so no figure is presented as revenue", () => {
     expect(buildMigrationFindings(two, map, TODAY).findings[0].estValue).toBeNull();

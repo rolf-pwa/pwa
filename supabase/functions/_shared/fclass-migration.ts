@@ -179,22 +179,29 @@ export interface AccountLine {
   breakEven: number | null;
 }
 
-/** Chargeback-load accounts with a maturity date inside the window (or already past it) and something invested. */
-export function dueRows(rows: MigrationRow[], asOf: string, cfg: FClassConfig = DEFAULT_FCLASS): { due: (MigrationRow & { load: CbLoad; investedOn: string; maturesOn: string; marketValue: number })[]; undated: number } {
-  const limit = addMonthsYmd(asOf, cfg.windowMonths);
-  const due: ReturnType<typeof dueRows>["due"] = [];
+export type ChargebackRow = MigrationRow & { load: CbLoad; investedOn: string; maturesOn: string; marketValue: number };
+
+/** Every account under a chargeback load with its dates and something invested; F Class, cash and anything with no chargeback are left out. */
+export function chargebackRows(rows: MigrationRow[]): { all: ChargebackRow[]; undated: number } {
+  const all: ChargebackRow[] = [];
   let undated = 0;
   for (const r of rows) {
     if (!(r.loadType in CB_SALES_COMMISSION)) continue; // F Class, HISA, anything that carries no chargeback
     if (!r.investedOn || !r.maturesOn) { undated += 1; continue; }
-    if (r.maturesOn > limit) continue;
     if (!r.marketValue || r.marketValue <= 0) continue;
-    due.push({ ...r, load: r.loadType as CbLoad, investedOn: r.investedOn, maturesOn: r.maturesOn, marketValue: r.marketValue });
+    all.push({ ...r, load: r.loadType as CbLoad, investedOn: r.investedOn, maturesOn: r.maturesOn, marketValue: r.marketValue });
   }
-  return { due, undated };
+  return { all, undated };
 }
 
-export function accountLine(r: ReturnType<typeof dueRows>["due"][number], asOf: string, cfg: FClassConfig = DEFAULT_FCLASS): AccountLine {
+/** The chargeback accounts with a maturity inside the window (or already past it): the ones that bring their household into the list. */
+export function dueRows(rows: MigrationRow[], asOf: string, cfg: FClassConfig = DEFAULT_FCLASS): { due: ChargebackRow[]; undated: number } {
+  const limit = addMonthsYmd(asOf, cfg.windowMonths);
+  const { all, undated } = chargebackRows(rows);
+  return { due: all.filter((r) => r.maturesOn <= limit), undated };
+}
+
+export function accountLine(r: ChargebackRow, asOf: string, cfg: FClassConfig = DEFAULT_FCLASS): AccountLine {
   const month = monthInForce(r.investedOn, asOf);
   const pct = chargebackPct(r.load, month);
   // What a chargeback can still apply to is the original investment less what has been withdrawn since (the chargeback on a withdrawal was
@@ -226,25 +233,37 @@ const last4 = (a: string) => digits(a).slice(-4) || a.slice(-4);
 export interface MigrationReport {
   findings: Finding[];
   gaps: DataGap[];
-  /** Due accounts that matched no household in the CRM, by their last four digits. */
+  /** Chargeback accounts that matched no household in the CRM, by their last four digits (any of them might belong to a household on the list). */
   unmatched: string[];
+  /** Accounts maturing inside the window: the ones that bring a household onto the list. */
   dueCount: number;
+  /** Accounts in the households on the list (all their chargeback accounts, not only those maturing soon). */
+  includedCount: number;
   undated: number;
 }
 
-/** One finding per household: the accounts near the end of their chargeback, the chargeback if moved today, and the monthly F-class fee. */
+/**
+ * One finding per household that has at least one chargeback account maturing inside the window. The finding covers all of that household's
+ * chargeback accounts: the chargeback if every one moved today, and the monthly F-class fee on all of them. Accounts inside the window are tagged.
+ */
 export function buildMigrationFindings(rows: MigrationRow[], accountToHousehold: Map<string, string>, asOf: string, cfg: FClassConfig = DEFAULT_FCLASS): MigrationReport {
-  const { due, undated } = dueRows(rows, asOf, cfg);
-  const byHousehold = new Map<string, { line: AccountLine; owner: string }[]>();
+  const { all, undated } = chargebackRows(rows);
+  const limit = addMonthsYmd(asOf, cfg.windowMonths);
+  const byHousehold = new Map<string, { line: AccountLine; inWindow: boolean }[]>();
   const unmatched: string[] = [];
-  for (const r of due) {
+  for (const r of all) {
     const hh = accountToHousehold.get(digits(r.account));
     if (!hh) { unmatched.push(last4(r.account)); continue; }
-    byHousehold.set(hh, [...(byHousehold.get(hh) ?? []), { line: accountLine(r, asOf, cfg), owner: r.owner }]);
+    byHousehold.set(hh, [...(byHousehold.get(hh) ?? []), { line: accountLine(r, asOf, cfg), inWindow: r.maturesOn <= limit }]);
   }
+  const dueCount = all.filter((r) => r.maturesOn <= limit).length;
+  let includedCount = 0;
 
   const findings: Finding[] = [], gaps: DataGap[] = [];
   for (const [householdId, items] of byHousehold) {
+    if (!items.some((i) => i.inWindow)) continue; // no account maturing inside the window: the household is not on the list
+    includedCount += items.length;
+    const inWindow = new Set(items.filter((i) => i.inWindow).map((i) => i.line.account));
     const lines = items.map((i) => i.line).sort((a, b) => a.maturesOn.localeCompare(b.maturesOn));
     const known = lines.filter((l) => l.chargeback !== null);
     const missing = lines.length - known.length;
@@ -257,12 +276,12 @@ export function buildMigrationFindings(rows: MigrationRow[], accountToHousehold:
     const be = known.length ? breakEvenMonths(totalCb, knownFee) : null;
     const totalValue = lines.reduce((t, l) => t + l.marketValue, 0);
     const first = lines[0].maturesOn, final = lines[lines.length - 1].maturesOn;
-    const cbText = missing === lines.length ? "chargeback not yet known" : `chargeback ${missing ? "at least " : ""}${money2(totalCb)} if moved today`;
+    const cbText = missing === lines.length ? "chargeback not yet known" : `chargeback ${missing ? "at least " : ""}${money2(totalCb)} if all moved today`;
     findings.push({
       householdId, type: "fclass_migration", key: "fclass-migration", dueOn: first,
-      title: `${lines.length} account${lines.length === 1 ? "" : "s"} near the end of chargeback: ${cbText}, F-class fee ${money2(totalFee)} a month`,
+      title: `${lines.length} account${lines.length === 1 ? "" : "s"} under chargeback, ${inWindow.size} maturing within ${cfg.windowMonths} months: ${cbText}, F-class fee ${money2(totalFee)} a month`,
       evidence: [
-        { label: "Total chargeback if moved today", value: missing === lines.length ? "Not known: original investment missing" : `${missing ? "At least " : ""}${money2(totalCb)}` },
+        { label: "Total chargeback if every account moved today", value: missing === lines.length ? "Not known: original investment missing" : `${missing ? "At least " : ""}${money2(totalCb)}` },
         { label: `Monthly F-class fee (your ${Math.round(cfg.advisorShare * 100)}% of ${cfg.feeRate * 100}%)`, value: money2(totalFee) },
         {
           label: "Months of F-class fees to cover the chargeback",
@@ -270,19 +289,19 @@ export function buildMigrationFindings(rows: MigrationRow[], accountToHousehold:
         },
         { label: "Market value in these accounts", value: money(totalValue) },
         ...lines.map((l) => ({
-          label: `${l.accountType || "Account"} ...${last4(l.account)} (${l.load}, ${l.maturesOn <= asOf ? "matured" : "matures"} ${l.maturesOn}, month ${l.monthInForce}, ${l.pctCharged}% charged)`,
+          label: `${l.accountType || "Account"} ...${last4(l.account)} (${l.load}, ${l.maturesOn <= asOf ? "matured" : "matures"} ${l.maturesOn}${inWindow.has(l.account) ? `, within ${cfg.windowMonths} months` : ""}, month ${l.monthInForce}, ${l.pctCharged}% charged)`,
           value: `${l.chargeback === null ? "chargeback unknown" : `chargeback ${money2(l.chargeback)}${l.withdrawn > 0 ? ` on ${money(l.chargeableBase ?? 0)} (${l.basis === "net" ? `${money(l.withdrawn)} of the ${money(l.original ?? 0)} invested already withdrawn` : `estimated: ${money(l.withdrawn)} of the ${money(l.original ?? 0)} invested assumed withdrawn; ${l.signSuspect ? `Net Transactions of +${money(l.netTransactions ?? 0)} was not used: it is positive but the account is below its original, and iA shows withdrawals as negative` : "add Net Transactions to the sheet for the exact figure"}`})` : ""}`}; fee ${money2(l.monthlyFee)}/month${l.breakEven === null || !l.chargeback ? "" : `; covered in ${monthsText(l.breakEven)}`}`,
         })),
       ],
       confidence: missing || guessed.length || suspects.length ? "medium" : "high",
       nextStep: final <= asOf
         ? "The chargeback period is over on every one of these accounts: moving to F-class costs nothing in chargeback."
-        : `The chargeback falls away account by account (the first on ${first}, the last on ${final}). Weigh each account's chargeback against its F-class fee to choose when to move it.`,
+        : `The chargeback falls away account by account (the first on ${first}, the last on ${final}). Moving the household together costs the total above; weigh each account's chargeback against its F-class fee to choose when to move each one.`,
       estValue: null,
     });
     if (suspects.length) gaps.push({ householdId, field: "Net transactions (migration sheet)", why: `${suspects.map((l) => `...${last4(l.account)} (+${money(l.netTransactions ?? 0)})`).join(", ")}: Net Transactions is positive but the account is below its original investment. iA shows withdrawals as negative numbers (for example -18,584.17), so the figure was not used. Check the sign.`, blocks: ["fclass_migration"] });
     if (guessed.length) gaps.push({ householdId, field: "Net transactions (migration sheet)", why: `${guessed.length} account${guessed.length === 1 ? "" : "s"} (${guessed.map((l) => "..." + last4(l.account)).join(", ")}) ${guessed.length === 1 ? "is" : "are"} below ${guessed.length === 1 ? "its" : "their"} original investment; iA's net transactions since contract issue would replace the estimate of what was withdrawn.`, blocks: ["fclass_migration"] });
-    if (missing) gaps.push({ householdId, field: "Original investment (migration sheet)", why: `${missing} account${missing === 1 ? "" : "s"} near the end of chargeback ${missing === 1 ? "has" : "have"} no original investment in the sheet, so the chargeback is ${missing === lines.length ? "unknown" : "understated"}.`, blocks: ["fclass_migration"] });
+    if (missing) gaps.push({ householdId, field: "Original investment (migration sheet)", why: `${missing} account${missing === 1 ? "" : "s"} under chargeback ${missing === 1 ? "has" : "have"} no original investment in the sheet, so the chargeback is ${missing === lines.length ? "unknown" : "understated"}.`, blocks: ["fclass_migration"] });
   }
-  return { findings, gaps, unmatched, dueCount: due.length, undated };
+  return { findings, gaps, unmatched, dueCount, includedCount, undated };
 }

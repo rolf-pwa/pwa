@@ -58,7 +58,7 @@ export async function runBookOfBusiness(db: SupabaseClient): Promise<string> {
       const rep = buildMigrationFindings(parsed.rows, accounts, today);
       migrationFindings = rep.findings;
       for (const g of rep.gaps) evaluated.find((r) => r.householdId === g.householdId)?.evaluation.gaps.push(g);
-      migration = { ok: true, windowMonths: DEFAULT_FCLASS.windowMonths, rows: parsed.rows.length, due: rep.dueCount, households: rep.findings.length, unmatched: rep.unmatched, undated: rep.undated };
+      migration = { ok: true, windowMonths: DEFAULT_FCLASS.windowMonths, rows: parsed.rows.length, due: rep.dueCount, included: rep.includedCount, households: rep.findings.length, unmatched: rep.unmatched, undated: rep.undated };
     } catch (e) {
       migration = { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
