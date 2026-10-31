@@ -92,3 +92,9 @@ Table `opportunities`: id, household_id, type, evidence jsonb, est_value, confid
 - **Accept:** a new status `accepted` and a `task_id` column (migration `20270108120000`). `book-of-business-accept` (staff only) creates one task for the person who clicked, due in a week, with the evidence and next step in its description, and links it back so a second click never makes a second task. Accepted opportunities are not reopened or resolved by later runs; Mark converted closes them.
 - **Page:** Accept replaces Mark converted on open items; a briefing link opens the right household.
 - Not done: Georgia does not yet add opportunities to the pre-meeting brief, and revenue estimates are still blank.
+
+## Fix: families, households and noisy gaps (2026-10-31)
+- **Pooling follows the tier engine.** A family is pooled only with a ratified Charter, a Virtual Family Office, or a tier set by hand (`isPooledFamily`, review-units.ts); otherwise each active household stands alone and is tiered on its own assets. The first version pooled every family, so households of one family all showed the family's AUM and family-level findings (Charter, tier line) repeated per household. Now a household shows its own AUM; a pooled family's findings are raised once, on the household with the most assets (`assignAnchors`). The stored tier is used when there is one.
+- **Ended relationships:** households with `relationship_ended_at` are not read, and what was open for them is resolved on the next run.
+- **Fewer false gaps:** a needs analysis is asked for only where cover matters (dependants, debt over the floor, or a policy); "Assets under management" is a gap only when accounts are on file with no values; a lawyer recorded as an engagement counts; a missing service tier is a gap only when a household has assets or a policy.
+- **Page:** each row shows the household's own AUM and how it is tiered; click a kind of missing data to list only the households missing it.

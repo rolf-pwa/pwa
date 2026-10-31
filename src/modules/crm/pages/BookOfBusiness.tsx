@@ -20,7 +20,7 @@ interface Opportunity {
   confidence: Confidence; next_step: string | null; status: Status; snoozed_until: string | null; dismissed_reason: string | null; first_seen: string;
 }
 interface Gap { field: string; why: string; blocks: string[] }
-interface HouseholdRun { householdId: string; label: string; tier: string | null; groupedAum: number; completeness: number | null; gaps: Gap[]; error: string | null }
+interface HouseholdRun { householdId: string; label: string; tier: string | null; groupedAum: number; householdAum: number; pooled: boolean; familyName: string | null; familyAum: number | null; completeness: number | null; gaps: Gap[]; error: string | null }
 interface Run {
   id: string; started_at: string; finished_at: string | null;
   summary: { households: number; averageCompleteness: number; topGaps: { field: string; households: number }[]; unreadable?: number };
@@ -55,6 +55,8 @@ export default function BookOfBusiness() {
   const [open, setOpen] = useState<string | null>(params.get("household"));
   const [filter, setFilter] = useState<Status>("open");
   const [dismissing, setDismissing] = useState<string | null>(null);
+  // Click a kind of missing data to list only the households missing it.
+  const [gapFilter, setGapFilter] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const poll = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -126,7 +128,8 @@ export default function BookOfBusiness() {
     return m;
   }, [opps, filter]);
   const rank = { high: 0, medium: 1, low: 2 } as const;
-  const rows = [...(run?.households ?? [])].sort((a, b) => (shown.get(b.householdId)?.length ?? 0) - (shown.get(a.householdId)?.length ?? 0) || a.label.localeCompare(b.label));
+  const gapKind = (field: string) => field.split(":")[0];
+  const rows = [...(run?.households ?? [])].filter((h) => !gapFilter || h.gaps.some((g) => gapKind(g.field) === gapFilter)).sort((a, b) => (shown.get(b.householdId)?.length ?? 0) - (shown.get(a.householdId)?.length ?? 0) || a.label.localeCompare(b.label));
 
   return (
     <AppLayout>
@@ -179,16 +182,19 @@ export default function BookOfBusiness() {
               <Card>
                 <CardHeader><CardTitle>What is missing most</CardTitle></CardHeader>
                 <CardContent>
-                  <p className="mb-2 text-sm text-muted-foreground">Fixing these unlocks the most rules. Each count is households.</p>
+                  <p className="mb-2 text-sm text-muted-foreground">Fixing these unlocks the most rules. Each count is households; click one to list who is missing it.</p>
                   <div className="grid gap-x-8 gap-y-1 text-sm md:grid-cols-2">
                     {run.summary.topGaps.map((g) => (
-                      <div key={g.field} className="flex justify-between"><span>{g.field}</span><span className="tabular-nums">{g.households}</span></div>
+                      <button key={g.field} type="button" onClick={() => setGapFilter(gapFilter === g.field ? null : g.field)} className={cn("flex justify-between rounded px-1 text-left hover:bg-muted", gapFilter === g.field && "bg-muted font-medium")}>
+                        <span>{g.field}</span><span className="tabular-nums">{g.households}</span>
+                      </button>
                     ))}
                   </div>
                 </CardContent>
               </Card>
             )}
 
+            {gapFilter && <p className="text-sm">Households missing "{gapFilter}" <button type="button" className="ml-2 text-primary hover:underline" onClick={() => setGapFilter(null)}>Show all</button></p>}
             <div className="flex items-center gap-3">
               <span className="text-sm text-muted-foreground">Show</span>
               <Select value={filter} onValueChange={(v) => setFilter(v as Status)}>
@@ -207,7 +213,7 @@ export default function BookOfBusiness() {
                       {isOpen ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
                       <span className="min-w-0 flex-1 truncate font-medium">{h.label}</span>
                       <span className="w-16 text-muted-foreground">{h.tier ? TIER_LABELS[h.tier] ?? h.tier : "No tier"}</span>
-                      <span className="w-24 text-right tabular-nums text-muted-foreground">{money(h.groupedAum)}</span>
+                      <span className="w-24 text-right tabular-nums text-muted-foreground" title="This household's own assets under management">{money(h.householdAum ?? 0)}</span>
                       <span className="w-28 text-right tabular-nums">{list.length} {FILTERS.find((f) => f.value === filter)!.label.toLowerCase()}</span>
                       <span className={cn("w-28 text-right tabular-nums", h.completeness !== null && h.completeness < 0.6 && "text-destructive")}>{h.completeness === null ? "unreadable" : `${pct(h.completeness)} on file`}</span>
                     </ListRowStatic>
@@ -215,6 +221,11 @@ export default function BookOfBusiness() {
                       <div className="space-y-4 bg-muted/30 px-10 py-4 text-sm">
                         {h.error && <p className="text-destructive">This household could not be read: {h.error}</p>}
                         <Link to={`/households/${h.householdId}`} className="text-primary hover:underline">Open household</Link>
+                        <p className="text-muted-foreground">
+                          {h.pooled
+                            ? `Tiered with the ${h.familyName ?? "family"} as a whole: ${money(h.familyAum ?? h.groupedAum)} pooled across its households. Family-level findings appear once, on the household with the most assets.`
+                            : "Tiered on its own assets."}
+                        </p>
                         {list.map((o) => (
                           <div key={o.id}>
                             <div className="flex items-center gap-2">

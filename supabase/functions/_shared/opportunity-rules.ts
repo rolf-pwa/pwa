@@ -30,10 +30,22 @@ export interface HouseholdSnapshot {
   householdId: string;
   label: string;
   members: Member[];
-  /** AUM directly under management (custodian iA / JustWealth), pooled across the family; the tier basis. */
+  familyId: string | null;
+  familyName: string | null;
+  /** True when the family is tiered as a whole (a ratified Charter, a Virtual Family Office, or a tier set by hand). Otherwise each household stands alone. */
+  pooled: boolean;
+  /** The family's pooled managed AUM; null when the households stand alone. */
+  familyAum: number | null;
+  /** This household's own AUM directly under management (custodian iA / JustWealth). */
+  householdAum: number;
+  /** The AUM the tier rests on: the family's pooled figure when the family is pooled, else the household's own. */
   groupedAum: number;
+  /** A pooled family's findings that belong to the family (Charter, tier line) are raised once, on its anchor household; a household that stands alone is always its own anchor. */
+  isFamilyAnchor: boolean;
   totalAum: number;
   tier: string | null;
+  /** False when no tier is stored for this household or family although it has assets or a policy (the nightly recompute has not set one). */
+  tierOnRecord: boolean;
   hasRatifiedCharter: boolean;
   accounts: AccountLine[];
   policies: PolicyLine[];
@@ -121,6 +133,22 @@ const isAdult = (m: Member) => !m.isMinor && m.role !== "minor";
 const daysBetween = (from: string, to: string) => Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86_400_000);
 const monthsBetween = (from: string, to: string) => daysBetween(from, to) / 30.4375;
 
+/** The household that carries family-level findings: itself when it stands alone, else only the family's anchor. */
+const isUnitLead = (s: HouseholdSnapshot) => !s.pooled || s.isFamilyAnchor;
+const unitNoun = (s: HouseholdSnapshot) => (s.pooled ? "family" : "household");
+
+/** Marks one household per pooled family as its anchor: the one with the most AUM of its own, then the first by name. Households that stand alone are their own anchors. */
+export function assignAnchors<T extends Pick<HouseholdSnapshot, "householdId" | "label" | "familyId" | "pooled" | "householdAum" | "isFamilyAnchor">>(snaps: T[]): T[] {
+  const best = new Map<string, T>();
+  for (const s of snaps) {
+    if (!s.pooled || !s.familyId) continue;
+    const cur = best.get(s.familyId);
+    if (!cur || s.householdAum > cur.householdAum || (s.householdAum === cur.householdAum && s.label.localeCompare(cur.label) < 0)) best.set(s.familyId, s);
+  }
+  for (const s of snaps) s.isFamilyAnchor = !s.pooled || !s.familyId || best.get(s.familyId)?.householdId === s.householdId;
+  return snaps;
+}
+
 type RuleOut = { findings: Finding[]; gaps: DataGap[]; present: number; total: number };
 type Rule = (s: HouseholdSnapshot, cfg: RuleConfig, today: string) => RuleOut;
 
@@ -139,9 +167,11 @@ const insuranceRule: Rule = (s, cfg, today) => {
   const debt = s.debts.filter((d) => !d.corporate).reduce((t, d) => t + d.balance, 0);
   need(o, s, adults.length > 0, "Adult members", "Cover is assessed per adult; none are on the household.", ["insurance_coverage_gap"]);
 
+  // A needs analysis only matters where cover does: dependants, debt, or a policy already in force.
+  const coverMatters = dependants || debt >= cfg.debtFloor || s.policies.length > 0;
   for (const m of adults) {
     const latest = s.needs.filter((n) => n.contactId === m.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-    need(o, s, !!latest, `Needs analysis: ${m.name}`, "Without a needs analysis the cover gap is a guess.", ["insurance_coverage_gap"]);
+    if (coverMatters) need(o, s, !!latest, `Needs analysis: ${m.name}`, "Without a needs analysis the cover gap is a guess.", ["insurance_coverage_gap"]);
     if (latest && latest.shortfall > 0) {
       const stale = monthsBetween(latest.createdAt.slice(0, 10), today) > cfg.needsStaleMonths;
       o.findings.push({
@@ -207,12 +237,16 @@ const debtRule: Rule = (s, cfg) => {
 
 const charterRule: Rule = (s, cfg) => {
   const o = out();
-  need(o, s, s.groupedAum > 0, "Assets under management", "Charter fit is judged on grouped AUM, and none is recorded.", ["charter_candidate", "tier_upgrade", "idle_cash"]);
+  if (!isUnitLead(s)) return o;
+  // Accounts on file with no value at all is missing data; no accounts, or accounts held elsewhere, is not.
+  const valuesUnknown = s.accounts.length > 0 && s.accounts.every((a) => a.value <= 0);
+  need(o, s, !valuesUnknown, "Assets under management", "Accounts are on file but none has a value, so the Charter and tier rules cannot be judged.", ["charter_candidate", "tier_upgrade", "idle_cash"]);
+  need(o, s, s.tierOnRecord || s.tier === null, "Service tier", "There are assets or a policy but no service tier is recorded; the nightly recompute has not set one.", ["charter_candidate", "tier_upgrade"]);
   if (!s.hasRatifiedCharter && s.groupedAum >= cfg.charterAumFloor) {
     o.findings.push({
       householdId: s.householdId, type: "charter_candidate", key: "charter",
-      title: `No Sovereignty Charter on a ${money(s.groupedAum)} household`,
-      evidence: [{ label: "Grouped AUM", value: money(s.groupedAum) }, { label: "Tier", value: s.tier ?? "not set" }, { label: "Ratified charter", value: "None" }],
+      title: `No Sovereignty Charter on a ${money(s.groupedAum)} ${unitNoun(s)}`,
+      evidence: [{ label: s.pooled ? "Family AUM (pooled)" : "Household AUM", value: money(s.groupedAum) }, { label: "Tier", value: s.tier ?? "not set" }, { label: "Ratified charter", value: "None" }],
       confidence: s.tier ? "high" : "medium",
       nextStep: "Offer the Sovereignty Charter build (Strategy engagement) at the next review.",
       estValue: null,
@@ -223,13 +257,13 @@ const charterRule: Rule = (s, cfg) => {
 
 const tierRule: Rule = (s, cfg) => {
   const o = out();
-  if (s.groupedAum <= 0) return o;
+  if (!isUnitLead(s) || s.groupedAum <= 0) return o;
   const next = [...cfg.tierThresholds].sort((a, b) => a - b).find((t) => t > s.groupedAum);
   if (next && s.groupedAum >= next * (1 - cfg.upgradeMargin)) {
     o.findings.push({
       householdId: s.householdId, type: "tier_upgrade", key: `to-${next}`,
       title: `${money(next - s.groupedAum)} short of the ${money(next)} tier line`,
-      evidence: [{ label: "Grouped AUM", value: money(s.groupedAum) }, { label: "Next threshold", value: money(next) }, { label: "Current tier", value: s.tier ?? "not set" }],
+      evidence: [{ label: s.pooled ? "Family AUM (pooled)" : "Household AUM", value: money(s.groupedAum) }, { label: "Next threshold", value: money(next) }, { label: "Current tier", value: s.tier ?? "not set" }],
       confidence: "high",
       nextStep: "Look for outside assets or contributions that would cross the line.",
       estValue: null,
