@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { ChevronDown, ChevronRight, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { AppLayout } from "@/shared/components/AppLayout";
@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/shared/lib/utils";
 
 type Confidence = "high" | "medium" | "low";
-type Status = "open" | "snoozed" | "dismissed" | "converted" | "resolved";
+type Status = "open" | "snoozed" | "accepted" | "dismissed" | "converted" | "resolved";
 interface Opportunity {
   id: string; household_id: string; type: string; key: string; title: string; evidence: { label: string; value: string }[];
   confidence: Confidence; next_step: string | null; status: Status; snoozed_until: string | null; dismissed_reason: string | null; first_seen: string;
@@ -35,7 +35,7 @@ const TYPE_LABELS: Record<string, string> = {
 const TIER_LABELS: Record<string, string> = { tier_0: "Tier 0", tier_1: "Tier 1", tier_2a: "Tier 2A", tier_2b: "Tier 2B", tier_3: "Tier 3", tier_4: "Tier 4" };
 const CONFIDENCE_LABEL: Record<Confidence, string> = { high: "Sure", medium: "Likely", low: "To confirm" };
 const FILTERS: { value: Status; label: string }[] = [
-  { value: "open", label: "Open" }, { value: "snoozed", label: "Snoozed" }, { value: "dismissed", label: "Dismissed" }, { value: "converted", label: "Converted" }, { value: "resolved", label: "No longer found" },
+  { value: "open", label: "Open" }, { value: "accepted", label: "Accepted" }, { value: "snoozed", label: "Snoozed" }, { value: "dismissed", label: "Dismissed" }, { value: "converted", label: "Converted" }, { value: "resolved", label: "No longer found" },
 ];
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
@@ -50,7 +50,9 @@ export default function BookOfBusiness() {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [open, setOpen] = useState<string | null>(null);
+  const [params] = useSearchParams();
+  // The briefing links here with ?household=<id>: that household opens on arrival.
+  const [open, setOpen] = useState<string | null>(params.get("household"));
   const [filter, setFilter] = useState<Status>("open");
   const [dismissing, setDismissing] = useState<string | null>(null);
   const [reason, setReason] = useState("");
@@ -97,13 +99,19 @@ export default function BookOfBusiness() {
     setReason("");
     await load();
   };
+  const accept = async (o: Opportunity) => {
+    const { data, error: err } = await supabase.functions.invoke("book-of-business-accept", { body: { opportunity_id: o.id } });
+    if (err || data?.error) { toast.error(data?.error || err?.message || "Could not create the task."); return; }
+    toast.success(data?.already ? "A task already exists for this one" : "Task created in Projects, due in a week");
+    await load();
+  };
   const snooze = (o: Opportunity) => decide(o, { status: "snoozed", snoozed_until: new Date(Date.now() + SNOOZE_DAYS * 86_400_000).toISOString().slice(0, 10) }, `Snoozed for ${SNOOZE_DAYS} days`);
   const dismiss = (o: Opportunity) => decide(o, { status: "dismissed", dismissed_reason: reason.trim() || null }, "Dismissed");
   const convert = (o: Opportunity) => decide(o, { status: "converted", converted_at: new Date().toISOString() }, "Marked converted");
   const reopen = (o: Opportunity) => decide(o, { status: "open", snoozed_until: null, dismissed_reason: null, converted_at: null, resolved_at: null }, "Reopened");
 
   const counts = useMemo(() => {
-    const c: Record<Status, number> = { open: 0, snoozed: 0, dismissed: 0, converted: 0, resolved: 0 };
+    const c: Record<Status, number> = { open: 0, snoozed: 0, accepted: 0, dismissed: 0, converted: 0, resolved: 0 };
     for (const o of opps) c[o.status] += 1;
     return c;
   }, [opps]);
@@ -153,7 +161,7 @@ export default function BookOfBusiness() {
                 <CardHeader><CardTitle>Opportunities</CardTitle></CardHeader>
                 <CardContent>
                   <div className="text-2xl font-semibold">{counts.open}</div>
-                  <p className="text-sm text-muted-foreground">{counts.snoozed} snoozed · {counts.dismissed} dismissed · {counts.converted} converted</p>
+                  <p className="text-sm text-muted-foreground">{counts.accepted} accepted · {counts.snoozed} snoozed · {counts.dismissed} dismissed · {counts.converted} converted</p>
                 </CardContent>
               </Card>
               <Card>
@@ -218,11 +226,12 @@ export default function BookOfBusiness() {
                             <p className="mt-1 font-medium">{o.title}</p>
                             <ul className="mt-1 text-muted-foreground">{o.evidence.map((e, i) => <li key={i}>{e.label}: {e.value}</li>)}</ul>
                             {o.next_step && <p className="mt-1">Next: {o.next_step}</p>}
+                            {o.status === "accepted" && <p className="mt-1 text-muted-foreground">A task for this is open in Projects.</p>}
                             {o.dismissed_reason && <p className="mt-1 text-muted-foreground">Dismissed because: {o.dismissed_reason}</p>}
                             <div className="mt-2 flex flex-wrap items-center gap-2">
                               {o.status === "open" && dismissing !== o.id && (
                                 <>
-                                  <Button size="sm" variant="outline" onClick={() => convert(o)}>Mark converted</Button>
+                                  <Button size="sm" onClick={() => accept(o)}>Accept: create task</Button>
                                   <Button size="sm" variant="outline" onClick={() => snooze(o)}>Snooze {SNOOZE_DAYS} days</Button>
                                   <Button size="sm" variant="outline" onClick={() => { setDismissing(o.id); setReason(""); }}>Dismiss</Button>
                                 </>
@@ -234,6 +243,7 @@ export default function BookOfBusiness() {
                                   <Button size="sm" variant="ghost" onClick={() => setDismissing(null)}>Cancel</Button>
                                 </>
                               )}
+                              {o.status === "accepted" && <Button size="sm" variant="outline" onClick={() => convert(o)}>Mark converted</Button>}
                               {o.status !== "open" && o.status !== "resolved" && <Button size="sm" variant="outline" onClick={() => reopen(o)}>Reopen</Button>}
                             </div>
                           </div>

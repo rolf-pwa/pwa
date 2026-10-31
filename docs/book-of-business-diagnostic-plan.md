@@ -1,6 +1,6 @@
 # Book-of-business diagnostic: plan
 
-Status: stages 1 and 2 built (stage 1 live; stage 2 awaiting merge). Stages 3 to 5 not started: the page already has the stage 3 basics (accept, dismiss, snooze, filters), so stage 3 is now filtering, sorting and totals.
+Status: stages 1 and 2 live; stage 4 built (awaiting merge). Stages 3 to 5 not started: the page already has the stage 3 basics (accept, dismiss, snooze, filters), so stage 3 is now filtering, sorting and totals.
 
 ## Goal
 Examine every household against a fixed rulebook and produce a ranked, evidence-backed list of opportunities to offer more products and services. Staff only. The list prompts Rolf to start a conversation; it never recommends anything to a client.
@@ -86,3 +86,9 @@ Table `opportunities`: id, household_id, type, evidence jsonb, est_value, confid
 - Monday 5 am Pacific cron (`book_of_business`, through `daily-briefing-generate`), watched by the job-health watchdog. `book-of-business-run` lets staff start a run from the page.
 - The stage 1 `book-of-business-report` function is removed; the page now reads stored data.
 - Revenue estimates (`est_value`) remain null for now. The rate question is settled (the iA schedule is the net rate); what is still needed is a premium, so the next step is to price from the latest `insurance_quotes` premium and leave the estimate blank when there is none.
+
+## Stage 4 as built
+- **Briefing:** the new opportunities of the week (open, first seen in the last 7 days) appear in the Today page's "firm" tile: the top three, surest first, each linking to its household on the Book of Business page, then one "and N more" line. The lines are built from the stored finding (`_shared/opportunity-briefing.ts`); the model never sees them and they are not ranked as today's priorities. Items drop off when decided (the briefing refresh knows `opp:` keys).
+- **Accept:** a new status `accepted` and a `task_id` column (migration `20270108120000`). `book-of-business-accept` (staff only) creates one task for the person who clicked, due in a week, with the evidence and next step in its description, and links it back so a second click never makes a second task. Accepted opportunities are not reopened or resolved by later runs; Mark converted closes them.
+- **Page:** Accept replaces Mark converted on open items; a briefing link opens the right household.
+- Not done: Georgia does not yet add opportunities to the pre-meeting brief, and revenue estimates are still blank.

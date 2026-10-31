@@ -2,7 +2,9 @@
 // email, a notification). Once Rolf has dealt with it, it drops off the briefing and moves to "handled". Pure: the current state is passed in.
 //
 // Keys: task:overdue:<id>  task:today:<id>  task:upcoming:<id>  request:<id>  email:<id>  quo:msg:<id>  quo:call:<id>
-//       esc:<id>  import:<id>  scans  sweep  note:<id>  conflict:<a>|<b>
+//       esc:<id>  import:<id>  scans  sweep  note:<id>  conflict:<a>|<b>  opp:<id>  opp:more
+
+import { moreLabel } from "./opportunity-briefing.ts";
 
 export interface OpenState {
   today: string;
@@ -17,6 +19,11 @@ export interface OpenState {
   /** Sweep sorts from the last day still to rate, or rated right as Would archive but not yet archived (Clients mail needs nothing). Undefined: not known, so the item stays. */
   sweepPending?: number;
   notes: Map<string, { read: boolean }>;
+  /** Book-of-business opportunities by id. Undefined: not known, so the item stays. */
+  opps?: Map<string, { status: string }>;
+  /** How many opportunities new this week are still open (the "and N more" line shows while there are more than the briefing lists). */
+  oppsNewOpen?: number;
+  oppsListed?: number;
 }
 
 export interface OpenResult { open: boolean; label?: string }
@@ -46,6 +53,17 @@ export function isStillOpen(key: string | undefined | null, s: OpenState, within
     case "scans": return s.pendingScans > 0 ? { open: true, label: `${s.pendingScans} scanned document${s.pendingScans === 1 ? "" : "s"} waiting for approval` } : { open: false };
     case "sweep": return { open: s.sweepPending === undefined || s.sweepPending > 0 };
     case "note": { const n = s.notes.get(a); return { open: !!n && !n.read }; }
+    case "opp": {
+      if (a === "more") {
+        if (s.oppsNewOpen === undefined) return { open: true };
+        const extra = s.oppsNewOpen - (s.oppsListed ?? 0);
+        return extra > 0 ? { open: true, label: moreLabel(extra) } : { open: false };
+      }
+      if (!s.opps) return { open: true };
+      const o = s.opps.get(a);
+      // Gone from the table, or no longer open (accepted, snoozed, dismissed, converted, resolved): it was dealt with.
+      return { open: !!o && o.status === "open" };
+    }
     default: return { open: true };
   }
 }

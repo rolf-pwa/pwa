@@ -18,6 +18,7 @@ import { eaApply, eaChat, eaDecide, eaForget, eaHistory, eaNudge } from "../_sha
 import { isMutedSender } from "../_shared/ea-agent.ts";
 import { checkOpenFiles } from "../_shared/insurance-file-service.ts";
 import { setSwitch } from "../_shared/georgia-switches.ts";
+import { briefingItems, pickBriefingOpportunities, type BriefingItem, type OpportunityRow } from "../_shared/opportunity-briefing.ts";
 import { JOBS, evaluateJob, recordHeartbeat, runWatchdog, trackJob, type Heartbeat } from "../_shared/job-health.ts";
 import { addRule, decideSuggestion, rulebook, suggestRules, undoAction } from "../_shared/georgia-rules.ts";
 import { runCalendarInvites } from "../_shared/calendar-service.ts";
@@ -440,18 +441,38 @@ interface FirmFacts {
   pendingScans: number;
   /** What this morning's inbox sweep found, as one line; null when it sorted nothing. */
   sweep: string | null;
+  /** New book-of-business opportunities this week, as firm-tile items (not part of the model's facts). */
+  opportunities: BriefingItem[];
+}
+
+/** The weekly book-of-business lines: what is new and still open, the surest first. Built from the stored findings, never reworded. A failure leaves them off rather than the briefing. */
+async function gatherOpportunityItems(db: Db, todayStr: string): Promise<BriefingItem[]> {
+  try {
+    const since = new Date(Date.parse(`${todayStr}T12:00:00Z`) - 7 * 86_400_000).toISOString().slice(0, 10);
+    const { data } = await db.from("opportunities").select("id, household_id, title, confidence, first_seen, status").eq("status", "open").gte("first_seen", since).limit(500);
+    const { top, more } = pickBriefingOpportunities((data ?? []) as OpportunityRow[], todayStr);
+    if (top.length === 0) return [];
+    const { data: hh } = await db.from("households").select("id, label").in("id", [...new Set(top.map((o) => o.household_id))]);
+    // deno-lint-ignore no-explicit-any
+    const label = new Map<string, string>((hh ?? []).map((h: any) => [h.id as string, String(h.label ?? "A household")]));
+    return briefingItems(top.map((o) => ({ ...o, householdLabel: label.get(o.household_id) ?? "A household" })), more);
+  } catch (e) {
+    console.error("[briefing] opportunities", e);
+    return [];
+  }
 }
 
 // What Georgia is waiting on you for: unread notifications, reviews and rebalances handed to you, a monthly file ready or held, and statements read but not approved.
 async function gatherFirmFacts(db: Db, todayStr: string, userId: string): Promise<FirmFacts> {
   const since = new Date(Date.parse(`${todayStr}T12:00:00Z`) - 3 * 86_400_000).toISOString();
   const sweptSince = new Date(Date.now() - 26 * 3_600_000).toISOString();
-  const [{ data: notes }, { data: esc }, { data: runs }, { count }, { data: swept }] = await Promise.all([
+  const [{ data: notes }, { data: esc }, { data: runs }, { count }, { data: swept }, opportunities] = await Promise.all([
     db.from("staff_notifications").select("id, title, link, source_type").eq("read", false).gte("created_at", since).order("created_at", { ascending: false }).limit(15),
     db.from("review_obligations").select("id, kind, family_id").eq("mode", "live").eq("status", "escalated").limit(15),
     db.from("monthly_import_runs").select("id, snapshot_date, status").in("status", ["ready", "held"]).order("snapshot_date", { ascending: false }).limit(2),
     db.from("stage2_verification_audit").select("id", { count: "exact", head: true }).eq("review_status", "pending"),
     db.from("inbox_sweep_items").select("bucket").eq("user_id", userId).gte("swept_at", sweptSince).limit(500),
+    gatherOpportunityItems(db, todayStr),
   ]);
   const sweptCounts: Record<string, number> = {};
   // deno-lint-ignore no-explicit-any
@@ -470,6 +491,7 @@ async function gatherFirmFacts(db: Db, todayStr: string, userId: string): Promis
     imports: (runs || []).map((r: any) => ({ id: r.id, date: r.snapshot_date, status: r.status })),
     pendingScans: count ?? 0,
     sweep: sweepLine(sweptCounts),
+    opportunities,
   };
 }
 
@@ -591,6 +613,7 @@ function buildSections(calendar: CalendarFacts, email: EmailFacts, quo: QuoFacts
       ...(firm.pendingScans ? [{ key: "scans", label: `${firm.pendingScans} scanned documents waiting for approval`, link: "/glass-box-review" }] : []),
       ...(firm.sweep ? [{ key: "sweep", label: firm.sweep, link: "/ask-georgia" }] : []),
       ...firm.notifications.map((n) => ({ key: `note:${n.id}`, label: n.title, link: n.link ?? "/dashboard" })),
+      ...firm.opportunities,
     ],
     counts: e.counts,
   };
