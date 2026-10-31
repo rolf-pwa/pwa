@@ -98,3 +98,13 @@ Table `opportunities`: id, household_id, type, evidence jsonb, est_value, confid
 - **Ended relationships:** households with `relationship_ended_at` are not read, and what was open for them is resolved on the next run.
 - **Fewer false gaps:** a needs analysis is asked for only where cover matters (dependants, debt over the floor, or a policy); "Assets under management" is a gap only when accounts are on file with no values; a lawyer recorded as an engagement counts; a missing service tier is a gap only when a household has assets or a policy.
 - **Page:** each row shows the household's own AUM and how it is tiered; click a kind of missing data to list only the households missing it.
+
+## F-class migration rule (2026-10-31)
+Rolf's migration plan sheet ("PWA 3.0 - Migration Plan", read each Monday run through the Drive export, never written to) lists accounts held under a chargeback (CB2, CB3 or CB5) load. The rule `fclass_migration` raises one finding per household whose accounts are within six months of their CB maturity date (or already past it): the total chargeback if moved today and the monthly F-class fee.
+- **Columns are read by header name** (Investment Date, Original Investment, Load Type, CB Maturity Date, Managed Investments, Account Number), not by letter; in the sheet CB Maturity Date is column M and column L is Contract Status.
+- **Chargeback** = original investment x sales commission rate for the load x the share still charged for the month the deposit is in (iA schedule notes 2 to 4: CB2 over 24 months, CB3 36, CB5 60; 100% for the first twelve months, then stepping down). Rates used: CB2 2.32%, CB3 2.5%, CB5 4%, the schedule's rates for standard funds. The sheet has no fund column, so FORLIFE Guaranteed Income & Growth (1.74 / 2.0 / 3%) and the Money Market fund (0%) are not told apart, and deposits made under an earlier schedule carried that schedule's rates. Treat the figure as an estimate until the rates are confirmed.
+- **Monthly F-class fee** = market value x 1% x 80% (the advisor's share) / 12, using the Managed Investments column.
+- **Original Investment** is empty in the sheet today; Rolf will fill it. Until then each finding says the chargeback is not yet known (or "at least" when some accounts have it) and the household gets a missing-data entry.
+- Accounts are matched to households by account number (digits only) from the investment accounts and the holding tank; accounts that match nothing are counted on the page by their last four digits.
+- If the sheet cannot be read, these findings are left exactly as they were and the page says so.
+- Not decided: whether to show a break-even (chargeback divided by the monthly fee).

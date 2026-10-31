@@ -2,8 +2,10 @@
 // Called by the Monday cron (through daily-briefing-generate) and by staff pressing "Run again" (book-of-business-run).
 
 import { buildSnapshot } from "./opportunity-snapshot.ts";
-import { assignAnchors, evaluateHousehold, summarizeBook, RULE_VERSION, type Evaluation, type HouseholdSnapshot } from "./opportunity-rules.ts";
+import { assignAnchors, evaluateHousehold, summarizeBook, RULE_VERSION, type Evaluation, type Finding, type HouseholdSnapshot } from "./opportunity-rules.ts";
 import { reconcile, type StoredOpportunity } from "./opportunity-reconcile.ts";
+import { buildMigrationFindings, parseSheet } from "./fclass-migration.ts";
+import { accountHouseholds, loadMigrationCsv } from "./fclass-migration-service.ts";
 
 // deno-lint-ignore no-explicit-any
 type SupabaseClient = any;
@@ -44,10 +46,27 @@ export async function runBookOfBusiness(db: SupabaseClient): Promise<string> {
     ].sort((a, b) => a.label.localeCompare(b.label));
 
     const evaluated = results.filter((r) => r.evaluation) as (Result & { evaluation: Evaluation })[];
-    const findings = evaluated.flatMap((r) => r.evaluation.findings);
+
+    // The migration plan sheet (read only): households near the end of a chargeback period. If the sheet cannot be read, this kind of
+    // finding is left exactly as it was rather than resolved.
+    let migration: Record<string, unknown> = { ok: false, error: "not run" };
+    let migrationFindings: Finding[] = [];
+    try {
+      const parsed = parseSheet(await loadMigrationCsv(db));
+      if (parsed.missingColumns.length) throw new Error(`The sheet has no column named: ${parsed.missingColumns.join(", ")}`);
+      const accounts = await accountHouseholds(db, new Set(evaluated.map((r) => r.householdId)));
+      const rep = buildMigrationFindings(parsed.rows, accounts, today);
+      migrationFindings = rep.findings;
+      for (const g of rep.gaps) evaluated.find((r) => r.householdId === g.householdId)?.evaluation.gaps.push(g);
+      migration = { ok: true, rows: parsed.rows.length, due: rep.dueCount, households: rep.findings.length, unmatched: rep.unmatched, undated: rep.undated };
+    } catch (e) {
+      migration = { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+
+    const findings = [...evaluated.flatMap((r) => r.evaluation.findings), ...migrationFindings];
     const { data: stored, error: storedErr } = await db.from("opportunities").select("id, household_id, type, key, status, snoozed_until");
     if (storedErr) throw new Error(storedErr.message);
-    const plan = reconcile((stored ?? []) as StoredOpportunity[], findings, new Set(evaluated.map((r) => r.householdId)), today, RULE_VERSION, retired);
+    const plan = reconcile((stored ?? []) as StoredOpportunity[], findings, new Set(evaluated.map((r) => r.householdId)), today, RULE_VERSION, retired, new Set(migration.ok ? [] : ["fclass_migration"]));
 
     if (plan.inserts.length) {
       const { error: e } = await db.from("opportunities").insert(plan.inserts);
@@ -63,7 +82,7 @@ export async function runBookOfBusiness(db: SupabaseClient): Promise<string> {
       if (e) throw new Error(`Could not resolve opportunities: ${e.message}`);
     }
 
-    const summary = { ...summarizeBook(evaluated.map((r) => ({ householdId: r.householdId, evaluation: r.evaluation }))), inserted: plan.inserts.length, resolved: plan.resolves.length, unreadable: results.length - evaluated.length };
+    const summary = { ...summarizeBook(evaluated.map((r) => ({ householdId: r.householdId, evaluation: r.evaluation }))), inserted: plan.inserts.length, resolved: plan.resolves.length, migration, unreadable: results.length - evaluated.length };
     const perHousehold = results.map((r) => ({ householdId: r.householdId, label: r.label, tier: r.tier, groupedAum: r.groupedAum, householdAum: r.householdAum, pooled: r.pooled, familyName: r.familyName, familyAum: r.familyAum, completeness: r.evaluation?.completeness ?? null, gaps: r.evaluation?.gaps ?? [], error: r.error ?? null }));
     await db.from("opportunity_runs").update({ finished_at: new Date().toISOString(), ok: true, summary, households: perHousehold }).eq("id", run.id);
     return `${results.length} households, ${findings.length} findings (${plan.inserts.length} new, ${plan.resolves.length} resolved)${summary.unreadable ? `, ${summary.unreadable} unreadable` : ""}`;
