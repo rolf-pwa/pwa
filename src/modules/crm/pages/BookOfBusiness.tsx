@@ -23,14 +23,17 @@ interface Gap { field: string; why: string; blocks: string[] }
 interface HouseholdRun { householdId: string; label: string; tier: string | null; groupedAum: number; householdAum: number; pooled: boolean; familyName: string | null; familyAum: number | null; completeness: number | null; gaps: Gap[]; error: string | null }
 interface Run {
   id: string; started_at: string; finished_at: string | null;
-  summary: { households: number; averageCompleteness: number; topGaps: { field: string; households: number }[]; unreadable?: number };
+  summary: {
+    households: number; averageCompleteness: number; topGaps: { field: string; households: number }[]; unreadable?: number;
+    migration?: { ok: boolean; error?: string; rows?: number; due?: number; households?: number; unmatched?: string[]; undated?: number };
+  };
   households: HouseholdRun[];
 }
 
 const TYPE_LABELS: Record<string, string> = {
   insurance_coverage_gap: "Insurance cover gap", debt_protection: "Debt protection", charter_candidate: "Sovereignty Charter",
   tier_upgrade: "Near a tier line", consolidation: "Outside assets", corporate_structuring: "Corporate structuring",
-  estate_gap: "Estate gaps", idle_cash: "Idle cash", policy_event: "Policy renewal",
+  estate_gap: "Estate gaps", idle_cash: "Idle cash", policy_event: "Policy renewal", fclass_migration: "F-class migration",
 };
 const TIER_LABELS: Record<string, string> = { tier_0: "Tier 0", tier_1: "Tier 1", tier_2a: "Tier 2A", tier_2b: "Tier 2B", tier_3: "Tier 3", tier_4: "Tier 4" };
 const CONFIDENCE_LABEL: Record<Confidence, string> = { high: "Sure", medium: "Likely", low: "To confirm" };
@@ -177,6 +180,18 @@ export default function BookOfBusiness() {
                 </CardContent>
               </Card>
             </div>
+
+            {run.summary.migration && (
+              run.summary.migration.ok ? (
+                <p className="text-sm text-muted-foreground">
+                  Migration plan sheet: {run.summary.migration.rows} accounts read, {run.summary.migration.due} within six months of the end of their chargeback, across {run.summary.migration.households} households.
+                  {run.summary.migration.unmatched && run.summary.migration.unmatched.length > 0 && ` ${run.summary.migration.unmatched.length} matched no household (account numbers ending ${run.summary.migration.unmatched.slice(0, 8).join(", ")}).`}
+                  {!!run.summary.migration.undated && ` ${run.summary.migration.undated} chargeback accounts have no investment or maturity date.`}
+                </p>
+              ) : (
+                <p className="text-sm text-destructive">The migration plan sheet could not be read, so F-class migration findings were left as they were: {run.summary.migration.error}</p>
+              )
+            )}
 
             {run.summary.topGaps.length > 0 && (
               <Card>

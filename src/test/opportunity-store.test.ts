@@ -69,6 +69,11 @@ describe("reconciling a run with what is stored", () => {
     const p = reconcile(existing, [], new Set(["h1"]), TODAY, RULE_VERSION, new Set(["gone"]));
     expect(p.resolves).toEqual(["a"]);
   });
+  it("leaves a kind of finding alone when its source could not be read this run", () => {
+    const existing = [stored({ id: "m", type: "fclass_migration", key: "fclass-migration" }), stored({ id: "i", type: "idle_cash" })];
+    const p = reconcile(existing, [], new Set(["h1"]), TODAY, RULE_VERSION, new Set(), new Set(["fclass_migration"]));
+    expect(p.resolves).toEqual(["i"]);
+  });
   it("handles several households and keys in one run", () => {
     const existing = [stored({ id: "a" }), stored({ id: "b", household_id: "h2" }), stored({ id: "c", household_id: "h2", key: "liquidity-surplus" })];
     const p = plan(existing, [finding(), finding({ householdId: "h2" })], ["h1", "h2"]);
@@ -105,7 +110,8 @@ describe("wiring", () => {
     expect((sql.match(/LIKE '%@prosperwise\.ca'/g) ?? []).length).toBeGreaterThanOrEqual(4);
   });
   it("the migration's types match the rulebook's", () => {
-    const sql = read("supabase/migrations/20270107130000_opportunities.sql");
+    // The latest constraint wins: the original migration plus the one that added a type.
+    const sql = read("supabase/migrations/20270107130000_opportunities.sql") + read("supabase/migrations/20270109120000_opportunity_fclass_type.sql");
     const rules = read("supabase/functions/_shared/opportunity-rules.ts");
     const typeUnion = rules.slice(rules.indexOf("export type OpportunityType"), rules.indexOf("export type Confidence"));
     for (const t of [...typeUnion.matchAll(/"([a-z_]+)"/g)].map((m) => m[1])) expect(sql).toContain(`'${t}'`);

@@ -12,7 +12,8 @@ export type OpportunityType =
   | "corporate_structuring"
   | "estate_gap"
   | "idle_cash"
-  | "policy_event";
+  | "policy_event"
+  | "fclass_migration";
 
 /** Bump when a rule's meaning changes, so stored findings show which version produced them. */
 export const RULE_VERSION = "1";

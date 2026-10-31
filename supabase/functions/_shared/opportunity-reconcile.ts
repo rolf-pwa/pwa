@@ -30,7 +30,7 @@ const idOf = (h: string, type: string, key: string) => `${h}\u0000${type}\u0000$
  * A household that could not be read is left alone, so a failed read never resolves its opportunities. A retired household (its advisory
  * relationship has ended) is out of scope on purpose, so what is still live for it is resolved.
  */
-export function reconcile(existing: StoredOpportunity[], findings: Finding[], evaluatedHouseholds: Set<string>, today: string, ruleVersion: string, retiredHouseholds: Set<string> = new Set()): Plan {
+export function reconcile(existing: StoredOpportunity[], findings: Finding[], evaluatedHouseholds: Set<string>, today: string, ruleVersion: string, retiredHouseholds: Set<string> = new Set(), untouchedTypes: Set<string> = new Set()): Plan {
   const plan: Plan = { inserts: [], updates: [], resolves: [] };
   const byId = new Map(existing.map((r) => [idOf(r.household_id, r.type, r.key), r]));
   const firing = new Set<string>();
@@ -50,6 +50,8 @@ export function reconcile(existing: StoredOpportunity[], findings: Finding[], ev
 
   for (const row of existing) {
     if (firing.has(idOf(row.household_id, row.type, row.key))) continue;
+    // A kind of finding that could not be worked out this run (its source was unreadable) is left exactly as it was.
+    if (untouchedTypes.has(row.type)) continue;
     if (!evaluatedHouseholds.has(row.household_id) && !retiredHouseholds.has(row.household_id)) continue;
     // Only live opportunities resolve; an accepted, dismissed or converted one keeps what staff decided.
     if (row.status === "open" || row.status === "snoozed") plan.resolves.push(row.id);
