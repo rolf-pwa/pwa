@@ -26,8 +26,13 @@ export interface FClassConfig {
   feeRate: number;
   /** The share of that fee the schedule pays the advisor. */
   advisorShare: number;
+  /** The override paid on the advisory fees, as a share of the fee it is based on. Omitted: none. */
+  overrideRate?: number;
+  /** What the override is a share of: the fee the client pays ("client_fee") or the part of it paid to the advisor ("advisor_fee"). */
+  overrideBasis?: "client_fee" | "advisor_fee";
 }
-export const DEFAULT_FCLASS: FClassConfig = { windowMonths: 12, feeRate: 0.01, advisorShare: 0.8 };
+// Overrides are 5% of the advisory fees paid (Rolf, 2026-10-31); read as 5% of the fee the client pays, so 0.05% of market value a year at a 1% fee.
+export const DEFAULT_FCLASS: FClassConfig = { windowMonths: 12, feeRate: 0.01, advisorShare: 0.8, overrideRate: 0.05, overrideBasis: "client_fee" };
 
 /** CB2's published percentages for months 13 to 24 in force (they step by 100/13, so they are listed as printed). */
 const CB2_STEPS = [92.3, 84.6, 76.9, 69.2, 61.5, 53.8, 46.1, 38.4, 30.7, 23, 15.3, 7.6];
@@ -65,6 +70,12 @@ export function monthlyFClassFee(marketValue: number, cfg: FClassConfig = DEFAUL
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Monthly override paid on the account's advisory fee: market value times the fee rate, times the basis share, times the override rate, over twelve months. */
+export function monthlyOverride(marketValue: number, cfg: FClassConfig = DEFAULT_FCLASS): number {
+  const share = cfg.overrideBasis === "advisor_fee" ? cfg.advisorShare : 1;
+  return round2((marketValue * cfg.feeRate * share * (cfg.overrideRate ?? 0)) / 12);
+}
 
 /** Months of F-class fees it takes to earn back a chargeback, to one decimal. Null when there is no fee to count. */
 export function breakEvenMonths(chargeback: number, monthlyFee: number): number | null {
@@ -175,7 +186,11 @@ export interface AccountLine {
   chargeback: number | null;
   marketValue: number;
   monthlyFee: number;
-  /** Months of this account's F-class fee needed to cover its chargeback; null when the chargeback is unknown. */
+  /** The override paid on this account's advisory fee. */
+  monthlyOverride: number;
+  /** Fee plus override: the monthly compensation the move would bring. */
+  monthlyComp: number;
+  /** Months of this account's monthly compensation needed to cover its chargeback; null when the chargeback is unknown. */
   breakEven: number | null;
 }
 
@@ -204,6 +219,7 @@ export function dueRows(rows: MigrationRow[], asOf: string, cfg: FClassConfig = 
 export function accountLine(r: ChargebackRow, asOf: string, cfg: FClassConfig = DEFAULT_FCLASS): AccountLine {
   const month = monthInForce(r.investedOn, asOf);
   const pct = chargebackPct(r.load, month);
+  const fee = monthlyFClassFee(r.marketValue, cfg), override = monthlyOverride(r.marketValue, cfg), comp = round2(fee + override);
   // What a chargeback can still apply to is the original investment less what has been withdrawn since (the chargeback on a withdrawal was
   // already charged to the advisor when it was made: Rolf, 2026-10-31). iA's net transactions give that exactly. Without them it is
   // estimated from the market value: the shortfall below the original is taken to be withdrawals. That ignores growth, so it overstates
@@ -221,8 +237,8 @@ export function accountLine(r: ChargebackRow, asOf: string, cfg: FClassConfig = 
     account: r.account, accountType: r.accountType, load: r.load, investedOn: r.investedOn, maturesOn: r.maturesOn, monthInForce: month, pctCharged: pct,
     original: r.original, chargeableBase: base, withdrawn: r.original === null || base === null ? 0 : round2(r.original - base), basis, signSuspect, netTransactions: net,
     chargeback: base === null ? null : round2(base * CB_SALES_COMMISSION[r.load] * (pct / 100)),
-    marketValue: r.marketValue, monthlyFee: monthlyFClassFee(r.marketValue, cfg),
-    breakEven: base === null ? null : breakEvenMonths(round2(base * CB_SALES_COMMISSION[r.load] * (pct / 100)), monthlyFClassFee(r.marketValue, cfg)),
+    marketValue: r.marketValue, monthlyFee: fee, monthlyOverride: override, monthlyComp: comp,
+    breakEven: base === null ? null : breakEvenMonths(round2(base * CB_SALES_COMMISSION[r.load] * (pct / 100)), comp),
   };
 }
 
@@ -272,25 +288,29 @@ export function buildMigrationFindings(rows: MigrationRow[], accountToHousehold:
     const guessed = lines.filter((l) => l.basis === "estimated" && l.withdrawn > 0 && !l.signSuspect);
     const totalCb = round2(known.reduce((t, l) => t + (l.chargeback ?? 0), 0));
     const totalFee = round2(lines.reduce((t, l) => t + l.monthlyFee, 0));
-    const knownFee = round2(known.reduce((t, l) => t + l.monthlyFee, 0));
-    const be = known.length ? breakEvenMonths(totalCb, knownFee) : null;
+    const totalOverride = round2(lines.reduce((t, l) => t + l.monthlyOverride, 0));
+    const totalComp = round2(totalFee + totalOverride);
+    const knownComp = round2(known.reduce((t, l) => t + l.monthlyComp, 0));
+    const be = known.length ? breakEvenMonths(totalCb, knownComp) : null;
     const totalValue = lines.reduce((t, l) => t + l.marketValue, 0);
     const first = lines[0].maturesOn, final = lines[lines.length - 1].maturesOn;
     const cbText = missing === lines.length ? "chargeback not yet known" : `chargeback ${missing ? "at least " : ""}${money2(totalCb)} if all moved today`;
     findings.push({
       householdId, type: "fclass_migration", key: "fclass-migration", dueOn: first,
-      title: `${lines.length} account${lines.length === 1 ? "" : "s"} under chargeback, ${inWindow.size} maturing within ${cfg.windowMonths} months: ${cbText}, F-class fee ${money2(totalFee)} a month`,
+      title: `${lines.length} account${lines.length === 1 ? "" : "s"} under chargeback, ${inWindow.size} maturing within ${cfg.windowMonths} months: ${cbText}, ${money2(totalComp)} a month in fees${totalOverride > 0 ? " and overrides" : ""}`,
       evidence: [
         { label: "Total chargeback if every account moved today", value: missing === lines.length ? "Not known: original investment missing" : `${missing ? "At least " : ""}${money2(totalCb)}` },
         { label: `Monthly F-class fee (your ${Math.round(cfg.advisorShare * 100)}% of ${cfg.feeRate * 100}%)`, value: money2(totalFee) },
+        { label: `Monthly override on the fees (${Math.round((cfg.overrideRate ?? 0) * 1000) / 10}% of the ${cfg.overrideBasis === "advisor_fee" ? "fee paid to you" : "advisory fee"})`, value: money2(totalOverride) },
+        { label: "Total monthly compensation (fee plus override)", value: money2(totalComp) },
         {
-          label: "Months of F-class fees to cover the chargeback",
+          label: "Months of total compensation to cover the chargeback",
           value: known.length === 0 ? "Not known: original investment missing" : be === null ? "No fee to count" : totalCb === 0 ? "No chargeback to cover" : `${missing ? "At least " : ""}${monthsText(be)}`,
         },
         { label: "Market value in these accounts", value: money(totalValue) },
         ...lines.map((l) => ({
           label: `${l.accountType || "Account"} ...${last4(l.account)} (${l.load}, ${l.maturesOn <= asOf ? "matured" : "matures"} ${l.maturesOn}${inWindow.has(l.account) ? `, within ${cfg.windowMonths} months` : ""}, month ${l.monthInForce}, ${l.pctCharged}% charged)`,
-          value: `${l.chargeback === null ? "chargeback unknown" : `chargeback ${money2(l.chargeback)}${l.withdrawn > 0 ? ` on ${money(l.chargeableBase ?? 0)} (${l.basis === "net" ? `${money(l.withdrawn)} of the ${money(l.original ?? 0)} invested already withdrawn` : `estimated: ${money(l.withdrawn)} of the ${money(l.original ?? 0)} invested assumed withdrawn; ${l.signSuspect ? `Net Transactions of +${money(l.netTransactions ?? 0)} was not used: it is positive but the account is below its original, and iA shows withdrawals as negative` : "add Net Transactions to the sheet for the exact figure"}`})` : ""}`}; fee ${money2(l.monthlyFee)}/month${l.breakEven === null || !l.chargeback ? "" : `; covered in ${monthsText(l.breakEven)}`}`,
+          value: `${l.chargeback === null ? "chargeback unknown" : `chargeback ${money2(l.chargeback)}${l.withdrawn > 0 ? ` on ${money(l.chargeableBase ?? 0)} (${l.basis === "net" ? `${money(l.withdrawn)} of the ${money(l.original ?? 0)} invested already withdrawn` : `estimated: ${money(l.withdrawn)} of the ${money(l.original ?? 0)} invested assumed withdrawn; ${l.signSuspect ? `Net Transactions of +${money(l.netTransactions ?? 0)} was not used: it is positive but the account is below its original, and iA shows withdrawals as negative` : "add Net Transactions to the sheet for the exact figure"}`})` : ""}`}; fee ${money2(l.monthlyFee)}/month + override ${money2(l.monthlyOverride)}/month${l.breakEven === null || !l.chargeback ? "" : `; covered in ${monthsText(l.breakEven)}`}`,
         })),
       ],
       confidence: missing || guessed.length || suspects.length ? "medium" : "high",
