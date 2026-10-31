@@ -1,0 +1,80 @@
+# Book-of-business diagnostic: plan
+
+Status: stage 1 built (rulebook, report function, Book of Business page); not yet deployed. Stages 2 to 5 not started.
+
+## Goal
+Examine every household against a fixed rulebook and produce a ranked, evidence-backed list of opportunities to offer more products and services. Staff only. The list prompts Rolf to start a conversation; it never recommends anything to a client.
+
+## Decisions (Rolf, 2026-10-30)
+- Opportunity types to start: insurance gaps, Sovereignty Charter, tier upgrade, consolidation of outside assets, corporate structuring, estate gaps. More later, so the rulebook must be easy to extend.
+- Revenue estimates: yes, using the iA commission schedule (Rolf to supply). Until then the estimate is blank, not guessed.
+- Surfaces: a standalone "Book of Business" page, plus a weekly section in Georgia's briefing.
+- Order: stage 1 (data-gaps report and rulebook) comes first, ahead of the monthly pipeline and meeting loop follow-ups.
+
+## Principles
+1. Rules decide; the model only words. A finding exists because a deterministic rule fired on stored data. Georgia may turn a finding into plain language and a suggested approach, but never creates or scores one.
+2. Every finding shows its evidence (the rows and values that triggered it) and a confidence level.
+3. Missing data is not "no gap". If a rule's inputs are absent, it emits a data gap instead of a finding.
+4. Staff only. No client-facing wording, portal or VFO exposure.
+5. No real client names in code, tests, commits or PRs. Fixtures use made-up households.
+
+## Data the rules read
+| Source | Used for |
+|---|---|
+| `households`, `contacts`, `families`, `household_relationships` | who is in the household, dependants, ages |
+| `service-tiering.ts` (`classifyTier`, grouped AUM) | tier, distance to the $250k / $750k / $2M thresholds |
+| `vineyard_accounts`, `holding_tank`, `storehouses`, `storehouse_rules` | AUM, custodian, idle cash vs reserve targets |
+| `insurance_policies` (type, coverage, cash value, renewal_date, beneficiaries), `insurance_needs_analyses`, `insurance_fact_finds`, `insurance_quotes` | coverage versus need, pending work |
+| `liabilities` | debt with no linked coverage |
+| `other_assets` (+ owners) | outside assets, property |
+| `household_charters`, `sovereignty_charters` | charter status |
+| `corporations`, `corporate_shareholders`, `corporate_vineyard_accounts` | structuring signals |
+| `professionals`, `professional_engagements` | lawyer, accountant, executor, POA on file |
+| `review_obligations` | open obligations |
+| `sovereignty-diagnostics.ts` | passive income, SBD clawback, vault and document readiness |
+
+## Rulebook v1
+Each rule is a pure function: `(HouseholdSnapshot) => Finding[] | DataGap[]`.
+
+| Type | Fires when | Needs (else data gap) |
+|---|---|---|
+| `insurance_coverage_gap` | dependants or liabilities exist and coverage is below the needs analysis, or no needs analysis and no policy | household members, liabilities, policies |
+| `debt_protection` | a liability above a threshold has no linked coverage | liabilities |
+| `charter_candidate` | Tier 2A, AUM above a floor, no ratified charter | tier, AUM |
+| `tier_upgrade` | grouped AUM within a set margin of the next threshold | grouped AUM |
+| `consolidation` | other assets or accounts held away from iA / JustWealth | assets, custodian |
+| `corporate_structuring` | corporation with passive income near the SBD clawback, or holdco without a structure review | corporation financials |
+| `estate_gap` | no beneficiary designations, or no lawyer, executor or POA on file | designations, professionals |
+| `idle_cash` | balances above the Storehouse reserve target | storehouse rules |
+| `policy_event` | renewal or conversion window within 90 days | policy dates |
+
+Thresholds live in one config object so they can be tuned without touching the rules.
+
+## Output shape
+`Finding`: household_id, type, title, evidence[] (table, row id, value), est_value (nullable until commission schedule), confidence (high / medium / low), suggested_next_step, status.
+`DataGap`: household_id, field, why it matters, which rule it blocks.
+Household completeness score = share of rule inputs present.
+
+## Storage (stage 2)
+Table `opportunities`: id, household_id, type, evidence jsonb, est_value, confidence, status (open / dismissed / converted / snoozed), snoozed_until, dismissed_reason, converted_at, rule_version, first_seen, last_seen. Unique on (household_id, type, dedupe_key) so weekly runs update rather than duplicate. Staff-only RLS. Explicit grants per CLAUDE.md. A run that no longer sees a finding marks it resolved, not deleted.
+
+## Build stages
+1. **Rulebook + data-gaps report.** Pure module in `supabase/functions/_shared/`, vitest with made-up households, a read-only report of data gaps and completeness per household. No schema change.
+2. **Storage and runner.** `opportunities` table, an edge function that runs the rulebook, weekly cron.
+3. **Book of Business page.** Dense list rows, filters by type, tier and confidence, evidence drawer, accept / dismiss / snooze, totals.
+4. **Georgia.** Weekly briefing section with the top items; accepting one creates a task. Add to the pre-meeting brief later.
+5. **Learning loop.** Dismissal reasons and conversions tune thresholds.
+
+## Open items
+- iA commission schedule from Rolf (needed for stage 2 estimates).
+- Per-rule thresholds (liability floor, AUM floor for charter, upgrade margin): propose defaults in stage 1 for Rolf to adjust.
+- Compliance wording check before anything from this list reaches Georgia's outward-facing drafts (none planned).
+- Remember to review `vertex-ai/index.ts` (Sovereignty Assistant) if the page or data model becomes something the assistant should know about.
+
+## Commission schedule (received 2026-10-30)
+`26-10-30 iA Financial - Commissions.pdf` (iA Agent MGA Section, effective 2026-10-26) sits in Rolf's Drive. It is the MGA schedule, so it shows what iA pays down the chain, not necessarily what Rolf keeps. Findings that shape stage 2:
+- Life and living-benefit commission is a percentage of annual premium by product and by policy year (1st, 2nd to 5th, 6th to 10th, 11th on). Examples: Pick-a-Term T20 to T40 50% first year, then 5%, 3%, 3%; whole life L100 60%, then 5%, 2%, 2%; UL Genesis level 60%; critical illness riders 40 to 50% first year, then 3%.
+- Commission needs a premium, and an opportunity has none until quoted. A stage 2 estimate therefore needs an assumed annual premium (from the needs-analysis shortfall and the client's age) or a real quote. Proposed: use the latest `insurance_quotes` premium when one exists, otherwise leave the estimate blank rather than guess.
+- Savings and retirement lines pay a sales commission or an F-class fee; those suit the AUM-based types (consolidation, tier upgrade) but need the fee Rolf actually charges, not iA's schedule.
+- There is a 2-year chargeback period on some structures and a first-year cap rule ($25,000 total); estimates should say "first-year, before chargeback".
+- Open: does Rolf's contract with his MGA pass the full schedule through, or a share? The estimate should use his net rate.
