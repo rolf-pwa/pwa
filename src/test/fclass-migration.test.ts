@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { addMonthsYmd, breakEvenMonths, buildMigrationFindings, chargebackPct, dueRows, monthInForce, monthlyFClassFee, parseCsv, parseDate, parseMoney, parseSheet, type MigrationRow } from "../../supabase/functions/_shared/fclass-migration";
+import { addMonthsYmd, breakEvenMonths, buildMigrationFindings, chargebackPct, DEFAULT_FCLASS, dueRows, monthInForce, monthlyFClassFee, parseCsv, parseDate, parseMoney, parseSheet, type MigrationRow } from "../../supabase/functions/_shared/fclass-migration";
 
 const TODAY = "2026-10-31";
 const row = (o: Partial<MigrationRow> = {}): MigrationRow => ({
@@ -105,12 +105,20 @@ describe("reading the sheet", () => {
 });
 
 describe("which accounts are due", () => {
-  it("takes chargeback accounts maturing within six months, including ones already matured", () => {
+  it("takes chargeback accounts maturing within twelve months, including ones already matured", () => {
     const rows = [
-      row({ account: "1", maturesOn: "2026-12-24" }), row({ account: "2", maturesOn: "2027-04-30" }), row({ account: "3", maturesOn: "2027-05-01" }),
-      row({ account: "4", maturesOn: "2026-09-01" }),
+      row({ account: "1", maturesOn: "2026-12-24" }), row({ account: "2", maturesOn: "2027-10-31" }), row({ account: "3", maturesOn: "2027-11-01" }),
+      row({ account: "4", maturesOn: "2026-09-01" }), row({ account: "5", maturesOn: "2027-04-30" }),
     ];
-    expect(dueRows(rows, TODAY).due.map((r) => r.account)).toEqual(["1", "2", "4"]);
+    expect(dueRows(rows, TODAY).due.map((r) => r.account)).toEqual(["1", "2", "4", "5"]);
+  });
+  it("follows the configured window", () => {
+    const rows = [row({ account: "in", maturesOn: "2027-04-30" }), row({ account: "out", maturesOn: "2027-05-01" })];
+    expect(dueRows(rows, TODAY, { windowMonths: 6, feeRate: 0.01, advisorShare: 0.8 }).due.map((r) => r.account)).toEqual(["in"]);
+    expect(dueRows(rows, TODAY, { windowMonths: 12, feeRate: 0.01, advisorShare: 0.8 }).due.map((r) => r.account)).toEqual(["in", "out"]);
+  });
+  it("is twelve months by default", () => {
+    expect(DEFAULT_FCLASS.windowMonths).toBe(12);
   });
   it("leaves out F-class, cash and other loads, empty accounts, and counts accounts with no dates", () => {
     const rows = [row({ account: "f", loadType: "FCLASS" }), row({ account: "h", loadType: "HISA" }), row({ account: "z", marketValue: 0 }), row({ account: "n", marketValue: null }), row({ account: "u", maturesOn: null }), row({ account: "ok" })];
