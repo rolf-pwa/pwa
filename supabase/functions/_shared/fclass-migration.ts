@@ -2,6 +2,7 @@
 // move to F-class would pay each month. Pure; no I/O. The migration plan sheet is read elsewhere (fclass-migration-service.ts) and
 // handed in as CSV text.
 //
+// Chargeback is worked out on what is still invested, not on withdrawals already made (see accountLine).
 // Chargeback (the iA MGA schedule effective 2026-10-26, "Charges when a deposit is surrendered (agent's charge)"): the charge is the
 // sales commission paid on the deposit times a percentage that steps down with the months the deposit has been in force, to nothing at
 // the end of the chargeback period (CB2: 24 months, CB3: 36, CB5: 60). F-class: fees are paid monthly on the daily balance at the
@@ -151,6 +152,10 @@ export interface AccountLine {
   monthInForce: number;
   pctCharged: number;
   original: number | null;
+  /** What a chargeback can still apply to: the original investment, or the market value when that is lower (see accountLine). Null with no original. */
+  chargeableBase: number | null;
+  /** The part of the original investment assumed withdrawn already (its chargeback was charged to the advisor then). */
+  assumedWithdrawn: number;
   /** Null when the original investment is not in the sheet. */
   chargeback: number | null;
   marketValue: number;
@@ -175,9 +180,15 @@ export function dueRows(rows: MigrationRow[], asOf: string, cfg: FClassConfig = 
 export function accountLine(r: ReturnType<typeof dueRows>["due"][number], asOf: string, cfg: FClassConfig = DEFAULT_FCLASS): AccountLine {
   const month = monthInForce(r.investedOn, asOf);
   const pct = chargebackPct(r.load, month);
+  // When the market value is below the original investment, the difference is taken to be withdrawals: the chargeback on those was
+  // already charged to the advisor when they were made (Rolf, 2026-10-31), so only what is still invested can be charged back. A market
+  // value above the original investment changes nothing, since the chargeback is on the deposit. A fall in value with no withdrawal would
+  // understate the chargeback; the sheet cannot tell the two apart.
+  const base = r.original === null ? null : Math.min(r.original, r.marketValue);
   return {
     account: r.account, accountType: r.accountType, load: r.load, investedOn: r.investedOn, maturesOn: r.maturesOn, monthInForce: month, pctCharged: pct,
-    original: r.original, chargeback: r.original === null ? null : round2(r.original * CB_SALES_COMMISSION[r.load] * (pct / 100)),
+    original: r.original, chargeableBase: base, assumedWithdrawn: r.original === null || base === null ? 0 : round2(r.original - base),
+    chargeback: base === null ? null : round2(base * CB_SALES_COMMISSION[r.load] * (pct / 100)),
     marketValue: r.marketValue, monthlyFee: monthlyFClassFee(r.marketValue, cfg),
   };
 }
@@ -225,7 +236,7 @@ export function buildMigrationFindings(rows: MigrationRow[], accountToHousehold:
         { label: "Market value in these accounts", value: money(totalValue) },
         ...lines.map((l) => ({
           label: `${l.accountType || "Account"} ...${last4(l.account)} (${l.load}, ${l.maturesOn <= asOf ? "matured" : "matures"} ${l.maturesOn}, month ${l.monthInForce}, ${l.pctCharged}% charged)`,
-          value: `${l.chargeback === null ? "chargeback unknown" : `chargeback ${money2(l.chargeback)}`}; fee ${money2(l.monthlyFee)}/month`,
+          value: `${l.chargeback === null ? "chargeback unknown" : `chargeback ${money2(l.chargeback)}${l.assumedWithdrawn > 0 ? ` on ${money(l.chargeableBase ?? 0)} (${money(l.assumedWithdrawn)} of the ${money(l.original ?? 0)} invested assumed withdrawn)` : ""}`}; fee ${money2(l.monthlyFee)}/month`,
         })),
       ],
       confidence: missing ? "medium" : "high",

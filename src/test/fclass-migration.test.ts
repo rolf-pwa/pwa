@@ -4,7 +4,7 @@ import { addMonthsYmd, buildMigrationFindings, chargebackPct, dueRows, monthInFo
 
 const TODAY = "2026-10-31";
 const row = (o: Partial<MigrationRow> = {}): MigrationRow => ({
-  account: "1000000001", accountType: "TFSA", owner: "Jordan Rivers-Hale", investedOn: "2021-12-24", original: 100_000, loadType: "CB5",
+  account: "1000000001", accountType: "TFSA", owner: "Jordan Rivers-Hale", investedOn: "2021-12-24", original: 7_000, loadType: "CB5",
   maturesOn: "2026-12-24", marketValue: 7_698.76, ...o,
 });
 
@@ -111,11 +111,11 @@ describe("the finding for a household", () => {
     const r = buildMigrationFindings(two, map, TODAY);
     expect(r.findings).toHaveLength(1);
     const f = r.findings[0];
-    // CB5: $100,000 x 4% x 6% (month 59) = $240.  CB3: $50,000 x 2.5% x 20% (month 32) = $250.
-    expect(f.evidence[0]).toEqual({ label: "Total chargeback if moved today", value: "$490.00" });
+    // CB5: $7,000 x 4% x 6% (month 59) = $16.80.  CB3: $50,000 x 2.5% x 20% (month 32) = $250.
+    expect(f.evidence[0]).toEqual({ label: "Total chargeback if moved today", value: "$266.80" });
     // $7,698.76 -> $5.13 and $135,991 -> $90.66 a month at 80% of 1%.
     expect(f.evidence[1]).toEqual({ label: "Monthly F-class fee (your 80% of 1%)", value: "$95.79" });
-    expect(f.title).toBe("2 accounts near the end of chargeback: chargeback $490.00 if moved today, F-class fee $95.79 a month");
+    expect(f.title).toBe("2 accounts near the end of chargeback: chargeback $266.80 if moved today, F-class fee $95.79 a month");
     expect(f.type).toBe("fclass_migration");
     expect(f.confidence).toBe("high");
     expect(r.gaps).toEqual([]);
@@ -123,12 +123,12 @@ describe("the finding for a household", () => {
   it("lists each account with its month in force, the share charged and its own figures, soonest maturity first", () => {
     const lines = buildMigrationFindings(two, map, TODAY).findings[0].evidence.slice(3);
     expect(lines[0].label).toBe("TFSA ...0001 (CB5, matures 2026-12-24, month 59, 6% charged)");
-    expect(lines[0].value).toBe("chargeback $240.00; fee $5.13/month");
+    expect(lines[0].value).toBe("chargeback $16.80; fee $5.13/month");
     expect(lines[1].label).toContain("RRIF ...0002 (CB3, matures 2027-03-19, month 32, 20% charged)");
   });
   it("says 'at least' and drops to medium confidence when an original investment is missing, and reports the gap", () => {
     const r = buildMigrationFindings([two[0], { ...two[1], original: null }], map, TODAY);
-    expect(r.findings[0].title).toContain("chargeback at least $240.00 if moved today");
+    expect(r.findings[0].title).toContain("chargeback at least $16.80 if moved today");
     expect(r.findings[0].confidence).toBe("medium");
     expect(r.gaps).toHaveLength(1);
     expect(r.gaps[0]).toMatchObject({ householdId: "h1", field: "Original investment (migration sheet)", blocks: ["fclass_migration"] });
@@ -154,6 +154,23 @@ describe("the finding for a household", () => {
     const r = buildMigrationFindings([row({ maturesOn: "2026-09-01", investedOn: "2021-08-01" })], new Map([["1000000001", "h1"]]), TODAY);
     expect(r.findings[0].nextStep).toContain("costs nothing in chargeback");
     expect(r.findings[0].evidence[0].value).toBe("$0.00");
+  });
+  it("charges back only what is still invested when the market value has fallen below the original investment", () => {
+    // $22,500 invested, $8,091 left: the rest is taken as withdrawn (its chargeback was charged at the time). CB5 month 59: 6% of 4%.
+    const r = buildMigrationFindings([row({ original: 22_500, marketValue: 8_091 })], new Map([["1000000001", "h1"]]), TODAY);
+    const [total, , , line] = r.findings[0].evidence;
+    expect(total.value).toBe("$19.42");
+    expect(line.value).toBe("chargeback $19.42 on $8,091 ($14,409 of the $22,500 invested assumed withdrawn); fee $5.39/month");
+  });
+  it("is unchanged when the market value is above the original investment, or equal to it", () => {
+    for (const marketValue of [6_164, 7_000]) {
+      const f = buildMigrationFindings([row({ original: 6_000, marketValue })], new Map([["1000000001", "h1"]]), TODAY).findings[0];
+      expect(f.evidence[0].value).toBe("$14.40"); // $6,000 x 4% x 6%
+      expect(f.evidence[3].value).not.toContain("withdrawn");
+    }
+  });
+  it("shows no withdrawal note when nothing is assumed withdrawn", () => {
+    expect(buildMigrationFindings([row()], new Map([["1000000001", "h1"]]), TODAY).findings[0].evidence[3].value).toBe("chargeback $16.80; fee $5.13/month");
   });
   it("never writes an estimated value, so no figure is presented as revenue", () => {
     expect(buildMigrationFindings(two, map, TODAY).findings[0].estValue).toBeNull();
