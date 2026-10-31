@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { addMonthsYmd, breakEvenMonths, buildMigrationFindings, chargebackPct, DEFAULT_FCLASS, monthlyOverride, dueRows, monthInForce, monthlyFClassFee, parseCsv, parseDate, parseMoney, parseSheet, type MigrationRow } from "../../supabase/functions/_shared/fclass-migration";
+import { addMonthsYmd, breakEvenMonths, buildMigrationFindings, chargebackPct, DEFAULT_FCLASS, FCLASS_LATER_KEY, monthlyOverride, dueRows, monthInForce, monthlyFClassFee, parseCsv, parseDate, parseMoney, parseSheet, type MigrationRow } from "../../supabase/functions/_shared/fclass-migration";
 
 const TODAY = "2026-10-31";
 const row = (o: Partial<MigrationRow> = {}): MigrationRow => ({
@@ -328,11 +328,34 @@ describe("the finding for a household", () => {
     expect(f.evidence[7].label).not.toContain("within 12 months");
     expect(f.dueOn).toBe("2026-12-24");
   });
-  it("leaves a household off the list when none of its accounts matures inside the window", () => {
+  it("puts a household on the later list when none of its accounts matures inside the window", () => {
     const r = buildMigrationFindings([row({ maturesOn: "2030-05-16", investedOn: "2025-05-16" })], new Map([["1000000001", "h1"]]), TODAY);
-    expect(r.findings).toEqual([]);
+    expect(r.findings).toHaveLength(1);
+    expect(r.findings[0].key).toBe(FCLASS_LATER_KEY);
+    expect(r.findings[0].title).toContain("none maturing within 12 months (the first on 2030-05-16)");
+    expect(r.findings[0].dueOn).toBe("2030-05-16");
     expect(r.includedCount).toBe(0);
     expect(r.dueCount).toBe(0);
+  });
+  it("works the later household's figures the same way: chargeback, fee, override, total and break-even", () => {
+    // $35,089 less $2,092 withdrawn = $32,997; CB5 month 46 charges 32%: $32,997 x 4% x 32% = $422.36. Fee $49,404 x 1% x 80% / 12 = $32.94.
+    const f = buildMigrationFindings([row({ original: 35_089, netTransactions: -2_092, marketValue: 49_404, investedOn: "2023-01-16", maturesOn: "2028-01-16" })], new Map([["1000000001", "h1"]]), TODAY).findings[0];
+    expect(f.evidence[0].value).toBe("$422.36");
+    expect(f.evidence[1].value).toBe("$32.94");
+    expect(f.evidence[2].value).toBe("$1.65");
+    expect(f.evidence[3].value).toBe("$34.59");
+    expect(f.evidence[4].value).toBe("12.2 months");
+  });
+  it("asks for no missing data on a later household, so the live list's requests are not buried", () => {
+    const r = buildMigrationFindings([row({ original: null, maturesOn: "2030-05-16", investedOn: "2025-05-16" })], new Map([["1000000001", "h1"]]), TODAY);
+    expect(r.findings[0].key).toBe(FCLASS_LATER_KEY);
+    expect(r.gaps).toEqual([]);
+  });
+  it("keeps a household on the live list when only some of its accounts mature later", () => {
+    const rows = [row({ account: "1000000001" }), row({ account: "1000000002", investedOn: "2025-05-16", maturesOn: "2030-05-16" })];
+    const r = buildMigrationFindings(rows, new Map([["1000000001", "h1"], ["1000000002", "h1"]]), TODAY);
+    expect(r.findings).toHaveLength(1);
+    expect(r.findings[0].key).toBe("fclass-migration");
   });
   it("does not count F-class accounts in a household's chargeback, and still lists the household", () => {
     const rows = [row({ account: "1000000001" }), row({ account: "1000000002", loadType: "FCLASS", maturesOn: "2025-02-18" })];
@@ -373,6 +396,12 @@ describe("wiring", () => {
     expect(src).toContain("loadMigrationCsv(db)");
     expect(src).toContain('"fclass_migration"');
     expect(src).toContain("migration,");
+  });
+  it("the later list stays off the briefing and has its own kind on the page, with the count in the run", () => {
+    expect(read("supabase/functions/daily-briefing-generate/index.ts")).toContain('.neq("key", FCLASS_LATER_KEY)');
+    expect(read("supabase/functions/_shared/briefing-refresh.ts")).toContain('.neq("key", FCLASS_LATER_KEY)');
+    expect(read("supabase/functions/_shared/opportunity-run.ts")).toContain("later: rep.findings.filter");
+    expect(read("src/modules/crm/pages/BookOfBusiness.tsx")).toContain(`const LATER_KEY = "${FCLASS_LATER_KEY}"`);
   });
   it("the migration allows the new type and the page labels it", () => {
     expect(read("supabase/migrations/20270109120000_opportunity_fclass_type.sql")).toContain("'fclass_migration'");

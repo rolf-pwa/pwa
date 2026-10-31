@@ -31,6 +31,7 @@ import { scanMeetingNotes } from "../_shared/meeting-followup-service.ts";
 import { runGeorgiaTasks } from "../_shared/georgia-task-service.ts";
 import { classifyEmail, calendarConflicts, groupWeek, sectionsFromEmails, type BriefingEmail, type BriefingSections, type CalEvent } from "../_shared/briefing-facts.ts";
 import { generateVertexContent, parseServiceAccountKey, GEMINI_DRAFTING_MODEL, withThinking } from "../_shared/vertex-ai.ts";
+import { FCLASS_LATER_KEY } from "../_shared/fclass-migration.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -449,7 +450,7 @@ interface FirmFacts {
 async function gatherOpportunityItems(db: Db, todayStr: string): Promise<BriefingItem[]> {
   try {
     const since = new Date(Date.parse(`${todayStr}T12:00:00Z`) - 7 * 86_400_000).toISOString().slice(0, 10);
-    const { data } = await db.from("opportunities").select("id, household_id, title, confidence, first_seen, status").eq("status", "open").gte("first_seen", since).limit(500);
+    const { data } = await db.from("opportunities").select("id, household_id, title, confidence, first_seen, status").eq("status", "open").neq("key", FCLASS_LATER_KEY).gte("first_seen", since).limit(500);
     const { top, more } = pickBriefingOpportunities((data ?? []) as OpportunityRow[], todayStr);
     if (top.length === 0) return [];
     const { data: hh } = await db.from("households").select("id, label").in("id", [...new Set(top.map((o) => o.household_id))]);
