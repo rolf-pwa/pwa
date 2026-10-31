@@ -50,14 +50,14 @@ describe("the monthly F-class fee", () => {
 });
 
 describe("overrides on the fees", () => {
-  it("are 5% of the advisory fee the client pays by default: 0.05% of market value a year", () => {
+  it("are 5% of the 80% of the fee paid to the advisor by default: 0.04% of market value a year", () => {
     expect(DEFAULT_FCLASS.overrideRate).toBe(0.05);
-    expect(DEFAULT_FCLASS.overrideBasis).toBe("client_fee");
-    expect(monthlyOverride(120_000)).toBe(5); // $120,000 x 1% x 5% / 12
-    expect(monthlyOverride(8_091)).toBe(0.34);
+    expect(DEFAULT_FCLASS.overrideBasis).toBe("advisor_fee");
+    expect(monthlyOverride(120_000)).toBe(4); // $120,000 x 1% x 80% x 5% / 12
+    expect(monthlyOverride(8_091)).toBe(0.27);
   });
-  it("can instead be 5% of the part of the fee paid to the advisor", () => {
-    expect(monthlyOverride(120_000, { ...DEFAULT_FCLASS, overrideBasis: "advisor_fee" })).toBe(4); // $120,000 x 1% x 80% x 5% / 12
+  it("can instead be 5% of the whole fee the client pays", () => {
+    expect(monthlyOverride(120_000, { ...DEFAULT_FCLASS, overrideBasis: "client_fee" })).toBe(5); // $120,000 x 1% x 5% / 12
   });
   it("are nothing when no override is configured", () => {
     expect(monthlyOverride(120_000, { windowMonths: 12, feeRate: 0.01, advisorShare: 0.8 })).toBe(0);
@@ -68,17 +68,19 @@ describe("overrides on the fees", () => {
       row({ account: "1000000002", original: 12_500, marketValue: 7_335, netTransactions: -11_150, investedOn: "2022-01-13", maturesOn: "2027-01-13" }),
     ];
     const f = buildMigrationFindings(rows, new Map([["1000000001", "h1"], ["1000000002", "h1"]]), TODAY).findings[0];
-    // Fees $5.39 + $4.89 = $10.28; overrides $0.34 + $0.31 = $0.65; total $10.93 a month.
+    // Fees $5.39 + $4.89 = $10.28; overrides $0.27 + $0.24 = $0.51; total $10.79 a month.
     expect(f.evidence[1]).toEqual({ label: "Monthly F-class fee (your 80% of 1%)", value: "$10.28" });
-    expect(f.evidence[2]).toEqual({ label: "Monthly override on the fees (5% of the advisory fee)", value: "$0.65" });
-    expect(f.evidence[3]).toEqual({ label: "Total monthly compensation (fee plus override)", value: "$10.93" });
-    expect(f.title).toContain("$10.93 a month in fees and overrides");
+    expect(f.evidence[2]).toEqual({ label: "Monthly override on the fees (5% of the fee paid to you)", value: "$0.51" });
+    expect(f.evidence[3]).toEqual({ label: "Total monthly compensation (fee plus override)", value: "$10.79" });
+    expect(f.title).toContain("$10.79 a month in fees and overrides");
   });
   it("shorten the break-even, which is worked out on the total compensation", () => {
-    // $9.40 chargeback: $5.39 fee alone is 1.7 months; with the $0.34 override ($5.73) it is 1.6.
+    // $9.40 chargeback: $5.39 fee alone is 1.7 months; with the $0.27 override ($5.66) it is still 1.7. A bigger override moves it: at $0.34 ($5.73) it is 1.6.
     const f = buildMigrationFindings([row({ original: 22_500, marketValue: 8_091, netTransactions: -18_584 })], new Map([["1000000001", "h1"]]), TODAY).findings[0];
-    expect(f.evidence[6].value).toContain("covered in 1.6 months");
+    expect(f.evidence[6].value).toContain("covered in 1.7 months");
     expect(f.evidence[4].label).toBe("Months of total compensation to cover the chargeback");
+    // Break-even on the total: a $100 chargeback against $50 fees + $10 override is 1.7 months, not 2.
+    expect(breakEvenMonths(100, 60)).toBe(1.7);
   });
   it("leave the wording and the numbers as before when there is no override", () => {
     const f = buildMigrationFindings([row()], new Map([["1000000001", "h1"]]), TODAY, { windowMonths: 12, feeRate: 0.01, advisorShare: 0.8 }).findings[0];
@@ -182,7 +184,7 @@ describe("the finding for a household", () => {
     expect(f.evidence[0]).toEqual({ label: "Total chargeback if every account moved today", value: "$266.80" });
     // $7,698.76 -> $5.13 and $135,991 -> $90.66 a month at 80% of 1%.
     expect(f.evidence[1]).toEqual({ label: "Monthly F-class fee (your 80% of 1%)", value: "$95.79" });
-    expect(f.title).toBe("2 accounts under chargeback, 2 maturing within 12 months: chargeback $266.80 if all moved today, $101.78 a month in fees and overrides");
+    expect(f.title).toBe("2 accounts under chargeback, 2 maturing within 12 months: chargeback $266.80 if all moved today, $100.58 a month in fees and overrides");
     expect(f.type).toBe("fclass_migration");
     expect(f.confidence).toBe("high");
     expect(r.gaps).toEqual([]);
@@ -190,7 +192,7 @@ describe("the finding for a household", () => {
   it("lists each account with its month in force, the share charged and its own figures, soonest maturity first", () => {
     const lines = buildMigrationFindings(two, map, TODAY).findings[0].evidence.slice(6);
     expect(lines[0].label).toBe("TFSA ...0001 (CB5, matures 2026-12-24, within 12 months, month 59, 6% charged)");
-    expect(lines[0].value).toBe("chargeback $16.80; fee $5.13/month + override $0.32/month; covered in 3.1 months");
+    expect(lines[0].value).toBe("chargeback $16.80; fee $5.13/month + override $0.26/month; covered in 3.1 months");
     expect(lines[1].label).toContain("RRIF ...0002 (CB3, matures 2027-03-19, within 12 months, month 32, 20% charged)");
   });
   it("says 'at least' and drops to medium confidence when an original investment is missing, and reports the gap", () => {
@@ -227,7 +229,7 @@ describe("the finding for a household", () => {
     const r = buildMigrationFindings([row({ original: 22_500, marketValue: 8_091.92, netTransactions: -18_584.17 })], new Map([["1000000001", "h1"]]), TODAY);
     const f = r.findings[0];
     expect(f.evidence[0].value).toBe("$9.40");
-    expect(f.evidence[6].value).toBe("chargeback $9.40 on $3,916 ($18,584 of the $22,500 invested already withdrawn); fee $5.39/month + override $0.34/month; covered in 1.6 months");
+    expect(f.evidence[6].value).toBe("chargeback $9.40 on $3,916 ($18,584 of the $22,500 invested already withdrawn); fee $5.39/month + override $0.27/month; covered in 1.7 months");
     expect(f.confidence).toBe("high");
     expect(r.gaps).toEqual([]);
   });
@@ -259,7 +261,7 @@ describe("the finding for a household", () => {
     const r = buildMigrationFindings([row({ original: 22_500, marketValue: 8_091 })], new Map([["1000000001", "h1"]]), TODAY);
     const f = r.findings[0];
     expect(f.evidence[0].value).toBe("$19.42");
-    expect(f.evidence[6].value).toBe("chargeback $19.42 on $8,091 (estimated: $14,409 of the $22,500 invested assumed withdrawn; add Net Transactions to the sheet for the exact figure); fee $5.39/month + override $0.34/month; covered in 3.4 months");
+    expect(f.evidence[6].value).toBe("chargeback $19.42 on $8,091 (estimated: $14,409 of the $22,500 invested assumed withdrawn; add Net Transactions to the sheet for the exact figure); fee $5.39/month + override $0.27/month; covered in 3.4 months");
     expect(f.confidence).toBe("medium");
     expect(r.gaps).toHaveLength(1);
     expect(r.gaps[0]).toMatchObject({ field: "Net transactions (migration sheet)", blocks: ["fclass_migration"] });
@@ -275,7 +277,7 @@ describe("the finding for a household", () => {
     }
   });
   it("shows no withdrawal note when nothing has been withdrawn", () => {
-    expect(buildMigrationFindings([row({ netTransactions: 0 })], new Map([["1000000001", "h1"]]), TODAY).findings[0].evidence[6].value).toBe("chargeback $16.80; fee $5.13/month + override $0.32/month; covered in 3.1 months");
+    expect(buildMigrationFindings([row({ netTransactions: 0 })], new Map([["1000000001", "h1"]]), TODAY).findings[0].evidence[6].value).toBe("chargeback $16.80; fee $5.13/month + override $0.26/month; covered in 3.1 months");
   });
   it("shows how many months of F-class fees cover the chargeback, for the household and for each account", () => {
     // The live Banfield rows: $9.40 + $4.32 = $13.72 against $5.39 + $4.89 = $10.28 a month.
@@ -285,7 +287,7 @@ describe("the finding for a household", () => {
     ];
     const f = buildMigrationFindings(rows, new Map([["1000000001", "h1"], ["1000000002", "h1"]]), TODAY).findings[0];
     expect(f.evidence[4]).toEqual({ label: "Months of total compensation to cover the chargeback", value: "1.3 months" });
-    expect(f.evidence[6].value).toContain("covered in 1.6 months");
+    expect(f.evidence[6].value).toContain("covered in 1.7 months");
     expect(f.evidence[7].value).toContain("covered in 0.8 months");
   });
   it("says so when there is no chargeback left to cover, and adds no per-account break-even", () => {

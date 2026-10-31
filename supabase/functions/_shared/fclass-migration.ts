@@ -31,8 +31,8 @@ export interface FClassConfig {
   /** What the override is a share of: the fee the client pays ("client_fee") or the part of it paid to the advisor ("advisor_fee"). */
   overrideBasis?: "client_fee" | "advisor_fee";
 }
-// Overrides are 5% of the advisory fees paid (Rolf, 2026-10-31); read as 5% of the fee the client pays, so 0.05% of market value a year at a 1% fee.
-export const DEFAULT_FCLASS: FClassConfig = { windowMonths: 12, feeRate: 0.01, advisorShare: 0.8, overrideRate: 0.05, overrideBasis: "client_fee" };
+// Overrides are 5% of the 80% of the advisory fee paid to the advisor (Rolf, 2026-10-31): 0.04% of market value a year at a 1% fee.
+export const DEFAULT_FCLASS: FClassConfig = { windowMonths: 12, feeRate: 0.01, advisorShare: 0.8, overrideRate: 0.05, overrideBasis: "advisor_fee" };
 
 /** CB2's published percentages for months 13 to 24 in force (they step by 100/13, so they are listed as printed). */
 const CB2_STEPS = [92.3, 84.6, 76.9, 69.2, 61.5, 53.8, 46.1, 38.4, 30.7, 23, 15.3, 7.6];
