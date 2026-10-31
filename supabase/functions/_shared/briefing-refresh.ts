@@ -84,7 +84,9 @@ export async function refreshBriefing(db: any, userId: string, todayStr: string)
   const quoCall = all.map((i) => i.key).filter((k: string) => k?.startsWith("quo:call:")).map((k: string) => k.slice(9));
 
   const hasSweep = all.some((i) => i.key === "sweep");
-  const [tasks, reqs, escs, imports, notes, msgs, calls, scans, emails, sweepRows] = await Promise.all([
+  const oppIds = keysOf(all, "opp:").filter((id) => id !== "more");
+  const hasOppMore = all.some((i) => i.key === "opp:more");
+  const [tasks, reqs, escs, imports, notes, msgs, calls, scans, emails, sweepRows, opps, oppsNew] = await Promise.all([
     taskIds.length ? db.from("pm_tasks").select("id, status, due_date").in("id", taskIds) : { data: [] },
     reqIds.length ? db.from("portal_requests").select("id, status, portal_request_messages(sender_type, created_at)").in("id", reqIds) : { data: [] },
     escIds.length ? db.from("review_obligations").select("id, status").in("id", escIds) : { data: [] },
@@ -95,6 +97,8 @@ export async function refreshBriefing(db: any, userId: string, todayStr: string)
     db.from("stage2_verification_audit").select("id", { count: "exact", head: true }).eq("review_status", "pending"),
     gmailState(db, userId, emailIds),
     hasSweep ? db.from("inbox_sweep_items").select("message_id, bucket, feedback, archived_at").eq("user_id", userId).gte("swept_at", new Date(Date.now() - 26 * 3_600_000).toISOString()).limit(500) : { data: null },
+    oppIds.length ? db.from("opportunities").select("id, status").in("id", oppIds) : { data: [] },
+    hasOppMore ? db.from("opportunities").select("id", { count: "exact", head: true }).eq("status", "open").gte("first_seen", new Date(Date.parse(`${todayStr}T12:00:00Z`) - 7 * 86_400_000).toISOString().slice(0, 10)) : { count: undefined },
   ]);
 
   const state: OpenState = {
@@ -111,6 +115,9 @@ export async function refreshBriefing(db: any, userId: string, todayStr: string)
     pendingScans: scans.count ?? 0,
     sweepPending: sweepRows.data ? await sweepStillInInbox(db, userId, pendingSorts(sweepRows.data as any[])) : undefined,
     notes: new Map((notes.data ?? []).map((n: any) => [n.id, { read: !!n.read }])),
+    opps: oppIds.length ? new Map((opps.data ?? []).map((o: any) => [o.id, { status: o.status }])) : undefined,
+    oppsNewOpen: hasOppMore ? oppsNew.count ?? undefined : undefined,
+    oppsListed: (opps.data ?? []).filter((o: any) => o.status === "open").length,
   };
 
   const handled: { label: string; link: string | null }[] = [...(s.handled ?? [])];

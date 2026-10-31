@@ -4,7 +4,7 @@
 
 import type { Finding } from "./opportunity-rules.ts";
 
-export type OpportunityStatus = "open" | "snoozed" | "dismissed" | "converted" | "resolved";
+export type OpportunityStatus = "open" | "snoozed" | "accepted" | "dismissed" | "converted" | "resolved";
 
 export interface StoredOpportunity {
   id: string;
@@ -50,7 +50,7 @@ export function reconcile(existing: StoredOpportunity[], findings: Finding[], ev
   for (const row of existing) {
     if (firing.has(idOf(row.household_id, row.type, row.key))) continue;
     if (!evaluatedHouseholds.has(row.household_id)) continue;
-    // Only live opportunities resolve; a dismissed or converted one keeps what staff decided.
+    // Only live opportunities resolve; an accepted, dismissed or converted one keeps what staff decided.
     if (row.status === "open" || row.status === "snoozed") plan.resolves.push(row.id);
   }
   return plan;
