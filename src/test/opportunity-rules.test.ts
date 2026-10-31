@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { DEFAULT_CONFIG, evaluateHousehold, summarizeBook, type HouseholdSnapshot } from "../../supabase/functions/_shared/opportunity-rules";
+import { DEFAULT_CONFIG, assignAnchors, evaluateHousehold, summarizeBook, type HouseholdSnapshot } from "../../supabase/functions/_shared/opportunity-rules";
 
 const TODAY = "2026-10-30";
 
@@ -11,7 +11,8 @@ const base = (o: Partial<HouseholdSnapshot> = {}): HouseholdSnapshot => ({
     { id: "a", name: "Jordan Rivers-Hale", role: "head_of_family", isMinor: false },
     { id: "b", name: "Sam Rivers-Hale", role: "spouse", isMinor: false },
   ],
-  groupedAum: 400_000, totalAum: 400_000, tier: "tier_2b", hasRatifiedCharter: true,
+  familyId: null, familyName: null, pooled: false, familyAum: null, householdAum: 400_000, isFamilyAnchor: true,
+  groupedAum: 400_000, totalAum: 400_000, tier: "tier_2b", tierOnRecord: true, hasRatifiedCharter: true,
   accounts: [{ id: "x1", name: "RRSP", type: "RRSP", value: 400_000, custodian: "iA Financial Group", beneficiary: "Sam", owner: "Jordan Rivers-Hale" }],
   policies: [
     { id: "p1", type: "term", coverage: 1_000_000, cashValue: 0, renewalDate: null, insuredContactId: "a", corporate: false },
@@ -114,8 +115,9 @@ describe("charter candidate and tier upgrade", () => {
     expect(types(base({ groupedAum: 400_000 }))).not.toContain("tier_upgrade");
     expect(types(base({ groupedAum: 3_000_000, totalAum: 3_000_000 }))).not.toContain("tier_upgrade");
   });
-  it("reports missing AUM as a gap that blocks three rules", () => {
-    const g = evaluateHousehold(base({ groupedAum: 0, totalAum: 0 }), TODAY).gaps.find((x) => x.field === "Assets under management")!;
+  it("reports accounts with no value as a gap that blocks three rules", () => {
+    const noValues = base({ groupedAum: 0, householdAum: 0, totalAum: 0, accounts: [{ ...base().accounts[0], value: 0 }] });
+    const g = evaluateHousehold(noValues, TODAY).gaps.find((x) => x.field === "Assets under management")!;
     expect(g.blocks).toEqual(["charter_candidate", "tier_upgrade", "idle_cash"]);
   });
 });
@@ -233,8 +235,9 @@ describe("evaluation as a whole", () => {
 
 describe("book summary", () => {
   it("counts findings by type and confidence, and ranks gaps by how many households miss them", () => {
-    const e1 = evaluateHousehold(base({ householdId: "h1", hasRatifiedCharter: false, groupedAum: 0, totalAum: 0 }), TODAY);
-    const e2 = evaluateHousehold(base({ householdId: "h2", groupedAum: 0, totalAum: 0, holdingTank: 90_000 }), TODAY);
+    const noValues = { groupedAum: 0, householdAum: 0, totalAum: 0, accounts: [{ ...base().accounts[0], value: 0 }] };
+    const e1 = evaluateHousehold(base({ householdId: "h1", hasRatifiedCharter: false, ...noValues }), TODAY);
+    const e2 = evaluateHousehold(base({ householdId: "h2", holdingTank: 90_000, ...noValues }), TODAY);
     const e3 = evaluateHousehold(base({ householdId: "h3" }), TODAY);
     const sum = summarizeBook([{ householdId: "h1", evaluation: e1 }, { householdId: "h2", evaluation: e2 }, { householdId: "h3", evaluation: e3 }]);
     expect(sum.households).toBe(3);
@@ -252,8 +255,88 @@ describe("book summary", () => {
   });
 });
 
+// A pooled family: three households, one number for the family. Family-level findings belong to the family once.
+const member = (o: Partial<HouseholdSnapshot> & { householdId: string }): HouseholdSnapshot => base({
+  label: o.householdId, familyId: "fam1", familyName: "Rivers-Hale family", pooled: true, familyAum: 900_000, groupedAum: 900_000, hasRatifiedCharter: false, tier: "tier_3", ...o,
+});
+
+describe("pooled families and households that stand alone", () => {
+  it("raises Charter and tier-line findings once for a pooled family, on its biggest household", () => {
+    const snaps = assignAnchors([
+      member({ householdId: "a", householdAum: 100_000, groupedAum: 700_000, familyAum: 700_000 }),
+      member({ householdId: "b", householdAum: 500_000, groupedAum: 700_000, familyAum: 700_000 }),
+      member({ householdId: "c", householdAum: 100_000, groupedAum: 700_000, familyAum: 700_000 }),
+    ]);
+    expect(snaps.map((s) => s.isFamilyAnchor)).toEqual([false, true, false]);
+    const per = snaps.map((s) => evaluateHousehold(s, TODAY).findings.filter((f) => f.type === "charter_candidate" || f.type === "tier_upgrade").length);
+    expect(per).toEqual([0, 2, 0]);
+  });
+  it("breaks a tie by name, and an anchor is chosen per family", () => {
+    const snaps = assignAnchors([
+      member({ householdId: "z", label: "Zed", householdAum: 100 }), member({ householdId: "m", label: "Mae", householdAum: 100 }),
+      member({ householdId: "x", label: "Other", familyId: "fam2", householdAum: 5 }),
+    ]);
+    expect(snaps.map((s) => s.isFamilyAnchor)).toEqual([false, true, true]);
+  });
+  it("words a pooled finding about the family and shows the pooled figure, not the household's", () => {
+    const [f] = evaluateHousehold(member({ householdId: "a", householdAum: 100_000 }), TODAY).findings.filter((x) => x.type === "charter_candidate");
+    expect(f.title).toBe("No Sovereignty Charter on a $900,000 family");
+    expect(f.evidence[0]).toEqual({ label: "Family AUM (pooled)", value: "$900,000" });
+  });
+  it("tiers a household that stands alone on its own assets, each raising its own findings", () => {
+    const snaps = assignAnchors([
+      base({ householdId: "a", label: "A", familyId: "fam1", pooled: false, hasRatifiedCharter: false, householdAum: 300_000, groupedAum: 300_000 }),
+      base({ householdId: "b", label: "B", familyId: "fam1", pooled: false, hasRatifiedCharter: false, householdAum: 40_000, groupedAum: 40_000 }),
+    ]);
+    expect(snaps.every((s) => s.isFamilyAnchor)).toBe(true);
+    const f = snaps.map((s) => evaluateHousehold(s, TODAY).findings.filter((x) => x.type === "charter_candidate"));
+    expect(f[0]).toHaveLength(1);
+    expect(f[0][0].title).toBe("No Sovereignty Charter on a $300,000 household");
+    expect(f[1]).toHaveLength(0);
+  });
+  it("does not ask a non-anchor household for the family's AUM or tier", () => {
+    const e = evaluateHousehold(member({ householdId: "a", isFamilyAnchor: false, tierOnRecord: false, accounts: [{ ...base().accounts[0], value: 0 }] }), TODAY);
+    expect(e.gaps.map((g) => g.field)).not.toContain("Assets under management");
+    expect(e.gaps.map((g) => g.field)).not.toContain("Service tier");
+  });
+});
+
+describe("gaps that are not really gaps", () => {
+  it("asks for a needs analysis only where cover matters", () => {
+    const quiet = base({ policies: [], lifeCoverage: 0, needs: [] });
+    expect(evaluateHousehold(quiet, TODAY).gaps.filter((g) => g.field.startsWith("Needs analysis"))).toEqual([]);
+    const withDebt = base({ policies: [], lifeCoverage: 0, needs: [], debts: [{ id: "d", type: "mortgage", balance: 300_000, corporate: false }] });
+    expect(evaluateHousehold(withDebt, TODAY).gaps.filter((g) => g.field.startsWith("Needs analysis"))).toHaveLength(2);
+    const withPolicy = base({ needs: [] });
+    expect(evaluateHousehold(withPolicy, TODAY).gaps.filter((g) => g.field.startsWith("Needs analysis"))).toHaveLength(2);
+    const withKids = base({ policies: [], lifeCoverage: 0, needs: [], members: [...base().members, { id: "k", name: "Kid", role: "minor", isMinor: true }] });
+    expect(evaluateHousehold(withKids, TODAY).gaps.filter((g) => g.field.startsWith("Needs analysis"))).toHaveLength(2);
+  });
+  it("treats no accounts, or accounts held elsewhere, as nothing to judge rather than missing AUM", () => {
+    const none = base({ accounts: [], groupedAum: 0, householdAum: 0, totalAum: 0, hasRatifiedCharter: false, tier: null });
+    expect(evaluateHousehold(none, TODAY).gaps.map((g) => g.field)).not.toContain("Assets under management");
+  });
+  it("asks for a service tier only when one should exist and none is recorded", () => {
+    expect(evaluateHousehold(base({ tierOnRecord: false }), TODAY).gaps.find((g) => g.field === "Service tier")?.blocks).toEqual(["charter_candidate", "tier_upgrade"]);
+    expect(evaluateHousehold(base({ tierOnRecord: false, tier: null }), TODAY).gaps.map((g) => g.field)).not.toContain("Service tier");
+    expect(evaluateHousehold(base(), TODAY).gaps.map((g) => g.field)).not.toContain("Service tier");
+  });
+});
+
 describe("wiring", () => {
   const read = (p: string) => readFileSync(p, "utf8");
+  it("the gatherer follows the tier engine's pooling rule and counts lawyers recorded as engagements", () => {
+    const src = read("supabase/functions/_shared/opportunity-snapshot.ts");
+    expect(src).toContain("isPooledFamily(");
+    expect(src).toContain('from("professional_engagements")');
+    expect(src).toContain("hasLegalEngagement ||");
+  });
+  it("the run skips households whose advisory relationship has ended, and resolves what they had open", () => {
+    const src = read("supabase/functions/_shared/opportunity-run.ts");
+    expect(src).toContain('.is("relationship_ended_at", null)');
+    expect(src).toContain("retired");
+    expect(src).toContain("assignAnchors(");
+  });
   it("the snapshot gatherer reads only", () => {
     expect(read("supabase/functions/_shared/opportunity-snapshot.ts")).not.toMatch(/\.(insert|update|upsert|delete)\(/);
   });

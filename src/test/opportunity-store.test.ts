@@ -64,6 +64,11 @@ describe("reconciling a run with what is stored", () => {
     expect(p.resolves).toEqual([]);
   });
 
+  it("resolves what is still live for a household whose relationship has ended, but not a decided opportunity", () => {
+    const existing = [stored({ id: "a", household_id: "gone" }), stored({ id: "b", household_id: "gone", key: "x", status: "dismissed" }), stored({ id: "c", household_id: "unread" })];
+    const p = reconcile(existing, [], new Set(["h1"]), TODAY, RULE_VERSION, new Set(["gone"]));
+    expect(p.resolves).toEqual(["a"]);
+  });
   it("handles several households and keys in one run", () => {
     const existing = [stored({ id: "a" }), stored({ id: "b", household_id: "h2" }), stored({ id: "c", household_id: "h2", key: "liquidity-surplus" })];
     const p = plan(existing, [finding(), finding({ householdId: "h2" })], ["h1", "h2"]);
