@@ -75,6 +75,8 @@ export interface Finding {
   nextStep: string;
   /** Left null until the iA commission schedule is wired in. */
   estValue: number | null;
+  /** When it is time-sensitive (an F-class migration's first chargeback maturity, a policy renewal), so the page can sort by it. */
+  dueOn?: string | null;
 }
 
 export interface DataGap {
@@ -383,7 +385,7 @@ const policyEventRule: Rule = (s, cfg, today) => {
     const days = daysBetween(today, p.renewalDate);
     if (days >= 0 && days <= cfg.policyEventDays) {
       o.findings.push({
-        householdId: s.householdId, type: "policy_event", key: `renewal:${p.id}`,
+        householdId: s.householdId, type: "policy_event", key: `renewal:${p.id}`, dueOn: p.renewalDate,
         title: `${p.type.replace(/_/g, " ")} policy renews in ${days} day${days === 1 ? "" : "s"}`,
         evidence: [{ label: "Renewal date", value: p.renewalDate }, { label: "Coverage", value: money(p.coverage) }],
         confidence: "high",
