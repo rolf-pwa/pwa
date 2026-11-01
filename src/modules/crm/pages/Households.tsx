@@ -44,6 +44,7 @@ interface HouseholdListItem {
   holdingTankCount: number;
   governance_status: string | null;
   fiduciary_entity: string | null;
+  hasPolicy: boolean;
 }
 
 const formatCurrency = (value: number) =>
@@ -59,6 +60,7 @@ const Households = () => {
   const [search, setSearch] = useState("");
   const [governanceFilter, setGovernanceFilter] = useState<string>("all");
   const [fiduciaryFilter, setFiduciaryFilter] = useState<string>("all");
+  const [policyFilter, setPolicyFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
@@ -69,6 +71,7 @@ const Households = () => {
       { data: vineyard },
       { data: storehouses },
       { data: holdingTank },
+      { data: policies },
     ] = await Promise.all([
       supabase.from("households").select("*").order("label"),
       supabase.from("families").select("id, name"),
@@ -76,6 +79,7 @@ const Households = () => {
       supabase.from("vineyard_accounts").select("contact_id, current_value"),
       supabase.from("storehouses").select("contact_id, current_value, asset_type"),
       supabase.from("holding_tank").select("household_id, current_value").eq("status", "holding"),
+      supabase.from("insurance_policies").select("contact_id"),
     ]);
 
     const familyMap = new Map((families || []).map((f: any) => [f.id, f.name]));
@@ -85,6 +89,13 @@ const Households = () => {
     (contacts || []).forEach((c: any) => {
       if (c.household_id) contactHouseholdMap.set(c.id, c.household_id);
     });
+
+    // A household has a policy on file when any of its members does.
+    const householdsWithPolicy = new Set<string>();
+    for (const p of policies || []) {
+      const hhId = contactHouseholdMap.get(p.contact_id);
+      if (hhId) householdsWithPolicy.add(hhId);
+    }
 
     // Aggregate assets per household
     const householdAssets = new Map<string, number>();
@@ -124,6 +135,7 @@ const Households = () => {
       holdingTankCount: hhHoldingCount.get(hh.id) || 0,
       governance_status: hh.governance_status,
       fiduciary_entity: hh.fiduciary_entity,
+      hasPolicy: householdsWithPolicy.has(hh.id),
     }));
 
     setHouseholds(result);
@@ -140,7 +152,8 @@ const Households = () => {
       hh.familyName.toLowerCase().includes(search.toLowerCase());
     const matchesGovernance = governanceFilter === "all" || hh.governance_status === governanceFilter;
     const matchesFiduciary = fiduciaryFilter === "all" || hh.fiduciary_entity === fiduciaryFilter;
-    return matchesSearch && matchesGovernance && matchesFiduciary;
+    const matchesPolicy = policyFilter === "all" || (policyFilter === "none" ? !hh.hasPolicy : hh.hasPolicy);
+    return matchesSearch && matchesGovernance && matchesFiduciary && matchesPolicy;
   });
 
   return (
@@ -195,11 +208,22 @@ const Households = () => {
               <SelectItem value="pwa">PWA — Advisors</SelectItem>
             </SelectContent>
           </Select>
-          {(governanceFilter !== "all" || fiduciaryFilter !== "all") && (
+          <Select value={policyFilter} onValueChange={setPolicyFilter}>
+            <SelectTrigger className="w-full sm:w-52">
+              <SelectValue placeholder="Insurance" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Insurance</SelectItem>
+              <SelectItem value="none">No policy on file</SelectItem>
+              <SelectItem value="has">Has a policy on file</SelectItem>
+            </SelectContent>
+          </Select>
+          {(governanceFilter !== "all" || fiduciaryFilter !== "all" || policyFilter !== "all") && (
             <button
               onClick={() => {
                 setGovernanceFilter("all");
                 setFiduciaryFilter("all");
+                setPolicyFilter("all");
               }}
               className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
