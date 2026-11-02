@@ -10,6 +10,7 @@ export interface ServiceAccountKey {
   token_uri: string;
 }
 
+import "./ai-usage.ts"; // records each call's token use (see ai-usage.ts)
 import { fetchWithVertexRetry, isVertexBusy, withModelFallback, VERTEX_BUSY_MESSAGE } from "./vertex-retry.ts";
 
 // Re-exported so call sites keep importing everything from ./vertex-ai.ts.
