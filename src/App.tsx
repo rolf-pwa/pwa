@@ -68,6 +68,7 @@ const PropertyDetail = lazy(() => import("@/modules/crm/pages/PropertyDetail"));
 const Workbench = lazy(() => import("@/modules/audit/pages/Workbench"));
 const Pipeline = lazy(() => import("@/modules/crm/pages/Pipeline"));
 const BookOfBusiness = lazy(() => import("@/modules/crm/pages/BookOfBusiness"));
+const AiUsage = lazy(() => import("@/modules/crm/pages/AiUsage"));
 const Vault = lazy(() => import("@/modules/crm/pages/Vault"));
 const VaultAudit = lazy(() => import("@/modules/crm/pages/VaultAudit"));
 const VaultGuest = lazy(() => import("@/modules/portal/pages/VaultGuest"));
@@ -204,6 +205,7 @@ const App = () => (
               <Route path="/workbench" element={<ProtectedRoute><Workbench /></ProtectedRoute>} />
               <Route path="/pipeline" element={<ProtectedRoute><Pipeline /></ProtectedRoute>} />
               <Route path="/book-of-business" element={<ProtectedRoute><BookOfBusiness /></ProtectedRoute>} />
+              <Route path="/ai-usage" element={<ProtectedRoute><AiUsage /></ProtectedRoute>} />
               <Route path="/services" element={<ProtectedRoute><BillingServices /></ProtectedRoute>} />
               <Route path="/invoices" element={<ProtectedRoute><BillingInvoices /></ProtectedRoute>} />
               <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
