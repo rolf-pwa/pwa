@@ -32,6 +32,7 @@ import { runGeorgiaTasks } from "../_shared/georgia-task-service.ts";
 import { classifyEmail, calendarConflicts, groupWeek, sectionsFromEmails, type BriefingEmail, type BriefingSections, type CalEvent } from "../_shared/briefing-facts.ts";
 import { generateVertexContent, parseServiceAccountKey, GEMINI_DRAFTING_MODEL, withThinking } from "../_shared/vertex-ai.ts";
 import { FCLASS_LATER_KEY } from "../_shared/fclass-migration.ts";
+import { usageBriefingItem, type DayGroup } from "../_shared/ai-usage-briefing.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -444,6 +445,8 @@ interface FirmFacts {
   sweep: string | null;
   /** New book-of-business opportunities this week, as firm-tile items (not part of the model's facts). */
   opportunities: BriefingItem[];
+  /** Last week's AI cost, on Mondays only (built from the logged token counts, not the model's facts). */
+  aiUsage: BriefingItem[];
 }
 
 /** The weekly book-of-business lines: what is new and still open, the surest first. Built from the stored findings, never reworded. A failure leaves them off rather than the briefing. */
@@ -463,17 +466,33 @@ async function gatherOpportunityItems(db: Db, todayStr: string): Promise<Briefin
   }
 }
 
+/** The Monday line about last week's AI cost. A failure leaves it off rather than the briefing. */
+async function gatherAiUsageItems(db: Db, todayStr: string): Promise<BriefingItem[]> {
+  try {
+    const { data, error } = await db.rpc("ai_usage_summary", { days: 21 });
+    if (error) throw new Error(error.message);
+    // deno-lint-ignore no-explicit-any
+    const rows: DayGroup[] = (data ?? []).map((r: any) => ({ day: String(r.day), label: r.label, model: r.model, calls: Number(r.calls), prompt_tokens: Number(r.prompt_tokens), cached_tokens: Number(r.cached_tokens), output_tokens: Number(r.output_tokens), thinking_tokens: Number(r.thinking_tokens) }));
+    const item = usageBriefingItem(rows, todayStr);
+    return item ? [item] : [];
+  } catch (e) {
+    console.error("[briefing] ai usage", e);
+    return [];
+  }
+}
+
 // What Georgia is waiting on you for: unread notifications, reviews and rebalances handed to you, a monthly file ready or held, and statements read but not approved.
 async function gatherFirmFacts(db: Db, todayStr: string, userId: string): Promise<FirmFacts> {
   const since = new Date(Date.parse(`${todayStr}T12:00:00Z`) - 3 * 86_400_000).toISOString();
   const sweptSince = new Date(Date.now() - 26 * 3_600_000).toISOString();
-  const [{ data: notes }, { data: esc }, { data: runs }, { count }, { data: swept }, opportunities] = await Promise.all([
+  const [{ data: notes }, { data: esc }, { data: runs }, { count }, { data: swept }, opportunities, aiUsage] = await Promise.all([
     db.from("staff_notifications").select("id, title, link, source_type").eq("read", false).gte("created_at", since).order("created_at", { ascending: false }).limit(15),
     db.from("review_obligations").select("id, kind, family_id").eq("mode", "live").eq("status", "escalated").limit(15),
     db.from("monthly_import_runs").select("id, snapshot_date, status").in("status", ["ready", "held"]).order("snapshot_date", { ascending: false }).limit(2),
     db.from("stage2_verification_audit").select("id", { count: "exact", head: true }).eq("review_status", "pending"),
     db.from("inbox_sweep_items").select("bucket").eq("user_id", userId).gte("swept_at", sweptSince).limit(500),
     gatherOpportunityItems(db, todayStr),
+    gatherAiUsageItems(db, todayStr),
   ]);
   const sweptCounts: Record<string, number> = {};
   // deno-lint-ignore no-explicit-any
@@ -493,6 +512,7 @@ async function gatherFirmFacts(db: Db, todayStr: string, userId: string): Promis
     pendingScans: count ?? 0,
     sweep: sweepLine(sweptCounts),
     opportunities,
+    aiUsage,
   };
 }
 
@@ -615,6 +635,7 @@ function buildSections(calendar: CalendarFacts, email: EmailFacts, quo: QuoFacts
       ...(firm.sweep ? [{ key: "sweep", label: firm.sweep, link: "/ask-georgia" }] : []),
       ...firm.notifications.map((n) => ({ key: `note:${n.id}`, label: n.title, link: n.link ?? "/dashboard" })),
       ...firm.opportunities,
+      ...firm.aiUsage,
     ],
     counts: e.counts,
   };
