@@ -307,6 +307,14 @@ export const describeProposalItem = (i: ProposalItem): string => {
 
 // ───── Rolf's task to carry out an authorized rebalancing ─────
 
+/** The title of Rolf's task to carry out an authorized rebalancing: the household's name, then the work. */
+export const rebalanceTaskTitle = (householdName: string): string => `${householdName.trim() || "Household"}: Portfolio Rebalancing`;
+/**
+ * Matches that task when it is closed (PostgREST `or` filter on pm_tasks.title): the current title, and the two older ones ("Rebalance <family>:
+ * acknowledged" and "...: carry out N authorized changes for <name>") so a task made before the rename still closes.
+ */
+export const REBALANCE_TASK_TITLE_FILTER = "title.like.%: Portfolio Rebalancing,title.like.Rebalance %: acknowledged,title.like.Rebalance %: carry out%";
+
 export interface RebalanceTaskPlan { description: string; subtasks: { title: string; description: string }[] }
 const dollars = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
 const first = (name: string | null) => (name ? name.split(" ")[0] : null);

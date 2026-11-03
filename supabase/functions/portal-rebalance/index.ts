@@ -9,7 +9,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validatePortalContact } from "../_shared/portal-auth.ts";
 import { REBALANCE_STATEMENT, REBALANCE_STATEMENT_VERSION, isFamilyAdult, pacificDate, windowLabel } from "../_shared/review-windows.ts";
 import { scopeToUnit, viewerUnit } from "../_shared/review-unit-for-contact.ts";
-import { checkOwnAcknowledged, proposalFullyAuthorized, rebalanceTaskPlan } from "../_shared/portfolio-review-client.ts";
+import { checkOwnAcknowledged, proposalFullyAuthorized, rebalanceTaskPlan, rebalanceTaskTitle } from "../_shared/portfolio-review-client.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -57,6 +57,8 @@ Deno.serve(async (req) => {
     const { data: fam } = await db.from("families").select("name").eq("id", me.family_id).maybeSingle();
     const { data: hhRow } = unit.householdId ? await db.from("households").select("label").eq("id", unit.householdId).maybeSingle() : { data: null as any };
     const family = familyTitle(hhRow?.label ? `${fam?.name ?? ""}: ${hhRow.label}` : fam?.name ?? null);
+    // Rolf's task is named for the household: "<Household>: Portfolio Rebalancing" (the family when there is no household of its own).
+    const taskTitle = rebalanceTaskTitle(hhRow?.label ?? family);
     const name = `${me.first_name ?? ""} ${me.last_name ?? ""}`.trim() || "A client";
     const label = windowLabel(ob.window_start, ob.window_end);
     const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || null;
@@ -99,10 +101,10 @@ Deno.serve(async (req) => {
       if (authorized.length) {
         // This person's changes grouped by account with the pack's exact figures and a link to the pack, and a subtask per item to check off.
         const plan = rebalanceTaskPlan(authorized, { clientName: name, label, today, packUrl: authUrl, stored: `The authorization, with the exact wording they agreed to (version ${REBALANCE_STATEMENT_VERSION}) and the items as they saw them, is stored with the family's records.` });
-        const parentId = await task(`Rebalance ${family}: carry out ${authorized.length} authorized change${authorized.length === 1 ? "" : "s"} for ${first}`, plan.description, 3);
+        const parentId = await task(taskTitle, plan.description, 3);
         if (parentId) for (const st of plan.subtasks) await task(st.title, st.description, 3, parentId);
       } else {
-        await task(`Rebalance ${family}: acknowledged`, `${name} reviewed the ${label} rebalancing you published and acknowledged it in the portal on ${today}. Carry it out, then mark it done on Georgia Reviews so the family is told.${authUrl ? `\n\nExactly what they authorized, by whom and when: ${authUrl}` : ""}\n\nThe acknowledgement (wording version ${REBALANCE_STATEMENT_VERSION}, with the proposal they saw) is stored with the family's records.`, 3);
+        await task(taskTitle, `${name} reviewed the ${label} rebalancing you published and acknowledged it in the portal on ${today}. Carry it out, then mark it done on Georgia Reviews so the family is told.${authUrl ? `\n\nExactly what they authorized, by whom and when: ${authUrl}` : ""}\n\nThe acknowledgement (wording version ${REBALANCE_STATEMENT_VERSION}, with the proposal they saw) is stored with the family's records.`, 3);
       }
       await db.from("staff_notifications").insert({ title: everyone ? `Rebalancing authorized: ${family}` : `${first} authorized their rebalancing changes: ${family}`, body: everyone ? `${name} authorized the ${label} rebalancing.` : `${name} authorized the changes to their accounts. The other account holder has not yet authorized theirs.`, link: `/families/${me.family_id}`, contact_id: me.id, source_type: "rebalancing" });
       await db.from("review_agent_events").insert({ family_id: me.family_id, obligation_id: ob.id, mode: "live", kind: "rebalancing_acknowledged", detail: { by: name, label, items: authorized.length, complete: everyone } });
