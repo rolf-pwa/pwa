@@ -14,6 +14,7 @@ import { Loader2, Send, Plus, Eye, EyeOff, X, Bot, RefreshCw, Trash2 } from "luc
 import { toast } from "sonner";
 import { getTaskAgent } from "@/shared/lib/agents";
 import type { PmTask, PmTaskCollaborator, PmTaskComment } from "@/shared/lib/agents";
+import { EditableTaskTitle } from "./EditableTaskTitle";
 import { StaffAssigneePicker } from "./StaffAssigneePicker";
 import { ProfessionalPicker } from "./ProfessionalPicker";
 import { HouseholdMemberPicker } from "./HouseholdMemberPicker";
@@ -306,6 +307,7 @@ export function TaskDetailPanel({ task, onChanged, onDeleted }: Props) {
 
   return (
     <div className="space-y-4 border-t border-border pt-4">
+      <EditableTaskTitle task={task} onSaved={onChanged} />
       <div className="flex flex-wrap items-center gap-3">
         <Select value={task.status} onValueChange={setStatus}>
           <SelectTrigger className="h-8 w-[140px]">
