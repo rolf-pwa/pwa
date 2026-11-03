@@ -108,7 +108,8 @@ export function TodayTabs({ sections, live, onDone, briefing, aside }: { section
         <>
           <SheetHeader>
             <SheetTitle>{TILE_LABEL[tab]}</SheetTitle>
-            <SheetDescription>{HINT[tab]} {phone ? "Tap" : "Click"} one to open it; the person it is about opens in their own page.</SheetDescription>
+            <SheetDescription>{HINT[tab]} {phone ? "Tap" : "Click"} one to open it; {tab === "tasks" ? "a task opens in the task workspace" : "the person it is about opens in their own page"}.</SheetDescription>
+            {tab === "tasks" && <p className="text-sm"><Link to="/tasks" className="font-medium text-accent hover:underline" data-testid="open-task-workspace">Open the task workspace</Link></p>}
           </SheetHeader>
           <div className="mt-4 space-y-5">
             {tiles[tab].groups.map((g) => section(g, tiles[tab].groups.length > 1))}

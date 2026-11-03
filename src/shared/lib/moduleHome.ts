@@ -8,7 +8,7 @@ export const MODULES: Module[] = [
   { label: "Professionals", home: "/professionals", prefixes: ["/professionals"], listIsHome: true },
   { label: "Holding Tank", home: "/holding-tank", prefixes: ["/holding-tank"], listIsHome: true },
   { label: "Workbench", home: "/workbench", prefixes: ["/workbench", "/quarterly-review", "/quarterly-vfo-audit"], listIsHome: true },
-  { label: "Projects", home: "/projects", prefixes: ["/projects"] },
+  { label: "Projects", home: "/projects", prefixes: ["/projects", "/tasks"] },
   { label: "Pipeline", home: "/pipeline", prefixes: ["/pipeline"] },
   { label: "Book of Business", home: "/book-of-business", prefixes: ["/book-of-business"] },
   { label: "Insurance", home: "/insurance", prefixes: ["/insurance"] },

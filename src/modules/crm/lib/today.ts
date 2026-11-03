@@ -74,7 +74,7 @@ export function buildTiles(s: BriefingSections | null, live: LiveToday | null): 
     ...week.map((d) => ({ id: `day:${d.date}`, label: dayLabel(d.date), items: d.items.map((i) => ev({ ...i, end: null })) })),
   ];
 
-  const task = (t: Task, badge?: string): TodayItem => ({ key: `task:${t.id ?? t.title}`, title: t.title, sub: [t.project, dueText(t.due_date)].filter(Boolean).join(" · ") || undefined, badge, href: t.link });
+  const task = (t: Task, badge?: string): TodayItem => ({ key: `task:${t.id ?? t.title}`, title: t.title, sub: [t.project, dueText(t.due_date)].filter(Boolean).join(" · ") || undefined, badge, href: t.id ? `/tasks?task=${t.id}` : t.link });
   const lt = live?.tasks;
   const tasks: TodayGroup[] = lt ? [
     { id: "overdue", label: "Overdue", items: lt.overdue.map((t) => task(t, "Overdue")) },
