@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildPortfolioPack, type ModelPortfolio, type PackAccount } from "../../supabase/functions/_shared/portfolio-review";
-import { buildClientView, portfolioReviewReadyEmail, shortAccountName, ALL_INCLUDED } from "../../supabase/functions/_shared/portfolio-review-client";
+import { readFileSync } from "node:fs";
+import { buildClientView, portfolioReviewReadyEmail, shortAccountName, ALL_INCLUDED, rebalanceTaskTitle, REBALANCE_TASK_TITLE_FILTER } from "../../supabase/functions/_shared/portfolio-review-client";
 
 const balanced: ModelPortfolio = { asOf: "2026-05-31", key: "balanced", label: "Balanced", incomeMin: 35, incomeMax: 55, equityMin: 45, equityMax: 65, incomeTarget: 40, funds: [{ name: "Fixed income managed portfolio (iA)", weight: 40 }, { name: "Fidelity Insights", weight: 60 }] };
 const acct = (over: Partial<PackAccount> = {}): PackAccount => ({
@@ -296,5 +297,25 @@ describe("accounts on different profiles", () => {
     expect(v.funds).toBeNull();
     expect(v.fundsSets!.map((f) => f.modelLabel).sort()).toEqual(["Aggressive", "Growth"]);
     expect(v.fundsSets!.find((f) => f.modelLabel === "Growth")!.accounts).toEqual(["iA RRSP …1111"]);
+  });
+});
+
+describe("the title of Rolf's task to carry out an authorized rebalancing", () => {
+  const read = (p: string) => readFileSync(p, "utf8");
+  it("is the household's name, then Portfolio Rebalancing", () => {
+    expect(rebalanceTaskTitle("Rivers-Hale Household")).toBe("Rivers-Hale Household: Portfolio Rebalancing");
+    expect(rebalanceTaskTitle("  Jordan & Casey  ")).toBe("Jordan & Casey: Portfolio Rebalancing");
+    expect(rebalanceTaskTitle("")).toBe("Household: Portfolio Rebalancing");
+  });
+  it("is used for the task with the authorized changes and for the plain acknowledgement alike, and the description and subtasks are untouched", () => {
+    const src = read("supabase/functions/portal-rebalance/index.ts");
+    expect(src).toContain("rebalanceTaskTitle(hhRow?.label ?? family)");
+    expect(src).toContain("await task(taskTitle, plan.description, 3)");
+    expect(src).toContain("for (const st of plan.subtasks) await task(st.title, st.description, 3, parentId)");
+    expect(src).not.toContain("carry out ${authorized.length}");
+  });
+  it("is still found, with the two older titles, when the rebalancing is marked done, so the task closes with its subtasks", () => {
+    expect(REBALANCE_TASK_TITLE_FILTER).toBe("title.like.%: Portfolio Rebalancing,title.like.Rebalance %: acknowledged,title.like.Rebalance %: carry out%");
+    expect(read("supabase/functions/review-agent-admin/index.ts").split(".or(REBALANCE_TASK_TITLE_FILTER)")).toHaveLength(3);
   });
 });

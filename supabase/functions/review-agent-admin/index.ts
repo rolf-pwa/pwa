@@ -14,7 +14,7 @@ import { inviteesOf, pacificDate, type FamilyContact } from "../_shared/review-w
 import { storableMessages } from "../_shared/support-context.ts";
 import { MODEL_PROMPT, validateModels } from "../_shared/ia-model-parse.ts";
 import { isPooledFamily } from "../_shared/review-units.ts";
-import { buildClientProposal, buildClientView, describeAuthorizedItem, narrativeParagraphs, portfolioReviewReadyEmail, type ClientIncludes } from "../_shared/portfolio-review-client.ts";
+import { buildClientProposal, buildClientView, describeAuthorizedItem, narrativeParagraphs, portfolioReviewReadyEmail, REBALANCE_TASK_TITLE_FILTER, type ClientIncludes } from "../_shared/portfolio-review-client.ts";
 import { attachItem, buildPackage, createFile, listFiles, removeItem } from "../_shared/insurance-file-service.ts";
 import { ffCompile, ffGet, ffSave, ffSend } from "../_shared/fact-find-service.ts";
 import { rCompile, rGet, rSave, rSend } from "../_shared/replacement-service.ts";
@@ -153,7 +153,7 @@ Deno.serve(async (req) => {
       if (o.completed_at) return json({ ok: true });
       await db.from("review_obligations").update({ completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", id);
       // Close Rolf's task to carry it out (old and new titles) and its subtasks.
-      const { data: carry } = await db.from("pm_tasks").select("id").eq("family_id", o.family_id).eq("status", "open").or("title.like.Rebalance %: acknowledged,title.like.Rebalance %: carry out%");
+      const { data: carry } = await db.from("pm_tasks").select("id").eq("family_id", o.family_id).eq("status", "open").or(REBALANCE_TASK_TITLE_FILTER);
       const carryIds = (carry ?? []).map((t: any) => t.id);
       if (carryIds.length) {
         const doneAt = new Date().toISOString();
@@ -621,7 +621,7 @@ Deno.serve(async (req) => {
       if (o.kind === "rebalancing" && !o.completed_at) patch.completed_at = now;
       await db.from("review_obligations").update(patch).eq("id", id);
       if (o.kind === "rebalancing") {
-        const { data: carry } = await db.from("pm_tasks").select("id").eq("family_id", o.family_id).eq("status", "open").or("title.like.Rebalance %: acknowledged,title.like.Rebalance %: carry out%");
+        const { data: carry } = await db.from("pm_tasks").select("id").eq("family_id", o.family_id).eq("status", "open").or(REBALANCE_TASK_TITLE_FILTER);
         const carryIds = (carry ?? []).map((t: any) => t.id);
         if (carryIds.length) {
           await db.from("pm_tasks").update({ status: "done", completed_at: now }).in("id", carryIds);
