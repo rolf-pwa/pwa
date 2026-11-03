@@ -10,13 +10,14 @@ const tasks = [task("a", "Send the transfer form", { due_date: day(-2) }), task(
 vi.mock("@/shared/components/AppLayout", () => ({ AppLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
 vi.mock("@/shared/hooks/useAuth", () => ({ useAuth: () => ({ user: { id: "rolf" } }) }));
 vi.mock("@/shared/hooks/use-mobile", () => ({ useIsMobile: () => false }));
-vi.mock("@/shared/lib/agents", () => ({ getTaskAgent: () => ({ listTasks: async () => tasks, listProjects: async () => [] }) }));
+const updateTask = vi.fn(async (id: string, u: Record<string, unknown>) => ({ ...tasks.find((t) => t.id === id)!, ...u }));
+vi.mock("@/shared/lib/agents", () => ({ getTaskAgent: () => ({ listTasks: async () => tasks, listProjects: async () => [], updateTask: (id: string, u: Record<string, unknown>) => updateTask(id, u) }) }));
 vi.mock("@/modules/pm/lib/taskEntityLinks", () => ({ resolveTaskEntityLinks: async () => ({}) }));
 vi.mock("@/modules/pm/components/TaskDetailPanel", () => ({ TaskDetailPanel: ({ task: t }: { task: { title: string } }) => <div data-testid="panel">panel for {t.title}</div> }));
 import TaskWorkspace from "@/modules/pm/pages/TaskWorkspace";
 
 const show = (url = "/tasks") => render(<MemoryRouter initialEntries={[url]}><TaskWorkspace /></MemoryRouter>);
-beforeEach(() => { document.body.innerHTML = ""; });
+beforeEach(() => { document.body.innerHTML = ""; updateTask.mockClear(); });
 
 describe("the task workspace page", () => {
   it("lists my overdue tasks first, with counts on the tabs, and opens a task in the full panel", async () => {
@@ -44,5 +45,29 @@ describe("the task workspace page", () => {
     fireEvent.change(screen.getByPlaceholderText(/Search tasks/), { target: { value: "zzz" } });
     expect(screen.queryAllByTestId("task-row")).toHaveLength(0);
     expect(screen.getByText("No task matches.")).toBeTruthy();
+  });
+  it("renames the open task: click the title, type, Enter saves it and the list follows", async () => {
+    show("/tasks?task=a");
+    await waitFor(() => expect(screen.getByTestId("task-title").textContent).toBe("Send the transfer form"));
+    fireEvent.click(screen.getByTestId("task-title"));
+    const input = screen.getByTestId("task-title-input") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "  Send the signed transfer form  " } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(updateTask).toHaveBeenCalledWith("a", { title: "Send the signed transfer form" }));
+    await waitFor(() => expect(screen.getByTestId("task-title").textContent).toBe("Send the signed transfer form"));
+    expect(within(screen.getByTestId("task-list")).getByText("Send the signed transfer form")).toBeTruthy();
+  });
+  it("leaves the title alone on Escape, when it is unchanged or when it is emptied", async () => {
+    show("/tasks?task=a");
+    await waitFor(() => expect(screen.getByTestId("task-title")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("task-title"));
+    fireEvent.change(screen.getByTestId("task-title-input"), { target: { value: "Something else" } });
+    fireEvent.keyDown(screen.getByTestId("task-title-input"), { key: "Escape" });
+    expect(screen.getByTestId("task-title").textContent).toBe("Send the transfer form");
+    fireEvent.click(screen.getByTestId("task-title"));
+    fireEvent.change(screen.getByTestId("task-title-input"), { target: { value: "   " } });
+    fireEvent.keyDown(screen.getByTestId("task-title-input"), { key: "Enter" });
+    expect(screen.getByTestId("task-title").textContent).toBe("Send the transfer form");
+    expect(updateTask).not.toHaveBeenCalled();
   });
 });
