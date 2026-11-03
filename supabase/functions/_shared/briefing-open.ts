@@ -2,7 +2,7 @@
 // email, a notification). Once Rolf has dealt with it, it drops off the briefing and moves to "handled". Pure: the current state is passed in.
 //
 // Keys: task:overdue:<id>  task:today:<id>  task:upcoming:<id>  request:<id>  email:<id>  quo:msg:<id>  quo:call:<id>
-//       esc:<id>  import:<id>  scans  sweep  note:<id>  conflict:<a>|<b>  opp:<id>  opp:more
+//       esc:<id>  import:<id>  scans  sweep  note:<id>  conflict:<a>|<b>  opp:<id>  opp:more  aiusage:<week start> (Mondays; stays until dismissed)
 
 import { moreLabel } from "./opportunity-briefing.ts";
 
