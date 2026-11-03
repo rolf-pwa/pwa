@@ -66,11 +66,12 @@ describe("what the buttons show", () => {
     expect(t.calendar.groups.map((g) => g.label)).toEqual(["Today", "Wed, Oct 28"]);
     expect(t.calendar.groups[0].items[0]).toMatchObject({ title: "Client A", badge: "Overlaps", href: "https://calendar/1" });
   });
-  it("counts overdue and due-today tasks, keeps the week and Georgia's own folded away, and opens the client or project", () => {
+  it("counts overdue and due-today tasks, keeps the week and Georgia's own folded away, and opens the task in the workspace", () => {
     const t = buildTiles(sections(), lv());
     expect(t.tasks.count).toBe(2);
     expect(t.tasks.groups.map((g) => [g.id, g.collapsed ?? false, g.watch ?? true])).toEqual([["overdue", false, true], ["due", false, true], ["week", true, false], ["georgia", true, false]]);
-    expect(t.tasks.groups[0].items[0]).toMatchObject({ title: "Send the transfer form", badge: "Overdue", href: "/contacts/c1", sub: "Santos · due Thu, Oct 22" });
+    expect(t.tasks.groups[0].items[0]).toMatchObject({ title: "Send the transfer form", badge: "Overdue", href: "/tasks?task=t1", sub: "Santos · due Thu, Oct 22" });
+    expect(t.tasks.groups[1].items[0]).toMatchObject({ title: "Call Jane", href: "/tasks?task=t2" });
   });
   it("knows what is new: items whose keys were not seen, and nothing before anything has been remembered", () => {
     const items = watched(buildTiles(sections(), live()).messages);
@@ -159,7 +160,8 @@ describe("the tabs and what they show", () => {
     show();
     pick("tasks");
     const panel = screen.getByTestId("today-panel");
-    expect(within(panel).getByText("Send the transfer form").closest("a")?.getAttribute("href")).toBe("/contacts/c1");
+    expect(within(panel).getByText("Send the transfer form").closest("a")?.getAttribute("href")).toBe("/tasks?task=t1");
+    expect(within(panel).getByTestId("open-task-workspace").getAttribute("href")).toBe("/tasks");
     expect(within(panel).getByText("Overdue", { selector: "span" })).toBeTruthy();
     expect(within(panel).getByTestId("group-week").querySelector("details")).toBeTruthy();
     expect(within(panel).getByTestId("group-georgia").querySelector("details")).toBeTruthy();
