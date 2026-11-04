@@ -14,6 +14,7 @@ Georgia answers simple, non-financial client requests herself. Today every submi
 
 ## Decided
 
+- **iA investments (Rolf, 2026-11-04):** iA is rolling out self-serve investment changes. For now the client can do **deposits** themselves; everything else on the investment side stays with Rolf until iA releases more.
 - **First scope:** status and "where is my..." answers; sending a document already on file; contact-detail updates; meeting logistics; and, for deposits and banking-detail changes, pointing the client to iA Financial's self-serve client space (Georgia never does these herself).
 - **Autonomy:** draft first, then graduate, category by category.
 - **Contact-detail changes:** Georgia applies them and tells Rolf (see the safeguards below).
@@ -56,7 +57,19 @@ Each request ends in one of four outcomes, recorded on the request:
 
 ### iA self-serve content
 
-Georgia must not describe iA's screens from memory. The plan needs a short knowledge-base entry, written and approved by Rolf, listing what iA's client space lets a client do (deposits, banking details, statements, tax slips), where each is, and what still needs the advisor. Georgia answers only from that entry, and anything not in it becomes a task. She never asks for or stores banking details in the portal. The current "banking and withdrawal" form should stop collecting them once this is live.
+Georgia must not describe iA's screens from memory. Her source is a short entry Rolf approves ([draft](georgia-ia-self-serve-entry.md)), built from iA's own guide "List of transactions available online" (SRM503-178A, March 2026) and Rolf's note on investments. She answers only from it, and anything not in it becomes a task. She never asks for or stores banking details in the portal; the current "banking and withdrawal" form should stop collecting them once this is live.
+
+What the guide says a client can do alone in **My Client Space**:
+
+- **Every insurance contract** (Access Life, Transition, Term, Whole, Participating, Universal): change banking information, change payment date, change contact information.
+- **Modernized contracts only:** change payment frequency or method, change beneficiary (except irrevocable), delay, stop or reinstate payments. "Modernized" means Access Life sold since April 2024, Transition sold since 24 November 2025, and Term and Whole Life sold since 30 March 2026. Participating and Universal Life are never modernized.
+- **Investments:** deposits, for now.
+
+Everything else (decreasing or terminating cover, changing the advisor, changing name, sex or date of birth, coverage changes, loans and withdrawals, transfers and investment instructions) is done by the advisor in iA's Advisor Centre, by EVO online changes, or on a paper form, so it stays with Rolf.
+
+**Georgia has to know whether a contract is modernized.** The CRM already holds each policy's type and issue date, so a small pure rule decides it (`isModernized(type, issue date)`) and she never guesses. If the type or date is missing she hands over.
+
+**iA's list will change** (investments are rolling out now), so the capabilities are kept as data Rolf can switch on, not as wording baked into a prompt.
 
 ### Contact-detail safeguards
 
@@ -93,6 +106,7 @@ The portal login finds a client by their email address, so changing an email cha
 
 ## Open items for Rolf
 
-- The iA self-serve entry: what the client space supports, and the links.
-- Whether withdrawals belong in the iA self-serve list too, or stay with Rolf.
+- Approve or correct the [iA self-serve entry](georgia-ia-self-serve-entry.md), and give the web address and the steps for a deposit (the guide has no steps or links).
+- Beneficiary changes on modernized contracts are self-serve at iA. Georgia could tell the client so, or leave them with Rolf because of the estate-planning side. Recommended: leave them with Rolf, and let Georgia mention the option only if he says so.
+- Whether withdrawals belong in the self-serve list too, or stay with Rolf (the investment note covers deposits only).
 - Which documents Georgia may send: statements, tax slips, confirmation letters, or only what is already in My Documents.
