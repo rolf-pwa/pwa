@@ -1,6 +1,8 @@
 # Georgia in the client portal: answering simple requests without a task
 
-Draft, 2026-11-04. Nothing here is built. The decisions Rolf has made are marked **Decided**; the rest is a proposal.
+Draft, 2026-11-04. The decisions Rolf has made are marked **Decided**; the rest is a proposal.
+
+**Status:** stage 1 (foundations) is built and changes no behaviour: the request outcome columns, the master switch and per-category modes (all off), the audit table, the gate and triage rules (`_shared/georgia-triage.ts`) and the iA self-serve rules (`_shared/ia-self-serve.ts`). Nothing calls them yet; stage 2 (shadow) wires them in.
 
 ## Goal
 
