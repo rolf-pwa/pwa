@@ -9,12 +9,32 @@ export const ACCESS_LIFE_SINCE = "2024-04-01";
 export const TRANSITION_SINCE = "2025-11-24";
 export const TERM_WHOLE_SINCE = "2026-03-30";
 
+/** insurance_policies.ia_product: the iA product, as iA's own guide names them. The CRM's policy_type is coarser (it cannot tell Access Life from Term, or Participating from Whole Life). */
+export const IA_PRODUCT_LABEL: Record<string, string> = {
+  access_life: "Access Life (simplified issue)",
+  transition: "Transition (critical illness)",
+  term: "Term Life",
+  whole_life: "Whole Life",
+  participating_life: "Participating Life",
+  universal_life: "Universal Life",
+  accifamily: "Accifamily (accident)",
+  acci_7_plus: "Acci 7 PLUS (accident)",
+  disability: "Disability",
+  cancer_guard: "Cancer Guard (critical illness)",
+  other: "Other iA product",
+};
+export const IA_PRODUCTS = Object.keys(IA_PRODUCT_LABEL);
+
+/** Whether a policy's carrier is iA: self-serve at My Client Space applies to nobody else's policies. */
+export const isIaCarrier = (carrier: string | null | undefined): boolean => /\b(ia\b|ia financial|industrial[- ]alliance)/i.test(String(carrier ?? ""));
+
 export interface PolicyFacts {
   /** insurance_policies.policy_type: term, whole_life, universal_life, critical_illness, disability, long_term_care, other. */
   policy_type: string | null;
   issue_date: string | null;
-  /** Anything that names the iA product (a plan name or note), for the cases the type cannot settle. */
-  hint?: string | null;
+  /** insurance_policies.ia_product: when set, it settles the question. */
+  ia_product?: string | null;
+  carrier?: string | null;
 }
 
 export interface ModernizedAnswer { modernized: Modernized; why: string }
@@ -23,22 +43,26 @@ const day = (d: string | null | undefined) => (d ? String(d).slice(0, 10) : null
 
 /**
  * Whether a policy is a "modernized" contract: Access Life sold since April 2024, Transition sold since 24 November 2025, and Term and Whole Life
- * sold since 30 March 2026. Participating and Universal Life never are, and neither are the living-benefits products. The CRM's policy type
- * does not separate Access Life from Term or Whole Life, or Participating from Whole Life, so those return null unless a hint names the product.
+ * sold since 30 March 2026. Participating and Universal Life never are, and neither are the living-benefits products. The iA product settles it
+ * when it is recorded. Without it the CRM's policy type cannot separate Access Life from Term or Whole Life, or Participating from Whole Life,
+ * so those return null and Georgia hands the request to Rolf.
  */
 export function isModernized(p: PolicyFacts): ModernizedAnswer {
   const type = String(p.policy_type ?? "").toLowerCase();
   const issued = day(p.issue_date);
-  const hint = String(p.hint ?? "").toLowerCase();
+  const product = String(p.ia_product ?? "").toLowerCase();
   const no = (why: string): ModernizedAnswer => ({ modernized: false, why });
   const unknown = (why: string): ModernizedAnswer => ({ modernized: null, why });
 
-  if (/participating/.test(hint)) return no("Participating Life is not a modernized contract");
-  if (/cancer guard|accifamily|acci 7|disability/.test(hint)) return no("A living-benefits product is not a modernized contract");
-  if (/universal/.test(hint)) return no("Universal Life is not a modernized contract");
+  if (p.carrier != null && String(p.carrier).trim() && !isIaCarrier(p.carrier)) return no("Not an iA policy");
+  if (product === "participating_life") return no("Participating Life is not a modernized contract");
+  if (product === "universal_life") return no("Universal Life is not a modernized contract");
+  if (["accifamily", "acci_7_plus", "disability", "cancer_guard"].includes(product)) return no("A living-benefits product is not a modernized contract");
+  if (product && product !== "other" && !issued) return unknown("The policy has no issue date");
+  if (product === "access_life") return issued! >= ACCESS_LIFE_SINCE ? { modernized: true, why: "Access Life sold since April 2024" } : no("Access Life sold before April 2024");
+  if (product === "transition") return issued! >= TRANSITION_SINCE ? { modernized: true, why: "Transition sold since 24 November 2025" } : no("Transition sold before 24 November 2025");
+  if (product === "term" || product === "whole_life") return issued! >= TERM_WHOLE_SINCE ? { modernized: true, why: `${IA_PRODUCT_LABEL[product]} sold since 30 March 2026` } : no(`${IA_PRODUCT_LABEL[product]} sold before 30 March 2026`);
   if (!issued) return unknown("The policy has no issue date");
-  if (/access life|simplified issue/.test(hint)) return issued >= ACCESS_LIFE_SINCE ? { modernized: true, why: "Access Life sold since April 2024" } : no("Access Life sold before April 2024");
-  if (/transition/.test(hint)) return issued >= TRANSITION_SINCE ? { modernized: true, why: "Transition sold since 24 November 2025" } : no("Transition sold before 24 November 2025");
 
   switch (type) {
     case "universal_life": return no("Universal Life is not a modernized contract");
@@ -80,6 +104,12 @@ export const INVESTMENT_CAPABILITIES_LIVE: Capability[] = ["investment_deposit"]
 export function insuranceSelfServe(m: Modernized): Capability[] {
   const all: Capability[] = ["insurance_banking", "insurance_payment_date", "insurance_contact"];
   return m === true ? [...all, "insurance_payment_method", "insurance_delay_stop_reinstate"] : all;
+}
+
+/** What the client can do alone for one policy: nothing for another carrier's, otherwise the insurance list for what is known about the product. */
+export function policySelfServe(p: PolicyFacts): Capability[] {
+  if (p.carrier != null && String(p.carrier).trim() && !isIaCarrier(p.carrier)) return [];
+  return insuranceSelfServe(isModernized(p).modernized);
 }
 
 export const investmentSelfServe = (): Capability[] => [...INVESTMENT_CAPABILITIES_LIVE];

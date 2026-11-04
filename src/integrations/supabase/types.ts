@@ -2695,6 +2695,7 @@ export type Database = {
           coverage_storehouse_id: string | null
           created_at: string
           cv_in_strategic: boolean
+          ia_product: string | null
           id: string
           insured_name: string | null
           issue_date: string | null
@@ -2721,6 +2722,7 @@ export type Database = {
           coverage_storehouse_id?: string | null
           created_at?: string
           cv_in_strategic?: boolean
+          ia_product?: string | null
           id?: string
           insured_name?: string | null
           issue_date?: string | null
@@ -2747,6 +2749,7 @@ export type Database = {
           coverage_storehouse_id?: string | null
           created_at?: string
           cv_in_strategic?: boolean
+          ia_product?: string | null
           id?: string
           insured_name?: string | null
           issue_date?: string | null
