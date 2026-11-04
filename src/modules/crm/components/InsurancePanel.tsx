@@ -17,7 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/shared/components/ui/badge";
 import { Shield, Plus, Pencil, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
-import { POLICY_TYPES, groupPolicies } from "@/shared/lib/insurance";
+import { IA_PRODUCT_LABEL, IA_PRODUCT_OPTIONS, POLICY_TYPES, groupPolicies } from "@/shared/lib/insurance";
 
 type OwnerScope =
   | { kind: "contact"; contactId: string }
@@ -36,6 +36,7 @@ interface Policy {
   carrier: string;
   policy_number: string | null;
   policy_type: string;
+  ia_product: string | null;
   insured_name: string | null;
   coverage_amount: number | null;
   cash_value: number | null;
@@ -84,6 +85,7 @@ const blank: Partial<Policy> = {
   carrier: "",
   policy_number: "",
   policy_type: "whole_life",
+  ia_product: null,
   insured_name: "",
   coverage_amount: 0,
   cash_value: 0,
@@ -136,7 +138,7 @@ export function InsurancePanel({ scope, storehouses, onStorehousesChanged }: { s
     };
     // Clean empty strings on optional fields
     ["policy_number","insured_name","primary_beneficiary","contingent_beneficiary","notes",
-     "issue_date","renewal_date","paid_up_date","premium_frequency",
+     "issue_date","renewal_date","paid_up_date","premium_frequency","ia_product",
      "coverage_storehouse_id","cash_value_storehouse_id"].forEach((k) => {
       if (payload[k] === "" || payload[k] === undefined) payload[k] = null;
     });
@@ -253,6 +255,7 @@ export function InsurancePanel({ scope, storehouses, onStorehousesChanged }: { s
                     <Badge variant="outline" className="text-[10px]">
                       {POLICY_TYPES.find((t) => t.value === p.policy_type)?.label || p.policy_type}
                     </Badge>
+                    {p.ia_product && <Badge variant="outline" className="text-[10px]" title="iA product">{IA_PRODUCT_LABEL[p.ia_product] ?? p.ia_product}</Badge>}
                     <Badge variant="outline" className={`text-[10px] ${SCOPE_COLORS[p.visibility_scope || "household_shared"] || ""}`}>
                       {SCOPE_LABELS[p.visibility_scope || "household_shared"] || "Household"}
                     </Badge>
@@ -363,6 +366,16 @@ export function InsurancePanel({ scope, storehouses, onStorehousesChanged }: { s
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {POLICY_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>iA Product</Label>
+                  <Select value={editing.ia_product || "none"} onValueChange={(v) => setEditing({ ...editing, ia_product: v === "none" ? null : v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Not set</SelectItem>
+                      {IA_PRODUCT_OPTIONS.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>

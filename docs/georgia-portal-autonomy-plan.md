@@ -1,6 +1,8 @@
 # Georgia in the client portal: answering simple requests without a task
 
-Draft, 2026-11-04. Nothing here is built. The decisions Rolf has made are marked **Decided**; the rest is a proposal.
+Draft, 2026-11-04. The decisions Rolf has made are marked **Decided**; the rest is a proposal.
+
+**Status:** stage 1 (foundations) is built and changes no behaviour: the request outcome columns, the master switch and per-category modes (all off), the audit table, the gate and triage rules (`_shared/georgia-triage.ts`) and the iA self-serve rules (`_shared/ia-self-serve.ts`). The policy form also has an optional **iA product** field. Nothing calls the rules yet; stage 2 (shadow) wires them in.
 
 ## Goal
 
@@ -70,7 +72,7 @@ What the guide says a client can do alone in **My Client Space**:
 
 Everything else (decreasing or terminating cover, changing the advisor, changing name, sex or date of birth, coverage changes, loans and withdrawals, transfers and investment instructions) is done by the advisor in iA's Advisor Centre, by EVO online changes, or on a paper form, so it stays with Rolf.
 
-**Georgia has to know whether a contract is modernized.** The CRM already holds each policy's type and issue date, so a small pure rule decides it (`isModernized(type, issue date)`) and she never guesses. If the type or date is missing she hands over.
+**Georgia has to know whether a contract is modernized.** The CRM's policy type is too coarse (it cannot tell Access Life from Term, or Participating from Whole Life), so each policy now has an optional **iA product** field, set on the policy form and named as iA's guide names the products. A small pure rule (`isModernized`, in `_shared/ia-self-serve.ts`) decides from the product, the issue date and the carrier, and she never guesses: with no product recorded it decides only the clear cases (Universal Life, living benefits, anything sold before April 2024, Term sold since 30 March 2026) and otherwise hands the request to Rolf. Another carrier's policy is never self-serve at iA.
 
 **iA's list will change** (investments are rolling out now), so the capabilities are kept as data Rolf can switch on, not as wording baked into a prompt.
 

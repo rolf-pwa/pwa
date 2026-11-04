@@ -1,3 +1,4 @@
+import { IA_PRODUCT_LABEL, IA_PRODUCTS } from "../../../supabase/functions/_shared/ia-self-serve";
 // Canonical insurance_policies.policy_type values and labels — shared so
 // InsurancePanel, ContactDetail, and HouseholdDetail can't silently drift
 // apart on what a given policy_type string means.
@@ -10,6 +11,10 @@ export const POLICY_TYPES = [
   { value: "long_term_care", label: "Long-Term Care" },
   { value: "other", label: "Other" },
 ];
+
+// The iA product (insurance_policies.ia_product), named as iA's own guide names them; the rule that uses it lives with the edge functions.
+export { IA_PRODUCT_LABEL, IA_PRODUCTS };
+export const IA_PRODUCT_OPTIONS = Object.entries(IA_PRODUCT_LABEL).map(([value, label]) => ({ value, label }));
 
 export function policyTypeLabel(value: string | null | undefined): string {
   return POLICY_TYPES.find((t) => t.value === value)?.label || value || "Other";
