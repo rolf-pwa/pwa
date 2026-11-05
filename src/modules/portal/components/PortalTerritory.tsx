@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { Progress } from "@/shared/components/ui/progress";
 import { Grape, Landmark, Castle, Sword, Wheat, Lock, Users, Home, Eye, EyeOff, Globe, Building2, ChevronDown, ChevronRight } from "lucide-react";
@@ -6,6 +6,9 @@ import { supabase } from "@/shared/integrations/supabase/client";
 import { toast } from "sonner";
 import { PortalAccountSnapshot } from "./PortalAccountSnapshot";
 import { formatCurrency } from "@/modules/portal/lib/portalAum";
+import { coverageText, liquidityView } from "../../../../supabase/functions/_shared/vfo-liquidity";
+
+const asOfText = (d: string | null) => (d ? new Date(`${d.slice(0, 10)}T12:00:00`).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" }) : null);
 
 const STOREHOUSE_CONFIG = [
   { num: 1, name: "Liquidity Reserve", icon: Castle },
@@ -55,6 +58,8 @@ interface Props {
   insurancePolicies?: any[];
   section?: "vineyard" | "storehouses" | "all";
   defaultCollapsed?: boolean;
+  /** The VFO portal: show what the Liquidity Reserve holds (income funds in the Vineyard accounts) and what could be drawn this year. */
+  showLiquidityDetail?: boolean;
 }
 
 function ScopeBadge({
@@ -148,7 +153,7 @@ function ScopeBadge({
   );
 }
 
-export function PortalTerritory({ vineyardAccounts, storehouses, contact, family, household, householdMembers = [], scopeLabel, portalToken, onScopeChange, corporations = [], insurancePolicies = [], section = "all", defaultCollapsed = false }: Props) {
+export function PortalTerritory({ vineyardAccounts, storehouses, contact, family, household, householdMembers = [], scopeLabel, portalToken, onScopeChange, corporations = [], insurancePolicies = [], section = "all", defaultCollapsed = false, showLiquidityDetail = false }: Props) {
   const showVineyard = section === "all" || section === "vineyard";
   const showStorehouses = section === "all" || section === "storehouses";
   const [vineyardOpen, setVineyardOpen] = useState(!defaultCollapsed);
@@ -183,6 +188,9 @@ export function PortalTerritory({ vineyardAccounts, storehouses, contact, family
     ? storehouses
     : storehouses.filter((s: any) => s.visibility_scope !== "private")
   ).filter((s: any) => s.asset_type !== 'Primary Residence & Protected Legacy Accounts');
+
+  // The Liquidity Reserve as the staff balance sheet counts it: income funds in the accounts this viewer can see, when no Liquidity Reserve is set up.
+  const liquidity = useMemo(() => (showLiquidityDetail ? liquidityView(visibleAccounts, visibleStorehouses) : null), [showLiquidityDetail, visibleAccounts, visibleStorehouses]);
 
   return (
     <div className="space-y-6">
@@ -299,6 +307,11 @@ export function PortalTerritory({ vineyardAccounts, storehouses, contact, family
               </p>
             </div>
           )}
+          {liquidity?.counted && (
+            <p className="text-xs text-muted-foreground" data-testid="vineyard-liquidity-line">
+              {formatCurrency(liquidity.incomeFunds)} of this is income funds, counted in your Liquidity Reserve.
+            </p>
+          )}
         </CardContent>
         )}
       </Card>
@@ -350,10 +363,36 @@ export function PortalTerritory({ vineyardAccounts, storehouses, contact, family
                     <Icon className="h-4 w-4 text-accent" />
                     <h4 className="text-sm font-medium text-foreground">{name}</h4>
                   </div>
-                  <span className="text-sm font-semibold text-foreground">
-                    {formatCurrency(total)}
+                  <span className="text-sm font-semibold text-foreground" data-testid={`storehouse-total-${num}`}>
+                    {formatCurrency(num === 1 && liquidity?.counted ? liquidity.reserve : total)}
                   </span>
                 </div>
+                {num === 1 && liquidity?.counted && (
+                  <div className="space-y-2" data-testid="liquidity-detail">
+                    <p className="pl-6 text-xs text-muted-foreground">
+                      {formatCurrency(liquidity.incomeFunds)} of income funds held in your Vineyard accounts{asOfText(liquidity.asOf) ? `, as of ${asOfText(liquidity.asOf)}` : ""}. It is part of your Vineyard total, not in addition to it.
+                    </p>
+                    {coverageText(liquidity) && <p className="pl-6 text-xs text-muted-foreground" data-testid="liquidity-coverage">{coverageText(liquidity)}</p>}
+                    {liquidity.lines.map((l) => (
+                      <div key={l.id} className="rounded-lg border border-border bg-muted/50 px-4 py-2" data-testid="liquidity-line">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-foreground/80">{l.name}{l.last4 ? <span className="text-xs text-muted-foreground"> ···{l.last4}</span> : null}</span>
+                          <span className="text-sm font-medium text-foreground">{formatCurrency(l.incomeFunds)}</span>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="rounded-lg border border-border px-4 py-2.5" data-testid="liquidity-available">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-foreground">Available to draw this year</span>
+                        <span className="text-sm font-semibold text-foreground">{liquidity.availableThisYear === null ? "Not yet worked out" : formatCurrency(liquidity.availableThisYear)}</span>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        This year's growth that is held in income funds, so drawing it does not touch your starting balance or mean selling growth investments.
+                        {liquidity.availableThisYear !== null && liquidity.availableCovered < liquidity.expected ? ` Worked out for ${liquidity.availableCovered} of your ${liquidity.expected} accounts.` : ""} To draw on it, contact Rolf.
+                      </p>
+                    </div>
+                  </div>
+                )}
                 {accounts.length > 0 ? (
                   <>
                     {targetTotal > 0 && (
@@ -400,7 +439,7 @@ export function PortalTerritory({ vineyardAccounts, storehouses, contact, family
                     <Lock className="h-3.5 w-3.5" />
                     <span>Value Protected by Governance Protocol</span>
                   </div>
-                ) : (
+                ) : num === 1 && liquidity?.counted ? null : (
                   <p className="text-xs text-muted-foreground pl-6">No accounts configured</p>
                 )}
               </div>
