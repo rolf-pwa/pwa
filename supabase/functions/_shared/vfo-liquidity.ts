@@ -3,11 +3,15 @@
 // It is the staff balance sheet's rule (quarterly-review-allocation.ts), applied to the accounts the viewer can see: when the household has no
 // Liquidity Reserve set up (no Liquidity storehouse, or one with no target), the income funds held in the investment accounts count as Liquidity.
 // They stay inside the Vineyard account they sit in, so nothing is added to the totals: this is a view of money already in the Vineyard.
-// Two figures, kept apart: the reserve (the income funds on hand) and what could be drawn this year (the lesser of this year's surplus and the
-// income funds, account by account: the same rule as the statement review). Income funds are only known for accounts whose statements have been
-// read, so the view says how many of the accounts it covers instead of presenting a total that looks complete.
+// Income funds are only known for accounts whose statements have been read, so the view says how many of the accounts it covers instead of
+// presenting a total that looks complete.
+//
+// What could be drawn this year (Rolf's rule): the Liquidity Reserve the Charter sets for the household, less the withdrawals from income funds
+// so far this year; income funds are not growth assets and are fully accessible up to that amount. It can never exceed the income funds actually
+// held. The statements print one net-transactions figure per account, not one per fund, so the withdrawals used are each account's year-to-date
+// net withdrawals (the same figure as "harvest to date"), on the footing that withdrawals are drawn from income funds. It is only worked out when
+// the Charter amount is on file and every account that issues a statement has its withdrawals read: a figure that might be too high is not shown.
 
-import { availableForWithdrawal } from "./withdrawal-availability.ts";
 import { hasLiquidityReserve } from "./quarterly-review-allocation.ts";
 
 export interface LiquidityAccount {
@@ -20,6 +24,9 @@ export interface LiquidityAccount {
   book_value?: number | string | null;
   income_funds_value?: number | string | null;
   income_funds_as_of?: string | null;
+  /** Net withdrawals so far this year, read from the statement (null = not read). */
+  withdrawals_ytd?: number | string | null;
+  withdrawals_as_of?: string | null;
 }
 
 export interface LiquidityStorehouse {
@@ -35,9 +42,17 @@ export interface LiquidityLine {
   accountType: string | null;
   incomeFunds: number;
   asOf: string | null;
-  /** What could be drawn from this account this year, or null when it cannot be worked out. */
-  available: number | null;
-  limitedBy: "surplus" | "income_funds" | "none" | null;
+}
+
+export interface DrawView {
+  /** The Liquidity Reserve the Charter sets, the withdrawals so far this year, and what could be drawn. */
+  charterAmount: number;
+  withdrawn: number;
+  available: number;
+  /** What limits it: the Charter's amount less withdrawals, or the income funds actually held. */
+  limitedBy: "charter" | "held";
+  /** The latest statement date the withdrawals were read from. */
+  asOf: string | null;
 }
 
 export interface LiquidityView {
@@ -52,9 +67,8 @@ export interface LiquidityView {
   covered: number;
   expected: number;
   asOf: string | null;
-  /** The sum of what could be drawn this year across the accounts where it can be worked out, and how many those are. */
-  availableThisYear: number | null;
-  availableCovered: number;
+  /** What could be drawn this year, or null when it cannot be worked out reliably. */
+  draw: DrawView | null;
 }
 
 const toNum = (v: unknown): number | null => {
@@ -68,17 +82,17 @@ const last4 = (n: string | null | undefined) => {
   return d.length >= 4 ? d.slice(-4) : null;
 };
 
-export function liquidityView(accounts: LiquidityAccount[], storehouses: LiquidityStorehouse[]): LiquidityView {
+export function liquidityView(accounts: LiquidityAccount[], storehouses: LiquidityStorehouse[], opts: { charterAmount?: number | string | null } = {}): LiquidityView {
   const liq = storehouses.filter((s) => s.storehouse_number === 1);
   const storehouseLiquidity = round2(liq.reduce((t, s) => t + (toNum(s.current_value) ?? 0), 0));
   const target = liq.reduce((t, s) => t + (toNum(s.target_value) ?? 0), 0);
   const setUp = hasLiquidityReserve({ exists: liq.length > 0, target: liq.length ? target : null });
-  const none: LiquidityView = { counted: false, storehouseLiquidity, incomeFunds: 0, reserve: storehouseLiquidity, lines: [], covered: 0, expected: 0, asOf: null, availableThisYear: null, availableCovered: 0 };
+  const none: LiquidityView = { counted: false, storehouseLiquidity, incomeFunds: 0, reserve: storehouseLiquidity, lines: [], covered: 0, expected: 0, asOf: null, draw: null };
   if (setUp) return none;
 
   const expecting = accounts.filter((a) => !!String(a.account_number ?? "").trim());
   const lines: LiquidityLine[] = [];
-  let available = 0, availableCovered = 0, covered = 0;
+  let covered = 0;
   for (const a of expecting) {
     const raw = toNum(a.income_funds_value);
     if (raw === null) continue;
@@ -86,20 +100,28 @@ export function liquidityView(accounts: LiquidityAccount[], storehouses: Liquidi
     const current = toNum(a.current_value);
     // As the staff balance sheet does: capped at the account's value, so a bad figure cannot push a total up.
     const income = raw > 0 ? Math.min(raw, current !== null && current > 0 ? current : raw) : 0;
-    const fig = availableForWithdrawal({ book_value: toNum(a.book_value), current_value: current, income_funds_value: income });
-    if (fig.available !== null) { available += fig.available; availableCovered += 1; }
     if (income > 0) {
-      lines.push({ id: a.id, name: a.account_name || "Account", last4: last4(a.account_number), accountType: a.account_type ?? null, incomeFunds: round2(income), asOf: a.income_funds_as_of ?? null, available: fig.available, limitedBy: fig.limited_by });
+      lines.push({ id: a.id, name: a.account_name || "Account", last4: last4(a.account_number), accountType: a.account_type ?? null, incomeFunds: round2(income), asOf: a.income_funds_as_of ?? null });
     }
   }
   const incomeFunds = round2(lines.reduce((t, l) => t + l.incomeFunds, 0));
   const dates = expecting.map((a) => a.income_funds_as_of).filter((d): d is string => !!d).sort();
+
+  // What could be drawn: only when income funds are counted as the reserve, the Charter amount is on file, and every statement account has its withdrawals read.
+  const charter = toNum(opts.charterAmount);
+  const withdrawals = expecting.map((a) => toNum(a.withdrawals_ytd));
+  let draw: DrawView | null = null;
+  if (incomeFunds > 0 && charter !== null && charter > 0 && expecting.length > 0 && withdrawals.every((w) => w !== null)) {
+    const withdrawn = round2(Math.max(0, withdrawals.reduce((t: number, w) => t + (w as number), 0)));
+    const left = Math.max(0, round2(charter - withdrawn));
+    const wDates = expecting.map((a) => a.withdrawals_as_of).filter((d): d is string => !!d).sort();
+    draw = { charterAmount: charter, withdrawn, available: round2(Math.min(left, incomeFunds)), limitedBy: left <= incomeFunds ? "charter" : "held", asOf: wDates.length ? wDates[wDates.length - 1] : null };
+  }
   return {
     counted: incomeFunds > 0,
     storehouseLiquidity, incomeFunds, reserve: round2(storehouseLiquidity + incomeFunds),
     lines: lines.sort((a, b) => b.incomeFunds - a.incomeFunds),
-    covered, expected: expecting.length, asOf: dates.length ? dates[dates.length - 1] : null,
-    availableThisYear: availableCovered ? round2(available) : null, availableCovered,
+    covered, expected: expecting.length, asOf: dates.length ? dates[dates.length - 1] : null, draw,
   };
 }
 

@@ -119,7 +119,7 @@ async function buildHierarchy(supabase: any, contact: any) {
     // Fetch all households, respecting hof_visible flag
     const { data: allHouseholds } = await supabase
       .from("households")
-      .select("id, label, address, hof_visible, governance_status, fiduciary_entity")
+      .select("id, label, address, hof_visible, governance_status, fiduciary_entity, liquidity_reserve_amount")
       .eq("family_id", familyId)
       .order("label");
 
@@ -452,7 +452,7 @@ proposal: ob.proposal ? { ...ob.proposal, switches: (ob.proposal.switches ?? [])
 
       if (householdId) {
         extraQueries.push(
-          supabase.from("households").select("id, label, address, governance_status, fiduciary_entity").eq("id", householdId).maybeSingle()
+          supabase.from("households").select("id, label, address, governance_status, fiduciary_entity, liquidity_reserve_amount").eq("id", householdId).maybeSingle()
         );
         extraQueries.push(
           supabase.from("contacts").select("id, first_name, last_name, family_role, is_minor").eq("household_id", householdId).neq("id", contactId)

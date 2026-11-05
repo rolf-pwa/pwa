@@ -190,7 +190,7 @@ export function PortalTerritory({ vineyardAccounts, storehouses, contact, family
   ).filter((s: any) => s.asset_type !== 'Primary Residence & Protected Legacy Accounts');
 
   // The Liquidity Reserve as the staff balance sheet counts it: income funds in the accounts this viewer can see, when no Liquidity Reserve is set up.
-  const liquidity = useMemo(() => (showLiquidityDetail ? liquidityView(visibleAccounts, visibleStorehouses) : null), [showLiquidityDetail, visibleAccounts, visibleStorehouses]);
+  const liquidity = useMemo(() => (showLiquidityDetail ? liquidityView(visibleAccounts, visibleStorehouses, { charterAmount: (household as { liquidity_reserve_amount?: number | string | null } | null)?.liquidity_reserve_amount }) : null), [showLiquidityDetail, visibleAccounts, visibleStorehouses, household]);
 
   return (
     <div className="space-y-6">
@@ -381,16 +381,18 @@ export function PortalTerritory({ vineyardAccounts, storehouses, contact, family
                         </div>
                       </div>
                     ))}
-                    <div className="rounded-lg border border-border px-4 py-2.5" data-testid="liquidity-available">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-foreground">Available to draw this year</span>
-                        <span className="text-sm font-semibold text-foreground">{liquidity.availableThisYear === null ? "Not yet worked out" : formatCurrency(liquidity.availableThisYear)}</span>
+                    {liquidity.draw && (
+                      <div className="rounded-lg border border-border px-4 py-2.5" data-testid="liquidity-available">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-foreground">Available to draw this year</span>
+                          <span className="text-sm font-semibold text-foreground">{formatCurrency(liquidity.draw.available)}</span>
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          The Liquidity Reserve your Charter sets, {formatCurrency(liquidity.draw.charterAmount)}, less {formatCurrency(liquidity.draw.withdrawn)} drawn so far this year{asOfText(liquidity.draw.asOf) ? `, as of ${asOfText(liquidity.draw.asOf)}` : ""}.
+                          {liquidity.draw.limitedBy === "held" ? " It is limited to the income funds you hold now." : ""} To draw on it, contact Rolf.
+                        </p>
                       </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        This year's growth that is held in income funds, so drawing it does not touch your starting balance or mean selling growth investments.
-                        {liquidity.availableThisYear !== null && liquidity.availableCovered < liquidity.expected ? ` Worked out for ${liquidity.availableCovered} of your ${liquidity.expected} accounts.` : ""} To draw on it, contact Rolf.
-                      </p>
-                    </div>
+                    )}
                   </div>
                 )}
                 {accounts.length > 0 ? (

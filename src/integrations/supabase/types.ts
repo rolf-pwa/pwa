@@ -2546,6 +2546,7 @@ export type Database = {
           intake_share_token: string | null
           intake_upload_url: string | null
           label: string
+          liquidity_reserve_amount: number | null
           legacy_advisor_friction_notes: string | null
           legacy_intake_upgrade: boolean
           onboarding_completed_at: string | null
@@ -2594,6 +2595,7 @@ export type Database = {
           intake_share_token?: string | null
           intake_upload_url?: string | null
           label?: string
+          liquidity_reserve_amount?: number | null
           legacy_advisor_friction_notes?: string | null
           legacy_intake_upgrade?: boolean
           onboarding_completed_at?: string | null
@@ -2642,6 +2644,7 @@ export type Database = {
           intake_share_token?: string | null
           intake_upload_url?: string | null
           label?: string
+          liquidity_reserve_amount?: number | null
           legacy_advisor_friction_notes?: string | null
           legacy_intake_upgrade?: boolean
           onboarding_completed_at?: string | null

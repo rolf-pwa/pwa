@@ -7,19 +7,20 @@ vi.mock("@/shared/integrations/supabase/client", () => ({ supabase: { functions:
 import { PortalTerritory } from "@/modules/portal/components/PortalTerritory";
 
 const account = (id: string, o: Record<string, unknown> = {}) => ({ id, account_name: `iA RRSP ${id}`, account_number: `18200000${id}`, account_type: "RRSP", current_value: 100000, book_value: 90000, income_funds_value: 30000, income_funds_as_of: "2026-10-30", visibility_scope: "family_shared", ...o });
-const render_ = (accounts: unknown[], storehouses: unknown[] = [], showLiquidityDetail = true) =>
-  render(<PortalTerritory vineyardAccounts={accounts as never} storehouses={storehouses as never} contact={{} as never} family={{} as never} household={{} as never} scopeLabel="My Territory" section="all" showLiquidityDetail={showLiquidityDetail} />);
+const render_ = (accounts: unknown[], storehouses: unknown[] = [], showLiquidityDetail = true, household: Record<string, unknown> = {}) =>
+  render(<PortalTerritory vineyardAccounts={accounts as never} storehouses={storehouses as never} contact={{} as never} family={{} as never} household={household as never} scopeLabel="My Territory" section="all" showLiquidityDetail={showLiquidityDetail} />);
 
 describe("the Liquidity Reserve on the VFO territory card", () => {
-  it("shows the reserve from the income funds, where it comes from, what could be drawn, and how to draw on it", () => {
+  it("shows the reserve from the income funds, where it comes from and the accounts holding it", () => {
     render_([account("11"), account("12", { income_funds_value: 12000, current_value: 115000 })]);
     expect(screen.getByTestId("storehouse-total-1").textContent).toBe("$42,000");
     const detail = screen.getByTestId("liquidity-detail");
     expect(detail.textContent).toContain("$42,000 of income funds held in your Vineyard accounts, as of Oct 30, 2026");
     expect(detail.textContent).toContain("not in addition to it");
     expect(within(detail).getAllByTestId("liquidity-line")).toHaveLength(2);
-    expect(within(screen.getByTestId("liquidity-available")).getByText("$22,000")).toBeTruthy();
-    expect(screen.getByTestId("liquidity-available").textContent).toContain("To draw on it, contact Rolf.");
+    // No Charter amount on file for the household: no "available to draw" figure.
+    expect(screen.queryByTestId("liquidity-available")).toBeNull();
+    expect(detail.textContent).not.toContain("Available to draw");
     // The other three reserves still say so; the Liquidity Reserve no longer does.
     expect(screen.getAllByText("No accounts configured")).toHaveLength(3);
   });
@@ -41,6 +42,23 @@ describe("the Liquidity Reserve on the VFO territory card", () => {
     render_([account("11")], [{ id: "s1", storehouse_number: 1, label: "Reserve", current_value: 80000, target_value: 150000, visibility_scope: "family_shared" }]);
     expect(screen.queryByTestId("liquidity-detail")).toBeNull();
     expect(screen.getByTestId("storehouse-total-1").textContent).toBe("$80,000");
+  });
+  it("shows what could be drawn this year, from the Charter amount and the withdrawals, once the household has a Charter amount", () => {
+    render_([account("11", { withdrawals_ytd: 5000, withdrawals_as_of: "2026-06-30" }), account("12", { income_funds_value: 12000, withdrawals_ytd: 3000, withdrawals_as_of: "2026-06-30" })], [], true, { liquidity_reserve_amount: "40000" });
+    const box = screen.getByTestId("liquidity-available");
+    expect(within(box).getByText("$32,000")).toBeTruthy();
+    expect(box.textContent).toContain("The Liquidity Reserve your Charter sets, $40,000, less $8,000 drawn so far this year, as of Jun 30, 2026.");
+    expect(box.textContent).toContain("To draw on it, contact Rolf.");
+    expect(box.textContent).not.toContain("limited to the income funds");
+  });
+  it("says when it is limited to the income funds held", () => {
+    render_([account("11", { withdrawals_ytd: 0 })], [], true, { liquidity_reserve_amount: 150000 });
+    expect(within(screen.getByTestId("liquidity-available")).getByText("$30,000")).toBeTruthy();
+    expect(screen.getByTestId("liquidity-available").textContent).toContain("It is limited to the income funds you hold now.");
+  });
+  it("shows no figure while a statement account has no withdrawals read", () => {
+    render_([account("11", { withdrawals_ytd: 0 }), account("12", { withdrawals_ytd: null })], [], true, { liquidity_reserve_amount: 40000 });
+    expect(screen.queryByTestId("liquidity-available")).toBeNull();
   });
   it("is on for the VFO portal only", () => {
     expect(readFileSync("src/modules/portal/pages/VfoPortal.tsx", "utf8")).toContain("showLiquidityDetail");
