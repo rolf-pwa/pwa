@@ -1,4 +1,5 @@
 // Uses Deno.serve (no std import needed)
+import "../_shared/bc-time.ts"; // B.C. no longer changes its clocks: "America/Vancouver" here means UTC-7 all year
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -359,12 +360,12 @@ function truncate(s: string, n: number) {
 }
 
 function defaultYesterday(): string {
-  // Target the current calendar date in America/Los_Angeles at run time.
-  // Cron fires at 05:30 UTC (22:30 PDT / 21:30 PST the prior day), so the PT
-  // date at that moment is the day that just finished. Manual runs during the
+  // Target the current calendar date in B.C. time at run time.
+  // Cron fires at 05:30 UTC (22:30 Pacific), so the date at that moment is
+  // the day that just finished. Manual runs during the
   // day simply capture "today so far" in PT.
   return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Los_Angeles",
+    timeZone: "America/Vancouver",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

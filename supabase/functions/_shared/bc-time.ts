@@ -24,6 +24,12 @@ export function pacificOffsetHours(ms: number): number {
   return Math.round((Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute) - minute) / 3_600_000);
 }
 
+/** The first instant of a month ("2026-11") in Pacific time, as an ISO string with its offset: -08:00 in earlier winters, -07:00 in summers and from the permanent date. */
+export function pacificMonthStart(month: string): string {
+  const offset = pacificOffsetHours(Date.parse(`${month}-01T12:00:00Z`));
+  return `${month}-01T00:00:00${offset === -7 ? "-07:00" : "-08:00"}`;
+}
+
 class BcDateTimeFormat extends Native {
   constructor(locales?: string | string[], options?: Intl.DateTimeFormatOptions) {
     super(locales, options);
