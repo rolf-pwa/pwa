@@ -81,7 +81,7 @@ export function familyDisplayTier(householdTiers: string[]): string | null {
   return known.reduce((a, b) => (order.indexOf(b) > order.indexOf(a) ? b : a));
 }
 
-export interface ExistingObligation { family_id: string; household_id: string | null; window_key: string; status: string; published_at?: string | null }
+export interface ExistingObligation { family_id: string; household_id: string | null; window_key: string; status: string; published_at?: string | null; /** Added by hand for a window the schedule does not include. */ manual?: boolean | null }
 
 /**
  * Whole-family obligations made before reviews went per household that are still in flight (booked, held, escalated, paused, or already published
@@ -92,6 +92,6 @@ export function familyLevelInFlight(existing: ExistingObligation[]): Set<string>
   return new Set(existing.filter((o) => !o.household_id && o.status !== "cancelled" && (o.status !== "open" || !!o.published_at)).map((o) => `${o.family_id}|${o.window_key}`));
 }
 
-/** An open obligation nobody owes any more is cancelled; one already published to the client never is. */
+/** An open obligation nobody owes any more is cancelled; one already published to the client, or added by hand, never is. */
 export const cancellable = (o: ExistingObligation, wanted: ReadonlySet<string>): boolean =>
-  o.status === "open" && !o.published_at && !wanted.has(`${unitKey(o.family_id, o.household_id)}|${o.window_key}`);
+  o.status === "open" && !o.published_at && !o.manual && !wanted.has(`${unitKey(o.family_id, o.household_id)}|${o.window_key}`);

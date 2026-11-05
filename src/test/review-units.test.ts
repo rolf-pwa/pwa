@@ -80,4 +80,8 @@ describe("converting the whole-family obligations to per-household ones", () => 
     expect(cancellable(ob({ status: "booked" }), wanted)).toBe(false);
     expect(cancellable(ob({ household_id: "h1" }), wanted)).toBe(false);
   });
+  it("never cancels a review added by hand for a window the schedule does not include", () => {
+    expect(cancellable(ob({ household_id: "h1", window_key: "2026-Q4-annual_review", manual: true }), new Set())).toBe(false);
+    expect(cancellable(ob({ household_id: "h1", window_key: "2026-Q4-annual_review", manual: false }), new Set())).toBe(true);
+  });
 });
