@@ -2,7 +2,7 @@
 
 Draft, 2026-11-04. The decisions Rolf has made are marked **Decided**; the rest is a proposal.
 
-**Status:** stage 1 (foundations) is built and changes no behaviour: the request outcome columns, the master switch and per-category modes (all off), the audit table, the gate and triage rules (`_shared/georgia-triage.ts`) and the iA self-serve rules (`_shared/ia-self-serve.ts`). The policy form also has an optional **iA product** field. Nothing calls the rules yet; stage 2 (shadow) wires them in.
+**Status:** stage 1 (foundations) is built and changes no behaviour: the request outcome columns, the master switch and per-category modes (all off), the audit table, the gate and triage rules (`_shared/georgia-triage.ts`) and the iA self-serve rules (`_shared/ia-self-serve.ts`). The policy form also has an optional **iA product** field. Stage 2 (shadow) is built: with the master switch on, each submitted request is triaged and what Georgia would have done is recorded on the request and in the audit log, while the request is handled exactly as before. The page **Back office, Georgia autonomy** holds the switch, the per-category modes (off or shadow for now) and the review, where Rolf marks each call Right or Wrong; a category is ready at 20 reviewed and 95% right. Stage 3 builds the replies (answer, document pointer, meeting offer, iA self-serve, contact update) and the draft mode.
 
 ## Goal
 

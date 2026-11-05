@@ -67,6 +67,14 @@ export function decide(t: Triage, cfg: AutonomyConfig): Decision {
   return { outcome: t.category === "contact_details" ? "done" : "answered", category: t.category, mode, reason: `${t.category} is automatic`, shadow: false };
 }
 
+export const TRIAGE_VERSION = "1";
+
+/** What Georgia would do with this request if its category were automatic and the master switch were on: the answer the shadow record keeps. Gated or unclear requests are still Rolf's. */
+export function wouldHandle(t: Triage): Outcome {
+  if (t.blocked.length || !t.category) return "handed_over";
+  return t.category === "contact_details" ? "done" : "answered";
+}
+
 /** A contract number as it is kept in a stored conversation: the last four digits only. */
 export function maskContract(value: string): string {
   const digits = String(value ?? "").replace(/\D/g, "");
