@@ -5,6 +5,7 @@ import { GEORGIA_CLIENT_PROMPT, PORTAL_TOOLS as TOOLS, cleanGeorgiaReply } from 
 import { availability, buildSupportContext, cleanLabels, modelTurns, newClientMessage, storableMessages } from "../_shared/support-context.ts";
 import { requestAcknowledgement, requestDueDate, requestTaskTitle, todayPacific } from "../_shared/request-task.ts";
 import { ADMIN_INBOX_EMAIL, resolveUserIdByEmail } from "../_shared/google-token.ts";
+import { recordShadowTriage } from "../_shared/georgia-autonomy.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -152,6 +153,8 @@ serve(async (req) => {
         );
       }
 
+      // Shadow mode: when Georgia's portal autonomy is on, record what she would have done. The request below is handled exactly as before.
+      await recordShadowTriage(supabase, { requestId: data.id, contactId: requestData.contact_id, text: requestData.request_description, requestType: requestData.request_type });
       // The request is acknowledged and closed at once; anything further continues in a client-visible task assigned to Rolf.
       let acknowledgement = "";
       let taskId: string | null = null;
