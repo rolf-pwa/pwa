@@ -11,7 +11,7 @@
 //   runs / loadRun / undo   the history of imports, a prepared file's rows for the importer page, and putting a bad import back.
 // Every commit records what it replaced (monthly_import_undo). The rules live in _shared/monthly-import.ts (unit-tested).
 
-import "../_shared/bc-time.ts";
+import { pacificMonthStart } from "../_shared/bc-time.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { driveDownloadFile, driveListChildren } from "../_shared/vault-provisioning.ts";
 import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
@@ -438,7 +438,7 @@ async function watch(admin: any) {
   const hour = pacificHour(now);
   if (hour >= 8 && hour < 18) {
     const month = today.slice(0, 7);
-    const { data: thisMonth } = await admin.from("monthly_import_runs").select("id").gte("created_at", `${month}-01T00:00:00-08:00`).limit(1);
+    const { data: thisMonth } = await admin.from("monthly_import_runs").select("id").gte("created_at", pacificMonthStart(month)).limit(1);
     const { data: rem } = await admin.from("monthly_import_reminders").select("*").eq("month", month).maybeSingle();
     const r = reminderFor(today, (thisMonth ?? []).length > 0, { download: !!rem?.download_sent_at, late: !!rem?.late_sent_at });
     if (r.kind) {
