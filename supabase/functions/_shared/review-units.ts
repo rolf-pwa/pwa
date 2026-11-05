@@ -4,7 +4,7 @@
 // Only its main household, the one with the head of the family, gets the full schedule on that tier (Rolf, 2026-11-05). Its other households
 // are their own units on their own tier, worked out from their own assets, until they reach VFO status of their own. Each unit is a household, so
 // each has its own portfolio review and rebalancing with a household pack and engine proposal (before that the whole family was one unit, which
-// left no household pack for a household such as Zachary Issler's). A family with no binding is not one entity: each household that still has an
+// left a household of the family with no household pack of its own). A family with no binding is not one entity: each household that still has an
 // advisory relationship is its own unit, tiered on its own assets (Rolf, 2026-10-14). A household with nothing under management and no insurance
 // has no tier and owes no meetings; one with insurance only is Tier 0, which has no scheduled review either.
 
