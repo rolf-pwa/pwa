@@ -53,6 +53,7 @@ import { InsuranceTab } from "@/modules/crm/components/InsuranceTab";
 import { VaultScanButton } from "@/modules/crm/components/vault/VaultScanButton";
 import { ShoeboxToolbar } from "@/modules/crm/components/vault/ShoeboxReviewPanel";
 import { VineyardDashboard } from "@/modules/crm/components/VineyardDashboard";
+import { LiquidityReserveCharterAmount } from "@/modules/crm/components/LiquidityReserveCharterAmount";
 import { RentalPropertiesCard } from "@/modules/crm/components/RentalPropertiesCard";
 import { HouseholdAssets } from "@/modules/crm/components/HouseholdAssets";
 import { HouseholdTotalsStrip } from "@/modules/crm/components/HouseholdTotalsStrip";
@@ -1042,6 +1043,7 @@ const HouseholdDetail = () => {
             <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
               <div className="min-w-0 space-y-6">
                 <VineyardDashboard householdId={id!} />
+                <LiquidityReserveCharterAmount householdId={id!} value={household.liquidity_reserve_amount} onSaved={(v) => setHousehold((h: any) => (h ? { ...h, liquidity_reserve_amount: v } : h))} />
 
 
               </div>
