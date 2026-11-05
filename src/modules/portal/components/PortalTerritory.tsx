@@ -381,16 +381,6 @@ export function PortalTerritory({ vineyardAccounts, storehouses, contact, family
                         </div>
                       </div>
                     ))}
-                    <div className="rounded-lg border border-border px-4 py-2.5" data-testid="liquidity-available">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-foreground">Available to draw this year</span>
-                        <span className="text-sm font-semibold text-foreground">{liquidity.availableThisYear === null ? "Not yet worked out" : formatCurrency(liquidity.availableThisYear)}</span>
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        This year's growth that is held in income funds, so drawing it does not touch your starting balance or mean selling growth investments.
-                        {liquidity.availableThisYear !== null && liquidity.availableCovered < liquidity.expected ? ` Worked out for ${liquidity.availableCovered} of your ${liquidity.expected} accounts.` : ""} To draw on it, contact Rolf.
-                      </p>
-                    </div>
                   </div>
                 )}
                 {accounts.length > 0 ? (

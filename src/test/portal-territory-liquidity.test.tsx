@@ -11,15 +11,16 @@ const render_ = (accounts: unknown[], storehouses: unknown[] = [], showLiquidity
   render(<PortalTerritory vineyardAccounts={accounts as never} storehouses={storehouses as never} contact={{} as never} family={{} as never} household={{} as never} scopeLabel="My Territory" section="all" showLiquidityDetail={showLiquidityDetail} />);
 
 describe("the Liquidity Reserve on the VFO territory card", () => {
-  it("shows the reserve from the income funds, where it comes from, what could be drawn, and how to draw on it", () => {
+  it("shows the reserve from the income funds, where it comes from and the accounts holding it", () => {
     render_([account("11"), account("12", { income_funds_value: 12000, current_value: 115000 })]);
     expect(screen.getByTestId("storehouse-total-1").textContent).toBe("$42,000");
     const detail = screen.getByTestId("liquidity-detail");
     expect(detail.textContent).toContain("$42,000 of income funds held in your Vineyard accounts, as of Oct 30, 2026");
     expect(detail.textContent).toContain("not in addition to it");
     expect(within(detail).getAllByTestId("liquidity-line")).toHaveLength(2);
-    expect(within(screen.getByTestId("liquidity-available")).getByText("$22,000")).toBeTruthy();
-    expect(screen.getByTestId("liquidity-available").textContent).toContain("To draw on it, contact Rolf.");
+    // What could be drawn this year is not shown until its rule is settled: a wrong figure to a client is worse than none.
+    expect(screen.queryByTestId("liquidity-available")).toBeNull();
+    expect(detail.textContent).not.toContain("Available to draw");
     // The other three reserves still say so; the Liquidity Reserve no longer does.
     expect(screen.getAllByText("No accounts configured")).toHaveLength(3);
   });

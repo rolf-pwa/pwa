@@ -40,29 +40,18 @@ describe("the Liquidity Reserve in the VFO, when none is set up", () => {
   });
 });
 
-describe("what could be drawn this year", () => {
-  it("is the lesser of this year's surplus and the income funds, account by account", () => {
-    // Surplus 10,000 against income 30,000 -> 10,000. Surplus 25,000 against income 12,000 -> 12,000.
-    const v = liquidityView([acct("1"), acct("2", { current_value: 115_000, income_funds_value: 12_000 })], []);
-    expect(v.lines.map((l) => [l.available, l.limitedBy])).toEqual([[10_000, "surplus"], [12_000, "income_funds"]]);
-    expect(v.availableThisYear).toBe(22_000);
-    expect(v.availableCovered).toBe(2);
-  });
-  it("is nothing for an account with no surplus, and unknown without a starting balance", () => {
-    const v = liquidityView([acct("1", { current_value: 85_000 }), acct("2", { book_value: null })], []);
-    expect(v.lines.find((l) => l.id === "1")!.available).toBe(0);
-    expect(v.lines.find((l) => l.id === "2")!.available).toBeNull();
-    expect(v.availableThisYear).toBe(0);
-    expect(v.availableCovered).toBe(1);
-    expect(liquidityView([acct("1", { book_value: null })], []).availableThisYear).toBeNull();
-  });
+describe("the figures it gives", () => {
   it("reads numbers that arrive as text, as database numerics do", () => {
     const v = liquidityView([acct("1", { current_value: "100000.50", book_value: "90000", income_funds_value: "30000" })], []);
     expect(v.incomeFunds).toBe(30_000);
-    expect(v.availableThisYear).toBe(10_000.5);
   });
   it("shows the last four digits of the account number only", () => {
     expect(liquidityView([acct("7")], []).lines[0].last4).toBe("0007");
     expect(JSON.stringify(liquidityView([acct("7")], []))).not.toContain("182000007");
+  });
+  it("does not work out what could be drawn this year: that rule is being settled with Rolf", () => {
+    const v = liquidityView([acct("1")], []) as unknown as Record<string, unknown>;
+    expect(v).not.toHaveProperty("availableThisYear");
+    expect(JSON.stringify(v)).not.toContain("available");
   });
 });
