@@ -6,12 +6,22 @@ import { isPooledFamily } from "./review-units.ts";
 // deno-lint-ignore no-explicit-any
 type Db = any;
 
-export interface ViewerUnit { householdId: string | null; tier: string | null }
+export interface ViewerUnit {
+  /** Set for a household that stands alone (an unbound family). */
+  householdId: string | null;
+  tier: string | null;
+  /** Set for a household of a bound family (VFO, Charter, hand-set tier): its reviews are its own, and a whole-family one made earlier still counts. */
+  reviewHouseholdId?: string | null;
+}
 
 export async function viewerUnit(db: Db, familyId: string, householdId: string | null | undefined): Promise<ViewerUnit> {
   const { data: fam } = await db.from("families").select("service_tier, vfo_enabled, has_ratified_charter, service_tier_source").eq("id", familyId).maybeSingle();
   const familyTier = (fam?.service_tier ?? null) as string | null;
-  if (!fam || !householdId || isPooledFamily(fam)) return { householdId: null, tier: familyTier };
+  if (fam && householdId && isPooledFamily(fam)) {
+    const { data: own } = await db.from("households").select("relationship_ended_at").eq("id", householdId).maybeSingle();
+    return { householdId: null, tier: familyTier, reviewHouseholdId: own && !own.relationship_ended_at ? householdId : null };
+  }
+  if (!fam || !householdId) return { householdId: null, tier: familyTier };
   const { data: hh } = await db.from("households").select("service_tier, relationship_ended_at").eq("id", householdId).maybeSingle();
   if (!hh || hh.relationship_ended_at) return { householdId: null, tier: familyTier };
   // A household that stands alone and has no tier (nothing under management, no insurance) owes nothing: it never falls back to the family tier.
@@ -20,4 +30,7 @@ export async function viewerUnit(db: Db, familyId: string, householdId: string |
 
 /** Limits a review_obligations query to the viewer's own meetings. */
 // deno-lint-ignore no-explicit-any
-export const scopeToUnit = (q: any, unit: ViewerUnit) => (unit.householdId ? q.eq("household_id", unit.householdId) : q.is("household_id", null));
+export const scopeToUnit = (q: any, unit: ViewerUnit) =>
+  unit.householdId ? q.eq("household_id", unit.householdId)
+    : unit.reviewHouseholdId ? q.or(`household_id.eq.${unit.reviewHouseholdId},household_id.is.null`)
+    : q.is("household_id", null);
