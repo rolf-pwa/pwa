@@ -17,7 +17,7 @@ import { SNOOZE_DAYS_STAFF, cleanReply, inboundReplies, replyAction } from "../_
 import { AGENT_SENDER, PORTAL_URL } from "../_shared/onboarding-agent.ts";
 import { FROM_LINE } from "../_shared/balance-notice.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
-import { cancellable, familyLevelInFlight, isPooledFamily, reviewUnits, unitKey } from "../_shared/review-units.ts";
+import { cancellable, familyLevelInFlight, isPooledFamily, mainHouseholdIds, reviewUnits, unitKey } from "../_shared/review-units.ts";
 import {
   DEFAULT_REVIEW_CONFIG, REVIEW_TASK_TITLE, decideReview, inviteesOf, pacificDate, rebalancingEmail, requiredObligations, reviewTaskBody, windowEmail,
   type FamilyContact, type ReviewConfig, type Tier,
@@ -57,7 +57,8 @@ Deno.serve(async (req) => {
     const boundFamilyIds = new Set(((allFamilies ?? []) as any[]).filter((f) => isPooledFamily(f)).map((f) => f.id as string));
     const boundHouseholdIds = ((hhs ?? []) as any[]).filter((h) => !h.relationship_ended_at && boundFamilyIds.has(h.family_id)).map((h) => h.id as string);
     const holdsAssets = await householdsHoldingAssets(boundHouseholdIds);
-    const units = reviewUnits((allFamilies ?? []) as any[], (hhs ?? []) as any[], holdsAssets);
+    const { data: headContacts } = boundFamilyIds.size ? await db.from("contacts").select("household_id, family_role").in("family_id", [...boundFamilyIds]).eq("family_role", "head_of_family") : { data: [] };
+    const units = reviewUnits((allFamilies ?? []) as any[], (hhs ?? []) as any[], holdsAssets, mainHouseholdIds((headContacts ?? []) as any[]));
     const unitByKey = new Map(units.map((u) => [u.key, u]));
     // A bound family's whole-family obligations made before reviews went per household keep working until they are done.
     for (const f of (allFamilies ?? []) as any[]) if (isPooledFamily(f) && !unitByKey.has(unitKey(f.id, null))) unitByKey.set(unitKey(f.id, null), { key: unitKey(f.id, null), familyId: f.id, householdId: null, name: f.name, tier: f.service_tier });
@@ -85,12 +86,12 @@ Deno.serve(async (req) => {
           wanted.add(k);
           if (have.has(k) || m.windowEnd < today) continue;
           // A whole-family obligation for this window is already in flight: it is not made again for each household.
-          if (f.householdId && inFlightFamily.has(`${f.familyId}|${m.key}`)) continue;
+          if (f.householdId && f.main && inFlightFamily.has(`${f.familyId}|${m.key}`)) continue;
           // A window already open when Georgia went live is tracked for bookings only: she never invites or hands over for it.
           const trackingOnly = m.windowStart < sinceDate;
           // A window already open when reviews went per household: Georgia does not start inviting people for it today; a rebalancing is published by Rolf anyway.
           const alreadyOpen = m.windowStart <= today;
-          const { data: row, error } = await db.from("review_obligations").insert({ family_id: f.familyId, household_id: f.householdId, kind: m.kind, window_key: m.key, window_start: m.windowStart, window_end: m.windowEnd, tier: f.tier, mode, invite: !(trackingOnly || (alreadyOpen && m.kind !== "rebalancing" && !!f.householdId && boundFamilyIds.has(f.familyId))) }).select("id").maybeSingle();
+          const { data: row, error } = await db.from("review_obligations").insert({ family_id: f.familyId, household_id: f.householdId, kind: m.kind, window_key: m.key, window_start: m.windowStart, window_end: m.windowEnd, tier: f.tier, mode, invite: !(trackingOnly || (alreadyOpen && m.kind !== "rebalancing" && !!f.householdId && f.main && boundFamilyIds.has(f.familyId))) }).select("id").maybeSingle();
           if (!error && row) { summary.created++; await event(f.familyId, row.id, mode, "obligation_opened", { kind: m.kind, window: `${m.windowStart} to ${m.windowEnd}`, ...(trackingOnly ? { trackingOnly: true } : {}) }); }
         }
       }

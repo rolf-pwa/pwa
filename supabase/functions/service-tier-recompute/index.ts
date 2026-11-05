@@ -13,7 +13,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { classifyTier, computeGroupedAum, computeHouseholdAum, hasFamilyRatifiedCharter, hasFamilyInsurancePolicy, hasHouseholdInsurancePolicy, type ServiceTier } from "../_shared/service-tiering.ts";
-import { familyDisplayTier, isPooledFamily } from "../_shared/review-units.ts";
+import { familyDisplayTier, isPooledFamily, mainHouseholdIds } from "../_shared/review-units.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -88,15 +88,19 @@ async function recomputeOne(db: Db, family: FamilyRow): Promise<Transition | nul
   const standsAlone = !isPooledFamily({ has_ratified_charter: hasCharter, vfo_enabled: family.vfo_enabled, service_tier_source: family.service_tier_source });
   const { data: households } = await db.from("households").select("id, relationship_ended_at").eq("family_id", family.id);
   const householdTiers: string[] = [];
+  // In a bound family the main household (the one with the head of the family) takes the family's tier; its other households are tiered on their own assets.
+  const { data: heads } = standsAlone ? { data: [] } : await db.from("contacts").select("household_id, family_role").eq("family_id", family.id).eq("family_role", "head_of_family");
+  const mains = mainHouseholdIds((heads ?? []) as { household_id: string | null; family_role: string | null }[]);
+  const anyMain = ((households || []) as { id: string; relationship_ended_at: string | null }[]).some((h) => !h.relationship_ended_at && mains.has(h.id));
   for (const h of (households || []) as { id: string; relationship_ended_at: string | null }[]) {
-    if (!standsAlone || h.relationship_ended_at) {
+    if (h.relationship_ended_at || (!standsAlone && (!anyMain || mains.has(h.id)))) {
       await db.from("households").update({ service_tier: null, grouped_aum_cad: null }).eq("id", h.id);
       continue;
     }
     const [aum, insured] = await Promise.all([computeHouseholdAum(db, h.id), hasHouseholdInsurancePolicy(db, h.id)]);
     // No managed assets and no insurance: nothing to review, so no tier and no meetings. Insurance only is Tier 0 (no scheduled review).
     const tier = aum <= 0 && !insured ? null : classifyTier({ groupedAum: aum, hasRatifiedCharter: false, hasInsurancePolicy: insured });
-    if (tier) householdTiers.push(tier);
+    if (tier && standsAlone) householdTiers.push(tier);
     await db.from("households").update({ service_tier: tier, grouped_aum_cad: aum }).eq("id", h.id);
   }
   const newTier = (standsAlone ? (familyDisplayTier(householdTiers) as ServiceTier | null) : null) ?? pooledTier;
