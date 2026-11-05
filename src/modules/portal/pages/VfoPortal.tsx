@@ -1058,6 +1058,7 @@ const VfoPortal = () => {
                     onScopeChange={refreshData}
                     corporations={corporations}
                     section="all"
+                    showLiquidityDetail
                     defaultCollapsed
                   />
                 )}
