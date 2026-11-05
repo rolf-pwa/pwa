@@ -476,7 +476,8 @@ Deno.serve(async (req) => {
       const { data: cfg } = await db.from("review_agent_config").select("mode").eq("id", true).maybeSingle();
       const mode = cfg?.mode === "shadow" ? "shadow" : "live";
       let q = db.from("review_obligations").select("kind, window_start, window_end, status").eq("family_id", hh.family_id).eq("mode", mode).neq("status", "cancelled");
-      q = pooled ? q.is("household_id", null) : q.eq("household_id", householdId);
+      // A bound family's household has its own reviews, plus any whole-family one made before reviews went per household.
+      q = pooled ? q.or(`household_id.eq.${householdId},household_id.is.null`) : q.eq("household_id", householdId);
       const { data: obligations } = await q;
       const { count } = await db.from("portfolio_review_publications").select("id", { count: "exact", head: true }).eq("household_id", householdId).eq("kind", "review").is("unpublished_at", null);
       return json({ tier: pooled ? fam?.service_tier ?? null : hh.service_tier ?? null, hasRatifiedCharter: Boolean(fam?.has_ratified_charter), obligations: obligations ?? [], publishedReview: (count ?? 0) > 0 });

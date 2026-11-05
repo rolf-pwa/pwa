@@ -17,7 +17,7 @@ import { SNOOZE_DAYS_STAFF, cleanReply, inboundReplies, replyAction } from "../_
 import { AGENT_SENDER, PORTAL_URL } from "../_shared/onboarding-agent.ts";
 import { FROM_LINE } from "../_shared/balance-notice.ts";
 import { logSystemHealth } from "../_shared/system-health.ts";
-import { reviewUnits, unitKey } from "../_shared/review-units.ts";
+import { cancellable, familyLevelInFlight, isPooledFamily, mainHouseholdIds, reviewUnits, unitKey } from "../_shared/review-units.ts";
 import {
   DEFAULT_REVIEW_CONFIG, REVIEW_TASK_TITLE, decideReview, inviteesOf, pacificDate, rebalancingEmail, requiredObligations, reviewTaskBody, windowEmail,
   type FamilyContact, type ReviewConfig, type Tier,
@@ -53,8 +53,15 @@ Deno.serve(async (req) => {
     // A unit that has ended its relationship gets none, and the cancel step below clears any it already had.
     const { data: allFamilies } = await db.from("families").select("id, name, service_tier, vfo_enabled, has_ratified_charter, service_tier_source").not("service_tier", "is", null);
     const { data: hhs } = await db.from("households").select("id, family_id, label, service_tier, relationship_ended_at");
-    const units = reviewUnits((allFamilies ?? []) as any[], (hhs ?? []) as any[]);
+    // Which households have something recorded under them: a household of a bound family owes its own reviews only if it does.
+    const boundFamilyIds = new Set(((allFamilies ?? []) as any[]).filter((f) => isPooledFamily(f)).map((f) => f.id as string));
+    const boundHouseholdIds = ((hhs ?? []) as any[]).filter((h) => !h.relationship_ended_at && boundFamilyIds.has(h.family_id)).map((h) => h.id as string);
+    const holdsAssets = await householdsHoldingAssets(boundHouseholdIds);
+    const { data: headContacts } = boundFamilyIds.size ? await db.from("contacts").select("household_id, family_role").in("family_id", [...boundFamilyIds]).eq("family_role", "head_of_family") : { data: [] };
+    const units = reviewUnits((allFamilies ?? []) as any[], (hhs ?? []) as any[], holdsAssets, mainHouseholdIds((headContacts ?? []) as any[]));
     const unitByKey = new Map(units.map((u) => [u.key, u]));
+    // A bound family's whole-family obligations made before reviews went per household keep working until they are done.
+    for (const f of (allFamilies ?? []) as any[]) if (isPooledFamily(f) && !unitByKey.has(unitKey(f.id, null))) unitByKey.set(unitKey(f.id, null), { key: unitKey(f.id, null), familyId: f.id, householdId: null, name: f.name, tier: f.service_tier });
     const { data: allContacts } = await db.from("contacts").select("id, family_id, first_name, last_name, email, family_role, is_minor, household_id, no_automated_email").in("family_id", [...new Set(units.map((u) => u.familyId))]);
     const contactsOf = new Map<string, FamilyContact[]>();
     for (const p of allContacts ?? []) {
@@ -68,8 +75,9 @@ Deno.serve(async (req) => {
     }
     const year = Number(today.slice(0, 4));
     const years = today >= `${year}-10-01` ? [year, year + 1] : [year];
-    const { data: existing } = await db.from("review_obligations").select("id, family_id, household_id, window_key, status").eq("mode", mode);
+    const { data: existing } = await db.from("review_obligations").select("id, family_id, household_id, window_key, status, published_at").eq("mode", mode);
     const have = new Map<string, any>((existing ?? []).map((o: any) => [`${unitKey(o.family_id, o.household_id)}|${o.window_key}`, o]));
+    const inFlightFamily = familyLevelInFlight((existing ?? []) as any[]);
     const wanted = new Set<string>();
     for (const f of units) {
       for (const y of years) {
@@ -77,9 +85,13 @@ Deno.serve(async (req) => {
           const k = `${f.key}|${m.key}`;
           wanted.add(k);
           if (have.has(k) || m.windowEnd < today) continue;
+          // A whole-family obligation for this window is already in flight: it is not made again for each household.
+          if (f.householdId && f.main && inFlightFamily.has(`${f.familyId}|${m.key}`)) continue;
           // A window already open when Georgia went live is tracked for bookings only: she never invites or hands over for it.
           const trackingOnly = m.windowStart < sinceDate;
-          const { data: row, error } = await db.from("review_obligations").insert({ family_id: f.familyId, household_id: f.householdId, kind: m.kind, window_key: m.key, window_start: m.windowStart, window_end: m.windowEnd, tier: f.tier, mode, invite: !trackingOnly }).select("id").maybeSingle();
+          // A window already open when reviews went per household: Georgia does not start inviting people for it today; a rebalancing is published by Rolf anyway.
+          const alreadyOpen = m.windowStart <= today;
+          const { data: row, error } = await db.from("review_obligations").insert({ family_id: f.familyId, household_id: f.householdId, kind: m.kind, window_key: m.key, window_start: m.windowStart, window_end: m.windowEnd, tier: f.tier, mode, invite: !(trackingOnly || (alreadyOpen && m.kind !== "rebalancing" && !!f.householdId && f.main && boundFamilyIds.has(f.familyId))) }).select("id").maybeSingle();
           if (!error && row) { summary.created++; await event(f.familyId, row.id, mode, "obligation_opened", { kind: m.kind, window: `${m.windowStart} to ${m.windowEnd}`, ...(trackingOnly ? { trackingOnly: true } : {}) }); }
         }
       }
@@ -106,7 +118,7 @@ Deno.serve(async (req) => {
 
     // A tier change can make an unstarted obligation obsolete (Tier 1 becomes 2B, say): cancel it unless a meeting is already booked.
     for (const o of existing ?? []) {
-      if (o.status === "open" && !wanted.has(`${unitKey(o.family_id, o.household_id)}|${o.window_key}`)) {
+      if (cancellable(o, wanted)) {
         await db.from("review_obligations").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("id", o.id);
         await event(o.family_id, o.id, mode, "obligation_cancelled", { reason: "this household or family no longer owes this meeting (tier change, no longer a separate household, or advisory relationship ended)" });
         summary.cancelled++;
@@ -267,4 +279,24 @@ async function handleReplies(o: any, family: any, contacts: FamilyContact[], sum
   await escalate(o, family, "live", action.reason, detail, text || "(no readable text)", invitees);
   summary.escalations++;
   return true;
+}
+
+/** The households, of the ones given, that have an account or a policy recorded under any of their people. */
+async function householdsHoldingAssets(householdIds: string[]): Promise<Set<string>> {
+  const held = new Set<string>();
+  if (!householdIds.length) return held;
+  const { data: people } = await db.from("contacts").select("id, household_id").in("household_id", householdIds);
+  const householdOf = new Map<string, string>((people ?? []).map((p: any) => [p.id as string, p.household_id as string]));
+  const contactIds = [...householdOf.keys()];
+  if (!contactIds.length) return held;
+  const [vineyard, tank, policies] = await Promise.all([
+    db.from("vineyard_accounts").select("contact_id").in("contact_id", contactIds),
+    db.from("holding_tank").select("contact_id").in("contact_id", contactIds).neq("status", "moved"),
+    db.from("insurance_policies").select("contact_id").in("contact_id", contactIds),
+  ]);
+  for (const r of [...(vineyard.data ?? []), ...(tank.data ?? []), ...(policies.data ?? [])] as any[]) {
+    const h = householdOf.get(r.contact_id);
+    if (h) held.add(h);
+  }
+  return held;
 }
