@@ -75,6 +75,13 @@ describe("the weekly tick and the admin page", () => {
   });
 });
 
+describe("a review added by hand", () => {
+  it("is kept by the weekly run, and the column is in a migration", () => {
+    expect(readFileSync("supabase/functions/review-agent-tick/index.ts", "utf8")).toContain('"id, family_id, household_id, window_key, status, published_at, manual"');
+    expect(readFileSync("supabase/migrations/20270116120000_review_obligation_manual.sql", "utf8")).toContain("ADD COLUMN IF NOT EXISTS manual boolean NOT NULL DEFAULT false");
+  });
+});
+
 describe("the tier engine", () => {
   const src = readFileSync("supabase/functions/service-tier-recompute/index.ts", "utf8");
   it("tiers the other households of a bound family on their own assets, and leaves the main household on the family's tier", () => {

@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
     }
     const year = Number(today.slice(0, 4));
     const years = today >= `${year}-10-01` ? [year, year + 1] : [year];
-    const { data: existing } = await db.from("review_obligations").select("id, family_id, household_id, window_key, status, published_at").eq("mode", mode);
+    const { data: existing } = await db.from("review_obligations").select("id, family_id, household_id, window_key, status, published_at, manual").eq("mode", mode);
     const have = new Map<string, any>((existing ?? []).map((o: any) => [`${unitKey(o.family_id, o.household_id)}|${o.window_key}`, o]));
     const inFlightFamily = familyLevelInFlight((existing ?? []) as any[]);
     const wanted = new Set<string>();
