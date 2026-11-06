@@ -6,7 +6,7 @@
 -- which only the Supabase dashboard exposes: scripts/verify/api-access-log.md has the query for that.
 
 CREATE OR REPLACE FUNCTION public.security_weekly_check() RETURNS jsonb
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth, pg_catalog AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_catalog AS $$
 DECLARE
   known text[] := ARRAY[
     'discovery_leads|Anon can create discovery leads', 'georgia_session_starts|Anon can create Georgia session starts',
@@ -20,8 +20,9 @@ BEGIN
     AND (p.qual = 'true' OR p.with_check = 'true' OR coalesce(p.qual, '') ILIKE '%auth.uid() is%not null%' OR coalesce(p.with_check, '') ILIKE '%auth.uid() is%not null%'
          OR p.roles::text LIKE '%anon%' OR p.roles::text LIKE '%public%')
     AND p.policyname NOT ILIKE 'Deny %'
+    -- (The search path leaves out auth on purpose: with it, Postgres prints auth.uid() as uid() and the match below fails.)
     -- google_tokens (a user's own rows) and the staff storage policies are limited by their own condition, not by role.
-    AND NOT (p.tablename = 'google_tokens' AND (coalesce(p.qual, '') ILIKE '%auth.uid()%' OR coalesce(p.with_check, '') ILIKE '%auth.uid()%'))
+    AND NOT (p.tablename = 'google_tokens' AND position('auth.uid() = user_id' in coalesce(p.qual, '') || coalesce(p.with_check, '')) > 0)
     AND NOT (p.schemaname = 'storage' AND p.policyname ILIKE 'Staff %')
     AND (p.tablename || '|' || p.policyname) <> ALL (known);
 
@@ -45,7 +46,7 @@ BEGIN
     ELSE format('Nothing unexpected. New non-staff accounts this week: %s.', new_users) END;
 
   INSERT INTO security_audit_logs (run_id, test_name, status, logic_trace)
-  VALUES (gen_random_uuid(), 'weekly_security_check', CASE WHEN found THEN 'fail' ELSE 'pass' END,
+  VALUES (gen_random_uuid(), 'weekly_security_check', CASE WHEN found THEN 'FAIL' ELSE 'PASS' END,
           summary || ' ' || jsonb_build_object('open_policies', open_policies, 'tables_without_rls', no_rls, 'non_browser_agents', scripted)::text);
 
   IF found THEN
