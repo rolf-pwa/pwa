@@ -239,7 +239,7 @@ function FolderNode({
           toast.warning(`Link created and copied, but the email to ${notifyEmail.trim()} failed to send (${res.email_reason || "unknown error"}). Send the link manually.`);
         }
       } else {
-        toast.success("Vault link copied (with unlock code)");
+        toast.success("Vault link copied (with unlock code). It expires in 30 days.");
       }
     } catch (e: any) { toast.error(e.message); }
   };
