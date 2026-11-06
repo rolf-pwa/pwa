@@ -4,6 +4,7 @@ import { getServiceGoogleAccessToken } from "../_shared/google-token.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { makeVisibilityFilter } from "../_shared/portal-visibility.ts";
 import { scopeToUnit, viewerUnit } from "../_shared/review-unit-for-contact.ts";
+import { clientIpFrom, logTokenUse, tokenFingerprint, userAgentFrom } from "../_shared/portal-token-log.ts";
 
 const ALLOWED_ORIGINS = [
   "https://prosperwise-portal.web.app",
@@ -250,6 +251,9 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    const clientIp = clientIpFrom(req.headers);
+    const clientUa = userAgentFrom(req.headers);
+
     // Validate token
     const { data: portalToken, error: tokenError } = await supabase
       .from("portal_tokens")
@@ -259,13 +263,16 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
       .maybeSingle();
 
     if (tokenError || !portalToken) {
+      await logTokenUse(supabase, { token_id: null, contact_id: null, purpose: null, outcome: "invalid", ip: clientIp, user_agent: clientUa, token_fingerprint: await tokenFingerprint(String(token)) });
       return new Response(JSON.stringify({ error: "Invalid or expired link" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    const seen = { token_id: portalToken.id as string, contact_id: portalToken.contact_id as string, purpose: (portalToken.purpose ?? null) as string | null, ip: clientIp, user_agent: clientUa, token_fingerprint: null };
     if (new Date(portalToken.expires_at) < new Date()) {
+      await logTokenUse(supabase, { ...seen, outcome: "expired" });
       return new Response(JSON.stringify({ error: "This link has expired" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -276,6 +283,7 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
     // token to resolve once (so the page can load), then mark it used.
     // Subsequent attempts get rejected — the user falls back to OTP.
     if (portalToken.single_use && portalToken.used_at) {
+      await logTokenUse(supabase, { ...seen, outcome: "already_used" });
       return new Response(JSON.stringify({ error: "This link has already been used. Please sign in with your email." }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -284,10 +292,9 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
 
     let sessionToken: string | null = null;
     if (portalToken.single_use && !portalToken.used_at) {
-      const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
       await supabase
         .from("portal_tokens")
-        .update({ used_at: new Date().toISOString(), first_used_ip: clientIp })
+        .update({ used_at: new Date().toISOString(), first_used_ip: clientIp, first_used_user_agent: clientUa })
         .eq("token", token);
 
       // The link itself is now spent, so hand back a short-lived session token. The page keeps it
@@ -303,6 +310,9 @@ if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders }
         .single();
       sessionToken = sess?.token ?? null;
     }
+
+    // Every successful use is recorded, including a staff preview or a client's session token, which used to leave nothing.
+    await logTokenUse(supabase, { ...seen, outcome: portalToken.single_use ? "first_use" : "ok" });
 
     const contactId = portalToken.contact_id;
     const advisorUserId = portalToken.created_by;
