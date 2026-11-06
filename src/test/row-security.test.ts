@@ -37,3 +37,20 @@ describe("row security: staff only", () => {
     }
   });
 });
+
+describe("weekly security check", () => {
+  const sql = read("20270119120000_weekly_security_check.sql");
+  it("looks for unexpected open policies, tables without row security and non-browser non-staff sessions, and tells the advisor", () => {
+    expect(sql).toContain("FROM pg_policies");
+    expect(sql).toContain("NOT t.rowsecurity");
+    expect(sql).toContain("auth.sessions");
+    expect(sql).toContain("INSERT INTO staff_notifications");
+    expect(sql).toContain("INSERT INTO security_audit_logs");
+  });
+  it("is closed to everyone but the service role, runs weekly, and never puts an email in the notification", () => {
+    expect(sql).toContain("REVOKE ALL ON FUNCTION public.security_weekly_check() FROM PUBLIC, anon, authenticated");
+    expect(sql).toContain("GRANT EXECUTE ON FUNCTION public.security_weekly_check() TO service_role");
+    expect(sql).toContain("cron.schedule('security-weekly-check', '0 13 * * 1'");
+    expect(sql).not.toMatch(/INSERT INTO staff_notifications[^;]*u\.email/i);
+  });
+});
