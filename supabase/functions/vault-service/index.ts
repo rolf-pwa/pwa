@@ -18,6 +18,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkOutboundPii } from "../_shared/pii-shield.ts";
+import { expiryText, shareLinkExpiry } from "../_shared/share-link-expiry.ts";
 import { validateProSession } from "../_shared/pro-portal-auth.ts";
 import { parseServiceAccountKey } from "../_shared/vertex-ai.ts";
 import { classifyShoeboxFile, buildProposedFilename, resolvePrimaryAdultName } from "../_shared/vault-shoebox-classify.ts";
@@ -2897,7 +2898,8 @@ serve(async (req) => {
         drive_id,
         permission,
         unlock_code: code,
-        expires_at: expires_at ?? null,
+        // Always expires, in 30 days at the most: a link with no end has no way to be forgotten safely.
+        expires_at: shareLinkExpiry(expires_at),
         max_uses: max_uses ?? null,
         created_by: actor.userId,
         name: name ?? null,
@@ -2920,7 +2922,7 @@ serve(async (req) => {
           (code
             ? `For your security, you'll be asked for a one-time unlock code on the landing page. That code is being sent to you separately.\n\n`
             : `You'll be asked to verify your identity on the landing page.\n\n`) +
-          `Access can be revoked at any time. If you weren't expecting this, please disregard.\n\n` +
+          `This link expires on ${expiryText(link.expires_at)}. Access can be revoked at any time. If you weren't expecting this, please disregard.\n\n` +
           `— ProsperWise`;
         emailResult = await sendVaultEmail({
           email: notify_email, full_name: recipient_name, subject, message, event_type: "vault_share_link",
