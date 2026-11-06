@@ -5,7 +5,8 @@
 import "../_shared/bc-time.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { mintMagicLink, plainPortalUrl } from "../_shared/portal-magic-link.ts";
+import { findOrMintMagicLink, plainPortalUrl } from "../_shared/portal-magic-link.ts";
+import { afterFailure, isDue } from "../_shared/digest-retry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -133,8 +134,9 @@ serve(async (req) => {
   try {
     const { data: pending, error } = await supabase
       .from("email_digest_queue")
-      .select("id, contact_id, recipient_email, first_name, task_name, task_event, link_tab, created_at")
+      .select("id, contact_id, recipient_email, first_name, task_name, task_event, link_tab, created_at, attempts, last_attempt_at")
       .is("sent_at", null)
+      .is("failed_at", null)
       .order("created_at", { ascending: true })
       .limit(1000);
 
@@ -177,11 +179,13 @@ serve(async (req) => {
       const firstName = items[0].first_name || "there";
       const contactId = items[0].contact_id;
       const count = items.length;
+      // A recipient this digest could not reach waits out a growing delay between tries, and is given up on (and the advisor told) after a few.
+      if (!isDue(items, Date.now())) continue;
 
       // Mint a single magic link to the tasks tab (not for documents)
       let url = plainPortalUrl();
       if (contactId && !documents && !reports) {
-        const link = await mintMagicLink(supabase, { contactId, targetHash: "tasks" });
+        const link = await findOrMintMagicLink(supabase, { contactId, targetHash: "tasks" });
         if (link?.url) url = link.url;
       }
 
@@ -225,6 +229,19 @@ serve(async (req) => {
         const reasons = results.map((r) => r.reason || "unknown").join(",");
         console.error(`[Digest] All channels failed for ${email}: ${reasons}`);
         errors.push(`send ${email}: ${reasons}`);
+        const next = afterFailure(items);
+        const ids = items.map((i) => i.id);
+        const nowIso = new Date().toISOString();
+        await supabase.from("email_digest_queue").update({ attempts: next.attempts, last_attempt_at: nowIso, ...(next.giveUp ? { failed_at: nowIso } : {}) }).in("id", ids);
+        if (next.giveUp) {
+          await supabase.from("staff_notifications").insert({
+            title: `Email updates to ${firstName} could not be delivered`,
+            body: `${count} update${count === 1 ? "" : "s"} for ${email} failed ${next.attempts} times (${reasons}). Check the address, or follow up another way. Georgia has stopped retrying.`,
+            link: contactId ? `/contacts/${contactId}` : null,
+            contact_id: contactId ?? null,
+            source_type: "email_digest_failed",
+          });
+        }
       }
     }
 
