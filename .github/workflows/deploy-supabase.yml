@@ -2,7 +2,7 @@ name: Deploy to Supabase
 
 # After a merge to main: apply the new migrations to production, then deploy the edge functions that changed. Runs one at a time, never cancelled midway.
 # Needs the repository secret SUPABASE_ACCESS_TOKEN (Supabase dashboard > Account > Access Tokens).
-# Manual run: Actions > Deploy to Supabase > Run workflow, with a space-separated list of function names to redeploy (recovery).
+# Manual run: Actions > Deploy to Supabase > Run workflow, with function names and/or migration files to redo (recovery).
 on:
   push:
     branches: [main]
@@ -14,8 +14,11 @@ on:
   workflow_dispatch:
     inputs:
       functions:
-        description: "Edge functions to redeploy, space separated"
-        required: true
+        description: "Edge functions to redeploy, space separated (optional)"
+        required: false
+      migrations:
+        description: "Migration files to apply, space separated, e.g. supabase/migrations/2026..._x.sql (optional)"
+        required: false
 
 concurrency:
   group: deploy-supabase
@@ -41,6 +44,7 @@ jobs:
       - name: Apply migrations and deploy functions
         env:
           FUNCTIONS: ${{ github.event.inputs.functions }}
+          MIGRATIONS: ${{ github.event.inputs.migrations }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             scripts/ci-deploy.sh
