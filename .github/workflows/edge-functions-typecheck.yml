@@ -1,10 +1,9 @@
 name: Edge function type check
 
+# Runs on every pull request (no path filter) so it can be a required check: a required check that never reports blocks the merge.
+# The script exits at once with "No edge functions changed" when a pull request does not touch supabase/functions.
 on:
   pull_request:
-    paths:
-      - "supabase/functions/**"
-      - "scripts/deno-check-functions.sh"
 
 jobs:
   deno-check:
