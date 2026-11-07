@@ -1,0 +1,39 @@
+name: CI
+
+# Every pull request must pass these before it is merged. Make them required in GitHub: Settings > Branches > main > Require status checks.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    # Placeholders: the tests and build import the Supabase client, which refuses to start without a URL. Nothing here talks to the real project.
+    env:
+      VITE_SUPABASE_URL: https://example.invalid
+      VITE_SUPABASE_PUBLISHABLE_KEY: ci-placeholder
+      VITE_SUPABASE_PROJECT_ID: ci-placeholder
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Type check
+        run: npm run typecheck
+      # Includes the row-security guard (src/test/row-security.test.ts), which reads every migration and fails on a policy that opens a table to anon or everyone.
+      - name: Tests
+        run: npm test
+      - name: Lint (no file may get worse)
+        if: github.event_name == 'pull_request'
+        run: scripts/lint-ratchet.sh "origin/${{ github.base_ref }}"
+      - name: Build
+        run: npm run build
