@@ -33,6 +33,10 @@ if [ "${RESET:-0}" = 1 ]; then
      delete from supabase_migrations.schema_migrations;" >/dev/null || { echo "reset failed"; exit 1; }
 fi
 
+# The reset above drops the public schema, and production's pgcrypto lives in public (see the end of this script), so a second reset removes it.
+# Put the extensions back, in the extensions schema, before any migration runs.
+q "create extension if not exists pgcrypto with schema extensions; create extension if not exists \"uuid-ossp\" with schema extensions;" >/dev/null || { echo "extensions failed"; exit 1; }
+
 fail=0; applied=0; tmp=$(mktemp)
 for f in $(ls supabase/migrations/*.sql | sort); do
   case "$f" in *" 2.sql") continue;; esac   # accidental duplicate copies of a migration
