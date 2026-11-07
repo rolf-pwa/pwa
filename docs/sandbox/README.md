@@ -1,3 +1,5 @@
+> **Retired 2026-11.** The V2 sandbox project below was deleted. Staging is documented in `docs/staging/README.md`. This page is kept for the notes on how V2 was built.
+
 # V2 sandbox
 
 A throwaway Supabase project (`jefuguzlmnrdcuqpiuar`, ca-central-1, free plan) for clicking through the
